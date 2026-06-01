@@ -1,0 +1,1090 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Infrastructures.FenceWoodWire03_BK.Multi" type="BinHex">496E667261737472756374757265732E46656E6365576F6F645769726530335F424B2E4D756C746900</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="object_archetypes.Infrastructures.FenceWoodWire03_BK.Multi" type="BinHex">6F626A6563745F617263686574797065732E496E667261737472756374757265732E46656E6365576F6F645769726530335F424B2E4D756C746900</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="1302" type="BinHex">1605000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="5" type="BinHex">05000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\infrastructures\fences\fencewoodwire03_bk.xml" type="BinHex">67726170686963735C696E667261737472756374757265735C66656E6365735C66656E6365776F6F647769726530335F626B2E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\infrastructures\fences\fencewoodwire03_bk.xml" type="BinHex">C54B52A8</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2" detail="0">
+              <object index="0" meshName="FenceWoodWire030a_STATE1" boneName="FenceWoodWire030a_STATE1" bboxMin="-2.93182,-0.189013,-1.53151" bboxMax="2.93182,0.179096,1.53152" />
+              <object index="1" meshName="FenceWood1e_STATE03" boneName="FenceWood1e_STATE03" bboxMin="-0.242644,-0.172838,-0.320153" bboxMax="0.168114,0.0987056,1.77683" />
+              <object index="2" meshName="FenceWood2e_STATE03" boneName="FenceWood2e_STATE03" bboxMin="-0.0215691,-0.00743091,-0.0926378" bboxMax="0.223788,0.166313,1.69321" />
+              <object index="3" meshName="FenceWoodWire031b_STATE2" boneName="FenceWoodWire031b_STATE2" bboxMin="-0.374045,-0.294975,-1.59418" bboxMax="1.62048,0.117379,1.46885" />
+              <object index="4" meshName="FenceWood8e_STATE03" boneName="FenceWood8e_STATE03" bboxMin="-1.57691,0.0199595,0.145389" bboxMax="0.202075,0.28202,0.836272" />
+              <object index="5" meshName="FenceWoodWire033b_STATE2" boneName="FenceWoodWire033b_STATE2" bboxMin="-3.10794,-0.260148,-0.998063" bboxMax="1.01068,0.176543,1.64946" />
+              <object index="6" meshName="FenceWood2e_STATE04" boneName="FenceWood2e_STATE04" bboxMin="-0.0215696,-0.00661053,-0.0875843" bboxMax="0.210733,0.158854,1.68902" />
+              <resource fileName="graphics\Infrastructures\Fences\FenceWoodWire03_BK.xbg" bboxMin="-2.77549,-0.314254,-0.595735" bboxMax="3.1417,0.433212,2.46908" />
+              <skeleton name="FenceWoodWire03_BK" pos="0,0,0" rot="1,-0,-0,-0">
+                <bone name="FenceWoodWire03a_STATE" pos="0.209879,-0.00858,0.935779" rot="1,0,0,0">
+                  <bone name="FenceWoodWire030a_STATE1" pos="-0.000674,0,0" rot="1,0,0,0">
+                    <bone name="FWSt1_wirekillFX" pos="-0.279731,0,0.24969" rot="1,0,0,0" />
+                    <bone name="FWSt1_wirekillFX01" pos="1.1886,0,0.000699" rot="1,0,0,0" />
+                    <bone name="FWSt1_wirekillFX02" pos="0.426394,0,-0.442744" rot="1,0,0,0" />
+                  </bone>
+                  <bone name="FenceWoodWire030a_STATE02" pos="-0.123358,0,-0.900049" rot="1,0,0,0">
+                    <bone name="FWunderstate01_STATE" pos="-2.28706,0,0.990579" rot="1,0,0,0">
+                      <bone name="FenceWood1e_STATE03" pos="-0.216675,0.046647,-0.407068" rot="0.999258,-0.0274755,0.026627,0.00435198" />
+                      <bone name="FenceWood2e_STATE03" pos="1.16865,0.091868,-0.797646" rot="0.997836,-0.0618337,0.0203539,0.00926954" />
+                      <bone name="FenceWoodWire031b_STATE2" pos="-0.147357,0.061719,-0.027858" rot="1,0,0,0">
+                        <bone name="FWstate_woodFX01" pos="-0.202203,-0.040819,-0.250624" rot="1,0,0,0" />
+                        <bone name="FWstate_woodFX02" pos="1.37625,-0.040819,-0.197388" rot="1,0,0,0" />
+                        <bone name="FWstate_wireFX01" pos="0.595415,-0.040819,0.593703" rot="1,0,0,0" />
+                        <bone name="FWstate_wireFX02" pos="0.701514,-0.040819,-0.215231" rot="1,0,0,0" />
+                      </bone>
+                      <bone name="FenceWood8e_STATE03" pos="1.09941,-0.128751,-1.24956" rot="1,0,0,0" />
+                    </bone>
+                    <bone name="FWunderstate02_STATE" pos="2.60991,0,0.010396" rot="1,0,0,0">
+                      <bone name="FenceWoodWire033b_STATE2" pos="-0.565417,-0.045526,0.361768" rot="1,0,0,0">
+                        <bone name="FWstateB_woodFX01" pos="0.185256,0.055918,-0.112982" rot="0.988192,0.0778917,-0.131535,0.0103679" />
+                        <bone name="FWstateB_woodFX02" pos="0.847274,0.055918,0.281171" rot="1,0,0,0" />
+                        <bone name="FWstateB_wireFX01" pos="0.494317,0.055918,0.259237" rot="1,0,0,0" />
+                        <bone name="FWstateB_wireFX02" pos="0.537964,0.055918,0.005095" rot="1,0,0,0" />
+                        <bone name="FWstateB_wireFX03" pos="-0.149157,0.055918,-0.357114" rot="1,0,0,0" />
+                        <bone name="FWstateB_woodFX03" pos="0.185256,0.055918,0.279917" rot="0.992472,0.00885425,0.122147,0.00108976" />
+                      </bone>
+                      <bone name="FenceWood2e_STATE04" pos="0.203575,-0.086862,0.285533" rot="0.9956,-0.0607445,-0.0697988,0.0148131" />
+                    </bone>
+                  </bone>
+                </bone>
+              </skeleton>
+            </component>
+            <component class="CompoundPhysComponent">
+              <nodes stateIndexStart="7" hasStatic="1">
+                <stateNode boneIndex="1" index="7" name="FenceWoodWire03a_STATE">
+                  <state index="0">
+                    <body index="6" objectIndex="0" boneIndex="2" name="FenceWoodWire030a_STATE1">
+                      <fx boneIndex="3" />
+                      <fx boneIndex="4" />
+                      <fx boneIndex="5" />
+                    </body>
+                  </state>
+                  <state index="1">
+                    <breakableNode name="FenceWoodWire030a_STATE02">
+                      <parts>
+                        <stateNode boneIndex="7" index="8" name="FWunderstate01_STATE">
+                          <state index="0">
+                            <body index="3" objectIndex="3" boneIndex="10" name="FenceWoodWire031b_STATE2">
+                              <fx boneIndex="11" />
+                              <fx boneIndex="12" />
+                              <fx boneIndex="13" />
+                              <fx boneIndex="14" />
+                            </body>
+                          </state>
+                          <state index="1">
+                            <body index="0" objectIndex="1" boneIndex="8" name="FenceWood1e_STATE03" />
+                            <body index="1" objectIndex="2" boneIndex="9" name="FenceWood2e_STATE03" />
+                            <body index="2" objectIndex="4" boneIndex="15" name="FenceWood8e_STATE03" />
+                          </state>
+                        </stateNode>
+                        <stateNode boneIndex="16" index="9" name="FWunderstate02_STATE">
+                          <state index="0">
+                            <body index="5" objectIndex="5" boneIndex="17" name="FenceWoodWire033b_STATE2">
+                              <fx boneIndex="18" />
+                              <fx boneIndex="19" />
+                              <fx boneIndex="20" />
+                              <fx boneIndex="21" />
+                              <fx boneIndex="22" />
+                              <fx boneIndex="23" />
+                            </body>
+                          </state>
+                          <state index="1">
+                            <body index="4" objectIndex="6" boneIndex="24" name="FenceWood2e_STATE04" />
+                          </state>
+                        </stateNode>
+                      </parts>
+                      <link partA="8" partB="9" />
+                    </breakableNode>
+                  </state>
+                </stateNode>
+              </nodes>
+              <resource fileName="graphics\Infrastructures\Fences\FenceWoodWire03_BK.hkx" />
+            </component>
+            <component class="ParticleFXComponent">
+              <FWSt1_wirekillFX psEmitter="" />
+              <FWSt1_wirekillFX01 psEmitter="" />
+              <FWSt1_wirekillFX02 psEmitter="" />
+              <FWstate_woodFX01 psEmitter="" />
+              <FWstate_woodFX02 psEmitter="" />
+              <FWstate_wireFX01 psEmitter="" />
+              <FWstate_wireFX02 psEmitter="" />
+              <FWstateB_woodFX01 psEmitter="" />
+              <FWstateB_woodFX02 psEmitter="" />
+              <FWstateB_wireFX01 psEmitter="" />
+              <FWstateB_wireFX02 psEmitter="" />
+              <FWstateB_wireFX03 psEmitter="" />
+              <FWstateB_woodFX03 psEmitter="" />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="129" type="BinHex">81000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="True" type="BinHex">01</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">67726170686963735C696E667261737472756374757265735C66656E6365735C66656E6365776F6F647769726530335F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">828E18B8</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="FenceWoodWire030a_STATE1" type="BinHex">46656E6365576F6F6457697265303330615F53544154453100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="FenceWoodWire030a_STATE1" type="BinHex">46656E6365576F6F6457697265303330615F53544154453100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="FenceWoodWire030a_STATE1" type="BinHex">E87D60A3</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="FenceWoodWire030a_STATE1_LOD0" type="BinHex">46656E6365576F6F6457697265303330615F5354415445315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="FenceWoodWire030a_STATE1_LOD0" type="BinHex">87E8A528</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="1" type="BinHex">01000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">67726170686963735C696E667261737472756374757265735C66656E6365735C66656E6365776F6F647769726530335F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">828E18B8</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="FenceWood1e_STATE03" type="BinHex">46656E6365576F6F6431655F5354415445303300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="FenceWood1e_STATE03" type="BinHex">46656E6365576F6F6431655F5354415445303300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="FenceWood1e_STATE03" type="BinHex">1D164824</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="FenceWood1e_STATE03_LOD0" type="BinHex">46656E6365576F6F6431655F535441544530335F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="FenceWood1e_STATE03_LOD0" type="BinHex">7C5ECA06</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="2" type="BinHex">02000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">67726170686963735C696E667261737472756374757265735C66656E6365735C66656E6365776F6F647769726530335F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">828E18B8</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="FenceWood2e_STATE03" type="BinHex">46656E6365576F6F6432655F5354415445303300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="FenceWood2e_STATE03" type="BinHex">46656E6365576F6F6432655F5354415445303300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="FenceWood2e_STATE03" type="BinHex">1EAD7FCF</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="FenceWood2e_STATE03_LOD0" type="BinHex">46656E6365576F6F6432655F535441544530335F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="FenceWood2e_STATE03_LOD0" type="BinHex">0534B717</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">67726170686963735C696E667261737472756374757265735C66656E6365735C66656E6365776F6F647769726530335F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">828E18B8</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="FenceWoodWire031b_STATE2" type="BinHex">46656E6365576F6F6457697265303331625F53544154453200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="FenceWoodWire031b_STATE2" type="BinHex">46656E6365576F6F6457697265303331625F53544154453200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="FenceWoodWire031b_STATE2" type="BinHex">F23F9DA3</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="FenceWoodWire031b_STATE2_LOD0" type="BinHex">46656E6365576F6F6457697265303331625F5354415445325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="FenceWoodWire031b_STATE2_LOD0" type="BinHex">9117F48E</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="4" type="BinHex">04000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">67726170686963735C696E667261737472756374757265735C66656E6365735C66656E6365776F6F647769726530335F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">828E18B8</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="FenceWood8e_STATE03" type="BinHex">46656E6365576F6F6438655F5354415445303300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="FenceWood8e_STATE03" type="BinHex">46656E6365576F6F6438655F5354415445303300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="FenceWood8e_STATE03" type="BinHex">D73D5DD8</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="FenceWood8e_STATE03_LOD0" type="BinHex">46656E6365576F6F6438655F535441544530335F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="FenceWood8e_STATE03_LOD0" type="BinHex">1349B870</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="5" type="BinHex">05000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">67726170686963735C696E667261737472756374757265735C66656E6365735C66656E6365776F6F647769726530335F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">828E18B8</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="FenceWoodWire033b_STATE2" type="BinHex">46656E6365576F6F6457697265303333625F53544154453200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="FenceWoodWire033b_STATE2" type="BinHex">46656E6365576F6F6457697265303333625F53544154453200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="FenceWoodWire033b_STATE2" type="BinHex">74176B8D</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="FenceWoodWire033b_STATE2_LOD0" type="BinHex">46656E6365576F6F6457697265303333625F5354415445325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="FenceWoodWire033b_STATE2_LOD0" type="BinHex">3CD39A6F</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="6" type="BinHex">06000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">67726170686963735C696E667261737472756374757265735C66656E6365735C66656E6365776F6F647769726530335F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\infrastructures\fences\fencewoodwire03_bk.xbg" type="BinHex">828E18B8</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="FenceWood2e_STATE04" type="BinHex">46656E6365576F6F6432655F5354415445303400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="FenceWood2e_STATE04" type="BinHex">46656E6365576F6F6432655F5354415445303400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="FenceWood2e_STATE04" type="BinHex">BD381B51</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="FenceWood2e_STATE04_LOD0" type="BinHex">46656E6365576F6F6432655F535441544530345F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="FenceWood2e_STATE04_LOD0" type="BinHex">BD04B20A</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="AC9A6073" name="CObjectSoundAndFXComponent">
+        <object hash="C3A5C531" name="Impact">
+          <field hash="67F06359" name="text_matimpDropImpact" value-String="" type="BinHex">00</field>
+          <field hash="CBCF835A" name="matimpDropImpact" type="BinHex">FFFFFFFF</field>
+          <field hash="86A8A2DC" name="fSpeedForMaxDropImpactVolume" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="0D713BF1" name="fMinimalCollisionSpeed" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="7862FEF3" name="bIsSingleDropImpactObject" value-Boolean="False" type="BinHex">00</field>
+          <object hash="0F3AB874" name="MovementSound">
+            <field hash="D5AF4127" name="sndRollingSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+            <field hash="AAB8E5DC" name="sndRollingSoundEnd" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+            <field hash="4057D6C6" name="sndtpRollingSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+            <field hash="8A190215" name="sndSlidingSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+            <field hash="7401DE02" name="sndSlidingSoundEnd" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+            <field hash="21E2902E" name="sndtpSlidingSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+            <field hash="4BC9F599" name="sndmlObjectMovementMultilayer" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="3B83D348" name="Falling">
+          <field hash="FE2AB381" name="bAllowAfterCollision" value-Boolean="False" type="BinHex">00</field>
+          <field hash="88C7BCA2" name="sndFallingSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          <field hash="498F1610" name="sndtpFallingType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+          <field hash="32145F6F" name="fSpeedToPlayFallingSound" value-Float32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="3AF23BDE" name="Water">
+          <field hash="9D8D45EB" name="fZSpeedToTriggerSplash" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="147B67CE" name="fZSpeedForMaxSplashVolume" value-Float32="0" type="BinHex">00000000</field>
+        </object>
+      </object>
+      <object hash="FE7AD4CF" name="CObjectIgnitorCreatorComponent" />
+      <object hash="35FD2B44" name="CSoundComponent">
+        <field hash="EEACC4D5" name="sndptSoundPoint" type="BinHex">FFFFFFFF</field>
+        <field hash="EC0172F4" type="BinHex">00</field>
+        <field hash="6F1831DF" name="MaskSoundEffect" type="BinHex">FFFFFFFF</field>
+      </object>
+      <object hash="AA13F142" name="CCompoundPhysComponent">
+        <field hash="527E7674" name="text_hidResourceId" value-String="graphics\infrastructures\fences\fencewoodwire03_bk.hkx" type="BinHex">67726170686963735C696E667261737472756374757265735C66656E6365735C66656E6365776F6F647769726530335F626B2E686B7800</field>
+        <field hash="2E50EB85" name="hidResourceId" value-ComputeHash32="graphics\infrastructures\fences\fencewoodwire03_bk.hkx" type="BinHex">4E9BF4F8</field>
+        <field hash="0C838A6E" name="bAnimateable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1CFFDBEC" name="bCreateAsStatic" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5BABAAC6" name="bUseMaxTerrainSlope" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CAA1B825" name="bUseFastCollision" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EBBF0BE" name="fSelfCollOverrideSpeed" value-Float32="200" type="BinHex">00004843</field>
+        <field hash="343B9712" name="hidHasStatic" type="BinHex">01</field>
+        <field hash="231B472A" name="hidNodeType" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        <object hash="78CF3E56" name="EntityPickup">
+          <field hash="743BADAE" name="bCanPickUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="7EC43CB1" name="bCanBePickedUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="4CA7A893" name="fPickupCollisionRadius" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="829623C6" name="fPickupCollisionHeight" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="AD22F2F7" type="BinHex">00</field>
+          <field hash="011D12F4" name="PickupAttachBone" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="1664515A" name="Damage">
+          <field hash="A123A798" name="bDamageable" value-Boolean="False" type="BinHex">00</field>
+          <field hash="BF493104" name="bPlayerOnly" value-Boolean="False" type="BinHex">00</field>
+        </object>
+        <object hash="FE267439" name="RootNode">
+          <field hash="88E8521E" name="text_disName" value-String="FenceWoodWire03a_STATE" type="BinHex">46656E6365576F6F64576972653033615F535441544500</field>
+          <field hash="AC497D21" name="disName" value-ComputeHash32="FenceWoodWire03a_STATE" type="BinHex">1F086F6A</field>
+          <field hash="FE7DBDC5" name="FirstStateIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="5B915FF1" name="hidBoneIndex" value-Int32="1" type="BinHex">01000000</field>
+          <object hash="366E727B" name="States">
+            <object hash="6252FDFF" name="State">
+              <field hash="258BB869" name="disIndex" value-Int32="0" type="BinHex">00000000</field>
+              <field hash="231B472A" name="hidNodeType" value-Int32="1" type="BinHex">01000000</field>
+              <object hash="DB83EFB8" name="StateSubNode">
+                <field hash="88E8521E" name="text_disName" value-String="FenceWoodWire030a_STATE1" type="BinHex">46656E6365576F6F6457697265303330615F53544154453100</field>
+                <field hash="AC497D21" name="disName" value-ComputeHash32="FenceWoodWire030a_STATE1" type="BinHex">E87D60A3</field>
+                <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                <field hash="8E462320" name="hidGraphicIndex" value-Int32="0" type="BinHex">00000000</field>
+                <object hash="2C3872D7" name="Stim">
+                  <field hash="1BD9687D" name="bPierceStim" value-Boolean="False" type="BinHex">00</field>
+                  <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                  <field hash="2CE04FBD" name="bBurnStim" value-Boolean="False" type="BinHex">00</field>
+                  <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                </object>
+                <object hash="F8CD54EF" name="hidEffectBones">
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="3" type="BinHex">03000000</field>
+                  </object>
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="4" type="BinHex">04000000</field>
+                  </object>
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="5" type="BinHex">05000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E9B0C869" name="OnDamage">
+                <field hash="A746E6DC" name="selNextState" value-Enum="2" type="BinHex">02000000</field>
+                <object hash="13B84C9B" name="enumNextState">
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="219C667A" name="OnEvent">
+                <field hash="C41038B9" name="bTriggerEffects" value-Boolean="False" type="BinHex">00</field>
+                <field hash="A746E6DC" name="selNextState" value-Enum="2" type="BinHex">02000000</field>
+                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                <object hash="13B84C9B" name="enumNextState">
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="6252FDFF" name="State">
+              <field hash="258BB869" name="disIndex" value-Int32="1" type="BinHex">01000000</field>
+              <field hash="231B472A" name="hidNodeType" value-Int32="2" type="BinHex">02000000</field>
+              <object hash="DB83EFB8" name="StateSubNode">
+                <field hash="88E8521E" name="text_disName" value-String="FenceWoodWire030a_STATE02" type="BinHex">46656E6365576F6F6457697265303330615F5354415445303200</field>
+                <field hash="AC497D21" name="disName" value-ComputeHash32="FenceWoodWire030a_STATE02" type="BinHex">7B85BCAD</field>
+                <field hash="0DBE2127" name="fHealth" value-Float32="60" type="BinHex">00007042</field>
+                <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                <object hash="1165F47F" name="MovingStims">
+                  <field hash="1BD9687D" name="bPierceStim" value-Boolean="False" type="BinHex">00</field>
+                  <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                  <field hash="2CE04FBD" name="bBurnStim" value-Boolean="False" type="BinHex">00</field>
+                  <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                </object>
+                <object hash="43821677" name="StaticStims">
+                  <field hash="1BD9687D" name="bPierceStim" value-Boolean="False" type="BinHex">00</field>
+                  <field hash="A82A04B0" name="bCrushStim" value-Boolean="False" type="BinHex">00</field>
+                  <field hash="2CE04FBD" name="bBurnStim" value-Boolean="False" type="BinHex">00</field>
+                  <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                </object>
+                <object hash="D949A3AE" name="hidPartsTypes">
+                  <object hash="AE055207" name="hidPart">
+                    <field hash="6BD475E8" name="hidType" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="AE055207" name="hidPart">
+                    <field hash="6BD475E8" name="hidType" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+                <object hash="A88188FA" name="Parts">
+                  <object hash="E93DDFF8" name="Part">
+                    <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="CEBC1B50" name="bForceStatic" value-Boolean="False" type="BinHex">00</field>
+                    <field hash="8BD83358" name="bCarryOnDamage" value-Boolean="True" type="BinHex">01</field>
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+                    <object hash="24E7FBE0" name="hidConnectivity">
+                      <object hash="D12C6860" name="hidMasks">
+                        <object hash="9865E1F1" name="hidMask">
+                          <field hash="F1F3A030" name="hidValue" value-Int32="2" type="BinHex">02000000</field>
+                        </object>
+                      </object>
+                    </object>
+                    <object hash="6D659EAB" name="StateNode">
+                      <field hash="88E8521E" name="text_disName" value-String="FWunderstate01_STATE" type="BinHex">4657756E646572737461746530315F535441544500</field>
+                      <field hash="AC497D21" name="disName" value-ComputeHash32="FWunderstate01_STATE" type="BinHex">4F4F7B9E</field>
+                      <field hash="FE7DBDC5" name="FirstStateIndex" value-Int32="0" type="BinHex">00000000</field>
+                      <field hash="5B915FF1" name="hidBoneIndex" value-Int32="7" type="BinHex">07000000</field>
+                      <object hash="366E727B" name="States">
+                        <object hash="6252FDFF" name="State">
+                          <field hash="258BB869" name="disIndex" value-Int32="0" type="BinHex">00000000</field>
+                          <field hash="231B472A" name="hidNodeType" value-Int32="1" type="BinHex">01000000</field>
+                          <object hash="DB83EFB8" name="StateSubNode">
+                            <field hash="88E8521E" name="text_disName" value-String="FenceWoodWire031b_STATE2" type="BinHex">46656E6365576F6F6457697265303331625F53544154453200</field>
+                            <field hash="AC497D21" name="disName" value-ComputeHash32="FenceWoodWire031b_STATE2" type="BinHex">F23F9DA3</field>
+                            <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                            <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                            <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                            <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                            <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                            <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                            <field hash="8E462320" name="hidGraphicIndex" value-Int32="3" type="BinHex">03000000</field>
+                            <object hash="2C3872D7" name="Stim">
+                              <field hash="1BD9687D" name="bPierceStim" value-Boolean="False" type="BinHex">00</field>
+                              <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                              <field hash="2CE04FBD" name="bBurnStim" value-Boolean="False" type="BinHex">00</field>
+                              <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                              <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                            </object>
+                            <object hash="F8CD54EF" name="hidEffectBones">
+                              <object hash="D24C9DB6" name="hidBone">
+                                <field hash="6CF79F05" name="hidIndex" value-Int32="11" type="BinHex">0B000000</field>
+                              </object>
+                              <object hash="D24C9DB6" name="hidBone">
+                                <field hash="6CF79F05" name="hidIndex" value-Int32="12" type="BinHex">0C000000</field>
+                              </object>
+                              <object hash="D24C9DB6" name="hidBone">
+                                <field hash="6CF79F05" name="hidIndex" value-Int32="13" type="BinHex">0D000000</field>
+                              </object>
+                              <object hash="D24C9DB6" name="hidBone">
+                                <field hash="6CF79F05" name="hidIndex" value-Int32="14" type="BinHex">0E000000</field>
+                              </object>
+                            </object>
+                          </object>
+                          <object hash="E9B0C869" name="OnDamage">
+                            <field hash="A746E6DC" name="selNextState" value-Enum="2" type="BinHex">02000000</field>
+                            <object hash="13B84C9B" name="enumNextState">
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                              </object>
+                            </object>
+                          </object>
+                          <object hash="219C667A" name="OnEvent">
+                            <field hash="C41038B9" name="bTriggerEffects" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="A746E6DC" name="selNextState" value-Enum="2" type="BinHex">02000000</field>
+                            <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                            <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                            <object hash="13B84C9B" name="enumNextState">
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                              </object>
+                            </object>
+                          </object>
+                        </object>
+                        <object hash="6252FDFF" name="State">
+                          <field hash="258BB869" name="disIndex" value-Int32="1" type="BinHex">01000000</field>
+                          <field hash="231B472A" name="hidNodeType" value-Int32="3" type="BinHex">03000000</field>
+                          <object hash="DB83EFB8" name="StateSubNode">
+                            <field hash="88E8521E" name="text_disName" value-String="" type="BinHex">00</field>
+                            <field hash="AC497D21" name="disName" type="BinHex">FFFFFFFF</field>
+                            <field hash="9F499A09" name="bHealthByAverage" value-Boolean="True" type="BinHex">01</field>
+                            <object hash="C0961D9A" name="hidNodeTypes">
+                              <object hash="6275CA84" name="hidNode">
+                                <field hash="6BD475E8" name="hidType" value-Int32="1" type="BinHex">01000000</field>
+                              </object>
+                              <object hash="6275CA84" name="hidNode">
+                                <field hash="6BD475E8" name="hidType" value-Int32="1" type="BinHex">01000000</field>
+                              </object>
+                              <object hash="6275CA84" name="hidNode">
+                                <field hash="6BD475E8" name="hidType" value-Int32="1" type="BinHex">01000000</field>
+                              </object>
+                            </object>
+                            <object hash="23C20EF1" name="NodeList">
+                              <object hash="254D477B" name="Node">
+                                <field hash="88E8521E" name="text_disName" value-String="FenceWood1e_STATE03" type="BinHex">46656E6365576F6F6431655F5354415445303300</field>
+                                <field hash="AC497D21" name="disName" value-ComputeHash32="FenceWood1e_STATE03" type="BinHex">1D164824</field>
+                                <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                                <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                                <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                                <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                                <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                                <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                                <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                                <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                                <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                                <field hash="8E462320" name="hidGraphicIndex" value-Int32="1" type="BinHex">01000000</field>
+                                <field hash="80736701" name="index" value-Int32="0" type="BinHex">00000000</field>
+                                <object hash="2C3872D7" name="Stim">
+                                  <field hash="1BD9687D" name="bPierceStim" value-Boolean="False" type="BinHex">00</field>
+                                  <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                                  <field hash="2CE04FBD" name="bBurnStim" value-Boolean="False" type="BinHex">00</field>
+                                  <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                                  <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                                </object>
+                                <object hash="F8CD54EF" name="hidEffectBones" />
+                              </object>
+                              <object hash="254D477B" name="Node">
+                                <field hash="88E8521E" name="text_disName" value-String="FenceWood2e_STATE03" type="BinHex">46656E6365576F6F6432655F5354415445303300</field>
+                                <field hash="AC497D21" name="disName" value-ComputeHash32="FenceWood2e_STATE03" type="BinHex">1EAD7FCF</field>
+                                <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                                <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                                <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                                <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                                <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                                <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                                <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                                <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                                <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                                <field hash="8E462320" name="hidGraphicIndex" value-Int32="2" type="BinHex">02000000</field>
+                                <field hash="80736701" name="index" value-Int32="1" type="BinHex">01000000</field>
+                                <object hash="2C3872D7" name="Stim">
+                                  <field hash="1BD9687D" name="bPierceStim" value-Boolean="False" type="BinHex">00</field>
+                                  <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                                  <field hash="2CE04FBD" name="bBurnStim" value-Boolean="False" type="BinHex">00</field>
+                                  <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                                  <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                                </object>
+                                <object hash="F8CD54EF" name="hidEffectBones" />
+                              </object>
+                              <object hash="254D477B" name="Node">
+                                <field hash="88E8521E" name="text_disName" value-String="FenceWood8e_STATE03" type="BinHex">46656E6365576F6F6438655F5354415445303300</field>
+                                <field hash="AC497D21" name="disName" value-ComputeHash32="FenceWood8e_STATE03" type="BinHex">D73D5DD8</field>
+                                <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                                <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                                <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                                <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                                <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                                <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                                <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                                <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                                <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                                <field hash="8E462320" name="hidGraphicIndex" value-Int32="4" type="BinHex">04000000</field>
+                                <field hash="80736701" name="index" value-Int32="2" type="BinHex">02000000</field>
+                                <object hash="2C3872D7" name="Stim">
+                                  <field hash="1BD9687D" name="bPierceStim" value-Boolean="False" type="BinHex">00</field>
+                                  <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                                  <field hash="2CE04FBD" name="bBurnStim" value-Boolean="False" type="BinHex">00</field>
+                                  <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                                  <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                                </object>
+                                <object hash="F8CD54EF" name="hidEffectBones" />
+                              </object>
+                            </object>
+                          </object>
+                          <object hash="E9B0C869" name="OnDamage">
+                            <field hash="A746E6DC" name="selNextState" value-Enum="1" type="BinHex">01000000</field>
+                            <object hash="13B84C9B" name="enumNextState">
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                              </object>
+                            </object>
+                          </object>
+                          <object hash="219C667A" name="OnEvent">
+                            <field hash="C41038B9" name="bTriggerEffects" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="A746E6DC" name="selNextState" value-Enum="0" type="BinHex">00000000</field>
+                            <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                            <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                            <object hash="13B84C9B" name="enumNextState">
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                              </object>
+                            </object>
+                          </object>
+                        </object>
+                      </object>
+                    </object>
+                  </object>
+                  <object hash="E93DDFF8" name="Part">
+                    <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="CEBC1B50" name="bForceStatic" value-Boolean="False" type="BinHex">00</field>
+                    <field hash="8BD83358" name="bCarryOnDamage" value-Boolean="True" type="BinHex">01</field>
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="1" type="BinHex">01000000</field>
+                    <object hash="24E7FBE0" name="hidConnectivity">
+                      <object hash="D12C6860" name="hidMasks">
+                        <object hash="9865E1F1" name="hidMask">
+                          <field hash="F1F3A030" name="hidValue" value-Int32="1" type="BinHex">01000000</field>
+                        </object>
+                      </object>
+                    </object>
+                    <object hash="6D659EAB" name="StateNode">
+                      <field hash="88E8521E" name="text_disName" value-String="FWunderstate02_STATE" type="BinHex">4657756E646572737461746530325F535441544500</field>
+                      <field hash="AC497D21" name="disName" value-ComputeHash32="FWunderstate02_STATE" type="BinHex">D25593AF</field>
+                      <field hash="FE7DBDC5" name="FirstStateIndex" value-Int32="0" type="BinHex">00000000</field>
+                      <field hash="5B915FF1" name="hidBoneIndex" value-Int32="16" type="BinHex">10000000</field>
+                      <object hash="366E727B" name="States">
+                        <object hash="6252FDFF" name="State">
+                          <field hash="258BB869" name="disIndex" value-Int32="0" type="BinHex">00000000</field>
+                          <field hash="231B472A" name="hidNodeType" value-Int32="1" type="BinHex">01000000</field>
+                          <object hash="DB83EFB8" name="StateSubNode">
+                            <field hash="88E8521E" name="text_disName" value-String="FenceWoodWire033b_STATE2" type="BinHex">46656E6365576F6F6457697265303333625F53544154453200</field>
+                            <field hash="AC497D21" name="disName" value-ComputeHash32="FenceWoodWire033b_STATE2" type="BinHex">74176B8D</field>
+                            <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                            <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                            <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                            <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                            <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                            <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                            <field hash="8E462320" name="hidGraphicIndex" value-Int32="5" type="BinHex">05000000</field>
+                            <object hash="2C3872D7" name="Stim">
+                              <field hash="1BD9687D" name="bPierceStim" value-Boolean="False" type="BinHex">00</field>
+                              <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                              <field hash="2CE04FBD" name="bBurnStim" value-Boolean="False" type="BinHex">00</field>
+                              <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                              <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                            </object>
+                            <object hash="F8CD54EF" name="hidEffectBones">
+                              <object hash="D24C9DB6" name="hidBone">
+                                <field hash="6CF79F05" name="hidIndex" value-Int32="18" type="BinHex">12000000</field>
+                              </object>
+                              <object hash="D24C9DB6" name="hidBone">
+                                <field hash="6CF79F05" name="hidIndex" value-Int32="19" type="BinHex">13000000</field>
+                              </object>
+                              <object hash="D24C9DB6" name="hidBone">
+                                <field hash="6CF79F05" name="hidIndex" value-Int32="20" type="BinHex">14000000</field>
+                              </object>
+                              <object hash="D24C9DB6" name="hidBone">
+                                <field hash="6CF79F05" name="hidIndex" value-Int32="21" type="BinHex">15000000</field>
+                              </object>
+                              <object hash="D24C9DB6" name="hidBone">
+                                <field hash="6CF79F05" name="hidIndex" value-Int32="22" type="BinHex">16000000</field>
+                              </object>
+                              <object hash="D24C9DB6" name="hidBone">
+                                <field hash="6CF79F05" name="hidIndex" value-Int32="23" type="BinHex">17000000</field>
+                              </object>
+                            </object>
+                          </object>
+                          <object hash="E9B0C869" name="OnDamage">
+                            <field hash="A746E6DC" name="selNextState" value-Enum="2" type="BinHex">02000000</field>
+                            <object hash="13B84C9B" name="enumNextState">
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                              </object>
+                            </object>
+                          </object>
+                          <object hash="219C667A" name="OnEvent">
+                            <field hash="C41038B9" name="bTriggerEffects" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="A746E6DC" name="selNextState" value-Enum="2" type="BinHex">02000000</field>
+                            <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                            <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                            <object hash="13B84C9B" name="enumNextState">
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                              </object>
+                            </object>
+                          </object>
+                        </object>
+                        <object hash="6252FDFF" name="State">
+                          <field hash="258BB869" name="disIndex" value-Int32="1" type="BinHex">01000000</field>
+                          <field hash="231B472A" name="hidNodeType" value-Int32="1" type="BinHex">01000000</field>
+                          <object hash="DB83EFB8" name="StateSubNode">
+                            <field hash="88E8521E" name="text_disName" value-String="FenceWood2e_STATE04" type="BinHex">46656E6365576F6F6432655F5354415445303400</field>
+                            <field hash="AC497D21" name="disName" value-ComputeHash32="FenceWood2e_STATE04" type="BinHex">BD381B51</field>
+                            <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                            <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                            <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                            <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                            <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                            <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                            <field hash="8E462320" name="hidGraphicIndex" value-Int32="6" type="BinHex">06000000</field>
+                            <object hash="2C3872D7" name="Stim">
+                              <field hash="1BD9687D" name="bPierceStim" value-Boolean="False" type="BinHex">00</field>
+                              <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                              <field hash="2CE04FBD" name="bBurnStim" value-Boolean="False" type="BinHex">00</field>
+                              <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                              <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                            </object>
+                            <object hash="F8CD54EF" name="hidEffectBones" />
+                          </object>
+                          <object hash="E9B0C869" name="OnDamage">
+                            <field hash="A746E6DC" name="selNextState" value-Enum="1" type="BinHex">01000000</field>
+                            <object hash="13B84C9B" name="enumNextState">
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                              </object>
+                            </object>
+                          </object>
+                          <object hash="219C667A" name="OnEvent">
+                            <field hash="C41038B9" name="bTriggerEffects" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="A746E6DC" name="selNextState" value-Enum="0" type="BinHex">00000000</field>
+                            <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                            <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                            <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                            <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                            <object hash="13B84C9B" name="enumNextState">
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                              </object>
+                              <object hash="0EBEAE51" name="enum">
+                                <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                              </object>
+                            </object>
+                          </object>
+                        </object>
+                      </object>
+                    </object>
+                  </object>
+                </object>
+              </object>
+              <object hash="E9B0C869" name="OnDamage">
+                <field hash="A746E6DC" name="selNextState" value-Enum="1" type="BinHex">01000000</field>
+                <object hash="13B84C9B" name="enumNextState">
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="219C667A" name="OnEvent">
+                <field hash="C41038B9" name="bTriggerEffects" value-Boolean="False" type="BinHex">00</field>
+                <field hash="A746E6DC" name="selNextState" value-Enum="0" type="BinHex">00000000</field>
+                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                <object hash="13B84C9B" name="enumNextState">
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+      </object>
+      <object hash="21F8DC61" name="CParticleFXComponent">
+        <object hash="B5150F3F" name="ParticleSystems">
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">62756C6C65745F696D706163742E62756C6C65745F696D706163742E625F696D705F6D6574616C00</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">F47F9A22</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWSt1_wirekillFX" type="BinHex">46575374315F776972656B696C6C465800</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWSt1_wirekillFX" type="BinHex">10693017</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">62756C6C65745F696D706163742E62756C6C65745F696D706163742E625F696D705F6D6574616C00</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">F47F9A22</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWSt1_wirekillFX01" type="BinHex">46575374315F776972656B696C6C4658303100</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWSt1_wirekillFX01" type="BinHex">ABF8EDB1</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">62756C6C65745F696D706163742E62756C6C65745F696D706163742E625F696D705F6D6574616C00</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">F47F9A22</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWSt1_wirekillFX02" type="BinHex">46575374315F776972656B696C6C4658303200</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWSt1_wirekillFX02" type="BinHex">11A9E428</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="destructibility.wood.wood_chair" type="BinHex">64657374727563746962696C6974792E776F6F642E776F6F645F636861697200</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="destructibility.wood.wood_chair" type="BinHex">C6EC1094</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWstate_woodFX01" type="BinHex">465773746174655F776F6F644658303100</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWstate_woodFX01" type="BinHex">CD799513</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="destructibility.wood.wood_chair" type="BinHex">64657374727563746962696C6974792E776F6F642E776F6F645F636861697200</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="destructibility.wood.wood_chair" type="BinHex">C6EC1094</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWstate_woodFX02" type="BinHex">465773746174655F776F6F644658303200</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWstate_woodFX02" type="BinHex">77289C8A</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">62756C6C65745F696D706163742E62756C6C65745F696D706163742E625F696D705F6D6574616C00</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">F47F9A22</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWstate_wireFX01" type="BinHex">465773746174655F776972654658303100</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWstate_wireFX01" type="BinHex">02746DF2</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">62756C6C65745F696D706163742E62756C6C65745F696D706163742E625F696D705F6D6574616C00</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">F47F9A22</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWstate_wireFX02" type="BinHex">465773746174655F776972654658303200</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWstate_wireFX02" type="BinHex">B825646B</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="destructibility.wood.wood_chair" type="BinHex">64657374727563746962696C6974792E776F6F642E776F6F645F636861697200</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="destructibility.wood.wood_chair" type="BinHex">C6EC1094</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWstateB_woodFX01" type="BinHex">46577374617465425F776F6F644658303100</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWstateB_woodFX01" type="BinHex">6CC3E21C</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="destructibility.wood.wood_chair" type="BinHex">64657374727563746962696C6974792E776F6F642E776F6F645F636861697200</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="destructibility.wood.wood_chair" type="BinHex">C6EC1094</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWstateB_woodFX02" type="BinHex">46577374617465425F776F6F644658303200</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWstateB_woodFX02" type="BinHex">D692EB85</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">62756C6C65745F696D706163742E62756C6C65745F696D706163742E625F696D705F6D6574616C00</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">F47F9A22</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWstateB_wireFX01" type="BinHex">46577374617465425F776972654658303100</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWstateB_wireFX01" type="BinHex">A3CE1AFD</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">62756C6C65745F696D706163742E62756C6C65745F696D706163742E625F696D705F6D6574616C00</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">F47F9A22</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWstateB_wireFX02" type="BinHex">46577374617465425F776972654658303200</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWstateB_wireFX02" type="BinHex">199F1364</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">62756C6C65745F696D706163742E62756C6C65745F696D706163742E625F696D705F6D6574616C00</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="bullet_impact.bullet_impact.b_imp_metal" type="BinHex">F47F9A22</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWstateB_wireFX03" type="BinHex">46577374617465425F776972654658303300</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWstateB_wireFX03" type="BinHex">8FAF1413</field>
+          </object>
+          <object hash="CAAA7EE8" name="ParticleSystem">
+            <field hash="E025591F" name="text_psEmitter" value-String="destructibility.wood.wood_chair" type="BinHex">64657374727563746962696C6974792E776F6F642E776F6F645F636861697200</field>
+            <field hash="132A6ADB" name="psEmitter" value-ComputeHash32="destructibility.wood.wood_chair" type="BinHex">C6EC1094</field>
+            <field hash="94677378" name="bFollowEntity" value-Boolean="False" type="BinHex">00</field>
+            <field hash="089AE5BB" name="text_disFXName" value-String="FWstateB_woodFX03" type="BinHex">46577374617465425F776F6F644658303300</field>
+            <field hash="FB95D67F" name="disFXName" value-ComputeHash32="FWstateB_woodFX03" type="BinHex">40A2ECF2</field>
+          </object>
+        </object>
+      </object>
+      <object hash="7273EBB0" name="CPersistComponent">
+        <field hash="7C4CF173" name="selLevel" value-Enum="1" type="BinHex">01000000</field>
+        <object hash="A2AF95CE" name="enumLevel">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Limited" type="BinHex">4C696D6974656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Full" type="BinHex">46756C6C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Critical" type="BinHex">437269746963616C00</field>
+          </object>
+        </object>
+      </object>
+      <object hash="A070E7F5" name="CCountersComponent">
+        <field hash="84F8E45C" name="archStimEffectTable" value-String="tables.StimEffectTables.ObjectDefault" type="BinHex">7461626C65732E5374696D4566666563745461626C65732E4F626A65637444656661756C7400</field>
+      </object>
+      <object hash="65EA0B23" name="CCompoundPhysNetworkComponent">
+        <field hash="3DDE91B5" name="fRespawnTime" value-Float32="60" type="BinHex">00007042</field>
+        <field hash="6B94101D" name="fPawnToCloseRadius" value-Float32="25" type="BinHex">0000C841</field>
+      </object>
+      <object hash="D6A6F4ED" name="CAIShootMeObject">
+        <field hash="6B8DD519" name="vectorBoxSize" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="EC0E81E5" name="bUsedByAI" value-Boolean="False" type="BinHex">00</field>
+        <field hash="A1B38F7F" name="selShootMeObjectType" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="FE628188" name="entEntranceEntity" type="BinHex">FFFFFFFFFFFFFFFF</field>
+        <object hash="ABEF1E16" name="enumShootMeObjectType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Generic" type="BinHex">47656E6572696300</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="AmmoPile" type="BinHex">416D6D6F50696C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="FuelPile" type="BinHex">4675656C50696C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="ExplosivePile" type="BinHex">4578706C6F7369766550696C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="RadioTower" type="BinHex">526164696F546F77657200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="NitrousOxTanks" type="BinHex">4E6974726F75734F7854616E6B7300</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="500lbBomb" type="BinHex">3530306C62426F6D6200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="NaturalGasTankRailCar" type="BinHex">4E61747572616C47617354616E6B5261696C43617200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="GasPump" type="BinHex">47617350756D7000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="DirectionBarrel" type="BinHex">446972656374696F6E42617272656C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="ThinPropaneTank" type="BinHex">5468696E50726F70616E6554616E6B00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="SmallPropaneTank" type="BinHex">536D616C6C50726F70616E6554616E6B00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="RedExplosiveBarrel" type="BinHex">5265644578706C6F7369766542617272656C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="JerryCan" type="BinHex">4A6572727943616E00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="OilTank" type="BinHex">4F696C54616E6B00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Generator" type="BinHex">47656E657261746F7200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="LiquidPropaneTank" type="BinHex">4C697175696450726F70616E6554616E6B00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Barge" type="BinHex">426172676500</field>
+          </object>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

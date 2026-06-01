@@ -1,0 +1,232 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Special.MK19.Multi" type="BinHex">5370656369616C2E4D4B31392E4D756C746900</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="weapons.Special.MK19.Multi" type="BinHex">776561706F6E732E5370656369616C2E4D4B31392E4D756C746900</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="2719" type="BinHex">9F0A000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="4" type="BinHex">04000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\weapons\special\mk19_turret\turret_mk19.xml" type="BinHex">67726170686963735C776561706F6E735C7370656369616C5C6D6B31395F7475727265745C7475727265745F6D6B31392E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\weapons\special\mk19_turret\turret_mk19.xml" type="BinHex">FAAF7FB2</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2" detail="0">
+              <object index="0" meshName="ACCESSORY03" boneName="ACCESSORY03" bboxMin="-0.0247783,-0.283186,-0.00813467" bboxMax="0.00898086,0.0710049,0.0806575" />
+              <object index="1" meshName="ACCESSORY01" boneName="ACCESSORY01" bboxMin="-0.023221,-0.0443297,-0.0145871" bboxMax="0.0234642,0.00988272,0.00328557" />
+              <object index="2" meshName="ACCESSORY02" boneName="ACCESSORY02" bboxMin="-0.111938,-0.285276,-0.0131049" bboxMax="0.111904,0.00307681,0.0456748" />
+              <object index="3" meshName="FRAME" boneName="FRAME" bboxMin="-0.440845,-0.591065,-0.196957" bboxMax="0.0901397,0.457185,0.209686" />
+              <object index="4" meshName="CLIP_BULLET" boneName="CLIP_BULLET" bboxMin="-0.0890628,-0.0303828,0.00739682" bboxMax="-0.0054095,0.0523994,0.0851433" />
+              <resource fileName="graphics\Weapons\Special\MK19_Turret\TURRET_Mk19.xbg" bboxMin="-0.440844,-0.591067,-0.196957" bboxMax="0.175835,0.457186,0.209686" />
+              <skeleton name="TURRET_Mk19" pos="0,0,0" rot="1,-0,-0,-0">
+                <bone name="ACCESSORY03" pos="0.10483,-0.256506,0.0157" rot="0.707107,0,-0,-0.707107" />
+                <bone name="FX_CASING" pos="0.082831,-0.117256,0.013877" rot="0.701057,0.0922957,-0.0922957,-0.701058" />
+                <bone name="ACCESSORY01" pos="-0.000274,-0.540512,0.085773" rot="1,0,0,0" />
+                <bone name="ACCESSORY02" pos="-0.02735,-0.05274,0.088095" rot="1,0,0,0" />
+                <bone name="FX_FIRE" pos="-0.001756,0.441225,0.008295" rot="1,0,0,0" />
+                <bone name="FRAME" pos="0,-0,-0" rot="1,0,0,0" />
+                <bone name="CLIP_BULLET" pos="-0.069554,-0.120663,-0.003891" rot="1,0,0,0" />
+                <bone name="Weapon_Break" pos="0,0,0" rot="1,0,0,0" />
+              </skeleton>
+            </component>
+            <component class="RigidPhysComponent">
+              <resource fileName="graphics\Weapons\Special\MK19_Turret\TURRET_Mk19.hkx" />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="1025" type="BinHex">01040000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="True" type="BinHex">01</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\weapons\special\mk19_turret\turret_mk19.xbg" type="BinHex">67726170686963735C776561706F6E735C7370656369616C5C6D6B31395F7475727265745C7475727265745F6D6B31392E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\weapons\special\mk19_turret\turret_mk19.xbg" type="BinHex">BD6A35A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="ACCESSORY03" type="BinHex">4143434553534F5259303300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="ACCESSORY03" type="BinHex">4143434553534F5259303300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="ACCESSORY03" type="BinHex">33FBD5AF</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="ACCESSORY03_LOD0" type="BinHex">4143434553534F525930335F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="ACCESSORY03_LOD0" type="BinHex">DF3C9271</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="1" type="BinHex">01000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\weapons\special\mk19_turret\turret_mk19.xbg" type="BinHex">67726170686963735C776561706F6E735C7370656369616C5C6D6B31395F7475727265745C7475727265745F6D6B31392E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\weapons\special\mk19_turret\turret_mk19.xbg" type="BinHex">BD6A35A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="ACCESSORY01" type="BinHex">4143434553534F5259303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="ACCESSORY01" type="BinHex">4143434553534F5259303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="ACCESSORY01" type="BinHex">1F9ADB41</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="ACCESSORY01_LOD0" type="BinHex">4143434553534F525930315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="ACCESSORY01_LOD0" type="BinHex">D49D5A3C</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="2" type="BinHex">02000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\weapons\special\mk19_turret\turret_mk19.xbg" type="BinHex">67726170686963735C776561706F6E735C7370656369616C5C6D6B31395F7475727265745C7475727265745F6D6B31392E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\weapons\special\mk19_turret\turret_mk19.xbg" type="BinHex">BD6A35A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="ACCESSORY02" type="BinHex">4143434553534F5259303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="ACCESSORY02" type="BinHex">4143434553534F5259303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="ACCESSORY02" type="BinHex">A5CBD2D8</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="ACCESSORY02_LOD0" type="BinHex">4143434553534F525930325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="ACCESSORY02_LOD0" type="BinHex">7AEFCEBA</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\weapons\special\mk19_turret\turret_mk19.xbg" type="BinHex">67726170686963735C776561706F6E735C7370656369616C5C6D6B31395F7475727265745C7475727265745F6D6B31392E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\weapons\special\mk19_turret\turret_mk19.xbg" type="BinHex">BD6A35A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="FRAME" type="BinHex">4652414D4500</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="FRAME" type="BinHex">4652414D4500</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="FRAME" type="BinHex">7DFEAC42</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="FRAME_LOD0" type="BinHex">4652414D455F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="FRAME_LOD0" type="BinHex">BBF47F11</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="4" type="BinHex">04000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\weapons\special\mk19_turret\turret_mk19.xbg" type="BinHex">67726170686963735C776561706F6E735C7370656369616C5C6D6B31395F7475727265745C7475727265745F6D6B31392E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\weapons\special\mk19_turret\turret_mk19.xbg" type="BinHex">BD6A35A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="CLIP_BULLET" type="BinHex">434C49505F42554C4C455400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="CLIP_BULLET" type="BinHex">434C49505F42554C4C455400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="CLIP_BULLET" type="BinHex">B8A008A9</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="CLIP_BULLET_LOD0" type="BinHex">434C49505F42554C4C45545F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="CLIP_BULLET_LOD0" type="BinHex">1A34A378</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="09D5E1B2" name="CSimpleAnimationComponent">
+        <field hash="F9F2D5F4" name="text_fileSkeleton" value-String="graphics\weapons\special\mk19_turret\turret_mk19_ref.skeleton" type="BinHex">67726170686963735C776561706F6E735C7370656369616C5C6D6B31395F7475727265745C7475727265745F6D6B31395F7265662E736B656C65746F6E00</field>
+        <field hash="0B80933A" name="fileSkeleton" value-ComputeHash32="graphics\weapons\special\mk19_turret\turret_mk19_ref.skeleton" type="BinHex">A8A9E309</field>
+        <field hash="C22DBBC8" name="sPartName" value-String="mk19" type="BinHex">6D6B313900</field>
+        <field hash="EC1D5173" name="text_fileAnimation" value-String="" type="BinHex">00</field>
+        <field hash="9033CC82" name="fileAnimation" type="BinHex">FFFFFFFF</field>
+        <field hash="D32F71E1" name="bDisableInterpolation" value-Boolean="False" type="BinHex">00</field>
+      </object>
+      <object hash="9FF97799" name="BTZWeapon">
+        <field hash="ECDD88A8" name="iAnimationValue" value-Int32="35" type="BinHex">23000000</field>
+        <field hash="8DC92BF4" name="sndswtpWeaponStatusSoundSwitchType" value-Int32="4457127" type="BinHex">A7024400</field>
+        <field hash="EB6ACCFC" name="WeaponStatusSwitchValues" strVal="^&quot;-&quot;&lt;&quot;N&quot;WeaponStatusSwitchValuesFailure4294967295LowReliabilityMediumReliabilityHighReliability" type="BinHex">00005E010400190400001A22002D22003C22004E22576561706F6E53746174757353776974636856616C75657300004661696C7572650034323934393637323935004C6F7752656C696162696C697479004D656469756D52656C696162696C697479004869676852656C696162696C6974790000</field>
+        <field hash="E320CAA8" name="bUseHiResScope" value-Boolean="False" type="BinHex">00</field>
+        <field hash="49C53E5F" name="fHiResLowResScopeSwitchTransitionPoint" value-Float32="0.5" type="BinHex">0000003F</field>
+        <field hash="B3B429E1" type="BinHex">00</field>
+        <field hash="FC967289" name="fireBulletShakeAndRumbleEffect" type="BinHex">FFFFFFFF</field>
+        <field hash="CFEE9FBD" name="archOffHandWeapon" type="BinHex">00</field>
+        <object hash="B547918A" name="ReliabilityLevelsData">
+          <object hash="EE263A5D" name="Failure">
+            <field hash="AE9D874A" name="fHorizontalRecoilPerShot" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="D1C42618" name="fVerticalRecoilPerShot" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="408D87CF" name="fBulletDeviationMax" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="6D4C4782" name="fJamProbabilityPerReload" value-Float32="0" type="BinHex">00000000</field>
+          </object>
+          <object hash="AAC53E41" name="Low">
+            <field hash="AE9D874A" name="fHorizontalRecoilPerShot" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="D1C42618" name="fVerticalRecoilPerShot" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="408D87CF" name="fBulletDeviationMax" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="6D4C4782" name="fJamProbabilityPerReload" value-Float32="0" type="BinHex">00000000</field>
+          </object>
+          <object hash="C1DF4081" name="Medium">
+            <field hash="AE9D874A" name="fHorizontalRecoilPerShot" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="D1C42618" name="fVerticalRecoilPerShot" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="408D87CF" name="fBulletDeviationMax" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="6D4C4782" name="fJamProbabilityPerReload" value-Float32="0" type="BinHex">00000000</field>
+          </object>
+          <object hash="51374B6B" name="High">
+            <field hash="AE9D874A" name="fHorizontalRecoilPerShot" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="D1C42618" name="fVerticalRecoilPerShot" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="408D87CF" name="fBulletDeviationMax" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="6D4C4782" name="fJamProbabilityPerReload" value-Float32="0" type="BinHex">00000000</field>
+          </object>
+        </object>
+        <object hash="55A3286F" name="SteppingWithWeaponSound">
+          <field hash="338BA146" name="sndWeaponStepSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          <field hash="DB924B43" name="sndtpWeaponStepSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+          <object hash="058252DA" name="StepSoundDelayVsPawnPace_InMillisecond">
+            <field hash="3420A9C9" name="Immobile" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="1AE0EE9F" name="Sneaking" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="67FD7C8B" name="Walking" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="E09CB0F3" name="Running" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="F87BDB87" name="Sprinting" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="F14C970E" name="RoadRunner" value-Int32="0" type="BinHex">00000000</field>
+          </object>
+        </object>
+        <object hash="004F9423" name="FireBulletIntensity">
+          <field hash="11FDAF2E" name="fFireIntensity" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="20B0996D" name="fHitIntesity" value-Float32="1" type="BinHex">0000803F</field>
+        </object>
+        <object hash="E348155E" name="FireStrategy" />
+      </object>
+      <object hash="A070E7F5" name="CCountersComponent">
+        <field hash="84F8E45C" name="archStimEffectTable" value-String="tables.StimEffectTables.WeaponDefault" type="BinHex">7461626C65732E5374696D4566666563745461626C65732E576561706F6E44656661756C7400</field>
+      </object>
+      <object hash="7273EBB0" name="CPersistComponent">
+        <field hash="7C4CF173" name="selLevel" value-Enum="2" type="BinHex">02000000</field>
+        <object hash="A2AF95CE" name="enumLevel">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Limited" type="BinHex">4C696D6974656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Full" type="BinHex">46756C6C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Critical" type="BinHex">437269746963616C00</field>
+          </object>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

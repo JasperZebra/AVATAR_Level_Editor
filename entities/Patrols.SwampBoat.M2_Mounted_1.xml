@@ -1,0 +1,134 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Patrols.SwampBoat.M2_Mounted" type="BinHex">506174726F6C732E5377616D70426F61742E4D325F4D6F756E74656400</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="GhostPatrols.Patrols.SwampBoat.M2_Mounted" type="BinHex">47686F7374506174726F6C732E506174726F6C732E5377616D70426F61742E4D325F4D6F756E74656400</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="991" type="BinHex">DF03000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CGhostEntity" type="BinHex">4347686F7374456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CGhostEntity" type="BinHex">44270F00</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="0" type="BinHex">00000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="D8C1CBCD" name="CNPCSpawnerComponent">
+        <field hash="7C35DA25" name="bActive" value-Boolean="False" type="BinHex">00</field>
+        <field hash="523DF11F" name="bNoTimerOnInitialSpawn" value-Boolean="False" type="BinHex">00</field>
+        <field hash="310819CE" name="bFullInitialSpawn" value-Boolean="False" type="BinHex">00</field>
+        <field hash="BFCE7DFE" name="fSpawnFrequency" value-Float32="-1" type="BinHex">000080BF</field>
+        <field hash="02C1FD37" name="fSecondsBeforeCorpseDespawn" value-Float32="60" type="BinHex">00007042</field>
+        <field hash="48A25DE7" name="fMinSpawnDistance" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="BBF3DD59" name="bRespawnWhenDead" value-Boolean="False" type="BinHex">00</field>
+        <field hash="53A83DCA" name="bCannotSeeRespawn" value-Boolean="True" type="BinHex">01</field>
+        <field hash="7CA76063" name="bCanSeeFarRespawn" value-Boolean="True" type="BinHex">01</field>
+        <field hash="57A6943E" name="bCannotSeeDespawn" value-Boolean="True" type="BinHex">01</field>
+        <field hash="DD76596C" name="iNPCMaximumAmount" value-Int32="-1" type="BinHex">FFFFFFFF</field>
+        <field hash="8F5EFFED" name="iNPCMaximumRespawns" value-Int32="-1" type="BinHex">FFFFFFFF</field>
+        <field hash="3D6FE267" name="iNPCMaximumDeadAmount" value-Int32="10" type="BinHex">0A000000</field>
+        <field hash="E800C721" name="bIgnoreSTP" value-Boolean="False" type="BinHex">00</field>
+        <field hash="749EB981" name="iNPCLevelOverride" value-Int32="-1" type="BinHex">FFFFFFFF</field>
+        <field hash="677CBE18" name="iNPCLevelOverrideMax" value-Int32="-1" type="BinHex">FFFFFFFF</field>
+        <field hash="42BF3779" name="bNPCForceSpawnWithWeaponDrawn" value-Boolean="False" type="BinHex">00</field>
+        <field hash="BA59DA31" name="entSpawnPoints" type="BinHex">FFFFFFFFFFFFFFFF</field>
+        <field hash="0751DF13" name="entRushPoint" type="BinHex">FFFFFFFFFFFFFFFF</field>
+        <field hash="759F3A12" name="bBlindRush" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C82D581F" name="entJumpPoint" type="BinHex">FFFFFFFFFFFFFFFF</field>
+        <field hash="8EA3A9BB" name="selSpawnerType" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="2048B038" name="archNPCArchetype" type="BinHex">00</field>
+        <field hash="99C21F79" name="sNPCOverrideNameID" type="BinHex">00</field>
+        <field hash="139FAB01" name="sAdditionnalMissionEventOnPlayerKill" type="BinHex">00</field>
+        <field hash="5AEDF0BD" name="sAdditionnalMissionEventOnDeath" type="BinHex">00</field>
+        <object hash="8752221C" name="sNPCSupportedSTPSubtypes">
+          <field hash="10CA06AB" name="hidSize" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="64D33A00" type="BinHex">00</field>
+          <field hash="6934F823" type="BinHex">FFFFFFFF</field>
+          <field hash="13D40A96" type="BinHex">00</field>
+          <field hash="1E33C8B5" type="BinHex">FFFFFFFF</field>
+          <field hash="8ADD5B2C" type="BinHex">00</field>
+          <field hash="873A990F" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="2D223749" name="VisionPoints">
+          <object hash="2FB2B4AA" name="VisionPoint">
+            <field hash="F8186C6E" name="fRadius" value-Float32="50" type="BinHex">00004842</field>
+            <field hash="95FD7609" name="entEntity" type="BinHex">FFFFFFFFFFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="07988E71" name="enumSpawnerType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Single" type="BinHex">53696E676C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Random" type="BinHex">52616E646F6D00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Cycle" type="BinHex">4379636C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Mounted" type="BinHex">4D6F756E74656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Group" type="BinHex">47726F757000</field>
+          </object>
+        </object>
+        <object hash="33F0D285" name="SpawnedVehiclesOverrides">
+          <field hash="4003810F" name="bNoAdvancedAmmo" value-Boolean="False" type="BinHex">00</field>
+          <field hash="8DAE7BF7" name="bDespawnOnPlayerDeath" value-Boolean="False" type="BinHex">00</field>
+        </object>
+        <object hash="F68F03C7" name="Sounds">
+          <field hash="398B9FF3" name="sndNPCSpawnedStartSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          <field hash="0BFF2BD8" name="sndNPCSpawnedStopSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          <field hash="61C94706" name="sndActivatedSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          <field hash="F78005C5" name="sndDeactivatedSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        </object>
+      </object>
+      <object hash="7273EBB0" name="CPersistComponent">
+        <field hash="7C4CF173" name="selLevel" value-Enum="1" type="BinHex">01000000</field>
+        <object hash="A2AF95CE" name="enumLevel">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Limited" type="BinHex">4C696D6974656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Full" type="BinHex">46756C6C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Critical" type="BinHex">437269746963616C00</field>
+          </object>
+        </object>
+      </object>
+    </object>
+    <object hash="C292BFA5" name="Ghost">
+      <field hash="5C91004B" name="entPathToFollow" type="BinHex">FFFFFFFFFFFFFFFF</field>
+      <field hash="BC35D67A" name="vectorBBoxMin" value-Vector3="-1.5,-4.5,0" type="BinHex">0000C0BF000090C000000000</field>
+      <field hash="8038E923" name="vectorBBoxMax" value-Vector3="1.5,4.5,3" type="BinHex">0000C03F0000904000004040</field>
+      <field hash="A01A877D" name="bIsPersistent" value-Boolean="False" type="BinHex">00</field>
+      <field hash="3637FDE4" name="bInvertPathDirection" value-Boolean="False" type="BinHex">00</field>
+      <field hash="450204DB" name="bGhostOnLastEntity" value-Boolean="True" type="BinHex">01</field>
+      <field hash="67AA6B0B" name="fSpeed" value-Float32="8" type="BinHex">00000041</field>
+      <field hash="645EC272" name="bIsEnabled" value-Boolean="True" type="BinHex">01</field>
+    </object>
+  </object>
+</object>

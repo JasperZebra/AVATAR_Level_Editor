@@ -1,0 +1,792 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="GameMode.FCXMulti.BTZKingOfTheHill" type="BinHex">47616D654D6F64652E4643584D756C74692E42545A4B696E674F6654686548696C6C00</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="engine.GameMode.FCXMulti.BTZKingOfTheHill" type="BinHex">656E67696E652E47616D654D6F64652E4643584D756C74692E42545A4B696E674F6654686548696C6C00</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="965" type="BinHex">C503000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CGameModeEntity" type="BinHex">4347616D654D6F6465456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CGameModeEntity" type="BinHex">0EF4CDB1</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="197" type="BinHex">C5000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="3101AE35" name="CGameModeComponent">
+        <field hash="F1B1D97B" name="text_sName" value-String="KingOfTheHill" type="BinHex">4B696E674F6654686548696C6C00</field>
+        <field hash="A7056326" name="sName" value-ComputeHash32="KingOfTheHill" type="BinHex">C5C8F830</field>
+        <field hash="8E4FDD0E" name="text_sVoiceIntroEventName" value-String="Radio_In" type="BinHex">526164696F5F496E00</field>
+        <field hash="B2A667BF" name="sVoiceIntroEventName" value-ComputeHash32="Radio_In" type="BinHex">3802B3D7</field>
+        <field hash="25438FC1" name="text_sVoiceOutroEventName" value-String="Radio_Out" type="BinHex">526164696F5F4F757400</field>
+        <field hash="19AA3570" name="sVoiceOutroEventName" value-ComputeHash32="Radio_Out" type="BinHex">1CE60400</field>
+        <field hash="3F4C7746" name="text_sVoiceSeparatorEventName" value-String="HalfSecond_Silence" type="BinHex">48616C665365636F6E645F53696C656E636500</field>
+        <field hash="F298115D" name="sVoiceSeparatorEventName" value-ComputeHash32="HalfSecond_Silence" type="BinHex">62676F0A</field>
+        <object hash="399A1672" name="CommonSoundEvents">
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="CountDownBeep_Generic" type="BinHex">436F756E74446F776E426565705F47656E6572696300</field>
+            <field hash="A7056326" name="sName" value-ComputeHash32="CountDownBeep_Generic" type="BinHex">8BDF1ED7</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="red" type="BinHex">72656400</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="red" type="BinHex">8F5F61FA</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126AE5" type="BinHex">3078303031323641453500</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="20" type="BinHex">14000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="blue" type="BinHex">626C756500</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="blue" type="BinHex">B4CA369E</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126AE5" type="BinHex">3078303031323641453500</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="20" type="BinHex">14000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="20" type="BinHex">14000000</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="Multi_CorpWinSound" type="BinHex">4D756C74695F436F727057696E536F756E6400</field>
+            <field hash="A7056326" name="sName" value-ComputeHash32="Multi_CorpWinSound" type="BinHex">443685AA</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="red" type="BinHex">72656400</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="red" type="BinHex">8F5F61FA</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126AF8" type="BinHex">3078303031323641463800</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="17" type="BinHex">11000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="blue" type="BinHex">626C756500</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="blue" type="BinHex">B4CA369E</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126AF7" type="BinHex">3078303031323641463700</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="17" type="BinHex">11000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="Multi_NaviWinSound" type="BinHex">4D756C74695F4E61766957696E536F756E6400</field>
+            <field hash="A7056326" name="sName" value-ComputeHash32="Multi_NaviWinSound" type="BinHex">FC48D46F</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="red" type="BinHex">72656400</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="red" type="BinHex">8F5F61FA</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126AF9" type="BinHex">3078303031323641463900</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="17" type="BinHex">11000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="blue" type="BinHex">626C756500</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="blue" type="BinHex">B4CA369E</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126AF6" type="BinHex">3078303031323641463600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="17" type="BinHex">11000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="" type="BinHex">00</field>
+            <field hash="A7056326" name="sName" type="BinHex">FFFFFFFF</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+        </object>
+        <object hash="CBB23DE4" name="SpecificSoundEvents">
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="TeamCaptureMainHill" type="BinHex">5465616D436170747572654D61696E48696C6C00</field>
+            <field hash="A7056326" name="sName" value-ComputeHash32="TeamCaptureMainHill" type="BinHex">56B1C894</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="red" type="BinHex">72656400</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="red" type="BinHex">8F5F61FA</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126B35" type="BinHex">3078303031323642333500</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="blue" type="BinHex">626C756500</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="blue" type="BinHex">B4CA369E</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126B35" type="BinHex">3078303031323642333500</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="TeamCaptureSecondaryHill" type="BinHex">5465616D436170747572655365636F6E6461727948696C6C00</field>
+            <field hash="A7056326" name="sName" value-ComputeHash32="TeamCaptureSecondaryHill" type="BinHex">0829694C</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="red" type="BinHex">72656400</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="red" type="BinHex">8F5F61FA</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126B33" type="BinHex">3078303031323642333300</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="blue" type="BinHex">626C756500</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="blue" type="BinHex">B4CA369E</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126B33" type="BinHex">3078303031323642333300</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="EnemyCapture" type="BinHex">456E656D794361707475726500</field>
+            <field hash="A7056326" name="sName" value-ComputeHash32="EnemyCapture" type="BinHex">CAD86521</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="blue" type="BinHex">626C756500</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="blue" type="BinHex">B4CA369E</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126B36" type="BinHex">3078303031323642333600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="red" type="BinHex">72656400</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="red" type="BinHex">8F5F61FA</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126B36" type="BinHex">3078303031323642333600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="Capture_Neutrality" type="BinHex">436170747572655F4E65757472616C69747900</field>
+            <field hash="A7056326" name="sName" value-ComputeHash32="Capture_Neutrality" type="BinHex">B47312A3</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="red" type="BinHex">72656400</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="red" type="BinHex">8F5F61FA</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126B5D" type="BinHex">3078303031323642354400</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="blue" type="BinHex">626C756500</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="blue" type="BinHex">B4CA369E</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00126B5D" type="BinHex">3078303031323642354400</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="Capture_Progress" type="BinHex">436170747572655F50726F677265737300</field>
+            <field hash="A7056326" name="sName" value-ComputeHash32="Capture_Progress" type="BinHex">3D213DBE</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="red" type="BinHex">72656400</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="red" type="BinHex">8F5F61FA</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00461FAF" type="BinHex">3078303034363146414600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="blue" type="BinHex">626C756500</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="blue" type="BinHex">B4CA369E</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00461FAF" type="BinHex">3078303034363146414600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="Capture_Progress_Stop" type="BinHex">436170747572655F50726F67726573735F53746F7000</field>
+            <field hash="A7056326" name="sName" value-ComputeHash32="Capture_Progress_Stop" type="BinHex">0A888B53</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="red" type="BinHex">72656400</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="red" type="BinHex">8F5F61FA</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00462A2F" type="BinHex">3078303034363241324600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="blue" type="BinHex">626C756500</field>
+                <field hash="3DC6BB3F" name="sTeam" value-ComputeHash32="blue" type="BinHex">B4CA369E</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0x00462A2F" type="BinHex">3078303034363241324600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="12" type="BinHex">0C000000</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="" type="BinHex">00</field>
+            <field hash="A7056326" name="sName" type="BinHex">FFFFFFFF</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+        </object>
+        <object hash="DC12CC44" name="CommonArchetypeReferences">
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.Bow_Standard.Bow_Standard_01" type="BinHex">776561706F6E732E4176617461725F426F77732E426F775F5374616E646172642E426F775F5374616E646172645F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.Bow_Standard.Bow_Standard_02" type="BinHex">776561706F6E732E4176617461725F426F77732E426F775F5374616E646172642E426F775F5374616E646172645F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.Bow_Standard.Bow_Standard_03" type="BinHex">776561706F6E732E4176617461725F426F77732E426F775F5374616E646172642E426F775F5374616E646172645F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.Bow_Standard.Bow_Standard_04" type="BinHex">776561706F6E732E4176617461725F426F77732E426F775F5374616E646172642E426F775F5374616E646172645F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Fighting_Staff.Fighting_Staff_01" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4669676874696E675F53746166662E4669676874696E675F53746166665F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Fighting_Staff.Fighting_Staff_02" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4669676874696E675F53746166662E4669676874696E675F53746166665F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Fighting_Staff.Fighting_Staff_03" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4669676874696E675F53746166662E4669676874696E675F53746166665F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Fighting_Staff.Fighting_Staff_04" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4669676874696E675F53746166662E4669676874696E675F53746166665F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Machetee.Machetee_01" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4D616368657465652E4D616368657465655F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Machetee.Machetee_02" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4D616368657465652E4D616368657465655F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Axe.Axe_01" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4178652E4178655F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Axe.Axe_02" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4178652E4178655F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Axe.Axe_03" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4178652E4178655F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Axe.Axe_04" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4178652E4178655F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Bare_Hands" type="BinHex">776561706F6E732E4176617461725F4D656C65652E426172655F48616E647300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Dual_Wasp.Dual_Wasp_01" type="BinHex">776561706F6E732E4176617461725F47756E732E4475616C5F576173702E4475616C5F576173705F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Dual_Wasp.Dual_Wasp_02" type="BinHex">776561706F6E732E4176617461725F47756E732E4475616C5F576173702E4475616C5F576173705F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Dual_Wasp.Dual_Wasp_03" type="BinHex">776561706F6E732E4176617461725F47756E732E4475616C5F576173702E4475616C5F576173705F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Dual_Wasp.Dual_Wasp_04" type="BinHex">776561706F6E732E4176617461725F47756E732E4475616C5F576173702E4475616C5F576173705F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Combat_Shotgun.Combat_Shotgun_01" type="BinHex">776561706F6E732E4176617461725F47756E732E436F6D6261745F53686F7467756E2E436F6D6261745F53686F7467756E5F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Combat_Shotgun.Combat_Shotgun_02" type="BinHex">776561706F6E732E4176617461725F47756E732E436F6D6261745F53686F7467756E2E436F6D6261745F53686F7467756E5F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Combat_Shotgun.Combat_Shotgun_03" type="BinHex">776561706F6E732E4176617461725F47756E732E436F6D6261745F53686F7467756E2E436F6D6261745F53686F7467756E5F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Combat_Shotgun.Combat_Shotgun_04" type="BinHex">776561706F6E732E4176617461725F47756E732E436F6D6261745F53686F7467756E2E436F6D6261745F53686F7467756E5F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Standard_Issue.Standard_Issue_01" type="BinHex">776561706F6E732E4176617461725F47756E732E5374616E646172645F49737375652E5374616E646172645F49737375655F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Standard_Issue.Standard_Issue_02" type="BinHex">776561706F6E732E4176617461725F47756E732E5374616E646172645F49737375652E5374616E646172645F49737375655F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Standard_Issue.Standard_Issue_03" type="BinHex">776561706F6E732E4176617461725F47756E732E5374616E646172645F49737375652E5374616E646172645F49737375655F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Standard_Issue.Standard_Issue_04" type="BinHex">776561706F6E732E4176617461725F47756E732E5374616E646172645F49737375652E5374616E646172645F49737375655F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.M60.M60_01" type="BinHex">776561706F6E732E4176617461725F47756E732E4D36302E4D36305F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.M60.M60_02" type="BinHex">776561706F6E732E4176617461725F47756E732E4D36302E4D36305F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.M60.M60_03" type="BinHex">776561706F6E732E4176617461725F47756E732E4D36302E4D36305F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.M60.M60_04" type="BinHex">776561706F6E732E4176617461725F47756E732E4D36302E4D36305F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Flame_Thrower.Flame_Thrower_01" type="BinHex">776561706F6E732E4176617461725F47756E732E466C616D655F5468726F7765722E466C616D655F5468726F7765725F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Flame_Thrower.Flame_Thrower_02" type="BinHex">776561706F6E732E4176617461725F47756E732E466C616D655F5468726F7765722E466C616D655F5468726F7765725F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Flame_Thrower.Flame_Thrower_03" type="BinHex">776561706F6E732E4176617461725F47756E732E466C616D655F5468726F7765722E466C616D655F5468726F7765725F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Flame_Thrower.Flame_Thrower_04" type="BinHex">776561706F6E732E4176617461725F47756E732E466C616D655F5468726F7765722E466C616D655F5468726F7765725F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Assault_Rifle.Assault_Rifle_01" type="BinHex">776561706F6E732E4176617461725F47756E732E41737361756C745F5269666C652E41737361756C745F5269666C655F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Assault_Rifle.Assault_Rifle_02" type="BinHex">776561706F6E732E4176617461725F47756E732E41737361756C745F5269666C652E41737361756C745F5269666C655F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Assault_Rifle.Assault_Rifle_03" type="BinHex">776561706F6E732E4176617461725F47756E732E41737361756C745F5269666C652E41737361756C745F5269666C655F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Assault_Rifle.Assault_Rifle_04" type="BinHex">776561706F6E732E4176617461725F47756E732E41737361756C745F5269666C652E41737361756C745F5269666C655F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Grenade_Launcher.Grenade_Launcher_01" type="BinHex">776561706F6E732E4176617461725F47756E732E4772656E6164655F4C61756E636865722E4772656E6164655F4C61756E636865725F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Grenade_Launcher.Grenade_Launcher_02" type="BinHex">776561706F6E732E4176617461725F47756E732E4772656E6164655F4C61756E636865722E4772656E6164655F4C61756E636865725F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Grenade_Launcher.Grenade_Launcher_03" type="BinHex">776561706F6E732E4176617461725F47756E732E4772656E6164655F4C61756E636865722E4772656E6164655F4C61756E636865725F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Grenade_Launcher.Grenade_Launcher_04" type="BinHex">776561706F6E732E4176617461725F47756E732E4772656E6164655F4C61756E636865722E4772656E6164655F4C61756E636865725F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Rail_Gun.Rail_Gun_01" type="BinHex">776561706F6E732E4176617461725F47756E732E5261696C5F47756E2E5261696C5F47756E5F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Rail_Gun.Rail_Gun_02" type="BinHex">776561706F6E732E4176617461725F47756E732E5261696C5F47756E2E5261696C5F47756E5F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Rail_Gun.Rail_Gun_03" type="BinHex">776561706F6E732E4176617461725F47756E732E5261696C5F47756E2E5261696C5F47756E5F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Rail_Gun.Rail_Gun_04" type="BinHex">776561706F6E732E4176617461725F47756E732E5261696C5F47756E2E5261696C5F47756E5F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Bare_Hands" type="BinHex">776561706F6E732E4176617461725F4D656C65652E426172655F48616E647300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="player.MainCharacter.PawnPlayerNetwork_Corp" type="BinHex">706C617965722E4D61696E4368617261637465722E5061776E506C617965724E6574776F726B5F436F727000</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="player.MainCharacter.PawnPlayerNetwork_Avatar" type="BinHex">706C617965722E4D61696E4368617261637465722E5061776E506C617965724E6574776F726B5F41766174617200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" type="BinHex">00</field>
+          </object>
+        </object>
+        <object hash="214C9832" name="SpecificArchetypeReferences">
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" type="BinHex">00</field>
+          </object>
+        </object>
+        <object hash="699EF488" name="AnimationPackageReferences">
+          <object hash="11D55E09" name="Package">
+            <field hash="A7056326" name="sName" value-String="multiplayer" type="BinHex">6D756C7469706C6179657200</field>
+          </object>
+          <object hash="11D55E09" name="Package">
+            <field hash="A7056326" name="sName" type="BinHex">00</field>
+          </object>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

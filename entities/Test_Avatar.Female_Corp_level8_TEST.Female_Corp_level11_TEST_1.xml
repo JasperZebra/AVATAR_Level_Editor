@@ -1,0 +1,678 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Test_Avatar.Female_Corp_level8_TEST.Female_Corp_level11_TEST" type="BinHex">546573745F4176617461722E46656D616C655F436F72705F6C6576656C385F544553542E46656D616C655F436F72705F6C6576656C31315F5445535400</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="enemy_archetypes.Test_Avatar.Female_Corp_level8_TEST.Female_Corp_level11_TEST" type="BinHex">656E656D795F617263686574797065732E546573745F4176617461722E46656D616C655F436F72705F6C6576656C385F544553542E46656D616C655F436F72705F6C6576656C31315F5445535400</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="927" type="BinHex">9F03000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="1" type="BinHex">01000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\av_characters\corp\_kit\corp_f.xml" type="BinHex">67726170686963735C61765F636861726163746572735C636F72705C5F6B69745C636F72705F662E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\av_characters\corp\_kit\corp_f.xml" type="BinHex">4C7B69CA</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicKitComponent">
+              <slot name="HEAD">
+                <part meshName="Corp_F_Head_01_Jade" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_01_Jade.glm" id="dgiraud-P-0312200839703291">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="asian" />
+                  <criteria tag="head02" criteria="exclude" />
+                  <criteria tag="head03" criteria="exclude" />
+                  <criteria tag="head04" criteria="exclude" />
+                  <criteria tag="head05" criteria="exclude" />
+                  <criteria tag="head06" criteria="exclude" />
+                  <criteria tag="head08" criteria="exclude" />
+                  <criteria tag="head09" criteria="exclude" />
+                  <criteria tag="head10" criteria="exclude" />
+                  <criteria tag="head11" criteria="exclude" />
+                  <criteria tag="head12" criteria="exclude" />
+                  <facial tag="head01" />
+                </part>
+                <part meshName="Corp_F_Head_02_Shanti" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_02_Shanti.glm" id="dgiraud-P-0312200839906838">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="black" />
+                  <criteria tag="head02" criteria="required" />
+                  <facial tag="head02" />
+                </part>
+                <part meshName="Corp_F_Head_03_Maria" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_03_Maria.glm" id="cseaut-P-2008112644802761">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="latino" />
+                  <criteria tag="head03" criteria="required" />
+                  <facial tag="head03" />
+                </part>
+                <part meshName="Corp_F_Head_05_Tamara" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_05_Tamara.glm" id="dgiraud-P-0312200839375729">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="latino" />
+                  <criteria tag="head05" criteria="required" />
+                  <facial tag="head05" />
+                </part>
+                <part meshName="Corp_F_Head_06_Eva" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_06_Eva.glm" id="vgault-P-2009032450472368">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="latino" />
+                  <criteria tag="head06" criteria="required" />
+                  <facial tag="head06" />
+                </part>
+                <part meshName="Corp_F_Head_07_Kim" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_07_Kim.glm" id="vgault-P-2009032450489762">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="asian" />
+                  <criteria tag="head07" criteria="required" />
+                  <facial tag="head07" />
+                </part>
+                <part meshName="Corp_F_Head_08_Sandy" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_08_Sandy.glm" id="vgault-P-2009032450517630">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="black" />
+                  <criteria tag="head08" criteria="required" />
+                  <facial tag="head08" />
+                </part>
+                <part meshName="Corp_F_Head_12_Andrea" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_12_Andrea.glm" id="gmolle-P-2009050149961623">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="white" />
+                  <criteria tag="head12" criteria="required" />
+                  <facial tag="head12" />
+                </part>
+                <part meshName="Corp_F_Head_10_Ana" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_10_Ana.glm" id="gmolle-P-2009022039437569">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="head10" criteria="required" />
+                  <facial tag="head10" />
+                </part>
+                <part meshName="Corp_F_Head_04_Norma" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_04_Norma.glm" id="vgault-P-2009050855343560">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="asian" />
+                  <criteria tag="head04" criteria="required" />
+                  <facial tag="head04" />
+                </part>
+                <part meshName="Corp_F_Head_09_Johanne" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_09_Johanne.glm" id="vgault-P-2009052042087844">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="head09" criteria="required" />
+                  <facial tag="head09" />
+                </part>
+                <part meshName="Corp_F_Head_11_Kisha" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Head_11_Kisha.glm" id="vgault-P-2009050442030530">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="black" />
+                  <criteria tag="head11" criteria="required" />
+                  <facial tag="head11" />
+                </part>
+              </slot>
+              <slot name="SHIRT">
+                <part meshName="Corp_F_Mid_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Mid_01.glm" id="vgault-P-2008111255820553">
+                  <weight value="1" />
+                  <colors overwrite="1" library="level00" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid02" criteria="exclude" />
+                  <criteria tag="mid03" criteria="exclude" />
+                  <criteria tag="mid04" criteria="exclude" />
+                  <criteria tag="mid05" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid07" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid09" criteria="exclude" />
+                  <criteria tag="mid02b" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                  <criteria tag="mid11" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_Mid_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Mid_02.glm" id="vgault-P-2008111142469215">
+                  <weight value="1" />
+                  <colors overwrite="1" library="level01" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid00" criteria="exclude" />
+                  <criteria tag="mid01" criteria="exclude" />
+                  <criteria tag="mid04" criteria="exclude" />
+                  <criteria tag="mid05" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid07" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid09" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                  <criteria tag="mid11" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_Mid_04" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Mid_04.glm" id="vgault-P-2008111142469653">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid04" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Mid_05" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Mid_05.glm" id="vgault-P-2009011952011786">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid00" criteria="exclude" />
+                  <criteria tag="mid01" criteria="exclude" />
+                  <criteria tag="mid02" criteria="exclude" />
+                  <criteria tag="mid03" criteria="exclude" />
+                  <criteria tag="mid04" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid07" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid09" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                  <criteria tag="mid02b" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_Mid_06" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Mid_06.glm" id="vgault-P-2009020553442942">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid06" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Mid_07" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Mid_07.glm" id="vgault-P-2009040356284770">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid07" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Mid_08" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Mid_08.glm" id="vgault-P-2009040949567855">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid08" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Mid_10" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Mid_10.glm" id="vgault-P-2009081461116891">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid10" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Mid_09" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Mid_09.glm" id="vgault-P-2009081472734521">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid09" criteria="required" />
+                </part>
+              </slot>
+              <slot name="ARMS">
+                <part meshName="Corp_F_Arms02" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Arms02.glm" id="vgault-P-2008111142468370">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid03" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Arms01" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Arms01.glm" id="vgault-P-2008111142468793">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid03" criteria="exclude" />
+                  <criteria tag="mid05" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid07" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid09" criteria="exclude" />
+                  <criteria tag="mid02b" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                  <criteria tag="mid11" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_Arms_03" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Arms_03.glm" id="vgault-P-2009070860179904">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid00" criteria="exclude" />
+                  <criteria tag="mid01" criteria="exclude" />
+                  <criteria tag="mid02" criteria="exclude" />
+                  <criteria tag="mid03" criteria="exclude" />
+                  <criteria tag="mid04" criteria="exclude" />
+                  <criteria tag="mid05" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid09" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                  <criteria tag="mid11" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_Arms_05" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Arms_05.glm" id="vgault-P-2009081461732169">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid00" criteria="exclude" />
+                  <criteria tag="mid01" criteria="exclude" />
+                  <criteria tag="mid02" criteria="exclude" />
+                  <criteria tag="mid03" criteria="exclude" />
+                  <criteria tag="mid04" criteria="exclude" />
+                  <criteria tag="mid05" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid07" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid02b" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_Arms_04" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Arms_04.glm" id="vgault-P-2009081462111868">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid05" criteria="required" />
+                </part>
+              </slot>
+              <slot name="PANTS">
+                <part meshName="Corp_F_Low_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Low_01.glm" id="vgault-P-2008111255820989">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low03" criteria="exclude" />
+                  <criteria tag="low04" criteria="exclude" />
+                  <criteria tag="low05" criteria="exclude" />
+                  <criteria tag="low06" criteria="exclude" />
+                  <criteria tag="low07" criteria="exclude" />
+                  <criteria tag="low08" criteria="exclude" />
+                  <criteria tag="low09" criteria="exclude" />
+                  <criteria tag="low10" criteria="exclude" />
+                  <criteria tag="low11" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_Low_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Low_02.glm" id="vgault-P-2008102337398343">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low03" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Low_03" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Low_03.glm" id="vgault-P-2008111142470952">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low04" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Low_04" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Low_04.glm" id="vgault-P-2009011952012606">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low05" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Low_05" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Low_05.glm" id="vgault-P-2009020553480832">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low06" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Low_06" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Low_06.glm" id="vgault-P-2009040356261407">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low07" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Low_07" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Low_07.glm" id="vgault-P-2009040949549922">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low08" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Low_09" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Low_09.glm" id="vgault-P-2009081461129127">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low10" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Low_10" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Low_10.glm" id="vgault-P-2009081461763734">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low11" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Low_08" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Low_08.glm" id="vgault-P-2009081472747036">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low09" criteria="required" />
+                </part>
+              </slot>
+              <slot name="LEGS">
+                <part meshName="Corp_LastLvl" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_LastLvl.glm" id="vgault-P-2009031940761059">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                </part>
+              </slot>
+              <slot name="HAT">
+                <part meshName="Corp_F_High_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_High_02.glm" id="vgault-P-2008111142470514">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="high04" criteria="required" />
+                </part>
+                <part meshName="Corp_F_High_04" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_High_04.glm" id="vgault-P-2009020562515409">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask02" />
+                  <criteria tag="high00" criteria="exclude" />
+                  <criteria tag="high01" criteria="exclude" />
+                  <criteria tag="high05" criteria="exclude" />
+                  <criteria tag="high06" criteria="exclude" />
+                  <criteria tag="high07" criteria="exclude" />
+                  <criteria tag="high08" criteria="exclude" />
+                  <criteria tag="high09" criteria="exclude" />
+                  <criteria tag="high10" criteria="exclude" />
+                  <criteria tag="high11" criteria="exclude" />
+                  <criteria tag="high04" criteria="exclude" />
+                  <criteria tag="high03" criteria="exclude" />
+                  <criteria tag="high02b" criteria="exclude" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_High_03" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_High_03.glm" id="vgault-P-2009020956751927">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask01" />
+                  <criteria tag="nomask" criteria="exclude" />
+                  <criteria tag="high00" criteria="exclude" />
+                  <criteria tag="high01" criteria="exclude" />
+                  <criteria tag="high02" criteria="exclude" />
+                  <criteria tag="high03" criteria="exclude" />
+                  <criteria tag="high04" criteria="exclude" />
+                  <criteria tag="high05" criteria="exclude" />
+                  <criteria tag="high07" criteria="exclude" />
+                  <criteria tag="high08" criteria="exclude" />
+                  <criteria tag="high09" criteria="exclude" />
+                  <criteria tag="high11" criteria="exclude" />
+                  <criteria tag="high12" criteria="exclude" />
+                  <criteria tag="high02b" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_High_05" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_High_05.glm" id="vgault-P-2009040356234988">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask01" />
+                  <criteria tag="high07" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_High_06" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_High_06.glm" id="vgault-P-2009040949484218">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask03" />
+                  <criteria tag="high08" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_High_07" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_High_07.glm" id="vgault-P-2009081060726812">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="high02b" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_High_10" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_High_10.glm" id="vgault-P-2009081461749311">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask03" />
+                  <criteria tag="high11" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_High_08" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_High_08.glm" id="vgault-P-2009081472724239">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask01" />
+                  <criteria tag="nomask" criteria="exclude" />
+                  <criteria tag="high00" criteria="exclude" />
+                  <criteria tag="high01" criteria="exclude" />
+                  <criteria tag="high02" criteria="exclude" />
+                  <criteria tag="high03" criteria="exclude" />
+                  <criteria tag="high04" criteria="exclude" />
+                  <criteria tag="high05" criteria="exclude" />
+                  <criteria tag="high06" criteria="exclude" />
+                  <criteria tag="high07" criteria="exclude" />
+                  <criteria tag="high08" criteria="exclude" />
+                  <criteria tag="high11" criteria="exclude" />
+                  <criteria tag="high02b" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_High_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_High_01.glm" id="vgault-P-2008111255820132">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="high03" criteria="required" />
+                </part>
+              </slot>
+              <slot name="GLASSES">
+                <part meshName="Corp_F_Mask_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Mask_02.glm" id="vgault-P-2009011952012204">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask03" />
+                  <criteria tag="high05" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_mask" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_mask.glm" id="vgault-P-2009050665061414">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask02" />
+                  <criteria tag="high00" criteria="exclude" />
+                  <criteria tag="high05" criteria="exclude" />
+                  <criteria tag="high06" criteria="exclude" />
+                  <criteria tag="nomask" criteria="exclude" />
+                  <criteria tag="high07" criteria="exclude" />
+                  <criteria tag="high08" criteria="exclude" />
+                  <criteria tag="high09" criteria="exclude" />
+                  <criteria tag="high10" criteria="exclude" />
+                  <criteria tag="high11" criteria="exclude" />
+                  <criteria tag="high02" criteria="exclude" />
+                </part>
+              </slot>
+              <slot name="GEAR">
+                <part meshName="Corp_F_Midgear_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Midgear_01.glm" id="vgault-P-2009081058891508">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid02" criteria="required" />
+                  <criteria tag="mid01" criteria="exclude" />
+                </part>
+                <part meshName="Corp_F_MidGear_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_MidGear_02.glm" id="vgault-P-2009081058926820">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid02b" criteria="required" />
+                  <criteria tag="mid07" criteria="exclude" />
+                </part>
+              </slot>
+              <slot name="ACCESSORY">
+                <part meshName="Corp_F_Gear_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Gear_02.glm" id="vgault-P-2009081058954569">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low02b" criteria="required" />
+                </part>
+                <part meshName="Corp_F_Gear_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Corp_F_Gear_01.glm" id="vgault-P-2008101051325604">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low02" criteria="required" />
+                </part>
+              </slot>
+              <slot name="BEARD">
+                <part meshName="Dummy_Skin_Latino" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Dummy_Skin_Latino.glm" id="vgault-P-2008121149546911">
+                  <weight value="1" />
+                  <colors overwrite="1" library="LatinoSkinTone" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="latino" criteria="required" />
+                </part>
+                <part meshName="Dummy_Skin_Asian" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Dummy_Skin_Asian.glm" id="vgault-P-2008121149545927">
+                  <weight value="1" />
+                  <colors overwrite="1" library="AsianskinTone" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="asian" criteria="required" />
+                </part>
+                <part meshName="Dummy_Skin_Black" fileName="graphics\av_Characters\Corp\_Kit\Corp_F\Dummy_Skin_Black.glm" id="vgault-P-2008121149546427">
+                  <weight value="1" />
+                  <colors overwrite="1" library="BlackSkintone" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="black" criteria="required" />
+                </part>
+              </slot>
+              <resource fileName="graphics\av_Characters\Corp\_Kit\Corp_F.xbg" />
+              <colors>
+                <library name="AsianskinTone">
+                  <color color1="4677731" color2="8956855" />
+                </library>
+                <library name="BlackSkintone">
+                  <color color1="3027517" color2="6262752" />
+                </library>
+                <library name="LatinoSkinTone">
+                  <color color1="4804705" color2="7374991" />
+                </library>
+                <library name="level01">
+                  <color color1="11848416" color2="4737096" />
+                </library>
+              </colors>
+              <textures />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="D1E227CB" name="CGraphicKitComponent">
+        <field hash="401B786C" name="bRadomize" value-Boolean="False" type="BinHex">00</field>
+        <field hash="56185012" name="hidOverwriteMaterials" type="BinHex">01</field>
+        <object hash="CF8E3B18" name="Tags">
+          <object hash="89A264BE" name="SpecializationTag">
+            <field hash="9B35862A" name="text_sTag" value-String="high11" type="BinHex">68696768313100</field>
+            <field hash="9C4BF81F" name="sTag" value-ComputeHash32="high11" type="BinHex">026BF1B6</field>
+          </object>
+          <object hash="89A264BE" name="SpecializationTag">
+            <field hash="9B35862A" name="text_sTag" value-String="mid11" type="BinHex">6D6964313100</field>
+            <field hash="9C4BF81F" name="sTag" value-ComputeHash32="mid11" type="BinHex">1C98F339</field>
+          </object>
+          <object hash="89A264BE" name="SpecializationTag">
+            <field hash="9B35862A" name="text_sTag" value-String="low11" type="BinHex">6C6F77313100</field>
+            <field hash="9C4BF81F" name="sTag" value-ComputeHash32="low11" type="BinHex">59F3983F</field>
+          </object>
+          <object hash="89A264BE" name="SpecializationTag">
+            <field hash="9B35862A" name="text_sTag" value-String="head08" type="BinHex">68656164303800</field>
+            <field hash="9C4BF81F" name="sTag" value-ComputeHash32="head08" type="BinHex">5EA9B73F</field>
+          </object>
+          <object hash="89A264BE" name="SpecializationTag">
+            <field hash="9B35862A" name="text_sTag" value-String="" type="BinHex">00</field>
+            <field hash="9C4BF81F" name="sTag" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="A3DC894F" name="PartOverwrite">
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="dgiraud-P-0312200839703291" type="BinHex">646769726175642D502D3033313232303038333937303332393100</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="dgiraud-P-0312200839703291" type="BinHex">56033F07</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2009031940761059" type="BinHex">766761756C742D502D3230303930333139343037363130353900</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2009031940761059" type="BinHex">A58A6556</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008121149545927" type="BinHex">766761756C742D502D3230303831323131343935343539323700</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008121149545927" type="BinHex">37C2DAE0</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" value-Int32="0" type="BinHex">00000000</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2009040949484218" type="BinHex">766761756C742D502D3230303930343039343934383432313800</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2009040949484218" type="BinHex">CAAC911B</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2009040949567855" type="BinHex">766761756C742D502D3230303930343039343935363738353500</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2009040949567855" type="BinHex">8F52026A</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2009040949549922" type="BinHex">766761756C742D502D3230303930343039343935343939323200</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2009040949549922" type="BinHex">8F1FFA20</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="" type="BinHex">00</field>
+            <field hash="DBDA2EF7" name="PartID" type="BinHex">FFFFFFFF</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="129" type="BinHex">81000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="True" type="BinHex">01</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="" type="BinHex">00</field>
+          <field hash="09D9B64E" name="objModel" type="BinHex">FFFFFFFF</field>
+          <field hash="3D5AC03A" name="hidMeshName" type="BinHex">00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="" type="BinHex">00</field>
+          <field hash="F1E66E05" name="hidNodeName" type="BinHex">FFFFFFFF</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="" type="BinHex">00</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" type="BinHex">FFFFFFFF</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

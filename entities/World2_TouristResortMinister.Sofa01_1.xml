@@ -1,0 +1,577 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="World2_TouristResortMinister.Sofa01" type="BinHex">576F726C64325F546F75726973745265736F72744D696E69737465722E536F6661303100</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="props.World2_TouristResortMinister.Sofa01" type="BinHex">70726F70732E576F726C64325F546F75726973745265736F72744D696E69737465722E536F6661303100</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="1666" type="BinHex">8206000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="3" type="BinHex">03000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xml" type="BinHex">67726170686963735C6F626A656374735C6675726E6974757265735C6368616972735C636861697274776F736561747330315F626B2E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xml" type="BinHex">51E6ADA7</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2" detail="0">
+              <object index="0" meshName="State01" boneName="State01" bboxMin="-0.846904,-0.388849,-0.0130797" bboxMax="0.857872,0.410886,1.21993" />
+              <object index="1" meshName="State02" boneName="State02" bboxMin="-0.846904,-0.388849,-0.0130797" bboxMax="0.857872,0.410886,1.21993" />
+              <object index="2" meshName="State03" boneName="State03" bboxMin="0.509421,-0.32606,-0.0130797" bboxMax="0.857872,0.342361,0.755371" />
+              <object index="3" meshName="State03b" boneName="State03b" bboxMin="-0.846904,-0.388849,-0.000822144" bboxMax="0.350018,0.404991,1.12715" />
+              <object index="4" meshName="State04" boneName="State04" bboxMin="-0.542368,0.389786,0.866157" bboxMax="0.466077,0.52186,1.29162" />
+              <resource fileName="graphics\Objects\Furnitures\Chairs\ChairTwoSeats01_BK.xbg" bboxMin="-0.846904,-0.397772,-0.0130797" bboxMax="0.857872,0.52186,1.29162" />
+              <skeleton name="ChairTwoSeats01_BK" pos="0,0,0" rot="1,-0,-0,-0">
+                <bone name="NMD_Node06" pos="-0.419974,-0.414505,0" rot="1,0,0,0">
+                  <bone name="State01" pos="0.419974,0.414505,0" rot="1,0,0,0">
+                    <bone name="St1_FX01" pos="0.666732,0.360757,1.02885" rot="1,0,0,0" />
+                    <bone name="St1_FX02" pos="0.819233,0.003868,0.676175" rot="1,0,0,0" />
+                    <bone name="St1_FX03" pos="0.819233,-0.305255,0.656746" rot="1,0,0,0" />
+                    <bone name="St1_FX04" pos="0.097845,-0.25613,0.417295" rot="1,0,0,0" />
+                    <bone name="St1_FX05" pos="0.263277,-0.222624,0.417295" rot="0.623743,0,0,-0.78163" />
+                    <bone name="St1_FX06" pos="-0.519118,0.305701,0.954742" rot="1,0,0,0" />
+                    <bone name="St1_FX07" pos="0.188905,0.305701,0.74115" rot="1,0,0,0" />
+                  </bone>
+                  <bone name="State02" pos="0.419974,0.414505,0" rot="1,0,0,0">
+                    <bone name="st2_FX01" pos="0.217079,-0.042429,0.431605" rot="1,0,0,0" />
+                    <bone name="st2_FX02" pos="-0.203673,0.252843,0.953647" rot="1,0,0,0" />
+                    <bone name="st2_FX03" pos="0.23391,0.252843,0.615814" rot="1,0,0,0" />
+                    <bone name="st2_FX04" pos="0.639165,0.337275,0.980288" rot="1,0,0,0" />
+                  </bone>
+                  <bone name="State03" pos="0.419974,0.414505,0" rot="1,0,0,0" />
+                  <bone name="State03b" pos="0.419974,0.414505,0" rot="1,0,0,0" />
+                  <bone name="State04" pos="0.419974,0.414505,0" rot="1,0,0,0" />
+                </bone>
+              </skeleton>
+            </component>
+            <component class="CompoundPhysComponent">
+              <nodes stateIndexStart="5" hasStatic="1">
+                <stateNode boneIndex="1" index="5" name="NMD_Node06">
+                  <state index="0">
+                    <body index="0" objectIndex="0" boneIndex="2" name="State01">
+                      <fx boneIndex="3" />
+                      <fx boneIndex="4" />
+                      <fx boneIndex="5" />
+                      <fx boneIndex="6" />
+                      <fx boneIndex="7" />
+                      <fx boneIndex="8" />
+                      <fx boneIndex="9" />
+                    </body>
+                  </state>
+                  <state index="1">
+                    <body index="1" objectIndex="1" boneIndex="10" name="State02">
+                      <fx boneIndex="11" />
+                      <fx boneIndex="12" />
+                      <fx boneIndex="13" />
+                      <fx boneIndex="14" />
+                    </body>
+                  </state>
+                  <state index="2">
+                    <body index="2" objectIndex="2" boneIndex="15" name="State03" />
+                    <body index="3" objectIndex="3" boneIndex="16" name="State03b" />
+                    <body index="4" objectIndex="4" boneIndex="17" name="State04" />
+                  </state>
+                </stateNode>
+              </nodes>
+              <resource fileName="graphics\Objects\Furnitures\Chairs\ChairTwoSeats01_BK.hkx" />
+            </component>
+            <component class="ParticleFXComponent">
+              <St1_FX01 psEmitter="" />
+              <St1_FX02 psEmitter="" />
+              <St1_FX03 psEmitter="" />
+              <St1_FX04 psEmitter="" />
+              <St1_FX05 psEmitter="" />
+              <St1_FX06 psEmitter="" />
+              <St1_FX07 psEmitter="" />
+              <st2_FX01 psEmitter="" />
+              <st2_FX02 psEmitter="" />
+              <st2_FX03 psEmitter="" />
+              <st2_FX04 psEmitter="" />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="129" type="BinHex">81000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="True" type="BinHex">01</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xbg" type="BinHex">67726170686963735C6F626A656374735C6675726E6974757265735C6368616972735C636861697274776F736561747330315F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xbg" type="BinHex">1623E7B7</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="State01" type="BinHex">5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="State01" type="BinHex">5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="State01" type="BinHex">B735699F</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="State01_LOD0" type="BinHex">537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="State01_LOD0" type="BinHex">3F8264B0</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="1" type="BinHex">01000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xbg" type="BinHex">67726170686963735C6F626A656374735C6675726E6974757265735C6368616972735C636861697274776F736561747330315F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xbg" type="BinHex">1623E7B7</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="State02" type="BinHex">5374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="State02" type="BinHex">5374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="State02" type="BinHex">0D646006</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="State02_LOD0" type="BinHex">537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="State02_LOD0" type="BinHex">91F0F036</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="2" type="BinHex">02000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xbg" type="BinHex">67726170686963735C6F626A656374735C6675726E6974757265735C6368616972735C636861697274776F736561747330315F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xbg" type="BinHex">1623E7B7</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="State03" type="BinHex">5374617465303300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="State03" type="BinHex">5374617465303300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="State03" type="BinHex">9B546771</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="State03_LOD0" type="BinHex">537461746530335F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="State03_LOD0" type="BinHex">3423ACFD</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xbg" type="BinHex">67726170686963735C6F626A656374735C6675726E6974757265735C6368616972735C636861697274776F736561747330315F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xbg" type="BinHex">1623E7B7</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="State03b" type="BinHex">537461746530336200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="State03b" type="BinHex">537461746530336200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="State03b" type="BinHex">61C21216</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="State03b_LOD0" type="BinHex">53746174653033625F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="State03b_LOD0" type="BinHex">6B82851F</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="4" type="BinHex">04000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xbg" type="BinHex">67726170686963735C6F626A656374735C6675726E6974757265735C6368616972735C636861697274776F736561747330315F626B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\objects\furnitures\chairs\chairtwoseats01_bk.xbg" type="BinHex">1623E7B7</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="State04" type="BinHex">5374617465303400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="State04" type="BinHex">5374617465303400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="State04" type="BinHex">38C103EF</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="State04_LOD0" type="BinHex">537461746530345F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="State04_LOD0" type="BinHex">8C13A9E0</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="AA13F142" name="CCompoundPhysComponent">
+        <field hash="527E7674" name="text_hidResourceId" value-String="graphics\objects\furnitures\chairs\chairtwoseats01_bk.hkx" type="BinHex">67726170686963735C6F626A656374735C6675726E6974757265735C6368616972735C636861697274776F736561747330315F626B2E686B7800</field>
+        <field hash="2E50EB85" name="hidResourceId" value-ComputeHash32="graphics\objects\furnitures\chairs\chairtwoseats01_bk.hkx" type="BinHex">DA360BF7</field>
+        <field hash="0C838A6E" name="bAnimateable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1CFFDBEC" name="bCreateAsStatic" value-Boolean="True" type="BinHex">01</field>
+        <field hash="5BABAAC6" name="bUseMaxTerrainSlope" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CAA1B825" name="bUseFastCollision" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EBBF0BE" name="fSelfCollOverrideSpeed" value-Float32="200" type="BinHex">00004843</field>
+        <field hash="343B9712" name="hidHasStatic" type="BinHex">01</field>
+        <field hash="231B472A" name="hidNodeType" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        <object hash="78CF3E56" name="EntityPickup">
+          <field hash="743BADAE" name="bCanPickUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="7EC43CB1" name="bCanBePickedUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="4CA7A893" name="fPickupCollisionRadius" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="829623C6" name="fPickupCollisionHeight" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="AD22F2F7" type="BinHex">00</field>
+          <field hash="011D12F4" name="PickupAttachBone" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="1664515A" name="Damage">
+          <field hash="A123A798" name="bDamageable" value-Boolean="True" type="BinHex">01</field>
+          <field hash="BF493104" name="bPlayerOnly" value-Boolean="False" type="BinHex">00</field>
+        </object>
+        <object hash="FE267439" name="RootNode">
+          <field hash="88E8521E" name="text_disName" value-String="NMD_Node06" type="BinHex">4E4D445F4E6F6465303600</field>
+          <field hash="AC497D21" name="disName" value-ComputeHash32="NMD_Node06" type="BinHex">09AFFAF0</field>
+          <field hash="FE7DBDC5" name="FirstStateIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="5B915FF1" name="hidBoneIndex" value-Int32="1" type="BinHex">01000000</field>
+          <object hash="366E727B" name="States">
+            <object hash="6252FDFF" name="State">
+              <field hash="258BB869" name="disIndex" value-Int32="0" type="BinHex">00000000</field>
+              <field hash="231B472A" name="hidNodeType" value-Int32="1" type="BinHex">01000000</field>
+              <object hash="DB83EFB8" name="StateSubNode">
+                <field hash="88E8521E" name="text_disName" value-String="State01" type="BinHex">5374617465303100</field>
+                <field hash="AC497D21" name="disName" value-ComputeHash32="State01" type="BinHex">B735699F</field>
+                <field hash="0DBE2127" name="fHealth" value-Float32="100" type="BinHex">0000C842</field>
+                <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                <field hash="8E462320" name="hidGraphicIndex" value-Int32="0" type="BinHex">00000000</field>
+                <object hash="2C3872D7" name="Stim">
+                  <field hash="1BD9687D" name="bPierceStim" value-Boolean="True" type="BinHex">01</field>
+                  <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                  <field hash="2CE04FBD" name="bBurnStim" value-Boolean="True" type="BinHex">01</field>
+                  <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                </object>
+                <object hash="F8CD54EF" name="hidEffectBones">
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="3" type="BinHex">03000000</field>
+                  </object>
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="4" type="BinHex">04000000</field>
+                  </object>
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="5" type="BinHex">05000000</field>
+                  </object>
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="6" type="BinHex">06000000</field>
+                  </object>
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="7" type="BinHex">07000000</field>
+                  </object>
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="8" type="BinHex">08000000</field>
+                  </object>
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="9" type="BinHex">09000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E9B0C869" name="OnDamage">
+                <field hash="A746E6DC" name="selNextState" value-Enum="2" type="BinHex">02000000</field>
+                <object hash="13B84C9B" name="enumNextState">
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="219C667A" name="OnEvent">
+                <field hash="C41038B9" name="bTriggerEffects" value-Boolean="False" type="BinHex">00</field>
+                <field hash="A746E6DC" name="selNextState" value-Enum="2" type="BinHex">02000000</field>
+                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                <object hash="13B84C9B" name="enumNextState">
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="6252FDFF" name="State">
+              <field hash="258BB869" name="disIndex" value-Int32="1" type="BinHex">01000000</field>
+              <field hash="231B472A" name="hidNodeType" value-Int32="1" type="BinHex">01000000</field>
+              <object hash="DB83EFB8" name="StateSubNode">
+                <field hash="88E8521E" name="text_disName" value-String="State02" type="BinHex">5374617465303200</field>
+                <field hash="AC497D21" name="disName" value-ComputeHash32="State02" type="BinHex">0D646006</field>
+                <field hash="0DBE2127" name="fHealth" value-Float32="100" type="BinHex">0000C842</field>
+                <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                <field hash="8E462320" name="hidGraphicIndex" value-Int32="1" type="BinHex">01000000</field>
+                <object hash="2C3872D7" name="Stim">
+                  <field hash="1BD9687D" name="bPierceStim" value-Boolean="True" type="BinHex">01</field>
+                  <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                  <field hash="2CE04FBD" name="bBurnStim" value-Boolean="True" type="BinHex">01</field>
+                  <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                </object>
+                <object hash="F8CD54EF" name="hidEffectBones">
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="11" type="BinHex">0B000000</field>
+                  </object>
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="12" type="BinHex">0C000000</field>
+                  </object>
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="13" type="BinHex">0D000000</field>
+                  </object>
+                  <object hash="D24C9DB6" name="hidBone">
+                    <field hash="6CF79F05" name="hidIndex" value-Int32="14" type="BinHex">0E000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="E9B0C869" name="OnDamage">
+                <field hash="A746E6DC" name="selNextState" value-Enum="2" type="BinHex">02000000</field>
+                <object hash="13B84C9B" name="enumNextState">
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="219C667A" name="OnEvent">
+                <field hash="C41038B9" name="bTriggerEffects" value-Boolean="False" type="BinHex">00</field>
+                <field hash="A746E6DC" name="selNextState" value-Enum="2" type="BinHex">02000000</field>
+                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                <object hash="13B84C9B" name="enumNextState">
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="6252FDFF" name="State">
+              <field hash="258BB869" name="disIndex" value-Int32="2" type="BinHex">02000000</field>
+              <field hash="231B472A" name="hidNodeType" value-Int32="3" type="BinHex">03000000</field>
+              <object hash="DB83EFB8" name="StateSubNode">
+                <field hash="88E8521E" name="text_disName" value-String="" type="BinHex">00</field>
+                <field hash="AC497D21" name="disName" type="BinHex">FFFFFFFF</field>
+                <field hash="9F499A09" name="bHealthByAverage" value-Boolean="True" type="BinHex">01</field>
+                <object hash="C0961D9A" name="hidNodeTypes">
+                  <object hash="6275CA84" name="hidNode">
+                    <field hash="6BD475E8" name="hidType" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="6275CA84" name="hidNode">
+                    <field hash="6BD475E8" name="hidType" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                  <object hash="6275CA84" name="hidNode">
+                    <field hash="6BD475E8" name="hidType" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+                <object hash="23C20EF1" name="NodeList">
+                  <object hash="254D477B" name="Node">
+                    <field hash="88E8521E" name="text_disName" value-String="State03" type="BinHex">5374617465303300</field>
+                    <field hash="AC497D21" name="disName" value-ComputeHash32="State03" type="BinHex">9B546771</field>
+                    <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                    <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                    <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                    <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                    <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                    <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                    <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                    <field hash="8E462320" name="hidGraphicIndex" value-Int32="2" type="BinHex">02000000</field>
+                    <field hash="80736701" name="index" value-Int32="0" type="BinHex">00000000</field>
+                    <object hash="2C3872D7" name="Stim">
+                      <field hash="1BD9687D" name="bPierceStim" value-Boolean="True" type="BinHex">01</field>
+                      <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                      <field hash="2CE04FBD" name="bBurnStim" value-Boolean="True" type="BinHex">01</field>
+                      <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                      <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                    </object>
+                    <object hash="F8CD54EF" name="hidEffectBones" />
+                  </object>
+                  <object hash="254D477B" name="Node">
+                    <field hash="88E8521E" name="text_disName" value-String="State03b" type="BinHex">537461746530336200</field>
+                    <field hash="AC497D21" name="disName" value-ComputeHash32="State03b" type="BinHex">61C21216</field>
+                    <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                    <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                    <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                    <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                    <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                    <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                    <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                    <field hash="8E462320" name="hidGraphicIndex" value-Int32="3" type="BinHex">03000000</field>
+                    <field hash="80736701" name="index" value-Int32="1" type="BinHex">01000000</field>
+                    <object hash="2C3872D7" name="Stim">
+                      <field hash="1BD9687D" name="bPierceStim" value-Boolean="True" type="BinHex">01</field>
+                      <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                      <field hash="2CE04FBD" name="bBurnStim" value-Boolean="True" type="BinHex">01</field>
+                      <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                      <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                    </object>
+                    <object hash="F8CD54EF" name="hidEffectBones" />
+                  </object>
+                  <object hash="254D477B" name="Node">
+                    <field hash="88E8521E" name="text_disName" value-String="State04" type="BinHex">5374617465303400</field>
+                    <field hash="AC497D21" name="disName" value-ComputeHash32="State04" type="BinHex">38C103EF</field>
+                    <field hash="0DBE2127" name="fHealth" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="340FD6F6" name="sndInitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                    <field hash="6C655DC9" name="vectorCenterOfMassOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                    <field hash="2FAB0399" name="fFloatingScale" value-Float32="1" type="BinHex">0000803F</field>
+                    <field hash="4B920C34" name="fWaterFriction" value-Float32="2" type="BinHex">00000040</field>
+                    <field hash="E02C0FC7" name="bStartEffectsOnCreate" value-Boolean="False" type="BinHex">00</field>
+                    <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                    <field hash="69466E0D" name="hidResIndex" value-Int32="0" type="BinHex">00000000</field>
+                    <field hash="8E462320" name="hidGraphicIndex" value-Int32="4" type="BinHex">04000000</field>
+                    <field hash="80736701" name="index" value-Int32="2" type="BinHex">02000000</field>
+                    <object hash="2C3872D7" name="Stim">
+                      <field hash="1BD9687D" name="bPierceStim" value-Boolean="True" type="BinHex">01</field>
+                      <field hash="A82A04B0" name="bCrushStim" value-Boolean="True" type="BinHex">01</field>
+                      <field hash="2CE04FBD" name="bBurnStim" value-Boolean="True" type="BinHex">01</field>
+                      <field hash="7B2F6D28" name="fBulletImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                      <field hash="FA5898B1" name="fExplosionImpulseScale" value-Float32="1" type="BinHex">0000803F</field>
+                    </object>
+                    <object hash="F8CD54EF" name="hidEffectBones" />
+                  </object>
+                </object>
+              </object>
+              <object hash="E9B0C869" name="OnDamage">
+                <field hash="A746E6DC" name="selNextState" value-Enum="0" type="BinHex">00000000</field>
+                <object hash="13B84C9B" name="enumNextState">
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="219C667A" name="OnEvent">
+                <field hash="C41038B9" name="bTriggerEffects" value-Boolean="False" type="BinHex">00</field>
+                <field hash="A746E6DC" name="selNextState" value-Enum="0" type="BinHex">00000000</field>
+                <field hash="68EF1D4E" name="sndExitSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="104AD236" name="sndExitGroupSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                <field hash="E07718D5" name="bSoundMustFollowEntity" value-Boolean="False" type="BinHex">00</field>
+                <field hash="809B4309" name="bExplodes" value-Boolean="False" type="BinHex">00</field>
+                <object hash="13B84C9B" name="enumNextState">
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Destroy" type="BinHex">44657374726F7900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Stay" type="BinHex">5374617900</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Next" type="BinHex">4E65787400</field>
+                  </object>
+                  <object hash="0EBEAE51" name="enum">
+                    <field hash="DCB67730" name="Value" value-String="Specify..." type="BinHex">537065636966792E2E2E00</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+      </object>
+      <object hash="09D5E1B2" name="CSimpleAnimationComponent">
+        <field hash="F9F2D5F4" name="text_fileSkeleton" value-String="graphics\characters\_common\singlebone_ref.skeleton" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C73696E676C65626F6E655F7265662E736B656C65746F6E00</field>
+        <field hash="0B80933A" name="fileSkeleton" value-ComputeHash32="graphics\characters\_common\singlebone_ref.skeleton" type="BinHex">C9233243</field>
+        <field hash="C22DBBC8" name="sPartName" value-String="sofa01" type="BinHex">736F6661303100</field>
+        <field hash="EC1D5173" name="text_fileAnimation" value-String="" type="BinHex">00</field>
+        <field hash="9033CC82" name="fileAnimation" type="BinHex">FFFFFFFF</field>
+        <field hash="D32F71E1" name="bDisableInterpolation" value-Boolean="False" type="BinHex">00</field>
+      </object>
+      <object hash="7273EBB0" name="CPersistComponent">
+        <field hash="7C4CF173" name="selLevel" value-Enum="2" type="BinHex">02000000</field>
+        <object hash="A2AF95CE" name="enumLevel">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Limited" type="BinHex">4C696D6974656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Full" type="BinHex">46756C6C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Critical" type="BinHex">437269746963616C00</field>
+          </object>
+        </object>
+      </object>
+      <object hash="06956112" name="CParticleEventListenerComponent" />
+    </object>
+  </object>
+</object>

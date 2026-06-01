@@ -1,0 +1,870 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Props.CS_BigTruck" type="BinHex">50726F70732E43535F426967547275636B00</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="props.Props.CS_BigTruck" type="BinHex">70726F70732E50726F70732E43535F426967547275636B00</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="1478" type="BinHex">C605000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="2" type="BinHex">02000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\vehicles\land\bigtruck\bigtruck.xml" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xml" type="BinHex">59D86EB2</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2" detail="0">
+              <object index="0" meshName="SteeringWheel" boneName="SteeringWheel" bboxMin="-0.235417,-0.234511,0.0265886" bboxMax="0.234796,0.235704,0.0643706" />
+              <object index="1" meshName="WheelBack_L" boneName="WheelBack_L" bboxMin="-0.0294425,-0.536013,-0.553032" bboxMax="0.696994,0.568429,0.551386" />
+              <object index="2" meshName="WheelBack_R" boneName="WheelBack_R" bboxMin="-0.725989,-0.536042,-0.553041" bboxMax="0.000447177,0.568461,0.551395" />
+              <object index="3" meshName="WheelFont_L" boneName="WheelFont_L" bboxMin="-0.343312,-0.554346,-0.554323" bboxMax="0.0196184,0.554346,0.554323" />
+              <object index="4" meshName="WheelFront_R" boneName="WheelFront_R" bboxMin="-0.00926812,-0.554346,-0.554323" bboxMax="0.353663,0.554345,0.554323" />
+              <object index="5" meshName="Chassis" boneName="Chassis" bboxMin="-1.31103,-5.90061,0.361776" bboxMax="1.30311,2.4009,2.66662" />
+              <object index="6" meshName="DoorLeftState01" boneName="DoorLeftState01" bboxMin="-0.0528967,-0.853248,-0.880909" bboxMax="0.0856358,0.0143515,0.612862" />
+              <object index="7" meshName="DoorLeftState02" boneName="DoorLeftState02" bboxMin="-0.100182,-0.858188,-0.880909" bboxMax="0.163061,0.015649,0.612862" />
+              <object index="8" meshName="DoorRightState01" boneName="DoorRightState01" bboxMin="-0.139264,-0.853248,-0.880952" bboxMax="-0.000731125,0.0143515,0.612819" />
+              <object index="9" meshName="DoorRightState02" boneName="DoorRightState02" bboxMin="-0.211363,-0.858424,-0.880952" bboxMax="0.0435198,0.0155816,0.612819" />
+              <object index="10" meshName="HoodState02" boneName="HoodState02" bboxMin="-1.01175,-0.0060141,-0.372615" bboxMax="0.946871,1.29178,0.0466495" />
+              <object index="11" meshName="HoodState01" boneName="HoodState01" bboxMin="-1.0075,-0.00601379,-0.313564" bboxMax="0.955098,1.29179,0.0217866" />
+              <object index="12" meshName="Window_STATE01" boneName="Window_STATE01" bboxMin="-0.641891,0.02297,-0.204855" bboxMax="0.641891,0.0264272,0.204855" />
+              <object index="13" meshName="Window_STATE02" boneName="Window_STATE02" bboxMin="-0.00273563,0.0310024,0.210351" bboxMax="0.0566895,0.0341713,0.250103" />
+              <object index="14" meshName="Winshield_STATE01" boneName="Winshield_STATE01" bboxMin="-0.929694,-0.363656,-0.249104" bboxMax="0.929694,0.00777649,0.249103" />
+              <object index="15" meshName="Winshield_STATE02" boneName="Winshield_STATE02" bboxMin="0.12918,-0.146848,0.254796" bboxMax="0.208522,-0.138455,0.262863" />
+              <object index="16" meshName="Speedometer" boneName="Speedometer" bboxMin="-0.00611639,-0.0375963,1.32445e-007" bboxMax="0.00611838,0.0061193,0.00472869" />
+              <object index="17" meshName="RPMmeter" boneName="RPMmeter" bboxMin="-0.00611681,-0.0376024,5.23173e-008" bboxMax="0.00611796,0.00611315,0.00472861" />
+              <object index="18" meshName="HeadLight_Right_State02" boneName="HeadLight_Right_State02" bboxMin="-0.110738,-0.0195837,-0.110752" bboxMax="0.110738,-0.00367096,0.269052" />
+              <object index="19" meshName="HeadLight_Right_State01" boneName="HeadLight_Right_State01" bboxMin="-0.110738,-0.0195837,-0.110738" bboxMax="0.110738,0.00530243,0.269065" />
+              <object index="20" meshName="HeadLight_Left_State02" boneName="HeadLight_Left_State02" bboxMin="-0.110738,-0.0195837,-0.110788" bboxMax="0.110738,-0.00367096,0.269015" />
+              <object index="21" meshName="HeadLight_Left_State01" boneName="HeadLight_Left_State01" bboxMin="-0.110738,-0.0195837,-0.110738" bboxMax="0.110738,0.00530243,0.269065" />
+              <object index="22" meshName="HeadLight_N_Left_State01" boneName="HeadLight_N_Left_State01" bboxMin="-2.63659,-0.0195837,-3.72478" bboxMax="2.63259,12.5707,1.52385" />
+              <object index="23" meshName="HeadLight_N_Right_State01" boneName="HeadLight_N_Right_State01" bboxMin="-3.09555,-0.0195837,-3.6349" bboxMax="2.17599,12.6377,1.62491" />
+              <object index="24" meshName="TailLight_Left_State02" boneName="TailLight_Left_State02" bboxMin="-0.149724,-0.0339636,-0.109677" bboxMax="0.147428,-0.00695007,0.0557806" />
+              <object index="25" meshName="TailLight_Left_State01" boneName="TailLight_Left_State01" bboxMin="-0.149724,-0.0339636,-0.109677" bboxMax="0.147428,-0.00695007,0.0557806" />
+              <object index="26" meshName="TailLight_Right_State02" boneName="TailLight_Right_State02" bboxMin="-0.149723,-0.0339636,-0.10976" bboxMax="0.148415,-0.00695007,0.0556976" />
+              <object index="27" meshName="TailLight_Right_State01" boneName="TailLight_Right_State01" bboxMin="-0.149723,-0.0339636,-0.109677" bboxMax="0.148415,-0.00695007,0.0557806" />
+              <object index="28" meshName="TailLight_N_Left_State01" boneName="TailLight_N_Left_State01" bboxMin="-0.149724,-0.0339636,-0.109677" bboxMax="0.147428,-0.00695007,0.0557806" />
+              <object index="29" meshName="TailLight_N_Right_State01" boneName="TailLight_N_Right_State01" bboxMin="-0.149723,-0.0339636,-0.109677" bboxMax="0.148415,-0.00695007,0.0557806" />
+              <object index="30" meshName="DashLight" boneName="DashLight" bboxMin="-0.378531,-0.703355,-0.605526" bboxMax="0.382311,-0.696706,-0.444723" />
+              <object index="31" meshName="Box_Right_01_State02" boneName="Box_Right_01_State02" bboxMin="-0.0427983,-1.1653,-0.0142433" bboxMax="0.0423979,1.30364,0.693516" />
+              <object index="32" meshName="Box_Right_01_State01" boneName="Box_Right_01_State01" bboxMin="-0.0228249,-1.1652,-0.0113956" bboxMax="0.0445796,1.30344,0.695279" />
+              <object index="33" meshName="Box_Right_01_State03" boneName="Box_Right_01_State03" bboxMin="-0.0427983,-1.1653,-0.0142433" bboxMax="0.0423979,1.30364,0.693516" />
+              <object index="34" meshName="Box_Right_02_State02" boneName="Box_Right_02_State02" bboxMin="-0.0228249,-1.16607,-0.014162" bboxMax="0.0445796,1.30431,0.66243" />
+              <object index="35" meshName="Box_Right_02_State01" boneName="Box_Right_02_State01" bboxMin="-0.0228249,-1.1652,-0.0113956" bboxMax="0.0445796,1.30344,0.695279" />
+              <object index="36" meshName="Box_Right_02_State03" boneName="Box_Right_02_State03" bboxMin="-0.0228249,-1.16607,-0.014162" bboxMax="0.0445796,1.30431,0.66243" />
+              <object index="37" meshName="Box_Left_01_State03" boneName="Box_Left_01_State03" bboxMin="-0.0445796,-1.1652,-0.0123796" bboxMax="0.0228249,1.30344,0.664313" />
+              <object index="38" meshName="Box_Left_01_State02" boneName="Box_Left_01_State02" bboxMin="-0.0445796,-1.1652,-0.0123771" bboxMax="0.0228249,1.30344,0.695284" />
+              <object index="39" meshName="Box_Left_01_State01" boneName="Box_Left_01_State01" bboxMin="-0.0445796,-1.1652,-0.0113908" bboxMax="0.0228249,1.30344,0.695284" />
+              <object index="40" meshName="Box_Left_02_State03" boneName="Box_Left_02_State03" bboxMin="-0.0445796,-1.16642,-0.0123534" bboxMax="0.0228249,1.30466,0.664163" />
+              <object index="41" meshName="Box_Left_02_State02" boneName="Box_Left_02_State02" bboxMin="-0.0445796,-1.16642,-0.0123534" bboxMax="0.0228249,1.30466,0.664163" />
+              <object index="42" meshName="Box_Left_02_State01" boneName="Box_Left_02_State01" bboxMin="-0.0445796,-1.1652,-0.0113908" bboxMax="0.0228249,1.30344,0.695284" />
+              <object index="43" meshName="Bumper_State02" boneName="Bumper_State02" bboxMin="-1.2009,-0.32116,-0.0789593" bboxMax="1.20839,-0.040342,1.00723" />
+              <object index="44" meshName="Bumper_State01" boneName="Bumper_State01" bboxMin="-1.19352,-0.293264,-0.0799993" bboxMax="1.19352,-0.0435373,0.987859" />
+              <resource fileName="graphics\Vehicles\Land\BigTruck\BigTruck.xbg" bboxMin="-3.45046,-4.86167,-2.49965" bboxMax="2.9616,16,2.85004" />
+              <skeleton name="BigTruck" pos="0,0,0" rot="1,-0,-0,-0">
+                <bone name="D_Entry_LD" pos="-1.67646,1.17424,1.14871" rot="0.707107,0,0,-0.707107" />
+                <bone name="D_Sit_Front" pos="-0.531279,1.03524,1.51578" rot="1,0,0,0" />
+                <bone name="Exhaust" pos="1.19518,-1.40871,0.632648" rot="-0.422618,0.906308,0,0" />
+                <bone name="P_Entry_RD" pos="1.70318,1.17424,1.14871" rot="0.707107,0,0,0.707107" />
+                <bone name="P_Sit_Front" pos="0.542341,1.03524,1.51578" rot="1,0,0,0" />
+                <bone name="SteeringWheel" pos="-0.527803,1.52562,1.9371" rot="0.968968,0.247187,0,0" />
+                <bone name="WheelBack_L" pos="-1.25328,-2.46045,0.71712" rot="1,0,0,0" />
+                <bone name="WheelBack_R" pos="1.28685,-2.46045,0.71712" rot="1,0,0,0" />
+                <bone name="WheelFont_L" pos="-0.850793,2.4206,0.716297" rot="1,0,0,0" />
+                <bone name="WheelFront_L_State_SuspensionMarker" pos="-0.850793,2.4206,0.579297" rot="1,0,0,0" />
+                <bone name="WheelFront_R" pos="0.888643,2.4206,0.716297" rot="1,0,0,0" />
+                <bone name="WheelFront_R_State_SuspensionMarker" pos="0.888643,2.4206,0.579297" rot="1,0,0,0" />
+                <bone name="WheelBack_L_State_SuspensionMarker" pos="-1.25328,-2.46045,0.580119" rot="1,0,0,0" />
+                <bone name="WheelBack_R_State_SuspensionMarker" pos="1.28685,-2.46045,0.580119" rot="1,0,0,0" />
+                <bone name="Chassis" pos="0,1.03894,0" rot="1,0,0,0" />
+                <bone name="Door_Front_L_STATE" pos="-1.00902,1.6673,1.79942" rot="1,0,0,0">
+                  <bone name="DoorLeftState01" pos="0,0,0" rot="1,0,0,0" />
+                  <bone name="DoorLeftState02" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="Door_Front_R_STATE" pos="1.03439,1.6673,1.79942" rot="1,0,0,0">
+                  <bone name="DoorRightState01" pos="0,0,0" rot="1,0,0,0" />
+                  <bone name="DoorRightState02" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="Repair_Point" pos="0,4.00094,0.805456" rot="-1.62921e-007,0,0,1" />
+                <bone name="HoodState" pos="0.012071,2.13659,1.95875" rot="1,0,0,0">
+                  <bone name="HoodState02" pos="0,0,0" rot="1,0,0,0" />
+                  <bone name="HoodState01" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="EngineSmoke" pos="0.012071,2.13659,1.95875" rot="-1.62921e-007,0,0.707107,0.707107" />
+                <bone name="Window_STATE" pos="-0.01681,0.642913,2.18489" rot="1,0,0,0">
+                  <bone name="Window_STATE01" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="Window_STATE02_FX" pos="0,0,0.013058" rot="-1.62921e-007,0,0.707107,0.707107" />
+                  </bone>
+                  <bone name="Window_STATE02" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="Winshield_STATE" pos="-0.013999,1.95398,2.21997" rot="1,0,0,0">
+                  <bone name="Winshield_STATE01" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="Winshield_STATE01_FX" pos="0,-0.058221,0.049268" rot="0.707107,0.707107,0,0" />
+                  </bone>
+                  <bone name="Winshield_STATE02" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="Speedometer" pos="-0.577498,1.74023,1.85762" rot="0.666811,0.680618,0.206589,-0.22236" />
+                <bone name="RPMmeter" pos="-0.450879,1.74023,1.85742" rot="-0.464447,-0.484008,-0.521003,0.527807" />
+                <bone name="DynamicLight" pos="-0.000356,3.20052,1.3589" rot="0.976296,-0.216439,0,0" />
+                <bone name="HeadLight_Right_State" pos="0.785613,3.36226,1.22513" rot="1,0,0,0">
+                  <bone name="HeadLight_Right_State02" pos="0,0,1.3e-005" rot="1,0,0,0" />
+                  <bone name="HeadLight_Right_State01" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="HeadLight_Right_State01_FX" pos="0,0,0" rot="1,0,0,0" />
+                  </bone>
+                </bone>
+                <bone name="HeadLight_Left_State" pos="-0.813871,3.36226,1.22513" rot="1,0,0,0">
+                  <bone name="HeadLight_Left_State02" pos="0,0,5e-005" rot="1,0,0,0" />
+                  <bone name="HeadLight_Left_State01" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="HeadLight_Left_State01_FX" pos="0,0,0" rot="1,0,0,0" />
+                  </bone>
+                </bone>
+                <bone name="HeadLight_N_Left_State" pos="-0.813871,3.36226,1.22513" rot="1,0,0,0">
+                  <bone name="HeadLight_N_Left_State01" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="HeadLight_N_Right_State" pos="0.785613,3.36226,1.22513" rot="1,0,0,0">
+                  <bone name="HeadLight_N_Right_State01" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="TailLight_Left_State" pos="-0.990147,-4.67185,1.11206" rot="1,0,0,0">
+                  <bone name="TailLight_Left_State02" pos="0,0,0" rot="1,0,0,0" />
+                  <bone name="TailLight_Left_State01" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="TailLight_Left_State01_FX" pos="0,0,0" rot="-1.62921e-007,0,0,1" />
+                  </bone>
+                </bone>
+                <bone name="TailLight_Right_State" pos="1.04391,-4.67185,1.11206" rot="1,0,0,0">
+                  <bone name="TailLight_Right_State02" pos="0,0,8.3e-005" rot="1,0,0,0" />
+                  <bone name="TailLight_Right_State01" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="TailLight_Right_State01_FX" pos="0,0,0" rot="-1.62921e-007,0,0,1" />
+                  </bone>
+                </bone>
+                <bone name="TailLight_N_Left_State" pos="-0.990147,-4.67185,1.11206" rot="1,0,0,0">
+                  <bone name="TailLight_N_Left_State01" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="TailLight_N_Right_State" pos="1.04391,-4.67185,1.11206" rot="1,0,0,0">
+                  <bone name="TailLight_N_Right_State01" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="DashLight" pos="-0.335987,2.43855,2.35251" rot="1,0,0,0" />
+                <bone name="Box_Right_01_State" pos="1.26441,-0.890679,1.29103" rot="1,0,0,0">
+                  <bone name="Box_Right_01_State02" pos="0,0,0.001766" rot="1,0,0,0">
+                    <bone name="Box_Right_01_State02_FX" pos="0,0,0.348044" rot="0.707107,0,0,-0.707107" />
+                  </bone>
+                  <bone name="Box_Right_01_State01" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="Box_Right_01_State01_FX" pos="0,0,0.231204" rot="0.707107,0,0,-0.707107" />
+                  </bone>
+                  <bone name="Box_Right_01_State03" pos="0,0,0.001766" rot="1,0,0,0" />
+                </bone>
+                <bone name="Box_Right_02_State" pos="1.26441,-3.39946,1.29103" rot="1,0,0,0">
+                  <bone name="Box_Right_02_State02" pos="0,0,0.001766" rot="1,0,0,0">
+                    <bone name="Box_Right_02_State02_FX" pos="0,0.005557,0.352697" rot="0.707107,0,0,-0.707107" />
+                  </bone>
+                  <bone name="Box_Right_02_State01" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="Box_Right_02_State01_FX" pos="0,0.005557,0.231204" rot="0.707107,0,0,-0.707107" />
+                  </bone>
+                  <bone name="Box_Right_02_State03" pos="0,0,0.001766" rot="1,0,0,0" />
+                </bone>
+                <bone name="Box_Left_01_State" pos="-1.23511,-0.890679,1.29103" rot="1,0,0,0">
+                  <bone name="Box_Left_01_State03" pos="0,0,0" rot="1,0,0,0" />
+                  <bone name="Box_Left_01_State02" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="Box_Left_01_State02_FX" pos="-0.00776,-0.000231,0.36154" rot="0.707107,0,0,0.707107" />
+                  </bone>
+                  <bone name="Box_Left_01_State01" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="Box_Left_01_State01_FX" pos="-0.00776,-0.000231,0.231204" rot="0.707107,0,0,0.707107" />
+                  </bone>
+                </bone>
+                <bone name="Box_Left_02_State" pos="-1.23511,-3.41018,1.29103" rot="1,0,0,0">
+                  <bone name="Box_Left_02_State03" pos="0,0,0" rot="1,0,0,0" />
+                  <bone name="Box_Left_02_State02" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="Box_Left_02_State02_FX" pos="-0.00776,0.016274,0.374066" rot="0.707107,0,0,0.707107" />
+                  </bone>
+                  <bone name="Box_Left_02_State01" pos="0,0,0" rot="1,0,0,0">
+                    <bone name="Box_Left_02_State01_FX" pos="-0.00776,0.016274,0.231204" rot="0.707107,0,0,0.707107" />
+                  </bone>
+                </bone>
+                <bone name="Bumper_State" pos="-0.049013,3.69936,0.886942" rot="1,0,0,0">
+                  <bone name="Bumper_State02" pos="0,0,7.8e-005" rot="1,0,0,0" />
+                  <bone name="Bumper_State01" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="Compass_Placement" pos="-0.124123,1.75324,2.02339" rot="0.704544,0.704345,-0.061546,-0.0610592" />
+              </skeleton>
+            </component>
+            <component class="VehicleWheeledPhysComponent">
+              <nodes version="2">
+                <wheels>
+                  <wheel rigidbodyIndex="33" rigidbodyName="WheelBack_L" partId="0" objectIndex="1" suspensionLength="0.250000" />
+                  <wheel rigidbodyIndex="34" rigidbodyName="WheelBack_R" partId="1" objectIndex="2" suspensionLength="0.250000" />
+                  <wheel rigidbodyIndex="35" rigidbodyName="WheelFont_L" partId="2" objectIndex="3" suspensionLength="0.250000" />
+                  <wheel rigidbodyIndex="36" rigidbodyName="WheelFront_R" partId="3" objectIndex="4" suspensionLength="0.250000" />
+                </wheels>
+                <frame rigidbodyIndex="14" rigidbodyName="Chassis" partId="4" objectIndex="5" />
+                <parts>
+                  <states>
+                    <door rigidbodyIndex="15" rigidbodyName="DoorLeftState01" partId="5" objectIndex="6" stateIndex="0" />
+                    <door rigidbodyIndex="16" rigidbodyName="DoorLeftState02" partId="6" objectIndex="7" stateIndex="1" />
+                  </states>
+                  <states>
+                    <door rigidbodyIndex="17" rigidbodyName="DoorRightState01" partId="7" objectIndex="8" stateIndex="0" />
+                    <door rigidbodyIndex="18" rigidbodyName="DoorRightState02" partId="8" objectIndex="9" stateIndex="1" />
+                  </states>
+                  <states>
+                    <hood rigidbodyIndex="24" rigidbodyName="HoodState01" partId="10" objectIndex="11" stateIndex="0" />
+                    <hood rigidbodyIndex="25" rigidbodyName="HoodState02" partId="9" objectIndex="10" stateIndex="1" />
+                  </states>
+                  <states>
+                    <window onlyHighresCol="1" rigidbodyName="Window_STATE01" partId="11" objectIndex="12" stateIndex="0" fxNodeName="Window_STATE02_FX" />
+                    <window onlyHighresCol="1" rigidbodyName="Window_STATE02" partId="12" objectIndex="13" stateIndex="1" />
+                  </states>
+                  <states>
+                    <windshield onlyHighresCol="1" rigidbodyName="Winshield_STATE01" partId="13" objectIndex="14" stateIndex="0" fxNodeName="Winshield_STATE01_FX" />
+                    <windshield onlyHighresCol="1" rigidbodyName="Winshield_STATE02" partId="14" objectIndex="15" stateIndex="1" />
+                  </states>
+                  <states>
+                    <HeadLight onlyHighresCol="1" rigidbodyName="HeadLight_Right_State01" partId="16" objectIndex="19" stateIndex="0" fxNodeName="HeadLight_Right_State01_FX" />
+                    <HeadLight onlyHighresCol="1" rigidbodyName="HeadLight_Right_State02" partId="15" objectIndex="18" stateIndex="1" />
+                  </states>
+                  <states>
+                    <HeadLight onlyHighresCol="1" rigidbodyName="HeadLight_Left_State01" partId="18" objectIndex="21" stateIndex="0" fxNodeName="HeadLight_Left_State01_FX" />
+                    <HeadLight onlyHighresCol="1" rigidbodyName="HeadLight_Left_State02" partId="17" objectIndex="20" stateIndex="1" />
+                  </states>
+                  <states>
+                    <TailLight onlyHighresCol="1" rigidbodyName="TailLight_Left_State01" partId="20" objectIndex="25" stateIndex="0" fxNodeName="TailLight_Left_State01_FX" />
+                    <TailLight onlyHighresCol="1" rigidbodyName="TailLight_Left_State02" partId="19" objectIndex="24" stateIndex="1" />
+                  </states>
+                  <states>
+                    <TailLight onlyHighresCol="1" rigidbodyName="TailLight_Right_State01" partId="22" objectIndex="27" stateIndex="0" fxNodeName="TailLight_Right_State01_FX" />
+                    <TailLight onlyHighresCol="1" rigidbodyName="TailLight_Right_State02" partId="21" objectIndex="26" stateIndex="1" />
+                  </states>
+                  <states>
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Right_01_State01" partId="24" objectIndex="32" stateIndex="0" fxNodeName="Box_Right_01_State01_FX" />
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Right_01_State02" partId="23" objectIndex="31" stateIndex="1" fxNodeName="Box_Right_01_State02_FX" />
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Right_01_State03" partId="25" objectIndex="33" stateIndex="2" />
+                  </states>
+                  <states>
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Right_02_State01" partId="27" objectIndex="35" stateIndex="0" fxNodeName="Box_Right_02_State01_FX" />
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Right_02_State02" partId="26" objectIndex="34" stateIndex="1" fxNodeName="Box_Right_02_State02_FX" />
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Right_02_State03" partId="28" objectIndex="36" stateIndex="2" />
+                  </states>
+                  <states>
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Left_01_State01" partId="31" objectIndex="39" stateIndex="0" fxNodeName="Box_Left_01_State01_FX" />
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Left_01_State02" partId="30" objectIndex="38" stateIndex="1" fxNodeName="Box_Left_01_State02_FX" />
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Left_01_State03" partId="29" objectIndex="37" stateIndex="2" />
+                  </states>
+                  <states>
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Left_02_State01" partId="34" objectIndex="42" stateIndex="0" fxNodeName="Box_Left_02_State01_FX" />
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Left_02_State02" partId="33" objectIndex="41" stateIndex="1" fxNodeName="Box_Left_02_State02_FX" />
+                    <accessory onlyHighresCol="1" rigidbodyName="Box_Left_02_State03" partId="32" objectIndex="40" stateIndex="2" />
+                  </states>
+                  <states>
+                    <body onlyHighresCol="1" rigidbodyName="Bumper_State01" partId="36" objectIndex="44" stateIndex="0" />
+                    <body onlyHighresCol="1" rigidbodyName="Bumper_State02" partId="35" objectIndex="43" stateIndex="1" />
+                  </states>
+                </parts>
+              </nodes>
+              <resource fileName="graphics\Vehicles\Land\BigTruck\BigTruck.hkx" />
+            </component>
+            <component class="GameLogicComponent">
+              <seat type="driver" seatbone="D_Sit_Front">
+                <entry bone="D_Entry_LD" userType="0" doorbone="Door_Front_L_STATE" />
+              </seat>
+              <seat type="passenger" seatbone="P_Sit_Front">
+                <entry bone="P_Entry_RD" userType="0" doorbone="Door_Front_R_STATE" />
+              </seat>
+              <repairspot spotbone="Repair_Point" hoodbone="HoodState" />
+              <gauge speedbone="Speedometer" rpmbone="RPMmeter" />
+              <dynamiclight bone="DynamicLight" />
+              <headlight day="HeadLight_Right_State01" night="HeadLight_N_Right_State01" />
+              <headlight day="HeadLight_Left_State01" night="HeadLight_N_Left_State01" />
+              <taillight day="TailLight_Left_State01" night="TailLight_N_Left_State01" />
+              <taillight day="TailLight_Right_State01" night="TailLight_N_Right_State01" />
+              <dashlight bone="DashLight" />
+            </component>
+            <component class="ParticleFXComponent">
+              <Exhaust psEmitter="" />
+              <EngineSmoke psEmitter="" />
+              <Window_STATE02_FX psEmitter="" />
+              <Winshield_STATE01_FX psEmitter="" />
+              <HeadLight_Right_State01_FX psEmitter="" />
+              <HeadLight_Left_State01_FX psEmitter="" />
+              <TailLight_Left_State01_FX psEmitter="" />
+              <TailLight_Right_State01_FX psEmitter="" />
+              <Box_Right_01_State02_FX psEmitter="" />
+              <Box_Right_01_State01_FX psEmitter="" />
+              <Box_Right_02_State02_FX psEmitter="" />
+              <Box_Right_02_State01_FX psEmitter="" />
+              <Box_Left_01_State02_FX psEmitter="" />
+              <Box_Left_01_State01_FX psEmitter="" />
+              <Box_Left_02_State02_FX psEmitter="" />
+              <Box_Left_02_State01_FX psEmitter="" />
+              <Compass_Placement psEmitter="" />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="129" type="BinHex">81000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="True" type="BinHex">01</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="SteeringWheel" type="BinHex">5374656572696E67576865656C00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="SteeringWheel" type="BinHex">5374656572696E67576865656C00</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="SteeringWheel" type="BinHex">0C7D8F33</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="SteeringWheel_LOD0" type="BinHex">5374656572696E67576865656C5F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="SteeringWheel_LOD0" type="BinHex">1F940E26</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="1" type="BinHex">01000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="WheelBack_L" type="BinHex">576865656C4261636B5F4C00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="WheelBack_L" type="BinHex">576865656C4261636B5F4C00</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="WheelBack_L" type="BinHex">FCB441F3</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="WheelBack_L_LOD0" type="BinHex">576865656C4261636B5F4C5F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="WheelBack_L_LOD0" type="BinHex">CA09B435</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="2" type="BinHex">02000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="WheelBack_R" type="BinHex">576865656C4261636B5F5200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="WheelBack_R" type="BinHex">576865656C4261636B5F5200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="WheelBack_R" type="BinHex">9F894E09</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="WheelBack_R_LOD0" type="BinHex">576865656C4261636B5F525F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="WheelBack_R_LOD0" type="BinHex">216A680C</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="WheelFont_L" type="BinHex">576865656C466F6E745F4C00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="WheelFont_L" type="BinHex">576865656C466F6E745F4C00</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="WheelFont_L" type="BinHex">1B74F032</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="WheelFont_L_LOD0" type="BinHex">576865656C466F6E745F4C5F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="WheelFont_L_LOD0" type="BinHex">2B8E70CF</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="4" type="BinHex">04000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="WheelFront_R" type="BinHex">576865656C46726F6E745F5200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="WheelFront_R" type="BinHex">576865656C46726F6E745F5200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="WheelFront_R" type="BinHex">50814B35</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="WheelFront_R_LOD0" type="BinHex">576865656C46726F6E745F525F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="WheelFront_R_LOD0" type="BinHex">D086A1D7</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="5" type="BinHex">05000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Chassis" type="BinHex">4368617373697300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Chassis" type="BinHex">4368617373697300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Chassis" type="BinHex">434A74FA</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Chassis_LOD0" type="BinHex">436861737369735F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Chassis_LOD0" type="BinHex">A96BF832</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="6" type="BinHex">06000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="DoorLeftState01" type="BinHex">446F6F724C6566745374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="DoorLeftState01" type="BinHex">446F6F724C6566745374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="DoorLeftState01" type="BinHex">B7FF1542</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="DoorLeftState01_LOD0" type="BinHex">446F6F724C656674537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="DoorLeftState01_LOD0" type="BinHex">3BA6E9C0</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="7" type="BinHex">07000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="DoorLeftState02" type="BinHex">446F6F724C6566745374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="DoorLeftState02" type="BinHex">446F6F724C6566745374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="DoorLeftState02" type="BinHex">0DAE1CDB</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="DoorLeftState02_LOD0" type="BinHex">446F6F724C656674537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="DoorLeftState02_LOD0" type="BinHex">95D47D46</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="8" type="BinHex">08000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="DoorRightState01" type="BinHex">446F6F7252696768745374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="DoorRightState01" type="BinHex">446F6F7252696768745374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="DoorRightState01" type="BinHex">7EA0E505</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="DoorRightState01_LOD0" type="BinHex">446F6F725269676874537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="DoorRightState01_LOD0" type="BinHex">77997EBD</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="9" type="BinHex">09000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="DoorRightState02" type="BinHex">446F6F7252696768745374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="DoorRightState02" type="BinHex">446F6F7252696768745374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="DoorRightState02" type="BinHex">C4F1EC9C</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="DoorRightState02_LOD0" type="BinHex">446F6F725269676874537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="DoorRightState02_LOD0" type="BinHex">D9EBEA3B</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="10" type="BinHex">0A000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="HoodState02" type="BinHex">486F6F645374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="HoodState02" type="BinHex">486F6F645374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="HoodState02" type="BinHex">FC4D976B</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="HoodState02_LOD0" type="BinHex">486F6F64537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="HoodState02_LOD0" type="BinHex">771946FE</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="11" type="BinHex">0B000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="HoodState01" type="BinHex">486F6F645374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="HoodState01" type="BinHex">486F6F645374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="HoodState01" type="BinHex">461C9EF2</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="HoodState01_LOD0" type="BinHex">486F6F64537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="HoodState01_LOD0" type="BinHex">D96BD278</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="12" type="BinHex">0C000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Window_STATE01" type="BinHex">57696E646F775F5354415445303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Window_STATE01" type="BinHex">57696E646F775F5354415445303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Window_STATE01" type="BinHex">2EAB4A5F</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Window_STATE01_LOD0" type="BinHex">57696E646F775F535441544530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Window_STATE01_LOD0" type="BinHex">3E7E1CC0</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="13" type="BinHex">0D000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Window_STATE02" type="BinHex">57696E646F775F5354415445303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Window_STATE02" type="BinHex">57696E646F775F5354415445303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Window_STATE02" type="BinHex">94FA43C6</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Window_STATE02_LOD0" type="BinHex">57696E646F775F535441544530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Window_STATE02_LOD0" type="BinHex">900C8846</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="14" type="BinHex">0E000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Winshield_STATE01" type="BinHex">57696E736869656C645F5354415445303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Winshield_STATE01" type="BinHex">57696E736869656C645F5354415445303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Winshield_STATE01" type="BinHex">E7A0DEA4</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Winshield_STATE01_LOD0" type="BinHex">57696E736869656C645F535441544530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Winshield_STATE01_LOD0" type="BinHex">CF5B4AFE</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="15" type="BinHex">0F000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Winshield_STATE02" type="BinHex">57696E736869656C645F5354415445303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Winshield_STATE02" type="BinHex">57696E736869656C645F5354415445303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Winshield_STATE02" type="BinHex">5DF1D73D</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Winshield_STATE02_LOD0" type="BinHex">57696E736869656C645F535441544530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Winshield_STATE02_LOD0" type="BinHex">6129DE78</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="16" type="BinHex">10000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Speedometer" type="BinHex">53706565646F6D6574657200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Speedometer" type="BinHex">53706565646F6D6574657200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Speedometer" type="BinHex">AFCB15EC</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Speedometer_LOD0" type="BinHex">53706565646F6D657465725F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Speedometer_LOD0" type="BinHex">E984B4DF</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="17" type="BinHex">11000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="RPMmeter" type="BinHex">52504D6D6574657200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="RPMmeter" type="BinHex">52504D6D6574657200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="RPMmeter" type="BinHex">6420117A</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="RPMmeter_LOD0" type="BinHex">52504D6D657465725F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="RPMmeter_LOD0" type="BinHex">5A1E1D60</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="18" type="BinHex">12000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="HeadLight_Right_State02" type="BinHex">486561644C696768745F52696768745F5374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="HeadLight_Right_State02" type="BinHex">486561644C696768745F52696768745F5374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="HeadLight_Right_State02" type="BinHex">E2C6B568</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="HeadLight_Right_State02_LOD0" type="BinHex">486561644C696768745F52696768745F537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="HeadLight_Right_State02_LOD0" type="BinHex">E3C02A0B</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="19" type="BinHex">13000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="HeadLight_Right_State01" type="BinHex">486561644C696768745F52696768745F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="HeadLight_Right_State01" type="BinHex">486561644C696768745F52696768745F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="HeadLight_Right_State01" type="BinHex">5897BCF1</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="HeadLight_Right_State01_LOD0" type="BinHex">486561644C696768745F52696768745F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="HeadLight_Right_State01_LOD0" type="BinHex">4DB2BE8D</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="20" type="BinHex">14000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="HeadLight_Left_State02" type="BinHex">486561644C696768745F4C6566745F5374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="HeadLight_Left_State02" type="BinHex">486561644C696768745F4C6566745F5374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="HeadLight_Left_State02" type="BinHex">6783EEAF</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="HeadLight_Left_State02_LOD0" type="BinHex">486561644C696768745F4C6566745F537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="HeadLight_Left_State02_LOD0" type="BinHex">D6D7B43A</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="21" type="BinHex">15000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="HeadLight_Left_State01" type="BinHex">486561644C696768745F4C6566745F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="HeadLight_Left_State01" type="BinHex">486561644C696768745F4C6566745F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="HeadLight_Left_State01" type="BinHex">DDD2E736</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="HeadLight_Left_State01_LOD0" type="BinHex">486561644C696768745F4C6566745F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="HeadLight_Left_State01_LOD0" type="BinHex">78A520BC</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="22" type="BinHex">16000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="HeadLight_N_Left_State01" type="BinHex">486561644C696768745F4E5F4C6566745F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="HeadLight_N_Left_State01" type="BinHex">486561644C696768745F4E5F4C6566745F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="HeadLight_N_Left_State01" type="BinHex">681EE9B1</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="HeadLight_N_Left_State01_LOD0" type="BinHex">486561644C696768745F4E5F4C6566745F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="HeadLight_N_Left_State01_LOD0" type="BinHex">2450C026</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="23" type="BinHex">17000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="HeadLight_N_Right_State01" type="BinHex">486561644C696768745F4E5F52696768745F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="HeadLight_N_Right_State01" type="BinHex">486561644C696768745F4E5F52696768745F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="HeadLight_N_Right_State01" type="BinHex">97DE304A</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="HeadLight_N_Right_State01_LOD0" type="BinHex">486561644C696768745F4E5F52696768745F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="HeadLight_N_Right_State01_LOD0" type="BinHex">674FF9EF</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="24" type="BinHex">18000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="TailLight_Left_State02" type="BinHex">5461696C4C696768745F4C6566745F5374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="TailLight_Left_State02" type="BinHex">5461696C4C696768745F4C6566745F5374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="TailLight_Left_State02" type="BinHex">AAB37865</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="TailLight_Left_State02_LOD0" type="BinHex">5461696C4C696768745F4C6566745F537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="TailLight_Left_State02_LOD0" type="BinHex">9BF89113</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="25" type="BinHex">19000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="TailLight_Left_State01" type="BinHex">5461696C4C696768745F4C6566745F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="TailLight_Left_State01" type="BinHex">5461696C4C696768745F4C6566745F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="TailLight_Left_State01" type="BinHex">10E271FC</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="TailLight_Left_State01_LOD0" type="BinHex">5461696C4C696768745F4C6566745F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="TailLight_Left_State01_LOD0" type="BinHex">358A0595</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="26" type="BinHex">1A000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="TailLight_Right_State02" type="BinHex">5461696C4C696768745F52696768745F5374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="TailLight_Right_State02" type="BinHex">5461696C4C696768745F52696768745F5374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="TailLight_Right_State02" type="BinHex">DFEEAA8D</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="TailLight_Right_State02_LOD0" type="BinHex">5461696C4C696768745F52696768745F537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="TailLight_Right_State02_LOD0" type="BinHex">E1D86E03</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="27" type="BinHex">1B000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="TailLight_Right_State01" type="BinHex">5461696C4C696768745F52696768745F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="TailLight_Right_State01" type="BinHex">5461696C4C696768745F52696768745F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="TailLight_Right_State01" type="BinHex">65BFA314</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="TailLight_Right_State01_LOD0" type="BinHex">5461696C4C696768745F52696768745F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="TailLight_Right_State01_LOD0" type="BinHex">4FAAFA85</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="28" type="BinHex">1C000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="TailLight_N_Left_State01" type="BinHex">5461696C4C696768745F4E5F4C6566745F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="TailLight_N_Left_State01" type="BinHex">5461696C4C696768745F4E5F4C6566745F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="TailLight_N_Left_State01" type="BinHex">514D64E9</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="TailLight_N_Left_State01_LOD0" type="BinHex">5461696C4C696768745F4E5F4C6566745F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="TailLight_N_Left_State01_LOD0" type="BinHex">1075C6C8</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="29" type="BinHex">1D000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="TailLight_N_Right_State01" type="BinHex">5461696C4C696768745F4E5F52696768745F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="TailLight_N_Right_State01" type="BinHex">5461696C4C696768745F4E5F52696768745F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="TailLight_N_Right_State01" type="BinHex">CCDB6D15</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="TailLight_N_Right_State01_LOD0" type="BinHex">5461696C4C696768745F4E5F52696768745F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="TailLight_N_Right_State01_LOD0" type="BinHex">F7BDA3CE</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="30" type="BinHex">1E000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="DashLight" type="BinHex">446173684C6967687400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="DashLight" type="BinHex">446173684C6967687400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="DashLight" type="BinHex">EF25E82C</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="DashLight_LOD0" type="BinHex">446173684C696768745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="DashLight_LOD0" type="BinHex">66DD01C7</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="31" type="BinHex">1F000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Right_01_State02" type="BinHex">426F785F52696768745F30315F5374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Right_01_State02" type="BinHex">426F785F52696768745F30315F5374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Right_01_State02" type="BinHex">75B8B0C6</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Right_01_State02_LOD0" type="BinHex">426F785F52696768745F30315F537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Right_01_State02_LOD0" type="BinHex">C0BFA3D5</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="32" type="BinHex">20000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Right_01_State01" type="BinHex">426F785F52696768745F30315F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Right_01_State01" type="BinHex">426F785F52696768745F30315F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Right_01_State01" type="BinHex">CFE9B95F</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Right_01_State01_LOD0" type="BinHex">426F785F52696768745F30315F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Right_01_State01_LOD0" type="BinHex">6ECD3753</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="33" type="BinHex">21000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Right_01_State03" type="BinHex">426F785F52696768745F30315F5374617465303300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Right_01_State03" type="BinHex">426F785F52696768745F30315F5374617465303300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Right_01_State03" type="BinHex">E388B7B1</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Right_01_State03_LOD0" type="BinHex">426F785F52696768745F30315F537461746530335F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Right_01_State03_LOD0" type="BinHex">656CFF1E</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="34" type="BinHex">22000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Right_02_State02" type="BinHex">426F785F52696768745F30325F5374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Right_02_State02" type="BinHex">426F785F52696768745F30325F5374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Right_02_State02" type="BinHex">B0843DFF</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Right_02_State02_LOD0" type="BinHex">426F785F52696768745F30325F537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Right_02_State02_LOD0" type="BinHex">1B9AC2A9</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="35" type="BinHex">23000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Right_02_State01" type="BinHex">426F785F52696768745F30325F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Right_02_State01" type="BinHex">426F785F52696768745F30325F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Right_02_State01" type="BinHex">0AD53466</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Right_02_State01_LOD0" type="BinHex">426F785F52696768745F30325F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Right_02_State01_LOD0" type="BinHex">B5E8562F</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="36" type="BinHex">24000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Right_02_State03" type="BinHex">426F785F52696768745F30325F5374617465303300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Right_02_State03" type="BinHex">426F785F52696768745F30325F5374617465303300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Right_02_State03" type="BinHex">26B43A88</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Right_02_State03_LOD0" type="BinHex">426F785F52696768745F30325F537461746530335F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Right_02_State03_LOD0" type="BinHex">BE499E62</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="37" type="BinHex">25000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Left_01_State03" type="BinHex">426F785F4C6566745F30315F5374617465303300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Left_01_State03" type="BinHex">426F785F4C6566745F30315F5374617465303300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Left_01_State03" type="BinHex">2CF8CFE2</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Left_01_State03_LOD0" type="BinHex">426F785F4C6566745F30315F537461746530335F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Left_01_State03_LOD0" type="BinHex">8C84F1D5</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="38" type="BinHex">26000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Left_01_State02" type="BinHex">426F785F4C6566745F30315F5374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Left_01_State02" type="BinHex">426F785F4C6566745F30315F5374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Left_01_State02" type="BinHex">BAC8C895</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Left_01_State02_LOD0" type="BinHex">426F785F4C6566745F30315F537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Left_01_State02_LOD0" type="BinHex">2957AD1E</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="39" type="BinHex">27000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Left_01_State01" type="BinHex">426F785F4C6566745F30315F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Left_01_State01" type="BinHex">426F785F4C6566745F30315F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Left_01_State01" type="BinHex">0099C10C</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Left_01_State01_LOD0" type="BinHex">426F785F4C6566745F30315F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Left_01_State01_LOD0" type="BinHex">87253998</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="40" type="BinHex">28000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Left_02_State03" type="BinHex">426F785F4C6566745F30325F5374617465303300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Left_02_State03" type="BinHex">426F785F4C6566745F30325F5374617465303300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Left_02_State03" type="BinHex">E9C442DB</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Left_02_State03_LOD0" type="BinHex">426F785F4C6566745F30325F537461746530335F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Left_02_State03_LOD0" type="BinHex">57A190A9</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="41" type="BinHex">29000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Left_02_State02" type="BinHex">426F785F4C6566745F30325F5374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Left_02_State02" type="BinHex">426F785F4C6566745F30325F5374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Left_02_State02" type="BinHex">7FF445AC</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Left_02_State02_LOD0" type="BinHex">426F785F4C6566745F30325F537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Left_02_State02_LOD0" type="BinHex">F272CC62</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="42" type="BinHex">2A000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Box_Left_02_State01" type="BinHex">426F785F4C6566745F30325F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Box_Left_02_State01" type="BinHex">426F785F4C6566745F30325F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Box_Left_02_State01" type="BinHex">C5A54C35</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Box_Left_02_State01_LOD0" type="BinHex">426F785F4C6566745F30325F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Box_Left_02_State01_LOD0" type="BinHex">5C0058E4</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="43" type="BinHex">2B000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Bumper_State02" type="BinHex">42756D7065725F5374617465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Bumper_State02" type="BinHex">42756D7065725F5374617465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Bumper_State02" type="BinHex">67C4F960</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Bumper_State02_LOD0" type="BinHex">42756D7065725F537461746530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Bumper_State02_LOD0" type="BinHex">26C97C69</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="44" type="BinHex">2C000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck.xbg" type="BinHex">1E1D24A2</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Bumper_State01" type="BinHex">42756D7065725F5374617465303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Bumper_State01" type="BinHex">42756D7065725F5374617465303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Bumper_State01" type="BinHex">DD95F0F9</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Bumper_State01_LOD0" type="BinHex">42756D7065725F537461746530315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Bumper_State01_LOD0" type="BinHex">88BBE8EF</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="E39B8041" name="CAvatarSkinComponent">
+        <field hash="B54515E2" name="hidCreateCopies" type="BinHex">01</field>
+        <object hash="0FA60B61" name="MaterialOverrides">
+          <object hash="85C817C3" name="Material">
+            <field hash="DD2929AC" type="BinHex">00</field>
+            <field hash="E1C0931D" name="fileOriginalMaterial" type="BinHex">FFFFFFFF</field>
+            <field hash="148E2F84" type="BinHex">00</field>
+            <field hash="28679535" name="fileMaterialOverride" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+      </object>
+      <object hash="09D5E1B2" name="CSimpleAnimationComponent">
+        <field hash="F9F2D5F4" name="text_fileSkeleton" value-String="graphics\vehicles\land\bigtruck\bigtruck_ref.skeleton" type="BinHex">67726170686963735C76656869636C65735C6C616E645C626967747275636B5C626967747275636B5F7265662E736B656C65746F6E00</field>
+        <field hash="0B80933A" name="fileSkeleton" value-ComputeHash32="graphics\vehicles\land\bigtruck\bigtruck_ref.skeleton" type="BinHex">7218F6B3</field>
+        <field hash="C22DBBC8" name="sPartName" value-String="bigtruck" type="BinHex">626967747275636B00</field>
+        <field hash="EC1D5173" name="text_fileAnimation" value-String="" type="BinHex">00</field>
+        <field hash="9033CC82" name="fileAnimation" type="BinHex">FFFFFFFF</field>
+        <field hash="D32F71E1" name="bDisableInterpolation" value-Boolean="False" type="BinHex">00</field>
+      </object>
+    </object>
+  </object>
+</object>

@@ -1,0 +1,254 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="MountedWeapons.MK19_SwampMount" type="BinHex">4D6F756E746564576561706F6E732E4D4B31395F5377616D704D6F756E7400</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="weapons.MountedWeapons.MK19_SwampMount" type="BinHex">776561706F6E732E4D6F756E746564576561706F6E732E4D4B31395F5377616D704D6F756E7400</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="2632" type="BinHex">480A000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="8" type="BinHex">08000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\weapons\turret\vehicule_fishingboat\turret_tripod.xml" type="BinHex">67726170686963735C776561706F6E735C7475727265745C7665686963756C655F66697368696E67626F61745C7475727265745F747269706F642E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\weapons\turret\vehicule_fishingboat\turret_tripod.xml" type="BinHex">F31A7CCE</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2" detail="0">
+              <object index="0" meshName="GunMount" boneName="GunMount" bboxMin="-0.076362,-0.0983742,-0.0959991" bboxMax="0.0848365,0.0983742,-0.00634644" />
+              <object index="1" meshName="Turret_Tripod_Prim" boneName="Turret_Tripod_Prim" bboxMin="-0.108598,-0.108288,-0.0186627" bboxMax="0.108598,0.107922,1.419" />
+              <resource fileName="graphics\Weapons\Turret\Vehicule_FishingBoat\Turret_Tripod.xbg" bboxMin="-0.108598,0.917079,-0.0186627" bboxMax="0.108598,1.13329,1.43619" />
+              <skeleton name="Turret_Tripod" pos="0,0,0" rot="1,-0,-0,-0">
+                <bone name="Turret_Axis" pos="-0.000241,1.02537,1.23652" rot="1,0,0,0">
+                  <bone name="GunMount" pos="0.001064,-0.000183,0.206018" rot="1,0,0,0" />
+                  <bone name="WeaponPlacement" pos="0.000241,-0.000183,0.206018" rot="1,0,0,0" />
+                  <bone name="Gunner_PH" pos="-0.006759,-1.02537,-1.23652" rot="1,0,0,0" />
+                </bone>
+                <bone name="Turret_Tripod_Prim" pos="0,1.02537,0" rot="1,0,0,0" />
+              </skeleton>
+            </component>
+            <component class="GameLogicComponent">
+              <pivot bone="Turret_Axis" />
+              <weapon bone="GunMount" />
+              <gunner bone="Gunner_PH" />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="1025" type="BinHex">01040000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="True" type="BinHex">01</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\weapons\turret\vehicule_fishingboat\turret_tripod.xbg" type="BinHex">67726170686963735C776561706F6E735C7475727265745C7665686963756C655F66697368696E67626F61745C7475727265745F747269706F642E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\weapons\turret\vehicule_fishingboat\turret_tripod.xbg" type="BinHex">B4DF36DE</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="GunMount" type="BinHex">47756E4D6F756E7400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="GunMount" type="BinHex">47756E4D6F756E7400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="GunMount" type="BinHex">21A7DEF7</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="GunMount_LOD0" type="BinHex">47756E4D6F756E745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="GunMount_LOD0" type="BinHex">9A705E94</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="1" type="BinHex">01000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\weapons\turret\vehicule_fishingboat\turret_tripod.xbg" type="BinHex">67726170686963735C776561706F6E735C7475727265745C7665686963756C655F66697368696E67626F61745C7475727265745F747269706F642E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\weapons\turret\vehicule_fishingboat\turret_tripod.xbg" type="BinHex">B4DF36DE</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Turret_Tripod_Prim" type="BinHex">5475727265745F547269706F645F5072696D00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Turret_Tripod_Prim" type="BinHex">5475727265745F547269706F645F5072696D00</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Turret_Tripod_Prim" type="BinHex">01D3908B</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Turret_Tripod_Prim_LOD0" type="BinHex">5475727265745F547269706F645F5072696D5F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Turret_Tripod_Prim_LOD0" type="BinHex">65FE4C48</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="99BF34B0" name="CMountedWeapon">
+        <field hash="3A9A4AC2" name="archWeapon" value-String="weapons.MountedWeapons.MK19_Mounted" type="BinHex">776561706F6E732E4D6F756E746564576561706F6E732E4D4B31395F4D6F756E74656400</field>
+        <field hash="BFF4F410" value-String="default_mount" type="BinHex">64656661756C745F6D6F756E7400</field>
+        <field hash="4D86B2DE" name="sWeaponDB_ID" value-ComputeHash32="default_mount" type="BinHex">0DAECFD3</field>
+        <field hash="246B45C0" name="isPlayerInvincibleWhenUsing" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1E9C8DEE" name="skillRingActionMap" value-String="using_mounted_weapon_skillring" type="BinHex">7573696E675F6D6F756E7465645F776561706F6E5F736B696C6C72696E6700</field>
+        <field hash="5CFE93AD" name="sUsageString" value-String="USE M249" type="BinHex">555345204D32343900</field>
+        <field hash="8BB4AC0A" name="minAngles" value-Vector3="-7.9999995,0,-24.999998" type="BinHex">FFFFFFC000000000FFFFC7C1</field>
+        <field hash="5C5F1E4B" name="maxAngles" value-Vector3="33.999996,0,24.999998" type="BinHex">FFFF074200000000FFFFC741</field>
+        <field hash="BE7B7E84" name="InteractRadius" value-Float32="1.5" type="BinHex">0000C03F</field>
+        <field hash="71FD9D0B" name="minPlayerAngle" value-Float32="-45" type="BinHex">000034C2</field>
+        <field hash="C8DB067A" name="maxPlayerAngle" value-Float32="45" type="BinHex">00003442</field>
+        <field hash="AC190C88" name="isBound" value-Boolean="True" type="BinHex">01</field>
+        <object hash="A2C149F7" name="EntryBones">
+          <object hash="A952F576" name="EntryBone">
+            <field hash="B857F415" type="BinHex">00</field>
+            <field hash="BF298A20" name="Item" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="3FDF7929" name="SoundProperties">
+          <field hash="0DA93CD3" name="sndMovementSoundPlayerStart" value-String="0x00449324" type="BinHex">3078303034343933323400</field>
+          <field hash="BBB1D17A" name="sndMovementSoundPlayerStop" value-String="0x00449325" type="BinHex">3078303034343933323500</field>
+          <field hash="04D4FA95" name="sndtpMovementSoundTypePlayer" value-UInt32="15" type="BinHex">0F000000</field>
+          <field hash="9E11E563" name="sndMovementSoundNPCStart" value-String="0x004F0141" type="BinHex">3078303034463031343100</field>
+          <field hash="0A97FCF7" name="sndMovementSoundNPCStop" value-String="0x004F0140" type="BinHex">3078303034463031343000</field>
+          <field hash="43378C48" name="sndtpMovementSoundTypeNPC" value-UInt32="14" type="BinHex">0E000000</field>
+          <field hash="E564BFD3" name="sndmlMovementSoundMultilayer" value-Int32="4457053" type="BinHex">5D024400</field>
+        </object>
+        <object hash="5A0CFE9B" name="Overheat">
+          <field hash="D32F0D55" name="fCoolDownDelay" value-Float32="2" type="BinHex">00000040</field>
+          <object hash="366E727B" name="States">
+            <object hash="6252FDFF" name="State">
+              <field hash="01F032D7" name="fHeatPerBullet" value-Float32="30" type="BinHex">0000F041</field>
+              <field hash="660DAE13" name="fCoolPerSecond" value-Float32="50" type="BinHex">00004842</field>
+              <object hash="3038DFBA" name="FXs">
+                <object hash="824A23BA" name="FX">
+                  <field hash="D821E6F9" name="text_psFX" value-String="" type="BinHex">00</field>
+                  <field hash="DF5F98CC" name="psFX" type="BinHex">FFFFFFFF</field>
+                  <field hash="920A6E7C" name="text_Bone" value-String="" type="BinHex">00</field>
+                  <field hash="95741049" name="Bone" type="BinHex">FFFFFFFF</field>
+                </object>
+              </object>
+            </object>
+            <object hash="6252FDFF" name="State">
+              <field hash="01F032D7" name="fHeatPerBullet" value-Float32="30" type="BinHex">0000F041</field>
+              <field hash="660DAE13" name="fCoolPerSecond" value-Float32="50" type="BinHex">00004842</field>
+              <object hash="3038DFBA" name="FXs">
+                <object hash="824A23BA" name="FX">
+                  <field hash="D821E6F9" name="text_psFX" value-String="weapons.malfunction.mounted_overheat_low" type="BinHex">776561706F6E732E6D616C66756E6374696F6E2E6D6F756E7465645F6F766572686561745F6C6F7700</field>
+                  <field hash="DF5F98CC" name="psFX" value-ComputeHash32="weapons.malfunction.mounted_overheat_low" type="BinHex">4DAC6092</field>
+                  <field hash="920A6E7C" name="text_Bone" value-String="FX_CASING" type="BinHex">46585F434153494E4700</field>
+                  <field hash="95741049" name="Bone" value-ComputeHash32="FX_CASING" type="BinHex">8EB631D4</field>
+                </object>
+                <object hash="824A23BA" name="FX">
+                  <field hash="D821E6F9" name="text_psFX" value-String="" type="BinHex">00</field>
+                  <field hash="DF5F98CC" name="psFX" type="BinHex">FFFFFFFF</field>
+                  <field hash="920A6E7C" name="text_Bone" value-String="" type="BinHex">00</field>
+                  <field hash="95741049" name="Bone" type="BinHex">FFFFFFFF</field>
+                </object>
+              </object>
+            </object>
+            <object hash="6252FDFF" name="State">
+              <field hash="01F032D7" name="fHeatPerBullet" value-Float32="30" type="BinHex">0000F041</field>
+              <field hash="660DAE13" name="fCoolPerSecond" value-Float32="50" type="BinHex">00004842</field>
+              <object hash="3038DFBA" name="FXs">
+                <object hash="824A23BA" name="FX">
+                  <field hash="D821E6F9" name="text_psFX" value-String="weapons.malfunction.mounted_overheat_medium" type="BinHex">776561706F6E732E6D616C66756E6374696F6E2E6D6F756E7465645F6F766572686561745F6D656469756D00</field>
+                  <field hash="DF5F98CC" name="psFX" value-ComputeHash32="weapons.malfunction.mounted_overheat_medium" type="BinHex">22060E2D</field>
+                  <field hash="920A6E7C" name="text_Bone" value-String="FX_CASING" type="BinHex">46585F434153494E4700</field>
+                  <field hash="95741049" name="Bone" value-ComputeHash32="FX_CASING" type="BinHex">8EB631D4</field>
+                </object>
+                <object hash="824A23BA" name="FX">
+                  <field hash="D821E6F9" name="text_psFX" value-String="" type="BinHex">00</field>
+                  <field hash="DF5F98CC" name="psFX" type="BinHex">FFFFFFFF</field>
+                  <field hash="920A6E7C" name="text_Bone" value-String="" type="BinHex">00</field>
+                  <field hash="95741049" name="Bone" type="BinHex">FFFFFFFF</field>
+                </object>
+              </object>
+            </object>
+            <object hash="6252FDFF" name="State">
+              <field hash="01F032D7" name="fHeatPerBullet" value-Float32="30" type="BinHex">0000F041</field>
+              <field hash="660DAE13" name="fCoolPerSecond" value-Float32="50" type="BinHex">00004842</field>
+              <object hash="3038DFBA" name="FXs">
+                <object hash="824A23BA" name="FX">
+                  <field hash="D821E6F9" name="text_psFX" value-String="weapons.malfunction.mounted_overheat_high" type="BinHex">776561706F6E732E6D616C66756E6374696F6E2E6D6F756E7465645F6F766572686561745F6869676800</field>
+                  <field hash="DF5F98CC" name="psFX" value-ComputeHash32="weapons.malfunction.mounted_overheat_high" type="BinHex">D2A2B958</field>
+                  <field hash="920A6E7C" name="text_Bone" value-String="FX_CASING" type="BinHex">46585F434153494E4700</field>
+                  <field hash="95741049" name="Bone" value-ComputeHash32="FX_CASING" type="BinHex">8EB631D4</field>
+                </object>
+                <object hash="824A23BA" name="FX">
+                  <field hash="D821E6F9" name="text_psFX" value-String="" type="BinHex">00</field>
+                  <field hash="DF5F98CC" name="psFX" type="BinHex">FFFFFFFF</field>
+                  <field hash="920A6E7C" name="text_Bone" value-String="" type="BinHex">00</field>
+                  <field hash="95741049" name="Bone" type="BinHex">FFFFFFFF</field>
+                </object>
+              </object>
+            </object>
+            <object hash="6252FDFF" name="State">
+              <field hash="01F032D7" name="fHeatPerBullet" value-Float32="0" type="BinHex">00000000</field>
+              <field hash="660DAE13" name="fCoolPerSecond" value-Float32="0" type="BinHex">00000000</field>
+              <object hash="3038DFBA" name="FXs">
+                <object hash="824A23BA" name="FX">
+                  <field hash="D821E6F9" name="text_psFX" value-String="" type="BinHex">00</field>
+                  <field hash="DF5F98CC" name="psFX" type="BinHex">FFFFFFFF</field>
+                  <field hash="920A6E7C" name="text_Bone" value-String="" type="BinHex">00</field>
+                  <field hash="95741049" name="Bone" type="BinHex">FFFFFFFF</field>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+      </object>
+      <object hash="59C4DC58" name="CMountedWeaponNetworkComponent" />
+      <object hash="7273EBB0" name="CPersistComponent">
+        <field hash="7C4CF173" name="selLevel" value-Enum="1" type="BinHex">01000000</field>
+        <object hash="A2AF95CE" name="enumLevel">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Limited" type="BinHex">4C696D6974656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Full" type="BinHex">46756C6C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Critical" type="BinHex">437269746963616C00</field>
+          </object>
+        </object>
+      </object>
+      <object hash="D771A22C" name="CFCXAIComponent">
+        <field hash="2B928622" name="text_Type" value-String="CAIMountedWeapon" type="BinHex">4341494D6F756E746564576561706F6E00</field>
+        <field hash="2CECF817" name="Type" value-ComputeHash32="CAIMountedWeapon" type="BinHex">243E3E02</field>
+        <field hash="DB65A9C9" name="bIgnoreAISecto" value-Boolean="False" type="BinHex">00</field>
+        <object hash="4F4522C9" name="AIObject">
+          <field hash="3DCCA634" name="entInitialUser" type="BinHex">FFFFFFFFFFFFFFFF</field>
+        </object>
+      </object>
+      <object hash="06956112" name="CParticleEventListenerComponent" />
+    </object>
+  </object>
+</object>

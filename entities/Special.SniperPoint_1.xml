@@ -1,0 +1,90 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Special.SniperPoint" type="BinHex">5370656369616C2E536E69706572506F696E7400</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="STP_archetypes.Special.SniperPoint" type="BinHex">5354505F617263686574797065732E5370656369616C2E536E69706572506F696E7400</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="1816" type="BinHex">1807000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="0" type="BinHex">00000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="D771A22C" name="CFCXAIComponent">
+        <field hash="2B928622" name="text_Type" value-String="CSniperPoint" type="BinHex">43536E69706572506F696E7400</field>
+        <field hash="2CECF817" name="Type" value-ComputeHash32="CSniperPoint" type="BinHex">536EE861</field>
+        <field hash="DB65A9C9" name="bIgnoreAISecto" value-Boolean="False" type="BinHex">00</field>
+        <object hash="4F4522C9" name="AIObject">
+          <object hash="61E86E53" name="CSniperPoint">
+            <field hash="7E006C9B" name="fBroadcastRange" value-Float32="20" type="BinHex">0000A041</field>
+            <field hash="51ADF25B" name="fScanAngleRange" value-Float32="90" type="BinHex">0000B442</field>
+            <field hash="12504DB5" name="fCombatAngleLimitLeft" value-Float32="180" type="BinHex">00003443</field>
+            <field hash="4CC0ECD7" name="fCombatAngleLimitRight" value-Float32="180" type="BinHex">00003443</field>
+            <field hash="1E786F08" name="fAimingDist" value-Float32="100" type="BinHex">0000C842</field>
+            <field hash="B75DD53F" name="bCrouch" value-Boolean="False" type="BinHex">00</field>
+            <field hash="439A49C6" name="bAlwaysStandUp" value-Boolean="False" type="BinHex">00</field>
+          </object>
+        </object>
+      </object>
+      <object hash="C2E2E9A3" name="CMapIntelligence">
+        <field hash="49BF3666" name="selType" value-Enum="6" type="BinHex">06000000</field>
+        <field hash="224CD7EB" name="fMarkerZ" value-Float32="0.0001" type="BinHex">17B7D138</field>
+        <field hash="47A924A6" name="bDisplayOnMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="E1112122" name="vInitialPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+        <object hash="11454E8B" name="enumType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="MedKit" type="BinHex">4D65644B697400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="AmmoPile" type="BinHex">416D6D6F50696C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="ExplosivePile" type="BinHex">4578706C6F7369766550696C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="FuelPile" type="BinHex">4675656C50696C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="MountedWeapon" type="BinHex">4D6F756E746564576561706F6E00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="SniperPoint" type="BinHex">536E69706572506F696E7400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="LandVehicle" type="BinHex">4C616E6456656869636C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="WaterVehicle" type="BinHex">576174657256656869636C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="AirVehicle" type="BinHex">41697256656869636C6500</field>
+          </object>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

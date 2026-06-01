@@ -1,0 +1,13 @@
+# Application dependencies
+PyQt6
+PyOpenGL
+numpy
+Pillow
+
+# Build
+cx_Freeze
+
+# Testing
+pytest
+pytest-cov
+pytest-qt

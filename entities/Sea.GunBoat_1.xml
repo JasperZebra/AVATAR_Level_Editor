@@ -1,0 +1,153 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Sea.GunBoat" type="BinHex">5365612E47756E426F617400</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="vehicle.Sea.GunBoat" type="BinHex">76656869636C652E5365612E47756E426F617400</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="2003" type="BinHex">D307000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="1" type="BinHex">01000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\vehicles\sea\veh_gunboat\veh_gunboat.xml" type="BinHex">67726170686963735C76656869636C65735C7365615C7665685F67756E626F61745C7665685F67756E626F61742E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\vehicles\sea\veh_gunboat\veh_gunboat.xml" type="BinHex">7422756C</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2">
+              <object index="0" meshName="BoatFrame" boneName="BoatFrame" bboxMin="-1.45399,-2.13274,-0.0898094" bboxMax="1.45399,4.38128,1.86823" />
+              <object index="1" meshName="SteeringWheel" boneName="SteeringWheel" bboxMin="-0.198909,-0.143108,-0.199122" bboxMax="0.198909,0.164278,0.143047" />
+              <resource fileName="graphics\Vehicles\Sea\VEH_Gunboat\VEH_GunBoat.xbg" bboxMin="-1.45399,-2.13274,-0.0898094" bboxMax="1.45399,4.38128,1.86823" />
+              <skeleton name="VEH_GunBoat" pos="0,0,0" rot="1,0,0,0">
+                <bone name="BoatFrame" pos="0,0,0" rot="1,0,0,0">
+                  <bone name="BoatFrame_LOD0" pos="0,0,0" rot="1,0,0,0" />
+                  <bone name="COL_BoatFrame01" pos="0.0165656,0.253853,-0.0826654" rot="1,0,0,0" />
+                  <bone name="COL_BoatFrame02" pos="-1.1673,0.237438,0.453112" rot="1,0,0,0" />
+                  <bone name="COL_BoatFrame03" pos="1.16087,0.237438,0.453112" rot="1,0,0,0" />
+                  <bone name="COL_BoatFrame04" pos="0.00173958,-1.74901,0.453112" rot="1,0,0,0" />
+                  <bone name="COL_BoatFrame05" pos="0.00173958,1.65138,0.453112" rot="1,0,0,0" />
+                  <bone name="COL_BoatFrame06" pos="0.709369,-0.531888,0.447695" rot="1,0,0,0" />
+                  <bone name="COL_BoatFrame07" pos="-0.718912,-0.531888,0.447695" rot="1,0,0,0" />
+                  <bone name="COL_BoatFrame08" pos="0.0282753,2.91498,0.116495" rot="1,0,0,0" />
+                  <bone name="COL_BoatFrame09" pos="0.0282753,3.53436,0.464548" rot="1,0,0,0" />
+                  <bone name="COL_BoatFrame10" pos="0.0282753,4.15374,0.934795" rot="1,0,0,0" />
+                </bone>
+                <bone name="P_EntryPoint_0" pos="-1.63822,-0.403653,0" rot="0.707107,0,0,-0.707107" />
+                <bone name="P_SitPoint_0" pos="-0.761365,-0.298867,0.968539" rot="0.707107,0,0,-0.707107">
+                  <bone name="P_SitPoint_0_EYE" pos="3e-008,-1e-008,0.7" rot="1,0,0,0" />
+                </bone>
+                <bone name="P_EntryPoint_1" pos="1.72901,-0.397901,0" rot="0.707107,0,0,0.707107" />
+                <bone name="P_SitPoint_1" pos="0.768408,-0.244807,0.905272" rot="0.707107,0,0,0.707107">
+                  <bone name="P_SitPoint_1_EYE" pos="-3e-008,-2e-008,0.7" rot="1,0,0,0" />
+                </bone>
+                <bone name="Repair" pos="0,2.83996,0.464061" rot="1,0,0,0" />
+                <bone name="SteeringWheel" pos="-3.1e-007,1.22512,1.62806" rot="1,0,0,0">
+                  <bone name="RightHand" pos="0.174564,-0.129238,0.0191223" rot="7.54979e-008,0,0,1" />
+                  <bone name="LeftHand" pos="-0.175088,-0.129238,0.0191223" rot="7.54979e-008,0,0,1" />
+                  <bone name="SteeringWheel_LOD0" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="D_EntryPoint_2" pos="0,0.4864,0.45352" rot="1,0,0,0" />
+                <bone name="W_EntryPoint_3" pos="-0.0503819,0.0653713,0.456659" rot="1,0,0,0" />
+                <bone name="Turret" pos="0.00089196,2.70737,0.44868" rot="1,0,0,0">
+                  <bone name="Gunner_3" pos="0,0,0" rot="1,0,0,0" />
+                </bone>
+                <bone name="D_SitPoint_2" pos="0.00207317,0.574944,1.27498" rot="1,0,0,0">
+                  <bone name="D_SitPoint_2_EYE" pos="0,0,0.7" rot="1,0,0,0" />
+                </bone>
+              </skeleton>
+            </component>
+            <component class="VehicleFloatingPhysComponent">
+              <nodes>
+                <frame rigidbodyIndex="0" objectIndex="0" />
+                <wheels />
+                <parts />
+              </nodes>
+              <frame index="0" rigidbodyIndex="0" graphicIndex="1" tempNode="ForBackwardCompability" />
+              <resource fileName="graphics\Vehicles\Sea\VEH_Gunboat\VEH_GunBoat.hkx" />
+            </component>
+            <component class="GameLogicComponent">
+              <seat id="0" type="passenger" entrybone="P_EntryPoint_0" seatbone="P_SitPoint_0" />
+              <seat id="1" type="passenger" entrybone="P_EntryPoint_1" seatbone="P_SitPoint_1" />
+              <repairspot spotbone="Repair" />
+              <seat id="2" type="driver" entrybone="D_EntryPoint_2" seatbone="D_SitPoint_2" />
+              <seat id="3" type="passenger" entrybone="W_EntryPoint_3" />
+            </component>
+            <component class="ParticleFXComponent">
+              <P_EntryPoint_0 psEmitter="" />
+              <P_SitPoint_0 psEmitter="" />
+              <P_SitPoint_0_EYE psEmitter="" />
+              <P_EntryPoint_1 psEmitter="" />
+              <P_SitPoint_1 psEmitter="" />
+              <P_SitPoint_1_EYE psEmitter="" />
+              <Repair psEmitter="" />
+              <RightHand psEmitter="" />
+              <LeftHand psEmitter="" />
+              <D_EntryPoint_2 psEmitter="" />
+              <W_EntryPoint_3 psEmitter="" />
+              <Mounted_Weapon_Ph psEmitter="" />
+              <Gunner_3 psEmitter="" />
+              <D_SitPoint_2 psEmitter="" />
+              <D_SitPoint_2_EYE psEmitter="" />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="431EBA8E" name="hidComponentClassName" value-String="CStaticGraphicComponent" type="BinHex">4353746174696347726170686963436F6D706F6E656E7400</field>
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="C938E172" name="hidUseTerrainHemiMap" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="129" type="BinHex">81000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="True" type="BinHex">01</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\vehicles\sea\veh_gunboat\veh_gunboat.xbg" type="BinHex">67726170686963735C76656869636C65735C7365615C7665685F67756E626F61745C7665685F67756E626F61742E78626700</field>
+        <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\vehicles\sea\veh_gunboat\veh_gunboat.xbg" type="BinHex">33E73F7C</field>
+        <field hash="3D5AC03A" name="hidMeshName" type="BinHex">00</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1065353216" type="BinHex">0000803F</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+      </object>
+      <object hash="D18498C8" name="CMissionComponent">
+        <field hash="7AF1FD74" name="text_hidMissionLayerPath" value-String="" type="BinHex">00</field>
+        <field hash="90AF9D50" name="hidMissionLayerPath" type="BinHex">FFFFFFFF</field>
+        <field hash="27B31D2E" name="text_hidCategory" value-String="" type="BinHex">00</field>
+        <field hash="37F59D7D" name="hidCategory" type="BinHex">FFFFFFFF</field>
+        <field hash="136C40D8" name="ForceMerge" type="BinHex">01</field>
+      </object>
+    </object>
+  </object>
+</object>

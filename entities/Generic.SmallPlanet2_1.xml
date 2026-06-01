@@ -1,0 +1,230 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Generic.SmallPlanet2" type="BinHex">47656E657269632E536D616C6C506C616E65743200</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="Planets.Generic.SmallPlanet2" type="BinHex">506C616E6574732E47656E657269632E536D616C6C506C616E65743200</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="1367" type="BinHex">5705000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CPlanetEntity" type="BinHex">43506C616E6574456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CPlanetEntity" type="BinHex">766A68FB</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="1" type="BinHex">01000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="229D6764" name="CPlanetComponent">
+        <field hash="7B89A9D2" name="iMaximumTessellation" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CCD7F331" type="BinHex">00</field>
+        <field hash="47F0EEB5" name="fileWaterNormalMap" type="BinHex">FFFFFFFF</field>
+        <field hash="ACD05C32" type="BinHex">00</field>
+        <field hash="D0FEC1C3" name="fileWaterMesh" type="BinHex">FFFFFFFF</field>
+        <field hash="C344DFA4" name="fRotationSpeed" value-Float32="10" type="BinHex">00002041</field>
+        <field hash="F1372AE7" name="vectorRotationAxis" value-Vector3="0,0,1" type="BinHex">00000000000000000000803F</field>
+        <field hash="9905196A" name="fRevolutionDistance" value-Float32="2000" type="BinHex">0000FA44</field>
+        <field hash="875D5C52" name="fRevolutionSpeed" value-Float32="5" type="BinHex">0000A040</field>
+        <field hash="5352613C" name="vectorRevolutionAxis" value-Vector3="0,1,1" type="BinHex">000000000000803F0000803F</field>
+        <field hash="D902C7F2" name="vectorRevolutionPosition" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+        <field hash="9A3EBC6A" name="iRevolutionPivot" value-Int32="0" type="BinHex">00000000</field>
+        <object hash="29A64A25" name="SurfaceProperties">
+          <field hash="F8186C6E" name="fRadius" value-Float32="100" type="BinHex">0000C842</field>
+          <field hash="ABD0ACD6" name="fDisplacementAtMinHeight" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="ED4D4081" name="fDisplacementMinHeight" value-Float32="2000" type="BinHex">0000FA44</field>
+          <field hash="7C3B1E97" name="fDisplacementAtMaxHeight" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="3AA6F2C0" name="fDisplacementMaxHeight" value-Float32="1000" type="BinHex">00007A44</field>
+          <field hash="A32D0CFE" name="fTerrainNormalScaleAtMinHeight" value-Float32="10" type="BinHex">00002041</field>
+          <field hash="CF559C8E" name="fTerrainNormalScaleMinHeight" value-Float32="2000" type="BinHex">0000FA44</field>
+          <field hash="74C6BEBF" name="fTerrainNormalScaleAtMaxHeight" value-Float32="50" type="BinHex">00004842</field>
+          <field hash="18BE2ECF" name="fTerrainNormalScaleMaxHeight" value-Float32="1000" type="BinHex">00007A44</field>
+          <field hash="30C508D3" name="fDiffuseNormalScaleAtMinHeight" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="3A7D09C5" name="fDiffuseNormalScaleMinHeight" value-Float32="1000" type="BinHex">00007A44</field>
+          <field hash="E72EBA92" name="fDiffuseNormalScaleAtMaxHeight" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="ED96BB84" name="fDiffuseNormalScaleMaxHeight" value-Float32="2000" type="BinHex">0000FA44</field>
+          <field hash="4C4FFE88" name="clrSpecularColor" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+          <field hash="D4CFE356" name="fSpecularPower" value-Float32="10" type="BinHex">00002041</field>
+        </object>
+        <object hash="75C8B3C1" name="HeightMapTextures">
+          <field hash="59A97BD2" type="BinHex">00</field>
+          <field hash="49EFFB81" name="fileCubeMap" type="BinHex">FFFFFFFF</field>
+          <field hash="F7BFCA49" type="BinHex">00</field>
+          <field hash="D31EE576" name="fileTop" type="BinHex">FFFFFFFF</field>
+          <field hash="0E3F5327" type="BinHex">00</field>
+          <field hash="B87DDF35" name="fileLeft" type="BinHex">FFFFFFFF</field>
+          <field hash="18EC6643" type="BinHex">00</field>
+          <field hash="EBE35587" name="fileFront" type="BinHex">FFFFFFFF</field>
+          <field hash="52DD71A1" type="BinHex">00</field>
+          <field hash="A1D24265" name="fileRight" type="BinHex">FFFFFFFF</field>
+          <field hash="19967578" type="BinHex">00</field>
+          <field hash="AFD4F96A" name="fileBack" type="BinHex">FFFFFFFF</field>
+          <field hash="32B222A3" type="BinHex">00</field>
+          <field hash="AE482B39" name="fileBottom" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="BF9166EA" name="SurfaceTextures">
+          <field hash="59A97BD2" value-String="graphics\av_pandora\_textures\planets\planet02_d.xbt" type="BinHex">67726170686963735C61765F70616E646F72615C5F74657874757265735C706C616E6574735C706C616E657430325F642E78627400</field>
+          <field hash="49EFFB81" name="fileCubeMap" value-ComputeHash32="graphics\av_pandora\_textures\planets\planet02_d.xbt" type="BinHex">E6241161</field>
+          <field hash="F7BFCA49" type="BinHex">00</field>
+          <field hash="D31EE576" name="fileTop" type="BinHex">FFFFFFFF</field>
+          <field hash="0E3F5327" type="BinHex">00</field>
+          <field hash="B87DDF35" name="fileLeft" type="BinHex">FFFFFFFF</field>
+          <field hash="18EC6643" type="BinHex">00</field>
+          <field hash="EBE35587" name="fileFront" type="BinHex">FFFFFFFF</field>
+          <field hash="52DD71A1" type="BinHex">00</field>
+          <field hash="A1D24265" name="fileRight" type="BinHex">FFFFFFFF</field>
+          <field hash="19967578" type="BinHex">00</field>
+          <field hash="AFD4F96A" name="fileBack" type="BinHex">FFFFFFFF</field>
+          <field hash="32B222A3" type="BinHex">00</field>
+          <field hash="AE482B39" name="fileBottom" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="6B70FC53" name="NeuronsTextures">
+          <field hash="59A97BD2" type="BinHex">00</field>
+          <field hash="49EFFB81" name="fileCubeMap" type="BinHex">FFFFFFFF</field>
+          <field hash="F7BFCA49" type="BinHex">00</field>
+          <field hash="D31EE576" name="fileTop" type="BinHex">FFFFFFFF</field>
+          <field hash="0E3F5327" type="BinHex">00</field>
+          <field hash="B87DDF35" name="fileLeft" type="BinHex">FFFFFFFF</field>
+          <field hash="18EC6643" type="BinHex">00</field>
+          <field hash="EBE35587" name="fileFront" type="BinHex">FFFFFFFF</field>
+          <field hash="52DD71A1" type="BinHex">00</field>
+          <field hash="A1D24265" name="fileRight" type="BinHex">FFFFFFFF</field>
+          <field hash="19967578" type="BinHex">00</field>
+          <field hash="AFD4F96A" name="fileBack" type="BinHex">FFFFFFFF</field>
+          <field hash="32B222A3" type="BinHex">00</field>
+          <field hash="AE482B39" name="fileBottom" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="6BD7114A" name="OceansTextures">
+          <field hash="59A97BD2" type="BinHex">00</field>
+          <field hash="49EFFB81" name="fileCubeMap" type="BinHex">FFFFFFFF</field>
+          <field hash="F7BFCA49" type="BinHex">00</field>
+          <field hash="D31EE576" name="fileTop" type="BinHex">FFFFFFFF</field>
+          <field hash="0E3F5327" type="BinHex">00</field>
+          <field hash="B87DDF35" name="fileLeft" type="BinHex">FFFFFFFF</field>
+          <field hash="18EC6643" type="BinHex">00</field>
+          <field hash="EBE35587" name="fileFront" type="BinHex">FFFFFFFF</field>
+          <field hash="52DD71A1" type="BinHex">00</field>
+          <field hash="A1D24265" name="fileRight" type="BinHex">FFFFFFFF</field>
+          <field hash="19967578" type="BinHex">00</field>
+          <field hash="AFD4F96A" name="fileBack" type="BinHex">FFFFFFFF</field>
+          <field hash="32B222A3" type="BinHex">00</field>
+          <field hash="AE482B39" name="fileBottom" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="EB965FB1" name="CloudLayer">
+          <field hash="C48BEE15" name="bEnable" value-Boolean="True" type="BinHex">01</field>
+          <field hash="62671F47" name="fFadeOutHeight" value-Float32="750" type="BinHex">00803B44</field>
+          <field hash="AABC625D" name="fFadeOutHeightRange" value-Float32="250" type="BinHex">00007A43</field>
+          <field hash="09160ED9" name="fAlphaFallOffCurve" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="601DC173" name="fScaleFallOffCurve" value-Float32="5" type="BinHex">0000A040</field>
+          <object hash="E124E866" name="Layers">
+            <object hash="251A0E1E" name="Layer">
+              <field hash="C48BEE15" name="bEnable" value-Boolean="False" type="BinHex">00</field>
+              <field hash="500F629A" name="clrColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+              <field hash="4C4FFE88" name="clrSpecularColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+              <field hash="D4CFE356" name="fSpecularPower" value-Float32="1" type="BinHex">0000803F</field>
+              <field hash="C16EAF07" name="fSpecularMultiplier" value-Float32="4.2224466E-38" type="BinHex">51E46501</field>
+              <field hash="359406E3" name="fThickness" value-Float32="1" type="BinHex">0000803F</field>
+              <field hash="47A035A3" name="fMinHeight" value-Float32="640" type="BinHex">00002044</field>
+              <field hash="9064C7C9" name="fCameraHeightMinHeight" value-Float32="900" type="BinHex">00006144</field>
+              <field hash="904B87E2" name="fMaxHeight" value-Float32="650" type="BinHex">00802244</field>
+              <field hash="478F7588" name="fCameraHeightMaxHeight" value-Float32="700" type="BinHex">00002F44</field>
+              <field hash="1FA43C36" name="vectorCloudRotationFactor" value-Vector3="0,0,1" type="BinHex">00000000000000000000803F</field>
+              <field hash="5D15AC5D" name="vectorDensityRotationSpeed" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+            </object>
+          </object>
+          <object hash="F823C94D" name="ColorMaps">
+            <field hash="59A97BD2" type="BinHex">00</field>
+            <field hash="49EFFB81" name="fileCubeMap" type="BinHex">FFFFFFFF</field>
+            <field hash="F7BFCA49" type="BinHex">00</field>
+            <field hash="D31EE576" name="fileTop" type="BinHex">FFFFFFFF</field>
+            <field hash="0E3F5327" type="BinHex">00</field>
+            <field hash="B87DDF35" name="fileLeft" type="BinHex">FFFFFFFF</field>
+            <field hash="18EC6643" type="BinHex">00</field>
+            <field hash="EBE35587" name="fileFront" type="BinHex">FFFFFFFF</field>
+            <field hash="52DD71A1" type="BinHex">00</field>
+            <field hash="A1D24265" name="fileRight" type="BinHex">FFFFFFFF</field>
+            <field hash="19967578" type="BinHex">00</field>
+            <field hash="AFD4F96A" name="fileBack" type="BinHex">FFFFFFFF</field>
+            <field hash="32B222A3" type="BinHex">00</field>
+            <field hash="AE482B39" name="fileBottom" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="BD0594EC" name="NormalMaps">
+            <field hash="59A97BD2" type="BinHex">00</field>
+            <field hash="49EFFB81" name="fileCubeMap" type="BinHex">FFFFFFFF</field>
+            <field hash="F7BFCA49" type="BinHex">00</field>
+            <field hash="D31EE576" name="fileTop" type="BinHex">FFFFFFFF</field>
+            <field hash="0E3F5327" type="BinHex">00</field>
+            <field hash="B87DDF35" name="fileLeft" type="BinHex">FFFFFFFF</field>
+            <field hash="18EC6643" type="BinHex">00</field>
+            <field hash="EBE35587" name="fileFront" type="BinHex">FFFFFFFF</field>
+            <field hash="52DD71A1" type="BinHex">00</field>
+            <field hash="A1D24265" name="fileRight" type="BinHex">FFFFFFFF</field>
+            <field hash="19967578" type="BinHex">00</field>
+            <field hash="AFD4F96A" name="fileBack" type="BinHex">FFFFFFFF</field>
+            <field hash="32B222A3" type="BinHex">00</field>
+            <field hash="AE482B39" name="fileBottom" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="C0BA51F5" name="Environment">
+          <field hash="F87FB6E1" name="clrEmissionColor" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+          <field hash="1CF81AD1" name="fEmissionColorHDRMul" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="5B079525" name="fEmissionRadius" value-Float32="1" type="BinHex">0000803F</field>
+        </object>
+        <object hash="ED96D873" name="Atmosphere">
+          <object hash="AB806ADE" name="LowAtmosphere">
+            <field hash="C48BEE15" name="bEnable" value-Boolean="False" type="BinHex">00</field>
+            <field hash="500F629A" name="clrColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+            <field hash="F8186C6E" name="fRadius" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="2419DF81" name="fInnerFalloff" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="767F28CF" name="fOuterFalloff" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="4366B264" name="fLambertAttenuation" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="6D46C4F9" name="fLambertFalloff" value-Float32="1" type="BinHex">0000803F</field>
+          </object>
+          <object hash="92FC0249" name="HighAtmosphere">
+            <field hash="C48BEE15" name="bEnable" value-Boolean="False" type="BinHex">00</field>
+            <field hash="500F629A" name="clrColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+            <field hash="F8186C6E" name="fRadius" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="2419DF81" name="fInnerFalloff" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="767F28CF" name="fOuterFalloff" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="4366B264" name="fLambertAttenuation" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="6D46C4F9" name="fLambertFalloff" value-Float32="1" type="BinHex">0000803F</field>
+          </object>
+        </object>
+        <object hash="E6C1D40E" name="Oceans">
+          <field hash="C48BEE15" name="bEnable" value-Boolean="False" type="BinHex">00</field>
+          <field hash="F8186C6E" name="fRadius" value-Float32="640" type="BinHex">00002044</field>
+          <field hash="D9B8BB21" name="bHeightMap" value-Boolean="False" type="BinHex">00</field>
+          <field hash="B85EB5E6" name="fHeightMapThreshold" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="FE959C88" name="vectorLayer1Tiling" value-Vector3="25,50,0" type="BinHex">0000C8410000484200000000</field>
+          <field hash="9B80D29A" name="vectorLayer1Scrolling" value-Vector3="0.01,0,0" type="BinHex">0AD7233C0000000000000000</field>
+          <field hash="CF7D8615" name="vectorLayer2Tiling" value-Vector3="50,25,0" type="BinHex">000048420000C84100000000</field>
+          <field hash="70B76999" name="vectorLayer2Scrolling" value-Vector3="0,0.01,0" type="BinHex">000000000AD7233C00000000</field>
+          <field hash="500F629A" name="clrColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+          <field hash="4C4FFE88" name="clrSpecularColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+          <field hash="D4CFE356" name="fSpecularPower" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="57E787BB" name="fNormalScaleMin" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="A3712EB9" name="fNormalScaleMinHeight" value-Float32="1000" type="BinHex">00007A44</field>
+          <field hash="6BEAB8E2" name="fNormalScaleMax" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="749A9CF8" name="fNormalScaleMaxHeight" value-Float32="2000" type="BinHex">0000FA44</field>
+          <field hash="F6231150" name="fShlickFresnelBias" value-Float32="0.02037" type="BinHex">FCDEA63C</field>
+          <field hash="3CEC7C53" name="fShlickFresnelPower" value-Float32="5" type="BinHex">0000A040</field>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

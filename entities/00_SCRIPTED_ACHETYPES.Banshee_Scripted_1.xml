@@ -1,0 +1,335 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="00_SCRIPTED_ACHETYPES.Banshee_Scripted" type="BinHex">30305F53435249505445445F4143484554595045532E42616E736865655F536372697074656400</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="Avatar_ScriptedEvents.00_SCRIPTED_ACHETYPES.Banshee_Scripted" type="BinHex">4176617461725F53637269707465644576656E74732E30305F53435249505445445F4143484554595045532E42616E736865655F536372697074656400</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="146" type="BinHex">9200000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="4" type="BinHex">04000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\av_creatures\banshee\banshee_scripted.xml" type="BinHex">67726170686963735C61765F6372656174757265735C62616E736865655C62616E736865655F73637269707465642E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\av_creatures\banshee\banshee_scripted.xml" type="BinHex">5CAEC011</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2" detail="0">
+              <object index="0" meshName="Banshee_Chassis" boneName="Banshee_Chassis" bboxMin="-0.501867,0.476911,0.459938" bboxMax="0.504233,2.01141,1.44582" />
+              <resource fileName="graphics\av_Creatures\Banshee\Banshee_Scripted.xbg" bboxMin="-6.14779,-5.15113,-0.154861" bboxMax="6.14408,4.7177,2.82868" />
+              <skeleton name="Banshee_Scripted" pos="0,0,0" rot="1,-0,-0,-0">
+                <bone name="Banshee_Chassis" pos="0,0,0" rot="1,0,0,0">
+                  <bone name="Base_Right_Hand01" pos="0.25,2.38834,1.36413" rot="1,0,0,0" />
+                  <bone name="Base_Left_Hand01" pos="-0.25,2.38834,1.36413" rot="1,0,0,0" />
+                  <bone name="Pilot_EntryPoint_01" pos="-0,2.58768,-0" rot="1,0,0,0" />
+                  <bone name="Pilot_SitPoint_01" pos="-0.000571,1.80496,1.14075" rot="1,0,0,0" />
+                  <bone name="Pelvis" pos="-4.1e-005,-0.371638,1.20902" rot="0.706876,-0.0192106,-0.0192127,-0.706816">
+                    <bone name="Engine_Tail01" pos="0.560847,0,0" rot="0.999945,-3.4282e-006,0.0104843,-0.000148503">
+                      <bone name="Engine_Tail02" pos="0.672068,0,-0" rot="0.999999,-5.79012e-007,0.00158745,0.000204632">
+                        <bone name="Engine_Tail03" pos="0.694033,2e-006,0" rot="0.999888,5.43264e-006,0.0149633,0.000202624">
+                          <bone name="Engine_Tail04" pos="0.700671,2e-006,0" rot="0.999945,0.000188718,0.010446,0.000362517">
+                            <bone name="Engine_Tail05" pos="0.670645,-0,1e-006" rot="0.999906,0.000159956,-0.013706,1.90795e-005">
+                              <bone name="Engine_Tail06" pos="0.645363,0,0" rot="0.999961,0.000185248,0.00884865,-0.000626489" />
+                            </bone>
+                          </bone>
+                        </bone>
+                      </bone>
+                    </bone>
+                    <bone name="Engine_Spine" pos="-0.544085,-3.2e-005,-0.001679" rot="0.999999,2.16778e-006,-0.00154292,2.9793e-005">
+                      <bone name="Engine_Spine1" pos="-0.513153,-2e-006,0.003135" rot="0.999995,4.02533e-007,0.00305499,2.0889e-006">
+                        <bone name="Engine_Spine2" pos="-0.520071,2.2e-005,0.00359" rot="0.999994,-1.2498e-006,0.00345125,-2.15194e-005">
+                          <bone name="Engine_Spine3" pos="-0.600203,-0.000258,0.039077" rot="4.88321e-005,0.999472,-0.001493,-0.032463">
+                            <bone name="Engine_Neck1" pos="-0,-0,0" rot="-0.00100915,0.001507,0.707106,-0.707106">
+                              <bone name="Engine_Neck2" pos="0.562903,-0,0" rot="0.999429,-2.71736e-005,0.000137592,0.0337973">
+                                <bone name="Engine_Neck3" pos="0.523512,0,0" rot="0.999988,1.79234e-006,-0.000725409,-0.00481454">
+                                  <bone name="Engine_Head" pos="0.523439,0,0" rot="0.986622,-0.000349688,-0.0016247,-0.163016">
+                                    <bone name="Engine_Mouth" pos="0.110537,-0.00231,0.005579" rot="0.640121,-0.642344,0.299796,-0.296244" />
+                                    <bone name="Engine_L_Ear_01" pos="-0.149394,0.138727,-0.159552" rot="-0.0370497,0.056696,0.716856,0.693923">
+                                      <bone name="Engine_L_Ear_02" pos="0.595662,-1e-006,2e-006" rot="0.985493,-0.00355237,0.165457,-0.0376246">
+                                        <bone name="Engine_L_Ear_03" pos="0.475818,-0,-0" rot="0.999181,0.0019658,-0.0179461,-0.0362041">
+                                          <bone name="Engine_L_Ear_04" pos="0.45543,-0,-0" rot="0.979313,-0.0156793,-0.153365,-0.131072">
+                                            <bone name="Engine_L_Ear_05" pos="0.317173,-1e-006,-0" rot="0.984296,-0.0519964,-0.10967,-0.128182" />
+                                          </bone>
+                                        </bone>
+                                      </bone>
+                                    </bone>
+                                    <bone name="Engine_R_Ear_01" pos="-0.14939,0.138416,0.152447" rot="-0.00854355,-0.0497602,-0.570203,0.819951">
+                                      <bone name="Engine_R_Ear_02" pos="0.595433,1e-006,-0" rot="0.500322,0.846771,-0.0408278,0.176039">
+                                        <bone name="Engine_R_Ear_03" pos="0.475497,1e-006,-0" rot="0.817816,0.573312,-0.0288488,0.0407383">
+                                          <bone name="Engine_R_Ear_04" pos="0.454922,1e-006,-0" rot="0.627916,0.751448,0.115133,0.166709">
+                                            <bone name="Engine_R_Ear_05" pos="0.316835,1e-006,-0" rot="0.984184,0.0431315,0.16965,0.0272057" />
+                                          </bone>
+                                        </bone>
+                                      </bone>
+                                    </bone>
+                                    <bone name="engine_mouth_down" pos="1.06703,0.997425,-0.397896" rot="-0.00618911,-0.12796,0.99166,0.0141157" />
+                                    <bone name="engine_L_mouth_down01" pos="0.834616,-0.63914,-0.032983" rot="0.640122,-0.642344,0.299796,-0.296244" />
+                                    <bone name="engine_R_mouth_down" pos="0.821686,-0.645109,0.02097" rot="0.640122,-0.642344,0.299796,-0.296244" />
+                                    <bone name="engine_eye_R" pos="0.627803,-0.008438,0.098815" rot="0.559121,-0.435063,-0.557006,-0.433415" />
+                                    <bone name="engine_eye_L" pos="0.627013,-0.008438,-0.109432" rot="0.559121,-0.435063,-0.557006,-0.433415" />
+                                  </bone>
+                                </bone>
+                              </bone>
+                            </bone>
+                          </bone>
+                          <bone name="Engine_IK_R_ClavWing" pos="0.137041,0.000212,0.268744" rot="0.335343,-0.134932,0.0699704,0.929754">
+                            <bone name="Engine_IK_R_UpperWing_Limit" pos="0.51647,0,1e-006" rot="0.607594,0.0749826,-0.204783,-0.763722">
+                              <bone name="Engine_IK_R_ForeWing_Limit" pos="0.74188,-0,2e-006" rot="0.811667,0.172557,-0.0398977,0.556623">
+                                <bone name="Engine_R_Wing_Corr02" pos="0.530659,0.000934,0.022642" rot="0.696842,-0.234033,0.0522326,-0.675952" />
+                                <bone name="Engine_R_Index01" pos="1.53411,0.008994,-0.039082" rot="0.975892,-0.0849822,0.110401,-0.168003">
+                                  <bone name="Engine_R_Index02" pos="1.03336,3e-006,3e-006" rot="0.999511,-0.00289652,0.0236092,-0.0202926">
+                                    <bone name="Engine_R_Index03" pos="1.10593,0,0" rot="0.999278,-0.00219955,0.0288981,-0.0245831">
+                                      <bone name="Engine_R_Index04" pos="1.05541,-0,-0" rot="0.999202,-0.000769549,0.0304957,-0.0257861" />
+                                    </bone>
+                                  </bone>
+                                </bone>
+                                <bone name="Engine_R_Middle01" pos="1.51131,-0.094624,0.028339" rot="0.964806,-0.103646,0.0946166,-0.222383">
+                                  <bone name="Engine_R_Middle02" pos="0.890402,3e-006,3e-006" rot="0.99959,-0.000612387,0.0283822,-0.00373101">
+                                    <bone name="Engine_R_Middle03" pos="1.04428,0,-0" rot="0.999542,-0.000407701,0.0300021,-0.00391304">
+                                      <bone name="Engine_R_Middle04" pos="1.03416,-4e-006,-0" rot="0.999613,-0.000165518,0.0275904,-0.00358" />
+                                    </bone>
+                                  </bone>
+                                </bone>
+                                <bone name="Engine_R_Ring01" pos="1.46352,-0.190668,0.06605" rot="0.941279,-0.13216,0.0747616,-0.301559">
+                                  <bone name="Engine_R_Ring02" pos="0.805838,3e-006,3e-006" rot="0.999585,-9.67642e-005,0.0288109,-0.000496096">
+                                    <bone name="Engine_R_Ring03" pos="0.895685,3e-006,-0" rot="7.48197e-005,0.999439,-0.000572,-0.033483">
+                                      <bone name="Engine_R_Ring04" pos="0.841836,0,-0" rot="3.58383e-005,0.999416,0.000577,0.034165" />
+                                    </bone>
+                                  </bone>
+                                </bone>
+                                <bone name="Engine_R_Pinky01" pos="1.35379,-0.257145,0.099399" rot="0.902368,-0.171902,0.0438646,-0.392756">
+                                  <bone name="Engine_R_Pinky02" pos="0.67326,2e-006,3e-006" rot="0.999252,0.00240203,0.0372815,0.00997776">
+                                    <bone name="Engine_R_Pinky03" pos="0.823331,-4e-006,0" rot="0.998865,0.00232281,0.0451453,0.014977" />
+                                  </bone>
+                                </bone>
+                                <bone name="Engine_R_Thumb01" pos="1.4669,0.132971,-0.057371" rot="0.944121,-0.0377849,0.0419906,0.324722">
+                                  <bone name="Engine_R_Thumb02" pos="0.78835,-0,0" rot="0.995366,-0.0011527,0.00728532,0.0958709">
+                                    <bone name="Engine_R_Thumb03" pos="0.319449,0,0" rot="0.942164,-0.0108458,0.0211494,0.334307" />
+                                  </bone>
+                                </bone>
+                              </bone>
+                              <bone name="Engine_R_Wing_Corr03" pos="0.739192,-0.024699,0.035731" rot="0.452976,0.111448,0.0601073,0.882484" />
+                              <bone name="Engine_R_Wing_Corr01" pos="0.739192,-0.024699,0.035731" rot="0.949662,-0.0848522,0.034381,-0.299601" />
+                            </bone>
+                          </bone>
+                          <bone name="Engine_IK_L_ClavWing" pos="0.13701,0.000267,0.26882" rot="-0.335266,-0.135347,-0.0701091,0.929711">
+                            <bone name="Engine_IK_L_UpperWing_Limit" pos="0.516356,-0,1e-006" rot="0.609582,-0.051982,-0.177518,0.77084">
+                              <bone name="Engine_IK_L_ForeWing_Limit" pos="0.741884,-0,-0" rot="0.806774,-0.194874,-0.0641721,-0.554096">
+                                <bone name="Engine_L_Index01" pos="1.53421,-0.009817,-0.038443" rot="0.976795,0.0752697,0.111338,0.166765">
+                                  <bone name="Engine_L_Index02" pos="1.03292,-1e-006,-3e-006" rot="0.999511,0.00273779,0.0236885,0.0202509">
+                                    <bone name="Engine_L_Index03" pos="1.10625,0,-0" rot="0.999275,0.00233668,0.029004,0.0245402">
+                                      <bone name="Engine_L_Index04" pos="1.0561,1e-006,-1e-006" rot="0.999199,0.000898632,0.0306196,0.0257381" />
+                                    </bone>
+                                  </bone>
+                                </bone>
+                                <bone name="Engine_L_Middle01" pos="1.51134,0.095087,0.026934" rot="0.965921,0.0941754,0.0962071,0.221072">
+                                  <bone name="Engine_L_Middle02" pos="0.890358,-0,-0" rot="0.99959,0.000752019,0.0283438,0.00390108">
+                                    <bone name="Engine_L_Middle03" pos="1.04449,-1e-006,-1e-006" rot="0.999542,0.000314574,0.0299704,0.00409312">
+                                      <bone name="Engine_L_Middle04" pos="1.034,0,-0" rot="0.999613,6.24844e-005,0.0275533,0.00375129" />
+                                    </bone>
+                                  </bone>
+                                </bone>
+                                <bone name="Engine_L_Ring01" pos="1.46352,0.191851,0.06272" rot="0.942849,0.122618,0.0771271,0.300088">
+                                  <bone name="Engine_L_Ring02" pos="0.805123,-1e-006,-1e-006" rot="0.999586,0.000182882,0.0287522,0.000939983">
+                                    <bone name="Engine_L_Ring03" pos="0.896245,-0,0" rot="0.999439,0.000142287,0.0334608,0.00108292">
+                                      <bone name="Engine_L_Ring04" pos="0.843837,0,-0" rot="0.999414,6.93346e-005,0.0342214,0.00109997" />
+                                    </bone>
+                                  </bone>
+                                </bone>
+                                <bone name="Engine_L_Pinky01" pos="1.35376,0.258981,0.094631" rot="0.903924,0.163992,0.047606,0.392124">
+                                  <bone name="Engine_L_Pinky02" pos="0.675375,-0,1e-006" rot="0.999248,-0.00482219,0.0364605,-0.0122994">
+                                    <bone name="Engine_L_Pinky03" pos="0.820629,-1e-006,1e-006" rot="0.99886,-0.000994763,0.0466357,-0.0101282" />
+                                  </bone>
+                                </bone>
+                                <bone name="Engine_L_Wing_Corr02" pos="0.534658,-0.000905,0.011622" rot="0.698149,0.228469,0.0553961,0.676255" />
+                                <bone name="Engine_L_Thumb01" pos="1.46686,-0.13414,-0.054344" rot="0.942726,0.0636877,0.0266734,-0.326343">
+                                  <bone name="Engine_L_Thumb02" pos="0.78835,-0,0" rot="0.995367,-0,0,-0.0961472">
+                                    <bone name="Engine_L_Thumb03" pos="0.319448,-0,0" rot="0.942227,0,0,-0.334974" />
+                                  </bone>
+                                </bone>
+                              </bone>
+                              <bone name="Engine_L_Wing_Corr03" pos="0.736691,0.010231,0.018839" rot="-0.440938,0.135864,-0.0254461,0.88683" />
+                              <bone name="Engine_L_Wing_Corr01" pos="0.736691,0.010231,0.018839" rot="0.947757,0.0471466,0.0562028,0.310443" />
+                            </bone>
+                          </bone>
+                        </bone>
+                      </bone>
+                      <bone name="Engine_IK_L_Tight" pos="0.4113,-0.195561,-0.138005" rot="0.531259,-0.170926,0.566451,-0.606367">
+                        <bone name="Engine_IK_L_Calf" pos="0.592933,0,-0" rot="0.91656,0.0489593,-0.375342,0.12899">
+                          <bone name="Engine_L_Leg_Corr02" pos="0.622354,0.005469,0.022638" rot="0.835267,0.325673,-0.290504,0.334475" />
+                          <bone name="Engine_L_ToeBack_01" pos="1.07058,0.025907,0.053483" rot="0.914894,0.354501,-0.128409,0.144255">
+                            <bone name="Engine_L_ToeBack_02" pos="0.698483,6e-006,0" rot="0.99992,-0.000675199,-0.0089426,0.00886734" />
+                          </bone>
+                          <bone name="Engine_L_Toe01" pos="0.997456,2.8e-005,-3.1e-005" rot="0.754376,0.630428,0.106459,-0.14881">
+                            <bone name="Engine_L_Toe02" pos="0.894507,-0,0" rot="0.904187,-0,-0,-0.427136" />
+                          </bone>
+                        </bone>
+                        <bone name="Engine_L_Leg_Corr01" pos="0.592927,4e-006,3e-006" rot="0.543444,0.226552,-0.579004,0.564002" />
+                      </bone>
+                      <bone name="Engine_IK_R_Tight" pos="0.411357,0.195679,-0.138008" rot="0.507983,-0.1737,0.109297,0.836562">
+                        <bone name="Engine_R_Leg_Corr01" pos="0.590397,-0.032402,0.043044" rot="0.546368,0.144019,-0.135682,-0.813837" />
+                        <bone name="Engine_IK_R_Calf" pos="0.639303,1e-006,0" rot="0.873788,-0.191267,0.0750198,-0.440777">
+                          <bone name="Engine_R_ToeBack_01" pos="1.06216,-0.039968,-0.014675" rot="0.899773,0.400688,0.0166589,-0.17199">
+                            <bone name="Engine_R_ToeBack_02" pos="0.687376,-3e-006,-0" rot="0.999958,0.00011777,-0.00902947,-0.00145951" />
+                          </bone>
+                          <bone name="Engine_R_Leg_Corr02" pos="0.620258,-0.048336,-0.002343" rot="0.827658,0.367254,0.0410957,-0.422396" />
+                          <bone name="Engine_R_Toe01" pos="0.992946,3.1e-005,0.000104" rot="0.973688,0.0861403,-0.0390901,0.207322">
+                            <bone name="Engine_R_Toe02" pos="0.894509,0,-0" rot="0.904188,0.00108748,-0.00234582,0.427127" />
+                          </bone>
+                        </bone>
+                      </bone>
+                    </bone>
+                  </bone>
+                </bone>
+              </skeleton>
+            </component>
+            <component class="StaticPhysComponent">
+              <resource fileName="graphics\av_Creatures\Banshee\Banshee_Scripted.hkx" />
+            </component>
+            <component class="GameLogicComponent">
+              <seat type="driver" seatbone="Pilot_SitPoint_01">
+                <entry bone="Pilot_EntryPoint_01" userType="0" />
+              </seat>
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="129" type="BinHex">81000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="True" type="BinHex">01</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_creatures\banshee\banshee_scripted.xbg" type="BinHex">67726170686963735C61765F6372656174757265735C62616E736865655C62616E736865655F73637269707465642E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_creatures\banshee\banshee_scripted.xbg" type="BinHex">1B6B8A01</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Banshee_Chassis" type="BinHex">42616E736865655F4368617373697300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Banshee_Chassis" type="BinHex">42616E736865655F4368617373697300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Banshee_Chassis" type="BinHex">4B2A8E23</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Banshee_Chassis_LOD0" type="BinHex">42616E736865655F436861737369735F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Banshee_Chassis_LOD0" type="BinHex">3B5F07D1</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="E39B8041" name="CAvatarSkinComponent">
+        <field hash="B54515E2" name="hidCreateCopies" type="BinHex">01</field>
+        <object hash="0FA60B61" name="MaterialOverrides">
+          <object hash="85C817C3" name="Material">
+            <field hash="DD2929AC" value-String="graphics\_materials\dgiraud-m-1505200853916370.xbm" type="BinHex">67726170686963735C5F6D6174657269616C735C646769726175642D6D2D313530353230303835333931363337302E78626D00</field>
+            <field hash="E1C0931D" name="fileOriginalMaterial" value-ComputeHash32="graphics\_materials\dgiraud-m-1505200853916370.xbm" type="BinHex">C804E573</field>
+            <field hash="148E2F84" value-String="graphics\_materials\vgault-m-2009071551585240.xbm" type="BinHex">67726170686963735C5F6D6174657269616C735C766761756C742D6D2D323030393037313535313538353234302E78626D00</field>
+            <field hash="28679535" name="fileMaterialOverride" value-ComputeHash32="graphics\_materials\vgault-m-2009071551585240.xbm" type="BinHex">EF91162B</field>
+          </object>
+          <object hash="85C817C3" name="Material">
+            <field hash="DD2929AC" type="BinHex">00</field>
+            <field hash="E1C0931D" name="fileOriginalMaterial" type="BinHex">FFFFFFFF</field>
+            <field hash="148E2F84" type="BinHex">00</field>
+            <field hash="28679535" name="fileMaterialOverride" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+      </object>
+      <object hash="037FB709" name="CStaticPhysComponent">
+        <field hash="527E7674" name="text_hidResourceId" value-String="graphics\av_creatures\banshee\banshee_scripted.hkx" type="BinHex">67726170686963735C61765F6372656174757265735C62616E736865655C62616E736865655F73637269707465642E686B7800</field>
+        <field hash="2E50EB85" name="hidResourceId" value-ComputeHash32="graphics\av_creatures\banshee\banshee_scripted.hkx" type="BinHex">D77E6641</field>
+        <field hash="5BABAAC6" name="bUseMaxTerrainSlope" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CFA0AA41" name="bIgnoreInExplosions" value-Boolean="False" type="BinHex">00</field>
+        <field hash="0C838A6E" name="bAnimateable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="387811D0" name="bLargeEntity" value-Boolean="False" type="BinHex">00</field>
+        <field hash="A8699EF0" name="hidResourceIndex" value-Int32="0" type="BinHex">00000000</field>
+        <object hash="78CF3E56" name="EntityPickup">
+          <field hash="743BADAE" name="bCanPickUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="7EC43CB1" name="bCanBePickedUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="4CA7A893" name="fPickupCollisionRadius" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="829623C6" name="fPickupCollisionHeight" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="AD22F2F7" type="BinHex">00</field>
+          <field hash="011D12F4" name="PickupAttachBone" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="A1FBD5FB" name="StaticParams">
+          <field hash="A3DFDD6E" name="bNeedExplosionInfo" value-Boolean="False" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="F62231F2" name="CAnimationComponent">
+        <field hash="F9F2D5F4" name="text_fileSkeleton" value-String="graphics\av_creatures\banshee\banshee_scripted_ref.skeleton" type="BinHex">67726170686963735C61765F6372656174757265735C62616E736865655C62616E736865655F73637269707465645F7265662E736B656C65746F6E00</field>
+        <field hash="0B80933A" name="fileSkeleton" value-ComputeHash32="graphics\av_creatures\banshee\banshee_scripted_ref.skeleton" type="BinHex">590E421B</field>
+        <field hash="E0AAD6E5" name="text_fileFacialFile" value-String="" type="BinHex">00</field>
+        <field hash="2A6C3AF2" name="fileFacialFile" type="BinHex">FFFFFFFF</field>
+        <field hash="BB681C98" name="selSkeletonType" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="C77E6465" name="sAnimPackage" type="BinHex">00</field>
+        <field hash="C22DBBC8" name="sPartName" value-String="banshee" type="BinHex">62616E7368656500</field>
+        <field hash="7B1B17E6" name="bForceBestQuality" value-Boolean="False" type="BinHex">00</field>
+        <field hash="D32F71E1" name="bDisableInterpolation" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9CB5A0AD" name="fCycleRandomTime" value-Float32="0.5" type="BinHex">0000003F</field>
+        <field hash="FE97B45D" name="text_InitialMoveState" value-String="" type="BinHex">00</field>
+        <field hash="52A8545E" name="InitialMoveState" type="BinHex">FFFFFFFF</field>
+        <object hash="FBEB7EA6" name="MercKitFacialFiles">
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="" type="BinHex">00</field>
+            <field hash="BCB3FA35" name="sHeadTag" type="BinHex">FFFFFFFF</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="" type="BinHex">00</field>
+            <field hash="0AD726A1" name="fileFacialActor" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="C0500C11" name="enumSkeletonType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar/Navi" type="BinHex">4176617461722F4E61766900</field>
+          </object>
+        </object>
+      </object>
+      <object hash="19EC7842" name="CAnimDrivenComponent" />
+      <object hash="06956112" name="CParticleEventListenerComponent" />
+    </object>
+  </object>
+</object>

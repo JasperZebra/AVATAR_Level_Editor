@@ -1,0 +1,120 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Objectives.RandomEncounterObjective_TODELETE" type="BinHex">4F626A656374697665732E52616E646F6D456E636F756E7465724F626A6563746976655F544F44454C45544500</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="Domino.Objectives.RandomEncounterObjective_TODELETE" type="BinHex">446F6D696E6F2E4F626A656374697665732E52616E646F6D456E636F756E7465724F626A6563746976655F544F44454C45544500</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="467" type="BinHex">D301000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CGameElementEntity" type="BinHex">4347616D65456C656D656E74456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CGameElementEntity" type="BinHex">61653790</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="0" type="BinHex">00000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="F1309295" name="CMapElementComponent">
+        <field hash="7A955273" name="StateId" type="BinHex">00</field>
+        <field hash="7F808678" name="ObjectiveId" type="BinHex">00</field>
+        <field hash="CC867EC0" name="MarkerZ" value-Float32="0.01" type="BinHex">0AD7233C</field>
+        <field hash="09013C00" name="CompassMarkerZ" value-Float32="0.01" type="BinHex">0AD7233C</field>
+        <field hash="37F7A221" name="entEntityToFollow" type="BinHex">FFFFFFFFFFFFFFFF</field>
+        <field hash="49BF3666" name="selType" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="4535EF9B" name="selState" value-Enum="0" type="BinHex">00000000</field>
+        <object hash="8E34E6AC" name="Markers">
+          <field hash="213EC2D3" name="archMapEnabled" type="BinHex">00</field>
+          <field hash="79ACD749" name="archMapAvailable" type="BinHex">00</field>
+          <field hash="E4CB4B80" name="archMapDir" type="BinHex">00</field>
+          <field hash="6C56C171" name="archCompass" type="BinHex">00</field>
+          <field hash="873C2C35" name="archCompassDir" type="BinHex">00</field>
+          <field hash="2846812F" name="archBlink" type="BinHex">00</field>
+          <field hash="C19711E1" name="archBlinkCompass" type="BinHex">00</field>
+          <field hash="8235B944" name="archCompassVehicle" type="BinHex">00</field>
+          <field hash="4A5749A7" name="archCompassDirVehicle" type="BinHex">00</field>
+          <field hash="14B7D3E4" name="archBlinkCompassVehicle" type="BinHex">00</field>
+        </object>
+        <object hash="11454E8B" name="enumType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Objective" type="BinHex">4F626A65637469766500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-Int32="5261136" type="BinHex">50475000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="SafeHouse" type="BinHex">53616665486F75736500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="CellTower" type="BinHex">43656C6C546F77657200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="WeaponShop" type="BinHex">576561706F6E53686F7000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="BusStation" type="BinHex">42757353746174696F6E00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Underground" type="BinHex">556E64657267726F756E6400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="HQ" type="BinHex">485100</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="MikesPlace" type="BinHex">4D696B6573506C61636500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Other" type="BinHex">4F7468657200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="City" type="BinHex">4369747900</field>
+          </object>
+        </object>
+        <object hash="9BD68B26" name="enumState">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Disabled" type="BinHex">44697361626C656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Enabled" type="BinHex">456E61626C656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Available" type="BinHex">417661696C61626C6500</field>
+          </object>
+        </object>
+      </object>
+      <object hash="7273EBB0" name="CPersistComponent">
+        <field hash="7C4CF173" name="selLevel" value-Enum="3" type="BinHex">03000000</field>
+        <object hash="A2AF95CE" name="enumLevel">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Limited" type="BinHex">4C696D6974656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Full" type="BinHex">46756C6C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Critical" type="BinHex">437269746963616C00</field>
+          </object>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

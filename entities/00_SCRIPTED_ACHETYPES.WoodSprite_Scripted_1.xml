@@ -1,0 +1,174 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="00_SCRIPTED_ACHETYPES.WoodSprite_Scripted" type="BinHex">30305F53435249505445445F4143484554595045532E576F6F645370726974655F536372697074656400</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="Avatar_ScriptedEvents.00_SCRIPTED_ACHETYPES.WoodSprite_Scripted" type="BinHex">4176617461725F53637269707465644576656E74732E30305F53435249505445445F4143484554595045532E576F6F645370726974655F536372697074656400</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="175" type="BinHex">AF00000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="2" type="BinHex">02000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\av_creatures\woodsprit\_temp\woodspritehigh.xml" type="BinHex">67726170686963735C61765F6372656174757265735C776F6F6473707269745C5F74656D705C776F6F64737072697465686967682E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\av_creatures\woodsprit\_temp\woodspritehigh.xml" type="BinHex">380C56C3</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2" detail="0">
+              <resource fileName="graphics\av_Creatures\woodsprit\_Temp\woodspriteHIGH.xbg" bboxMin="-0.0534333,-0.0538168,-0.00472504" bboxMax="0.0535383,0.0524786,0.0774342" />
+              <skeleton name="woodspriteHIGH" pos="0,0,0" rot="1,-0,-0,-0">
+                <bone name="Manip_Engine_Point_Root" pos="0,0,0.028852" rot="1,0,0,0">
+                  <bone name="Engine_Bone21" pos="0.044243,0,0.039635" rot="0.602575,0.602575,0.370004,-0.370004">
+                    <bone name="Engine_Bone22" pos="0.021803,-0,-0" rot="0.965324,0,0,-0.261055">
+                      <bone name="Engine_Bone23" pos="0.017275,-0,-0" rot="0.99522,0,0,-0.0976614">
+                        <bone name="Engine_Bone24" pos="0.015803,-0,-0" rot="0.996686,-0,0,-0.0813498" />
+                      </bone>
+                    </bone>
+                  </bone>
+                  <bone name="Engine_Bone01" pos="0.013672,0.042083,0.039635" rot="0.704974,0.270019,0.653522,0.0548755">
+                    <bone name="Engine_Bone02" pos="0.021804,-0,-0" rot="0.965316,2.61085e-007,-1.04434e-006,-0.261085">
+                      <bone name="Engine_Bone03" pos="0.017275,-0,0" rot="0.995218,-2.93024e-007,1.26977e-006,-0.0976742">
+                        <bone name="Engine_Bone04" pos="0.015803,0,0" rot="0.996685,1.62717e-007,-8.94943e-007,-0.0813586" />
+                      </bone>
+                    </bone>
+                  </bone>
+                  <bone name="Engine_Bone06" pos="-0.035787,0.025999,0.039635" rot="0.53811,-0.165729,0.687411,0.458735">
+                    <bone name="Engine_Bone07" pos="0.021802,0,-0" rot="0.965335,0,-7.83038e-007,-0.261013">
+                      <bone name="Engine_Bone08" pos="0.017275,-0,-0" rot="0.995221,-9.76437e-008,6.83506e-007,-0.0976437">
+                        <bone name="Engine_Bone09" pos="0.015803,-0,0" rot="0.996687,-8.1338e-008,-8.1338e-008,-0.081338" />
+                      </bone>
+                    </bone>
+                  </bone>
+                  <bone name="Engine_Bone11" pos="-0.035787,-0.025999,0.039635" rot="0.165728,-0.53811,0.458734,0.687411">
+                    <bone name="Engine_Bone12" pos="0.021802,-0,-0" rot="0.965335,0,-7.83038e-007,-0.261013">
+                      <bone name="Engine_Bone13" pos="0.017275,0,-0" rot="0.995221,-1.95287e-007,1.26937e-006,-0.0976439">
+                        <bone name="Engine_Bone14" pos="0.015803,0,0" rot="0.996687,0,-5.69359e-007,-0.0813373" />
+                      </bone>
+                    </bone>
+                  </bone>
+                  <bone name="Engine_Bone16" pos="0.013672,-0.042083,0.039635" rot="0.270019,0.704975,-0.054876,-0.653521">
+                    <bone name="Engine_Bone17" pos="0.021804,-0,-0" rot="0.965316,2.61086e-007,-1.30543e-006,-0.261086">
+                      <bone name="Engine_Bone18" pos="0.017275,0,-0" rot="0.995218,-2.93022e-007,2.14883e-006,-0.097674">
+                        <bone name="Engine_Bone19" pos="0.015803,0,-0" rot="0.996685,4.06792e-007,-2.44075e-006,-0.0813586" />
+                      </bone>
+                    </bone>
+                  </bone>
+                </bone>
+              </skeleton>
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="129" type="BinHex">81000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="True" type="BinHex">01</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_creatures\woodsprit\_temp\woodspritehigh.xbg" type="BinHex">67726170686963735C61765F6372656174757265735C776F6F6473707269745C5F74656D705C776F6F64737072697465686967682E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_creatures\woodsprit\_temp\woodspritehigh.xbg" type="BinHex">7FC91CD3</field>
+          <field hash="3D5AC03A" name="hidMeshName" type="BinHex">00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="" type="BinHex">00</field>
+          <field hash="F1E66E05" name="hidNodeName" type="BinHex">FFFFFFFF</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="" type="BinHex">00</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" type="BinHex">FFFFFFFF</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="E39B8041" name="CAvatarSkinComponent">
+        <field hash="B54515E2" name="hidCreateCopies" type="BinHex">01</field>
+        <object hash="0FA60B61" name="MaterialOverrides">
+          <object hash="85C817C3" name="Material">
+            <field hash="DD2929AC" type="BinHex">00</field>
+            <field hash="E1C0931D" name="fileOriginalMaterial" type="BinHex">FFFFFFFF</field>
+            <field hash="148E2F84" type="BinHex">00</field>
+            <field hash="28679535" name="fileMaterialOverride" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+      </object>
+      <object hash="F62231F2" name="CAnimationComponent">
+        <field hash="F9F2D5F4" name="text_fileSkeleton" value-String="graphics\av_creatures\woodsprit\_temp\woodspritehigh_ref.skeleton" type="BinHex">67726170686963735C61765F6372656174757265735C776F6F6473707269745C5F74656D705C776F6F64737072697465686967685F7265662E736B656C65746F6E00</field>
+        <field hash="0B80933A" name="fileSkeleton" value-ComputeHash32="graphics\av_creatures\woodsprit\_temp\woodspritehigh_ref.skeleton" type="BinHex">22C04B21</field>
+        <field hash="E0AAD6E5" name="text_fileFacialFile" value-String="" type="BinHex">00</field>
+        <field hash="2A6C3AF2" name="fileFacialFile" type="BinHex">FFFFFFFF</field>
+        <field hash="BB681C98" name="selSkeletonType" value-Enum="1" type="BinHex">01000000</field>
+        <field hash="C77E6465" name="sAnimPackage" type="BinHex">00</field>
+        <field hash="C22DBBC8" name="sPartName" type="BinHex">00</field>
+        <field hash="7B1B17E6" name="bForceBestQuality" value-Boolean="False" type="BinHex">00</field>
+        <field hash="D32F71E1" name="bDisableInterpolation" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9CB5A0AD" name="fCycleRandomTime" value-Float32="0.5" type="BinHex">0000003F</field>
+        <field hash="FE97B45D" name="text_InitialMoveState" value-String="" type="BinHex">00</field>
+        <field hash="52A8545E" name="InitialMoveState" type="BinHex">FFFFFFFF</field>
+        <object hash="FBEB7EA6" name="MercKitFacialFiles">
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="" type="BinHex">00</field>
+            <field hash="BCB3FA35" name="sHeadTag" type="BinHex">FFFFFFFF</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="" type="BinHex">00</field>
+            <field hash="0AD726A1" name="fileFacialActor" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="C0500C11" name="enumSkeletonType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar/Navi" type="BinHex">4176617461722F4E61766900</field>
+          </object>
+        </object>
+      </object>
+      <object hash="19EC7842" name="CAnimDrivenComponent" />
+      <object hash="06956112" name="CParticleEventListenerComponent" />
+    </object>
+  </object>
+</object>

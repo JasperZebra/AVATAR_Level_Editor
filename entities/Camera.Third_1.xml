@@ -1,0 +1,887 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Camera.Third" type="BinHex">43616D6572612E546869726400</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="cameras.Camera.Third" type="BinHex">63616D657261732E43616D6572612E546869726400</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="268" type="BinHex">0C01000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="0" type="BinHex">00000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="54042A27" name="CCameraThirdComponent">
+        <field hash="337A5FDE" name="fCameraBlendTime" value-Float32="0.5" type="BinHex">0000003F</field>
+        <field hash="3905BE36" name="fNearDistance" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+        <field hash="E2F17F88" name="fFarDistance" value-Float32="5000" type="BinHex">00409C45</field>
+        <field hash="BEF721BA" name="fFOV" value-Float32="70" type="BinHex">00008C42</field>
+        <field hash="CFA64180" name="bUseEaseInEaseOutTransition" value-Boolean="True" type="BinHex">01</field>
+        <object hash="CA0ED3A8" name="CameraModes">
+          <object hash="6D71633C" name="CameraModeGameplay">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="49B6CB3E" name="fDistance" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="564AB765" name="archPitchOverrideCurve" type="BinHex">00</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+              </object>
+            </object>
+            <object hash="7D0E24F1" name="HurtMode">
+              <field hash="283A0028" name="fHurtModePitchAngle" value-Float32="-45" type="BinHex">000034C2</field>
+              <field hash="8A63B888" name="fHurtStateRecoverDuration" value-Float32="0.5" type="BinHex">0000003F</field>
+              <object hash="8D1EA23F" name="HurtModePosDampingMethod">
+                <field hash="8C587CF7" name="DampingFactor" value-Float32="15" type="BinHex">00007041</field>
+              </object>
+              <object hash="F46FBDE6" name="HurtModeAngleDampingMethod">
+                <field hash="8C587CF7" name="DampingFactor" value-Float32="15" type="BinHex">00007041</field>
+              </object>
+            </object>
+            <object hash="41DA6C12" name="DodgeMode">
+              <field hash="FB56E3F1" name="fDodgeStateRecoverDuration" value-Float32="0.5" type="BinHex">0000003F</field>
+              <field hash="41EF9374" name="fDodgeZOffset" value-Float32="-1.5" type="BinHex">0000C0BF</field>
+              <object hash="E40F3EF4" name="DodgeModePosDampingMethod">
+                <field hash="8C587CF7" name="DampingFactor" value-Float32="15" type="BinHex">00007041</field>
+              </object>
+            </object>
+            <object hash="E82C5081" name="Sprint">
+              <object hash="F1C472F8" name="SprintAmbientNoiseOverride">
+                <object hash="657EF3DC" name="Angles">
+                  <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                </object>
+                <object hash="546E67DF" name="Positions">
+                  <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                </object>
+                <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                  <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+                </object>
+              </object>
+            </object>
+            <object hash="58E07DB0" name="SuperJump">
+              <object hash="F457DB3F" name="SuperJumpAmbientNoiseOverride">
+                <object hash="657EF3DC" name="Angles">
+                  <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                </object>
+                <object hash="546E67DF" name="Positions">
+                  <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                </object>
+                <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                  <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="80EAD980" name="fRotationDamping" value-Float32="0" type="BinHex">00000000</field>
+                </object>
+              </object>
+            </object>
+            <object hash="01CFE02B" name="InsideBuilding">
+              <object hash="3B605D81" name="InsideBuildingOverrides">
+                <field hash="49B6CB3E" name="fDistance" value-Float32="4" type="BinHex">00008040</field>
+                <field hash="EE8D412B" name="OffsetLookAt" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="B34F1E45" name="CameraOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="BEF721BA" name="fFOV" value-Float32="75" type="BinHex">00009642</field>
+                <field hash="FA5BE606" name="fDistanceMaxPitch" value-Float32="4" type="BinHex">00008040</field>
+                <field hash="4EDCD81D" name="OffsetLookAtMaxPitch" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="C283470F" name="CameraOffsetMaxPitch" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="B4EAC1FB" name="fFOVMaxPitch" value-Float32="75" type="BinHex">00009642</field>
+                <field hash="919D7E20" name="fPositionDampingFactor" value-Float32="50" type="BinHex">00004842</field>
+                <field hash="AF5BD63C" name="fLookAnglesDampingFactor" value-Float32="50" type="BinHex">00004842</field>
+                <field hash="4ACE833A" name="fOffsetLookAnglesDampingFactor" value-Float32="50" type="BinHex">00004842</field>
+                <field hash="856079DC" name="fDistanceDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="60FBE2D8" name="fOffsetDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="06625F47" name="fAmbientNoiseDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="22903EA2" name="fAmbientNoiseDelayedRotationDampingFactor" value-Float32="5" type="BinHex">0000A040</field>
+                <field hash="A2478C1B" name="fFOVDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="7DD92E67" name="fRollFactor" value-Float32="1" type="BinHex">0000803F</field>
+                <field hash="F9D2828F" name="fPitchFactor" value-Float32="1" type="BinHex">0000803F</field>
+                <object hash="94F68F25" name="AmbientNoiseParams">
+                  <object hash="657EF3DC" name="Angles">
+                    <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  </object>
+                  <object hash="546E67DF" name="Positions">
+                    <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  </object>
+                  <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                    <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="80EAD980" name="fRotationDamping" value-Float32="0" type="BinHex">00000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="6E3CE548" name="InsideBuildingMediumOverrides">
+                <field hash="49B6CB3E" name="fDistance" value-Float32="4" type="BinHex">00008040</field>
+                <field hash="EE8D412B" name="OffsetLookAt" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="B34F1E45" name="CameraOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="BEF721BA" name="fFOV" value-Float32="75" type="BinHex">00009642</field>
+                <field hash="FA5BE606" name="fDistanceMaxPitch" value-Float32="4" type="BinHex">00008040</field>
+                <field hash="4EDCD81D" name="OffsetLookAtMaxPitch" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="C283470F" name="CameraOffsetMaxPitch" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="B4EAC1FB" name="fFOVMaxPitch" value-Float32="75" type="BinHex">00009642</field>
+                <field hash="919D7E20" name="fPositionDampingFactor" value-Float32="50" type="BinHex">00004842</field>
+                <field hash="AF5BD63C" name="fLookAnglesDampingFactor" value-Float32="50" type="BinHex">00004842</field>
+                <field hash="4ACE833A" name="fOffsetLookAnglesDampingFactor" value-Float32="50" type="BinHex">00004842</field>
+                <field hash="856079DC" name="fDistanceDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="60FBE2D8" name="fOffsetDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="06625F47" name="fAmbientNoiseDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="22903EA2" name="fAmbientNoiseDelayedRotationDampingFactor" value-Float32="5" type="BinHex">0000A040</field>
+                <field hash="A2478C1B" name="fFOVDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="7DD92E67" name="fRollFactor" value-Float32="1" type="BinHex">0000803F</field>
+                <field hash="F9D2828F" name="fPitchFactor" value-Float32="1" type="BinHex">0000803F</field>
+                <object hash="94F68F25" name="AmbientNoiseParams">
+                  <object hash="657EF3DC" name="Angles">
+                    <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  </object>
+                  <object hash="546E67DF" name="Positions">
+                    <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  </object>
+                  <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                    <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="80EAD980" name="fRotationDamping" value-Float32="0" type="BinHex">00000000</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="8FAD270E" name="InsideBuildingLargeOverrides">
+                <field hash="49B6CB3E" name="fDistance" value-Float32="4" type="BinHex">00008040</field>
+                <field hash="EE8D412B" name="OffsetLookAt" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="B34F1E45" name="CameraOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="BEF721BA" name="fFOV" value-Float32="75" type="BinHex">00009642</field>
+                <field hash="FA5BE606" name="fDistanceMaxPitch" value-Float32="4" type="BinHex">00008040</field>
+                <field hash="4EDCD81D" name="OffsetLookAtMaxPitch" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="C283470F" name="CameraOffsetMaxPitch" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+                <field hash="B4EAC1FB" name="fFOVMaxPitch" value-Float32="75" type="BinHex">00009642</field>
+                <field hash="919D7E20" name="fPositionDampingFactor" value-Float32="50" type="BinHex">00004842</field>
+                <field hash="AF5BD63C" name="fLookAnglesDampingFactor" value-Float32="50" type="BinHex">00004842</field>
+                <field hash="4ACE833A" name="fOffsetLookAnglesDampingFactor" value-Float32="50" type="BinHex">00004842</field>
+                <field hash="856079DC" name="fDistanceDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="60FBE2D8" name="fOffsetDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="06625F47" name="fAmbientNoiseDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="22903EA2" name="fAmbientNoiseDelayedRotationDampingFactor" value-Float32="5" type="BinHex">0000A040</field>
+                <field hash="A2478C1B" name="fFOVDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="7DD92E67" name="fRollFactor" value-Float32="1" type="BinHex">0000803F</field>
+                <field hash="F9D2828F" name="fPitchFactor" value-Float32="1" type="BinHex">0000803F</field>
+                <object hash="94F68F25" name="AmbientNoiseParams">
+                  <object hash="657EF3DC" name="Angles">
+                    <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  </object>
+                  <object hash="546E67DF" name="Positions">
+                    <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  </object>
+                  <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                    <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                    <field hash="80EAD980" name="fRotationDamping" value-Float32="0" type="BinHex">00000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object hash="2AC35E32" name="CameraModeAMPSuit">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="2" type="BinHex">00000040</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="49B6CB3E" name="fDistance" value-Float32="5" type="BinHex">0000A040</field>
+            <field hash="564AB765" name="archPitchOverrideCurve" type="BinHex">00</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+              </object>
+            </object>
+            <object hash="7D0E24F1" name="HurtMode">
+              <field hash="283A0028" name="fHurtModePitchAngle" value-Float32="-45" type="BinHex">000034C2</field>
+              <field hash="8A63B888" name="fHurtStateRecoverDuration" value-Float32="0.5" type="BinHex">0000003F</field>
+              <object hash="8D1EA23F" name="HurtModePosDampingMethod">
+                <field hash="8C587CF7" name="DampingFactor" value-Float32="15" type="BinHex">00007041</field>
+              </object>
+              <object hash="F46FBDE6" name="HurtModeAngleDampingMethod">
+                <field hash="8C587CF7" name="DampingFactor" value-Float32="15" type="BinHex">00007041</field>
+              </object>
+            </object>
+          </object>
+          <object hash="2BDAA43A" name="CameraModeHybrid">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="2" type="BinHex">00000040</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="49B6CB3E" name="fDistance" value-Float32="5" type="BinHex">0000A040</field>
+            <field hash="564AB765" name="archPitchOverrideCurve" type="BinHex">00</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+            </object>
+          </object>
+          <object hash="B43E7A36" name="CameraModeInteraction">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="False" type="BinHex">00</field>
+            <field hash="38B32C7F" name="fAvatarTargetMinDistance" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="F4BE5770" name="fAvatarTargetMaxDistance" value-Float32="2" type="BinHex">00000040</field>
+            <field hash="785A7A5D" name="fCorpTargetMinDistance" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="B4570152" name="fCorpTargetMaxDistance" value-Float32="2" type="BinHex">00000040</field>
+            <field hash="21116556" name="fGenericTargetMinDistance" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="ED1C1E59" name="fGenericTargetMaxDistance" value-Float32="2" type="BinHex">00000040</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+              </object>
+            </object>
+            <object hash="5C1263D8" name="LookFromDampingMethod">
+              <field hash="8C587CF7" name="DampingFactor" value-Float32="2" type="BinHex">00000040</field>
+            </object>
+            <object hash="000EEB27" name="LookAtDampingMethod">
+              <field hash="8C587CF7" name="DampingFactor" value-Float32="2" type="BinHex">00000040</field>
+            </object>
+            <object hash="402A23E5" name="AvatarTargetCameraParams">
+              <object hash="88620BC5" name="Params">
+                <field hash="F96FAF0D" name="text_Name" value-String="" type="BinHex">00</field>
+                <field hash="FE11D138" name="Name" type="BinHex">FFFFFFFF</field>
+                <field hash="E83B4249" name="iPriority" value-Int32="0" type="BinHex">00000000</field>
+                <field hash="C71EA3E2" name="sTargetCharacterNameID" type="BinHex">00</field>
+                <field hash="94A3B508" name="LookAtOffsetMinDistance" value-Vector3="0,0,-0.3" type="BinHex">00000000000000009A9999BE</field>
+                <field hash="88E4AE52" name="CameraOffsetMinDistance" value-Vector3="-0.7,-1.7,-0.7" type="BinHex">333333BF9A99D9BF333333BF</field>
+                <field hash="E76585BC" name="fRollMinDistance" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="639E9319" name="fFOVMinDistance" value-Float32="39.598" type="BinHex">5A641E42</field>
+                <field hash="58AECE07" name="LookAtOffsetMaxDistance" value-Vector3="0,0,-0.3" type="BinHex">00000000000000009A9999BE</field>
+                <field hash="44E9D55D" name="CameraOffsetMaxDistance" value-Vector3="-0.7,-1.7,-0.7" type="BinHex">333333BF9A99D9BF333333BF</field>
+                <field hash="2B68FEB3" name="fRollMaxDistance" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="AF93E816" name="fFOVMaxDistance" value-Float32="39.598" type="BinHex">5A641E42</field>
+              </object>
+            </object>
+            <object hash="8FB0040D" name="CorpTargetCameraParams">
+              <object hash="88620BC5" name="Params">
+                <field hash="F96FAF0D" name="text_Name" value-String="" type="BinHex">00</field>
+                <field hash="FE11D138" name="Name" type="BinHex">FFFFFFFF</field>
+                <field hash="E83B4249" name="iPriority" value-Int32="0" type="BinHex">00000000</field>
+                <field hash="C71EA3E2" name="sTargetCharacterNameID" type="BinHex">00</field>
+                <field hash="94A3B508" name="LookAtOffsetMinDistance" value-Vector3="0,0,-0.3" type="BinHex">00000000000000009A9999BE</field>
+                <field hash="88E4AE52" name="CameraOffsetMinDistance" value-Vector3="-0.7,-1.7,-0.7" type="BinHex">333333BF9A99D9BF333333BF</field>
+                <field hash="E76585BC" name="fRollMinDistance" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="639E9319" name="fFOVMinDistance" value-Float32="39.598" type="BinHex">5A641E42</field>
+                <field hash="58AECE07" name="LookAtOffsetMaxDistance" value-Vector3="0,0,-0.3" type="BinHex">00000000000000009A9999BE</field>
+                <field hash="44E9D55D" name="CameraOffsetMaxDistance" value-Vector3="-0.7,-1.7,-0.7" type="BinHex">333333BF9A99D9BF333333BF</field>
+                <field hash="2B68FEB3" name="fRollMaxDistance" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="AF93E816" name="fFOVMaxDistance" value-Float32="39.598" type="BinHex">5A641E42</field>
+              </object>
+            </object>
+            <object hash="1AA5DE72" name="GenericTargetCameraParams">
+              <object hash="88620BC5" name="Params">
+                <field hash="F96FAF0D" name="text_Name" value-String="" type="BinHex">00</field>
+                <field hash="FE11D138" name="Name" type="BinHex">FFFFFFFF</field>
+                <field hash="E83B4249" name="iPriority" value-Int32="0" type="BinHex">00000000</field>
+                <field hash="C71EA3E2" name="sTargetCharacterNameID" type="BinHex">00</field>
+                <field hash="94A3B508" name="LookAtOffsetMinDistance" value-Vector3="0,0,-0.3" type="BinHex">00000000000000009A9999BE</field>
+                <field hash="88E4AE52" name="CameraOffsetMinDistance" value-Vector3="-0.7,-1.7,-0.7" type="BinHex">333333BF9A99D9BF333333BF</field>
+                <field hash="E76585BC" name="fRollMinDistance" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="639E9319" name="fFOVMinDistance" value-Float32="39.598" type="BinHex">5A641E42</field>
+                <field hash="58AECE07" name="LookAtOffsetMaxDistance" value-Vector3="0,0,-0.3" type="BinHex">00000000000000009A9999BE</field>
+                <field hash="44E9D55D" name="CameraOffsetMaxDistance" value-Vector3="-0.7,-1.7,-0.7" type="BinHex">333333BF9A99D9BF333333BF</field>
+                <field hash="2B68FEB3" name="fRollMaxDistance" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="AF93E816" name="fFOVMaxDistance" value-Float32="39.598" type="BinHex">5A641E42</field>
+              </object>
+            </object>
+          </object>
+          <object hash="0B4D786A" name="CameraModeAnimated">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="7EBF8F6B" name="FOV" value-Float32="39.598" type="BinHex">5A641E42</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+              </object>
+            </object>
+          </object>
+          <object hash="B646AF1C" name="CameraModeAnimatedByBone">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="7EBF8F6B" name="FOV" value-Float32="39.598" type="BinHex">5A641E42</field>
+            <field hash="FBDCC869" name="fAnimBlendEaseInPower" value-Float32="2" type="BinHex">00000040</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+              </object>
+            </object>
+          </object>
+          <object hash="9DB0F497" name="CameraModeDeath">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="241148DB" name="HAngleSpeed" value-Float32="10" type="BinHex">00002041</field>
+            <field hash="D891A716" name="VAngleSpeed" value-Float32="2" type="BinHex">00000040</field>
+            <field hash="76CB80C8" name="HAngleAccel" value-Float32="3" type="BinHex">00004040</field>
+            <field hash="8A4B6F05" name="VAngleAccel" value-Float32="3" type="BinHex">00004040</field>
+            <field hash="004C0A2C" name="MinVAngle" value-Float32="10" type="BinHex">00002041</field>
+            <field hash="D7A7B86D" name="MaxVAngle" value-Float32="60" type="BinHex">00007042</field>
+            <field hash="E5E4F8D7" name="Distance" value-Float32="9" type="BinHex">00001041</field>
+            <field hash="A1ED6359" name="DeathFOV" value-Float32="70" type="BinHex">00008C42</field>
+            <field hash="D4285A13" name="RotationDelay" value-Float32="2" type="BinHex">00000040</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+              </object>
+            </object>
+          </object>
+          <object hash="8C1DA269" name="CameraModeDeathRecovery">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="8BC80560" name="LookOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+            <field hash="B34F1E45" name="CameraOffset" value-Vector3="0,0,1.7" type="BinHex">00000000000000009A99D93F</field>
+            <field hash="53B8038A" name="RecoveryLookOffset" value-Vector3="0.5,0,0" type="BinHex">0000003F0000000000000000</field>
+            <field hash="FEBD7866" name="RecoveryCameraOffset" value-Vector3="0.5,-3,0" type="BinHex">0000003F000040C000000000</field>
+            <field hash="880CE5EB" name="fTurnAroundDelay" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="6A5690A9" name="fTurnAroundDampingFactor" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="6C485AB7" name="fRecoveryDelay" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="5D450E25" name="fPreRecoveryDampingFactor" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="F77F600C" name="fRecoveryDampingFactor" value-Float32="5" type="BinHex">0000A040</field>
+            <field hash="C15A35AA" name="fRecoveryCutTime" value-Float32="0.5" type="BinHex">0000003F</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+              </object>
+            </object>
+            <object hash="94EEC946" name="CameraSourcePosDampingMethod">
+              <field hash="8C587CF7" name="DampingFactor" value-Float32="15" type="BinHex">00007041</field>
+            </object>
+            <object hash="D8DA2DFC" name="LookSourcePosDampingMethod">
+              <field hash="8C587CF7" name="DampingFactor" value-Float32="15" type="BinHex">00007041</field>
+            </object>
+          </object>
+          <object hash="62EE9BDE" name="CameraModeVehicle">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="28506330" name="ffov" value-Float32="70" type="BinHex">00008C42</field>
+            <field hash="0B8E3FA1" name="fCameraRadius" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+              </object>
+            </object>
+            <object hash="88620BC5" name="Params">
+              <field hash="5FF09C23" name="vectorAchorOffset" value-Vector3="0,-1,2" type="BinHex">00000000000080BF00000040</field>
+              <field hash="A5AED1A4" name="vectorFocusOffset" value-Vector3="0,1,1" type="BinHex">000000000000803F0000803F</field>
+              <field hash="B38BD050" name="vectorCenterOffset" value-Vector3="0,0,1" type="BinHex">00000000000000000000803F</field>
+              <field hash="68818699" name="fFreeLength" value-Float32="5" type="BinHex">0000A040</field>
+              <field hash="D0CB3512" name="fReturnRate" value-Float32="0" type="BinHex">00000000</field>
+              <field hash="7DD92E67" name="fRollFactor" value-Float32="0" type="BinHex">00000000</field>
+              <field hash="CDE9B733" name="fVehicleRadius" value-Float32="1" type="BinHex">0000803F</field>
+              <field hash="DC0A6C37" name="bAllowOffsetTilt" value-Boolean="True" type="BinHex">01</field>
+              <field hash="BEF721BA" name="fFOV" value-Float32="75" type="BinHex">00009642</field>
+              <field hash="9612FF0B" name="fDistanceBlendSpeed" value-Float32="4" type="BinHex">00008040</field>
+              <field hash="A87FA83F" name="fOffsetBlendSpeed" value-Float32="4" type="BinHex">00008040</field>
+              <field hash="1AB32CDC" name="fAmbientNoiseBlendSpeed" value-Float32="4" type="BinHex">00008040</field>
+              <field hash="920A9B21" name="fFOVBlendSpeed" value-Float32="4" type="BinHex">00008040</field>
+              <object hash="94F68F25" name="AmbientNoiseParams">
+                <object hash="657EF3DC" name="Angles">
+                  <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                </object>
+                <object hash="546E67DF" name="Positions">
+                  <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                </object>
+                <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                  <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object hash="38608969" name="CameraModeGameplayVehicle">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="2" type="BinHex">00000040</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="49B6CB3E" name="fDistance" value-Float32="5" type="BinHex">0000A040</field>
+            <field hash="564AB765" name="archPitchOverrideCurve" type="BinHex">00</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+              </object>
+            </object>
+          </object>
+          <object hash="E43EEF8B" name="CameraModeFixed">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+              </object>
+            </object>
+          </object>
+          <object hash="D250BC41" name="CameraModeMountedWeapon">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="2" type="BinHex">00000040</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="49B6CB3E" name="fDistance" value-Float32="5" type="BinHex">0000A040</field>
+            <field hash="564AB765" name="archPitchOverrideCurve" type="BinHex">00</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="30" type="BinHex">0000F041</field>
+              </object>
+            </object>
+          </object>
+          <object hash="857A402C" name="CameraModeLadder">
+            <field hash="678C9901" name="CameraModeBlendInTime" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="9E2B2C9B" name="CameraModeBlendOutTime" value-Float32="-1" type="BinHex">000080BF</field>
+            <field hash="CC337A2E" name="bIsCollisionCheckEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="67F81090" name="fCollisionRecoveryDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="9BE69C9A" name="fCollisionDistanceInDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+            <field hash="5B478CBC" name="fCollisionDistanceOutDampingFactor" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="00CBEA97" name="bIsCloseDistanceAdjustementEnabled" value-Boolean="True" type="BinHex">01</field>
+            <field hash="49B6CB3E" name="fDistance" value-Float32="5" type="BinHex">0000A040</field>
+            <field hash="564AB765" name="archPitchOverrideCurve" type="BinHex">00</field>
+            <object hash="94F68F25" name="AmbientNoiseParams">
+              <object hash="657EF3DC" name="Angles">
+                <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="546E67DF" name="Positions">
+                <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+              <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                <field hash="80EAD980" name="fRotationDamping" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+            </object>
+            <object hash="D3D6150F" name="CameraOverrides">
+              <field hash="49B6CB3E" name="fDistance" value-Float32="4" type="BinHex">00008040</field>
+              <field hash="EE8D412B" name="OffsetLookAt" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+              <field hash="B34F1E45" name="CameraOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+              <field hash="BEF721BA" name="fFOV" value-Float32="75" type="BinHex">00009642</field>
+              <field hash="FA5BE606" name="fDistanceMaxPitch" value-Float32="4" type="BinHex">00008040</field>
+              <field hash="4EDCD81D" name="OffsetLookAtMaxPitch" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+              <field hash="C283470F" name="CameraOffsetMaxPitch" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+              <field hash="B4EAC1FB" name="fFOVMaxPitch" value-Float32="75" type="BinHex">00009642</field>
+              <field hash="919D7E20" name="fPositionDampingFactor" value-Float32="25" type="BinHex">0000C841</field>
+              <field hash="AF5BD63C" name="fLookAnglesDampingFactor" value-Float32="50" type="BinHex">00004842</field>
+              <field hash="4ACE833A" name="fOffsetLookAnglesDampingFactor" value-Float32="50" type="BinHex">00004842</field>
+              <field hash="856079DC" name="fDistanceDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+              <field hash="60FBE2D8" name="fOffsetDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+              <field hash="06625F47" name="fAmbientNoiseDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+              <field hash="22903EA2" name="fAmbientNoiseDelayedRotationDampingFactor" value-Float32="5" type="BinHex">0000A040</field>
+              <field hash="A2478C1B" name="fFOVDampingFactor" value-Float32="15" type="BinHex">00007041</field>
+              <field hash="7DD92E67" name="fRollFactor" value-Float32="1" type="BinHex">0000803F</field>
+              <field hash="F9D2828F" name="fPitchFactor" value-Float32="1" type="BinHex">0000803F</field>
+              <object hash="94F68F25" name="AmbientNoiseParams">
+                <object hash="657EF3DC" name="Angles">
+                  <field hash="B03A58AA" name="fYawSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="8A2AFA99" name="fYawAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="E4143EEA" name="fPitchSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="3A6589F7" name="fPitchAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="51F908F9" name="fRollSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="08F42206" name="fRollAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                </object>
+                <object hash="546E67DF" name="Positions">
+                  <field hash="9D120AD4" name="fXSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="76702537" name="fXAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="564ED971" name="fYSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="99B24E09" name="fYAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="D0DAABDF" name="fZSpeed" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="7285F50A" name="fZAmplitude" value-Float32="0" type="BinHex">00000000</field>
+                </object>
+                <object hash="E08C02F8" name="DelayedPitchYawOverride">
+                  <field hash="41FB3A05" name="fUseDelayedRotation" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="6891BEF9" name="fRotationFactor" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="80EAD980" name="fRotationDamping" value-Float32="0" type="BinHex">00000000</field>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object hash="2652688C" name="Microphone">
+          <field hash="869E31D5" name="fMicPositionFactor" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="52F49F01" name="fMicClosest2CamLimit" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="2A47498C" name="fMicFarest2CamLimit" value-Float32="8" type="BinHex">00000041</field>
+        </object>
+        <object hash="D93CA11D" name="Collision">
+          <field hash="111D20CE" name="fCollisionSphereRadius" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="CA82C220" name="fMinCameraDistance" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+          <field hash="C2A8C1F5" name="ZoomOffset" value-Vector3="0,0,0.5" type="BinHex">00000000000000000000003F</field>
+          <field hash="860D0041" name="ZoomOffsetMaxPitch" value-Vector3="0.5,0,0.3" type="BinHex">0000003F000000009A99993E</field>
+          <field hash="90054D19" name="fZoomOffsetStartDistance" value-Float32="2" type="BinHex">00000040</field>
+        </object>
+        <object hash="0E25AACD" name="AmbientNoiseDelayedRotationDampingMethod">
+          <field hash="8C587CF7" name="DampingFactor" value-Float32="15" type="BinHex">00007041</field>
+        </object>
+        <object hash="C2F61D5E" name="AmbientNoiseDelayedAmplitudeDampingMethod">
+          <field hash="8C587CF7" name="DampingFactor" value-Float32="15" type="BinHex">00007041</field>
+        </object>
+      </object>
+      <object hash="7273EBB0" name="CPersistComponent">
+        <field hash="7C4CF173" name="selLevel" value-Enum="1" type="BinHex">01000000</field>
+        <object hash="A2AF95CE" name="enumLevel">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Limited" type="BinHex">4C696D6974656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Full" type="BinHex">46756C6C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Critical" type="BinHex">437269746963616C00</field>
+          </object>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

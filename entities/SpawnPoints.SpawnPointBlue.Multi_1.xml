@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="SpawnPoints.SpawnPointBlue.Multi" type="BinHex">537061776E506F696E74732E537061776E506F696E74426C75652E4D756C746900</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="multiplayer.SpawnPoints.SpawnPointBlue.Multi" type="BinHex">6D756C7469706C617965722E537061776E506F696E74732E537061776E506F696E74426C75652E4D756C746900</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="1184" type="BinHex">A004000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CSpawnPointBlue" type="BinHex">43537061776E506F696E74426C756500</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CSpawnPointBlue" type="BinHex">11BB5002</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="0" type="BinHex">00000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <field hash="12B13DF7" name="bWorldStart" value-Boolean="False" type="BinHex">00</field>
+    <field hash="68B5CA9C" name="bIsNavi" value-Boolean="False" type="BinHex">00</field>
+    <field hash="2C08FA38" name="fSpawnWeight" value-Float32="0" type="BinHex">00000000</field>
+    <field hash="B59F66BB" name="entSpawnMissionTrigger" type="BinHex">FFFFFFFFFFFFFFFF</field>
+    <field hash="772FE20F" name="entBansheeCheckpoint" type="BinHex">FFFFFFFFFFFFFFFF</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components" />
+  </object>
+</object>

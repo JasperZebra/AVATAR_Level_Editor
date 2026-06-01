@@ -1,0 +1,343 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="00_SCRIPTED_ACHETYPES.Valkyrie_Scripted" type="BinHex">30305F53435249505445445F4143484554595045532E56616C6B797269655F536372697074656400</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="Avatar_ScriptedEvents.00_SCRIPTED_ACHETYPES.Valkyrie_Scripted" type="BinHex">4176617461725F53637269707465644576656E74732E30305F53435249505445445F4143484554595045532E56616C6B797269655F536372697074656400</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="172" type="BinHex">AC00000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="3" type="BinHex">03000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xml" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xml" type="BinHex">8E1991C4</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2" detail="0">
+              <object index="0" meshName="Valkyrie_01_Body" boneName="Valkyrie_01_Body" bboxMin="-27.6325,-71.8709,1.29543" bboxMax="27.6135,11.2754,13.2689" />
+              <object index="1" meshName="Reactor_Back" boneName="Reactor_Back" bboxMin="-16.0044,-6.9954,-2.15206" bboxMax="16.0161,6.27578,1.522" />
+              <object index="2" meshName="Reactor_Front" boneName="Reactor_Front" bboxMin="-12.5023,-6.24997,-1.45464" bboxMax="12.5616,3.79569,1.3909" />
+              <object index="3" meshName="Safedoor" boneName="Safedoor" bboxMin="-4.4309,-14.2379,-0.0410504" bboxMax="4.43089,0.0426568,4.19642" />
+              <object index="4" meshName="INTERIOR" boneName="INTERIOR" bboxMin="-5.40415,-34.7304,-0.799141" bboxMax="5.54438,0.35355,8.44584" />
+              <object index="5" meshName="BONE_Landing_Wheels_Plate_Right_01" boneName="BONE_Landing_Wheels_Plate_Right_01" bboxMin="-1.24144,-0.000108372,-1.35798" bboxMax="0.47318,9.81031,0.0369726" />
+              <object index="6" meshName="BONE_Landing_Wheels_Plate_Right_02" boneName="BONE_Landing_Wheels_Plate_Right_02" bboxMin="-1.38633,0.000136638,-0.0935174" bboxMax="-0.0163276,9.8096,0.0418826" />
+              <object index="7" meshName="BONE_Landing_Gear_Left" boneName="BONE_Landing_Gear_Left" bboxMin="-1.41864,-4.82207,-2.34306" bboxMax="1.64828e-007,4.06007,1.10702e-007" />
+              <object index="8" meshName="BONE_Landing_Wheels_Plate_Left_02" boneName="BONE_Landing_Wheels_Plate_Left_02" bboxMin="-0.00709413,1.64638e-006,-0.074771" bboxMax="1.42735,9.80947,0.0606289" />
+              <object index="9" meshName="BONE_Landing_Wheels_Plate_Left_01" boneName="BONE_Landing_Wheels_Plate_Left_01" bboxMin="-0.496051,-0.00025264,-1.33856" bboxMax="1.21857,9.81016,0.0563879" />
+              <object index="10" meshName="Landing_Gear_Front_Plate" boneName="Landing_Gear_Front_Plate" bboxMin="-1.20354,-1.16663,-0.0792839" bboxMax="1.20354,1.17699,0.107744" />
+              <object index="11" meshName="NMD_Node02" boneName="NMD_Node02" bboxMin="-0.856988,-0.804365,-1.79105" bboxMax="0.856988,0.804363,0.216217" />
+              <object index="12" meshName="BONE_Landing_Gear_Right" boneName="BONE_Landing_Gear_Right" bboxMin="-7.52158e-008,-4.82208,-2.34306" bboxMax="1.41864,4.06007,4.21916e-007" />
+              <resource fileName="graphics\av_Vehicles_Corp\Valkyrie\Valkyrie.xbg" bboxMin="-27.6325,-71.8709,1.17445" bboxMax="27.6135,11.2754,13.3064" />
+              <skeleton name="Valkyrie" pos="0,0,0" rot="1,-0,-0,-0">
+                <bone name="Valkyrie_01_Body" pos="0,0,0.037567" rot="1,0,0,0" />
+                <bone name="Reactor_Back" pos="0,-43.6539,7.71899" rot="1,0,0,0">
+                  <bone name="FX_REACTOR_BACK_RIGHT" pos="14.2989,-6.5675,0.035592" rot="-1.62921e-007,0,0,1" />
+                  <bone name="FX_REACTOR_BACK_LEFT" pos="-14.2829,-6.5675,0.035592" rot="-1.62921e-007,0,0,1" />
+                </bone>
+                <bone name="Reactor_Front" pos="1e-006,-25.0407,7.48167" rot="1,0,0,0">
+                  <bone name="FX_REACTOR_FRONT_RIGHT" pos="11.2288,-5.66585,0.340224" rot="-1.62921e-007,0,0,1" />
+                  <bone name="FX_REACTOR_FRONT_LEFT" pos="-11.2602,-5.66585,0.340224" rot="-1.62921e-007,0,0,1" />
+                </bone>
+                <bone name="Safedoor" pos="-0.024383,-42.4915,1.62258" rot="1,0,0,0" />
+                <bone name="INTERIOR" pos="0,-22.0003,1.97359" rot="1,0,0,0" />
+                <bone name="BONE_Landing_Wheels_Plate_Right_01" pos="7.61552,-34.5041,2.76749" rot="1,0,0,0" />
+                <bone name="BONE_Landing_Wheels_Plate_Right_02" pos="6.398,-34.5035,1.5028" rot="1,0,0,0" />
+                <bone name="BONE_Landing_Gear_Left" pos="-7.06475,-29.1647,2.83052" rot="0.675589,0,-0.737278,0" />
+                <bone name="BONE_Landing_Wheels_Plate_Left_02" pos="-6.37716,-34.5392,1.48709" rot="1,0,0,0" />
+                <bone name="BONE_Landing_Wheels_Plate_Left_01" pos="-7.59523,-34.5399,2.75111" rot="1,0,0,0" />
+                <bone name="Landing_Gear_Front_Plate" pos="0,-3.3,1.58372" rot="0.998119,0.0613138,0,0" />
+                <bone name="NMD_Node02" pos="0.0127,-3.24755,3.9326" rot="1,0,0,0" />
+                <bone name="BONE_Landing_Gear_Right" pos="7.07069,-29.1647,2.82959" rot="0.67559,0,0.737278,0" />
+              </skeleton>
+            </component>
+            <component class="StaticPhysComponent">
+              <resource fileName="graphics\av_Vehicles_Corp\Valkyrie\Valkyrie.hkx" />
+            </component>
+            <component class="GameLogicComponent">
+              <propeller bone="Reactor_Back" />
+              <propeller bone="Reactor_Front" />
+              <propeller bone="Safedoor" />
+              <propeller bone="INTERIOR" />
+              <propeller bone="BONE_Landing_Wheels_Plate_Right_01" />
+              <propeller bone="BONE_Landing_Wheels_Plate_Right_02" />
+              <propeller bone="BONE_Landing_Gear_Left" />
+              <propeller bone="BONE_Landing_Wheels_Plate_Left_02" />
+              <propeller bone="BONE_Landing_Wheels_Plate_Left_01" />
+              <propeller bone="Landing_Gear_Front_Plate" />
+              <propeller bone="NMD_Node02" />
+            </component>
+            <component class="ParticleFXComponent">
+              <FX_REACTOR_BACK_RIGHT psEmitter="" />
+              <FX_REACTOR_BACK_LEFT psEmitter="" />
+              <FX_REACTOR_FRONT_RIGHT psEmitter="" />
+              <FX_REACTOR_FRONT_LEFT psEmitter="" />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="129" type="BinHex">81000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="True" type="BinHex">01</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Valkyrie_01_Body" type="BinHex">56616C6B797269655F30315F426F647900</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Valkyrie_01_Body" type="BinHex">56616C6B797269655F30315F426F647900</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Valkyrie_01_Body" type="BinHex">9B07D1EC</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Valkyrie_01_Body_LOD0" type="BinHex">56616C6B797269655F30315F426F64795F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Valkyrie_01_Body_LOD0" type="BinHex">8DF52821</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="1" type="BinHex">01000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Reactor_Back" type="BinHex">52656163746F725F4261636B00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Reactor_Back" type="BinHex">52656163746F725F4261636B00</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Reactor_Back" type="BinHex">0A0C2894</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Reactor_Back_LOD0" type="BinHex">52656163746F725F4261636B5F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Reactor_Back_LOD0" type="BinHex">8DC7BC47</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="2" type="BinHex">02000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Reactor_Front" type="BinHex">52656163746F725F46726F6E7400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Reactor_Front" type="BinHex">52656163746F725F46726F6E7400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Reactor_Front" type="BinHex">2AC86AA6</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Reactor_Front_LOD0" type="BinHex">52656163746F725F46726F6E745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Reactor_Front_LOD0" type="BinHex">079C3CE1</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Safedoor" type="BinHex">53616665646F6F7200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Safedoor" type="BinHex">53616665646F6F7200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Safedoor" type="BinHex">56F394B7</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Safedoor_LOD0" type="BinHex">53616665646F6F725F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Safedoor_LOD0" type="BinHex">A393B716</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="4" type="BinHex">04000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="INTERIOR" type="BinHex">494E544552494F5200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="INTERIOR" type="BinHex">494E544552494F5200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="INTERIOR" type="BinHex">278703AC</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="INTERIOR_LOD0" type="BinHex">494E544552494F525F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="INTERIOR_LOD0" type="BinHex">F8083267</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="5" type="BinHex">05000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="BONE_Landing_Wheels_Plate_Right_01" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F52696768745F303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="BONE_Landing_Wheels_Plate_Right_01" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F52696768745F303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="BONE_Landing_Wheels_Plate_Right_01" type="BinHex">E1989415</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="BONE_Landing_Wheels_Plate_Right_01_LOD0" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F52696768745F30315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="BONE_Landing_Wheels_Plate_Right_01_LOD0" type="BinHex">CEE946C4</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="6" type="BinHex">06000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="BONE_Landing_Wheels_Plate_Right_02" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F52696768745F303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="BONE_Landing_Wheels_Plate_Right_02" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F52696768745F303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="BONE_Landing_Wheels_Plate_Right_02" type="BinHex">5BC99D8C</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="BONE_Landing_Wheels_Plate_Right_02_LOD0" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F52696768745F30325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="BONE_Landing_Wheels_Plate_Right_02_LOD0" type="BinHex">609BD242</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="7" type="BinHex">07000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="BONE_Landing_Gear_Left" type="BinHex">424F4E455F4C616E64696E675F476561725F4C65667400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="BONE_Landing_Gear_Left" type="BinHex">424F4E455F4C616E64696E675F476561725F4C65667400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="BONE_Landing_Gear_Left" type="BinHex">98022FDD</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="BONE_Landing_Gear_Left_LOD0" type="BinHex">424F4E455F4C616E64696E675F476561725F4C6566745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="BONE_Landing_Gear_Left_LOD0" type="BinHex">07265128</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="8" type="BinHex">08000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="BONE_Landing_Wheels_Plate_Left_02" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F4C6566745F303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="BONE_Landing_Wheels_Plate_Left_02" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F4C6566745F303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="BONE_Landing_Wheels_Plate_Left_02" type="BinHex">7081201E</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="BONE_Landing_Wheels_Plate_Left_02_LOD0" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F4C6566745F30325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="BONE_Landing_Wheels_Plate_Left_02_LOD0" type="BinHex">7C709224</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="9" type="BinHex">09000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="BONE_Landing_Wheels_Plate_Left_01" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F4C6566745F303100</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="BONE_Landing_Wheels_Plate_Left_01" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F4C6566745F303100</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="BONE_Landing_Wheels_Plate_Left_01" type="BinHex">CAD02987</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="BONE_Landing_Wheels_Plate_Left_01_LOD0" type="BinHex">424F4E455F4C616E64696E675F576865656C735F506C6174655F4C6566745F30315F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="BONE_Landing_Wheels_Plate_Left_01_LOD0" type="BinHex">D20206A2</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="10" type="BinHex">0A000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Landing_Gear_Front_Plate" type="BinHex">4C616E64696E675F476561725F46726F6E745F506C61746500</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Landing_Gear_Front_Plate" type="BinHex">4C616E64696E675F476561725F46726F6E745F506C61746500</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Landing_Gear_Front_Plate" type="BinHex">92FC13C6</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Landing_Gear_Front_Plate_LOD0" type="BinHex">4C616E64696E675F476561725F46726F6E745F506C6174655F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Landing_Gear_Front_Plate_LOD0" type="BinHex">5C881F80</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="11" type="BinHex">0B000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="NMD_Node02" type="BinHex">4E4D445F4E6F6465303200</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="NMD_Node02" type="BinHex">4E4D445F4E6F6465303200</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="NMD_Node02" type="BinHex">106B97F7</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="NMD_Node02_LOD0" type="BinHex">4E4D445F4E6F646530325F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="NMD_Node02_LOD0" type="BinHex">5D06CF4B</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="12" type="BinHex">0C000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.xbg" type="BinHex">C9DCDBD4</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="BONE_Landing_Gear_Right" type="BinHex">424F4E455F4C616E64696E675F476561725F526967687400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="BONE_Landing_Gear_Right" type="BinHex">424F4E455F4C616E64696E675F476561725F526967687400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="BONE_Landing_Gear_Right" type="BinHex">EDCFD009</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="BONE_Landing_Gear_Right_LOD0" type="BinHex">424F4E455F4C616E64696E675F476561725F52696768745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="BONE_Landing_Gear_Right_LOD0" type="BinHex">954B88C6</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="E39B8041" name="CAvatarSkinComponent">
+        <field hash="B54515E2" name="hidCreateCopies" type="BinHex">01</field>
+        <object hash="0FA60B61" name="MaterialOverrides">
+          <object hash="85C817C3" name="Material">
+            <field hash="DD2929AC" type="BinHex">00</field>
+            <field hash="E1C0931D" name="fileOriginalMaterial" type="BinHex">FFFFFFFF</field>
+            <field hash="148E2F84" type="BinHex">00</field>
+            <field hash="28679535" name="fileMaterialOverride" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+      </object>
+      <object hash="037FB709" name="CStaticPhysComponent">
+        <field hash="527E7674" name="text_hidResourceId" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie.hkx" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269652E686B7800</field>
+        <field hash="2E50EB85" name="hidResourceId" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie.hkx" type="BinHex">05C93794</field>
+        <field hash="5BABAAC6" name="bUseMaxTerrainSlope" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CFA0AA41" name="bIgnoreInExplosions" value-Boolean="False" type="BinHex">00</field>
+        <field hash="0C838A6E" name="bAnimateable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="387811D0" name="bLargeEntity" value-Boolean="False" type="BinHex">00</field>
+        <field hash="A8699EF0" name="hidResourceIndex" value-Int32="0" type="BinHex">00000000</field>
+        <object hash="78CF3E56" name="EntityPickup">
+          <field hash="743BADAE" name="bCanPickUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="7EC43CB1" name="bCanBePickedUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="4CA7A893" name="fPickupCollisionRadius" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="829623C6" name="fPickupCollisionHeight" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="AD22F2F7" type="BinHex">00</field>
+          <field hash="011D12F4" name="PickupAttachBone" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="A1FBD5FB" name="StaticParams">
+          <field hash="A3DFDD6E" name="bNeedExplosionInfo" value-Boolean="False" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="F62231F2" name="CAnimationComponent">
+        <field hash="F9F2D5F4" name="text_fileSkeleton" value-String="graphics\av_vehicles_corp\valkyrie\valkyrie_ref.skeleton" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C76616C6B797269655C76616C6B797269655F7265662E736B656C65746F6E00</field>
+        <field hash="0B80933A" name="fileSkeleton" value-ComputeHash32="graphics\av_vehicles_corp\valkyrie\valkyrie_ref.skeleton" type="BinHex">C7D7D13A</field>
+        <field hash="E0AAD6E5" name="text_fileFacialFile" value-String="" type="BinHex">00</field>
+        <field hash="2A6C3AF2" name="fileFacialFile" type="BinHex">FFFFFFFF</field>
+        <field hash="BB681C98" name="selSkeletonType" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="C77E6465" name="sAnimPackage" type="BinHex">00</field>
+        <field hash="C22DBBC8" name="sPartName" value-String="valkyrie" type="BinHex">76616C6B7972696500</field>
+        <field hash="7B1B17E6" name="bForceBestQuality" value-Boolean="False" type="BinHex">00</field>
+        <field hash="D32F71E1" name="bDisableInterpolation" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9CB5A0AD" name="fCycleRandomTime" value-Float32="0.5" type="BinHex">0000003F</field>
+        <field hash="FE97B45D" name="text_InitialMoveState" value-String="" type="BinHex">00</field>
+        <field hash="52A8545E" name="InitialMoveState" type="BinHex">FFFFFFFF</field>
+        <object hash="FBEB7EA6" name="MercKitFacialFiles">
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="" type="BinHex">00</field>
+            <field hash="BCB3FA35" name="sHeadTag" type="BinHex">FFFFFFFF</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="" type="BinHex">00</field>
+            <field hash="0AD726A1" name="fileFacialActor" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="C0500C11" name="enumSkeletonType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar/Navi" type="BinHex">4176617461722F4E61766900</field>
+          </object>
+        </object>
+      </object>
+      <object hash="19EC7842" name="CAnimDrivenComponent" />
+      <object hash="06956112" name="CParticleEventListenerComponent" />
+    </object>
+  </object>
+</object>
