@@ -1,0 +1,1009 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="MainCharacter.PawnPaperDollCorp" type="BinHex">4D61696E4368617261637465722E5061776E5061706572446F6C6C436F727000</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="player.MainCharacter.PawnPaperDollCorp" type="BinHex">706C617965722E4D61696E4368617261637465722E5061776E5061706572446F6C6C436F727000</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="1381" type="BinHex">6505000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="5" type="BinHex">05000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\av_characters\corp\_kit\corp_m.xml" type="BinHex">67726170686963735C61765F636861726163746572735C636F72705C5F6B69745C636F72705F6D2E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\av_characters\corp\_kit\corp_m.xml" type="BinHex">5D4AB9BD</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicKitComponent">
+              <slot name="HEAD">
+                <part meshName="Corp_M_Head_01_Quaridge" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_01_Quaridge.glm" id="vgault-P-2008100761520476">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="head01" criteria="required" />
+                  <facial tag="head01" />
+                </part>
+                <part meshName="Corp_M_Head_06_Xiang" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_06_Xiang.glm" id="cseaut-P-2008120141489638">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="asian" />
+                  <criteria tag="head06" criteria="required" />
+                  <facial tag="head06" />
+                </part>
+                <part meshName="Corp_M_Head_07_Seth" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_07_Seth.glm" id="dgiraud-P-0312200840144682">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="black" />
+                  <tag name="head07" />
+                  <criteria tag="head01" criteria="exclude" />
+                  <criteria tag="head06" criteria="exclude" />
+                  <criteria tag="head08" criteria="exclude" />
+                  <criteria tag="head11" criteria="exclude" />
+                  <criteria tag="head14" criteria="exclude" />
+                  <criteria tag="head15" criteria="exclude" />
+                  <criteria tag="head16" criteria="exclude" />
+                  <criteria tag="head17" criteria="exclude" />
+                  <criteria tag="head18" criteria="exclude" />
+                  <criteria tag="head19" criteria="exclude" />
+                  <criteria tag="head20" criteria="exclude" />
+                  <criteria tag="head12" criteria="exclude" />
+                  <facial tag="head07" />
+                </part>
+                <part meshName="Corp_M_Head_12_James" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_12_James.glm" id="dgiraud-P-1512200852200629">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="head12" criteria="required" />
+                  <facial tag="head12" />
+                </part>
+                <part meshName="Corp_M_Head_11_Technician" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_11_Technician.glm" id="vgault-P-2008120558968355">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="head11" criteria="required" />
+                  <facial tag="head11" />
+                </part>
+                <part meshName="Corp_M_Head_14_Jin" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_14_Jin.glm" id="vgault-P-2009031854528950">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="asian" />
+                  <criteria tag="head14" criteria="required" />
+                  <facial tag="head14" />
+                </part>
+                <part meshName="Corp_M_Head_15_Danny" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_15_Danny.glm" id="vgault-P-2009031854552764">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="latino" />
+                  <criteria tag="head15" criteria="required" />
+                  <facial tag="head15" />
+                </part>
+                <part meshName="Corp_M_Head_16_Tao" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_16_Tao.glm" id="vgault-P-2009031854569093">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="asian" />
+                  <criteria tag="head16" criteria="required" />
+                  <facial tag="head16" />
+                </part>
+                <part meshName="Corp_M_Head_17_Kenny" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_17_Kenny.glm" id="dgiraud-P-0603200950343739">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="black" />
+                  <criteria tag="head17" criteria="required" />
+                  <facial tag="head17" />
+                </part>
+                <part meshName="Corp_M_Head_18_Christian" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_18_Christian.glm" id="vgault-P-2009032458361305">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="head18" criteria="required" />
+                  <facial tag="head18" />
+                </part>
+                <part meshName="Corp_M_Head_19_Benji" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_19_Benji.glm" id="vgault-P-2009040141195278">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="latino" />
+                  <criteria tag="head19" criteria="required" />
+                  <facial tag="head19" />
+                </part>
+                <part meshName="Corp_M_Head_20_Djimon" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_20_Djimon.glm" id="ythouin-P-2009041752763774">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="black" />
+                  <criteria tag="head20" criteria="required" />
+                  <facial tag="head20" />
+                </part>
+                <part meshName="Corp_M_Head_08_Jose" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Head_08_Jose.glm" id="cseaut-P-2008112652531918">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="latino" />
+                  <criteria tag="head08" criteria="required" />
+                  <facial tag="head08" />
+                </part>
+              </slot>
+              <slot name="SHIRT">
+                <part meshName="Corp_M_Mid_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Mid_01.glm" id="vgault-P-2008100761293672">
+                  <weight value="1" />
+                  <colors overwrite="0" library="level00" />
+                  <textures overwrite="0" library="" />
+                  <tag name="noaccessory" />
+                  <tag name="nogear" />
+                  <tag name="mid01" />
+                  <tag name="mid00" />
+                  <criteria tag="mid02" criteria="exclude" />
+                  <criteria tag="mid03" criteria="exclude" />
+                  <criteria tag="mid04" criteria="exclude" />
+                  <criteria tag="mid05" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid07" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid02b" criteria="exclude" />
+                  <criteria tag="mid09" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                  <criteria tag="mid11" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_Mid_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Mid_02.glm" id="vgault-P-2008102361858073">
+                  <weight value="1" />
+                  <colors overwrite="0" library="level01" />
+                  <textures overwrite="0" library="" />
+                  <tag name="nogear" />
+                  <tag name="noaccessory" />
+                  <criteria tag="mid00" criteria="exclude" />
+                  <criteria tag="mid01" criteria="exclude" />
+                  <criteria tag="mid04" criteria="exclude" />
+                  <criteria tag="mid05" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid07" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid09" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                  <criteria tag="mid11" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_Mid_04" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Mid_04.glm" id="vgault-P-2008110438955293">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="noaccessory" />
+                  <criteria tag="mid04" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Mid_05" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Mid_05.glm" id="vgault-P-2008122341045750">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="nogear" />
+                  <tag name="noaccessory" />
+                  <criteria tag="mid00" criteria="exclude" />
+                  <criteria tag="mid01" criteria="exclude" />
+                  <criteria tag="mid02" criteria="exclude" />
+                  <criteria tag="mid03" criteria="exclude" />
+                  <criteria tag="mid04" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid07" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid02b" criteria="exclude" />
+                  <criteria tag="mid09" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_Mid_06" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Mid_06.glm" id="vgault-P-2009012849622198">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="noaccessory" />
+                  <criteria tag="mid06" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Mid_07" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Mid_07.glm" id="vgault-P-2009022467740259">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid07" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Mid_08" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Mid_08.glm" id="vgault-P-2009031761277746">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid08" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Mid_09" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Mid_09.glm" id="vgault-P-2009081266255882">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid09" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Mid_10" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Mid_10.glm" id="vgault-P-2009081348988589">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid10" criteria="required" />
+                </part>
+              </slot>
+              <slot name="ARMS">
+                <part meshName="Corp_M_Arms_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Arms_01.glm" id="vgault-P-2008111264202891">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid03" criteria="exclude" />
+                  <criteria tag="mid05" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid07" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid02b" criteria="exclude" />
+                  <criteria tag="mid09" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                  <criteria tag="mid11" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_Arms_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Arms_02.glm" id="vgault-P-2008110438955744">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid03" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Arms_03" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Arms_03.glm" id="vgault-P-2009071052889713">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="mid02b" />
+                  <criteria tag="mid00" criteria="exclude" />
+                  <criteria tag="mid01" criteria="exclude" />
+                  <criteria tag="mid02" criteria="exclude" />
+                  <criteria tag="mid03" criteria="exclude" />
+                  <criteria tag="mid04" criteria="exclude" />
+                  <criteria tag="mid05" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid09" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                  <criteria tag="mid11" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_Arms_05" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Arms_05.glm" id="vgault-P-2009081451521562">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid00" criteria="exclude" />
+                  <criteria tag="mid01" criteria="exclude" />
+                  <criteria tag="mid02" criteria="exclude" />
+                  <criteria tag="mid03" criteria="exclude" />
+                  <criteria tag="mid04" criteria="exclude" />
+                  <criteria tag="mid05" criteria="exclude" />
+                  <criteria tag="mid06" criteria="exclude" />
+                  <criteria tag="mid07" criteria="exclude" />
+                  <criteria tag="mid08" criteria="exclude" />
+                  <criteria tag="mid10" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_Arms_04" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Arms_04.glm" id="vgault-P-2009081451804425">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid05" criteria="required" />
+                </part>
+              </slot>
+              <slot name="PANTS">
+                <part meshName="Corp_M_Low_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Low_01.glm" id="vgault-P-2008100761371955">
+                  <weight value="1" />
+                  <colors overwrite="0" library="level00" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low03" criteria="exclude" />
+                  <criteria tag="low05" criteria="exclude" />
+                  <criteria tag="low04" criteria="exclude" />
+                  <criteria tag="low06" criteria="exclude" />
+                  <criteria tag="low07" criteria="exclude" />
+                  <criteria tag="low08" criteria="exclude" />
+                  <criteria tag="low09" criteria="exclude" />
+                  <criteria tag="low10" criteria="exclude" />
+                  <criteria tag="low11" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_Low_03" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Low_03.glm" id="vgault-P-2008110438956710">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low04" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Low_05" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Low_05.glm" id="vgault-P-2009012849622557">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low06" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Low_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Low_02.glm" id="vgault-P-2008102361967627">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low03" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Low_04" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Low_04.glm" id="vgault-P-2008122341046765">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low05" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Low_06" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Low_06.glm" id="vgault-P-2009022548230345">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low07" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Low_07" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Low_07.glm" id="vgault-P-2009031761260312">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low08" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Low_09" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Low_09.glm" id="vgault-P-2009081348956573">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low10" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Low_08" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Low_08.glm" id="vgault-P-2009081266239414">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low09" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Low_10" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Low_10.glm" id="vgault-P-2009081449478548">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low11" criteria="required" />
+                </part>
+              </slot>
+              <slot name="LEGS">
+                <part meshName="Corp_LastLvl" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_LastLvl.glm" id="vgault-P-2009031940761059">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                </part>
+              </slot>
+              <slot name="SHOES">
+                <part meshName="Corp_arrow" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_arrow.glm" id="vgault-P-2009052866171404">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="arrow" criteria="required" />
+                </part>
+                <part meshName="Dummy_Skin_Navarone" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Dummy_Skin_Navarone.glm" id="vgault-P-2009070260992923">
+                  <weight value="1" />
+                  <colors overwrite="1" library="navarone" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="navarone" criteria="required" />
+                </part>
+              </slot>
+              <slot name="HAT">
+                <part meshName="Corp_M_High_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_High_01.glm" id="vgault-P-2008100761755676">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="high03" criteria="required" />
+                </part>
+                <part meshName="Corp_M_High_03" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_High_03.glm" id="vgault-P-2009012849621370">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask01" />
+                  <criteria tag="high06" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_High_04" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_High_04.glm" id="vgault-P-2009020559412796">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask02" />
+                  <criteria tag="high02" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_High_05" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_High_05.glm" id="vgault-P-2009022542229733">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask01" />
+                  <criteria tag="high07" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_High_06" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_High_06.glm" id="vgault-P-2009031761245431">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask03" />
+                  <criteria tag="high08" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_High_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_High_02.glm" id="vgault-P-2008110438956196">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="high00" criteria="exclude" />
+                  <criteria tag="high01" criteria="exclude" />
+                  <criteria tag="high02" criteria="exclude" />
+                  <criteria tag="high03" criteria="exclude" />
+                  <criteria tag="high06" criteria="exclude" />
+                  <criteria tag="high07" criteria="exclude" />
+                  <criteria tag="high08" criteria="exclude" />
+                  <criteria tag="high02b" criteria="exclude" />
+                  <criteria tag="high09" criteria="exclude" />
+                  <criteria tag="high10" criteria="exclude" />
+                  <criteria tag="high11" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_High_07" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_High_07.glm" id="vgault-P-2009071443355873">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="high02b" criteria="required" />
+                </part>
+                <part meshName="Corp_M_High_09" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_High_09.glm" id="vgault-P-2009081349016386">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask01" />
+                  <criteria tag="high10" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_High_08" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_High_08.glm" id="vgault-P-2009081371966770">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask01" />
+                  <criteria tag="high09" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_High_10" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_High_10.glm" id="vgault-P-2009081449459219">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask03" />
+                  <criteria tag="high11" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+              </slot>
+              <slot name="GLASSES">
+                <part meshName="Corp_M_Mask_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Mask_02.glm" id="vgault-P-2008122341046265">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask03" />
+                  <criteria tag="high05" criteria="required" />
+                  <criteria tag="nomask" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_Mask_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Mask_01.glm" id="vgault-P-2009050665061414">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <tag name="voicemask02" />
+                  <criteria tag="high05" criteria="exclude" />
+                  <criteria tag="high00" criteria="exclude" />
+                  <criteria tag="high06" criteria="exclude" />
+                  <criteria tag="high07" criteria="exclude" />
+                  <criteria tag="nomask" criteria="exclude" />
+                  <criteria tag="high08" criteria="exclude" />
+                  <criteria tag="high02" criteria="exclude" />
+                  <criteria tag="high09" criteria="exclude" />
+                  <criteria tag="high10" criteria="exclude" />
+                  <criteria tag="high11" criteria="exclude" />
+                </part>
+              </slot>
+              <slot name="GEAR">
+                <part meshName="Corp_M_MidGear_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_MidGear_02.glm" id="vgault-P-2009071458903659">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid02b" criteria="required" />
+                  <criteria tag="mid07" criteria="exclude" />
+                </part>
+                <part meshName="Corp_M_MidGear_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_MidGear_01.glm" id="vgault-P-2009071460323095">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mid02" criteria="required" />
+                </part>
+              </slot>
+              <slot name="ACCESSORY">
+                <part meshName="Corp_M_Gear_01" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Gear_01.glm" id="vgault-P-2008101051325604">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low02" criteria="required" />
+                </part>
+                <part meshName="Corp_M_Gear_02" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Corp_M_Gear_02.glm" id="vgault-P-2009071443206681">
+                  <weight value="1" />
+                  <colors overwrite="1" library="level01" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="low02b" criteria="required" />
+                </part>
+              </slot>
+              <slot name="BEARD">
+                <part meshName="Dummy_Skin_Asian" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Dummy_Skin_Asian.glm" id="vgault-P-2008121149545927">
+                  <weight value="1" />
+                  <colors overwrite="1" library="Asianskintone" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="asian" criteria="required" />
+                </part>
+                <part meshName="Dummy_Skin_Black" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Dummy_Skin_Black.glm" id="vgault-P-2008121149546427">
+                  <weight value="1" />
+                  <colors overwrite="1" library="BlackSkintone" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="black" criteria="required" />
+                </part>
+                <part meshName="Dummy_Skin_Latino" fileName="graphics\av_Characters\Corp\_Kit\Corp_M\Dummy_Skin_Latino.glm" id="vgault-P-2008121149546911">
+                  <weight value="1" />
+                  <colors overwrite="1" library="Latinoskintone" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="latino" criteria="required" />
+                </part>
+              </slot>
+              <resource fileName="graphics\av_Characters\Corp\_Kit\Corp_M.xbg" />
+              <colors>
+                <library name="Asianskintone">
+                  <color color1="3625054" color2="7102295" />
+                </library>
+                <library name="BlackSkintone">
+                  <color color1="2370620" color2="4156289" />
+                </library>
+                <library name="Latinoskintone">
+                  <color color1="3819866" color2="3487029" />
+                </library>
+                <library name="level01">
+                  <color color1="4741948" color2="4737096" />
+                </library>
+                <library name="navarone">
+                  <color color1="11630145" color2="2105376" />
+                </library>
+              </colors>
+              <textures />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="D1E227CB" name="CGraphicKitComponent">
+        <field hash="401B786C" name="bRadomize" value-Boolean="False" type="BinHex">00</field>
+        <field hash="56185012" name="hidOverwriteMaterials" type="BinHex">01</field>
+        <object hash="CF8E3B18" name="Tags">
+          <object hash="89A264BE" name="SpecializationTag">
+            <field hash="9B35862A" name="text_sTag" value-String="" type="BinHex">00</field>
+            <field hash="9C4BF81F" name="sTag" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="A3DC894F" name="PartOverwrite">
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008111264202891" type="BinHex">766761756C742D502D3230303831313132363432303238393100</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008111264202891" type="BinHex">4646401D</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008100761371955" type="BinHex">766761756C742D502D3230303831303037363133373139353500</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008100761371955" type="BinHex">29D970EA</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008100761293672" type="BinHex">766761756C742D502D3230303831303037363132393336373200</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008100761293672" type="BinHex">7ACC1B93</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="dgiraud-P-1512200852200629" type="BinHex">646769726175642D502D3135313232303038353232303036323900</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="dgiraud-P-1512200852200629" type="BinHex">30DC9BE7</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2009031940761059" type="BinHex">766761756C742D502D3230303930333139343037363130353900</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2009031940761059" type="BinHex">A58A6556</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008110438956196" type="BinHex">766761756C742D502D3230303831313034333839353631393600</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008110438956196" type="BinHex">2A7628B2</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2009050665061414" type="BinHex">766761756C742D502D3230303930353036363530363134313400</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2009050665061414" type="BinHex">0EED679E</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="" type="BinHex">00</field>
+            <field hash="DBDA2EF7" name="PartID" type="BinHex">FFFFFFFF</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="1" type="BinHex">01000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="True" type="BinHex">01</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="True" type="BinHex">01</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="" type="BinHex">00</field>
+          <field hash="09D9B64E" name="objModel" type="BinHex">FFFFFFFF</field>
+          <field hash="3D5AC03A" name="hidMeshName" type="BinHex">00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="" type="BinHex">00</field>
+          <field hash="F1E66E05" name="hidNodeName" type="BinHex">FFFFFFFF</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="" type="BinHex">00</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" type="BinHex">FFFFFFFF</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="F62231F2" name="CAnimationComponent">
+        <field hash="F9F2D5F4" name="text_fileSkeleton" value-String="graphics\av_characters\corp\original_template\pelvis_ref.skeleton" type="BinHex">67726170686963735C61765F636861726163746572735C636F72705C6F726967696E616C5F74656D706C6174655C70656C7669735F7265662E736B656C65746F6E00</field>
+        <field hash="0B80933A" name="fileSkeleton" value-ComputeHash32="graphics\av_characters\corp\original_template\pelvis_ref.skeleton" type="BinHex">088B2DCC</field>
+        <field hash="E0AAD6E5" name="text_fileFacialFile" value-String="graphics\av_characters\_common\facial\corp_m_head_01_quaridge_lod0.lfa" type="BinHex">67726170686963735C61765F636861726163746572735C5F636F6D6D6F6E5C66616369616C5C636F72705F6D5F686561645F30315F71756172696467655F6C6F64302E6C666100</field>
+        <field hash="2A6C3AF2" name="fileFacialFile" value-ComputeHash32="graphics\av_characters\_common\facial\corp_m_head_01_quaridge_lod0.lfa" type="BinHex">3EEEF1BC</field>
+        <field hash="BB681C98" name="selSkeletonType" value-Enum="1" type="BinHex">01000000</field>
+        <field hash="C77E6465" name="sAnimPackage" type="BinHex">00</field>
+        <field hash="C22DBBC8" name="sPartName" type="BinHex">00</field>
+        <field hash="7B1B17E6" name="bForceBestQuality" value-Boolean="False" type="BinHex">00</field>
+        <field hash="D32F71E1" name="bDisableInterpolation" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9CB5A0AD" name="fCycleRandomTime" value-Float32="0.5" type="BinHex">0000003F</field>
+        <field hash="FE97B45D" name="text_InitialMoveState" value-String="" type="BinHex">00</field>
+        <field hash="52A8545E" name="InitialMoveState" type="BinHex">FFFFFFFF</field>
+        <object hash="FBEB7EA6" name="MercKitFacialFiles">
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="" type="BinHex">00</field>
+            <field hash="BCB3FA35" name="sHeadTag" type="BinHex">FFFFFFFF</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="" type="BinHex">00</field>
+            <field hash="0AD726A1" name="fileFacialActor" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="C0500C11" name="enumSkeletonType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar/Navi" type="BinHex">4176617461722F4E61766900</field>
+          </object>
+        </object>
+      </object>
+      <object hash="911DD85F" name="CPawn">
+        <field hash="731995FE" name="bIsAI" value-Boolean="False" type="BinHex">00</field>
+        <field hash="E247A953" value-String="scripts\game\objects\pawn\statemachine\paperdoll_state_machines.xml" type="BinHex">736372697074735C67616D655C6F626A656374735C7061776E5C73746174656D616368696E655C7061706572646F6C6C5F73746174655F6D616368696E65732E786D6C00</field>
+        <field hash="4E784950" name="fileStateMachine" value-ComputeHash32="scripts\game\objects\pawn\statemachine\paperdoll_state_machines.xml" type="BinHex">4D995257</field>
+        <field hash="6FAA9CAC" name="Usable" type="BinHex">00</field>
+        <field hash="E800C721" name="bIgnoreSTP" value-Boolean="False" type="BinHex">00</field>
+        <field hash="8A37EFA0" name="bUseFallHeight" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CA3D3C70" name="JustSpawnedDelay" value-Float32="3" type="BinHex">00004040</field>
+        <field hash="B4CDA6CA" name="JustSpawnedUnmuteDelay" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="AC6D4E14" name="bSuperJumpEnabled" value-Boolean="False" type="BinHex">00</field>
+        <field hash="F182FB47" name="fSuperJumpMinSpeed" value-Float32="5" type="BinHex">0000A040</field>
+        <field hash="1BB6F62F" name="fDodgeCoolDownDuration" value-Float32="1.5" type="BinHex">0000C03F</field>
+        <field hash="9319A967" name="fDodgeCoolDownDurationCombat" value-Float32="0" type="BinHex">00000000</field>
+        <object hash="CDC489B3" name="sSupportedSTPSubtypes">
+          <field hash="10CA06AB" name="hidSize" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="02CFE006" type="BinHex">00</field>
+          <field hash="01AF68F3" type="BinHex">FFFFFFFF</field>
+          <field hash="75C8D090" type="BinHex">00</field>
+          <field hash="76A85865" type="BinHex">FFFFFFFF</field>
+          <field hash="ECC1812A" type="BinHex">00</field>
+          <field hash="EFA109DF" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="7B9AA48C" name="Body">
+          <field hash="04EFD8BF" name="fJumpHeight" value-Float32="1.2" type="BinHex">9A99993F</field>
+          <field hash="13016A51" name="fJumpHeightExhausted" value-Float32="0.4" type="BinHex">CDCCCC3E</field>
+          <field hash="0C0145D3" name="fSuperJumpHeight" value-Float32="6" type="BinHex">0000C040</field>
+          <field hash="C445724A" name="fJumpDelay" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="47E53307" name="fSuperJumpDelay" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="7B6AB510" name="fGravity" value-Float32="-9.8" type="BinHex">CDCC1CC1</field>
+          <field hash="E3F0C8DF" name="fWalkingMaxSpeed" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="90158390" name="fWalkingMaxSpeedCrouch" value-Float32="3" type="BinHex">00004040</field>
+          <field hash="8F1647CE" name="fWalkingInWaterSpeedFactor" value-Float32="0.6" type="BinHex">9A99193F</field>
+          <field hash="EDCEEFDC" name="fSuperJumpSpeedFactor" value-Float32="2" type="BinHex">00000040</field>
+          <field hash="217F5FE1" name="fScanningSpeedFactor" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+          <field hash="2460B137" name="fWalkingAcceleration" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="54760C64" name="fWalkingDeceleration" value-Float32="10" type="BinHex">00002041</field>
+          <field hash="A7D4D5DD" name="archSprintCurve" type="BinHex">00</field>
+          <field hash="D0FABA42" name="fSprintingDeceleration" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="74003D8F" name="fClimbSpeed" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="C5D19B4B" name="fWalkInWaterMinDepth" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="03E61B77" name="fSwimmingMinDepth" value-Float32="1.56" type="BinHex">14AEC73F</field>
+          <field hash="10035609" name="fSwimmingMaxSpeed" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="CBF7D350" name="fSwimmingAcceleration" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="BBE16E03" name="fSwimmingDeceleration" value-Float32="10" type="BinHex">00002041</field>
+          <field hash="014B5783" name="fDivingMaxSpeed" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="7D79652A" name="fDivingSpeed" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="71AD2EED" name="fRisingSpeed" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="58805B6E" name="fSprintingTurnModifier" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="03D186AE" name="fSprintingStrafeLimit" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="D4F9BA6A" name="SwimmingClimbMinHeight" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="0312082B" name="SwimmingClimbMaxHeight" value-Float32="1.6" type="BinHex">CDCCCC3F</field>
+        </object>
+        <object hash="D29D1346" name="Skills" />
+        <object hash="33DCC895" name="Inventory">
+          <field hash="8C965C28" name="text_packInventoryPack" value-String="" type="BinHex">00</field>
+          <field hash="15333272" name="packInventoryPack" type="BinHex">FFFFFFFF</field>
+          <field hash="3E2F4A45" name="bUnlimitedAmmo" value-Boolean="False" type="BinHex">00</field>
+          <field hash="E941BDB7" name="bAutoReload" value-Boolean="False" type="BinHex">00</field>
+          <field hash="B5AEE215" name="bAutoDraw" value-Boolean="False" type="BinHex">00</field>
+          <field hash="130CDED8" name="text_sInitialWeaponCategory" value-String="" type="BinHex">00</field>
+          <field hash="C566275A" name="sInitialWeaponCategory" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="1D238520" name="IdleCycleBreaker">
+          <field hash="B1611D35" name="fMinTime" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="B292FD7A" name="fMaxTime" value-Float32="0" type="BinHex">00000000</field>
+        </object>
+      </object>
+      <object hash="95E5CC77" name="AvatarCharacterSheet_Player">
+        <field hash="8A13CD27" name="selGender" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="C4B45F53" name="selPawnType" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="301B8DF1" name="bGivesNoXp" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CF77E1ED" name="bGivesNoEp" value-Boolean="False" type="BinHex">00</field>
+        <field hash="F8579499" name="iEPRewardOverride" value-Int32="-1" type="BinHex">FFFFFFFF</field>
+        <field hash="BB4D0B84" name="bUntargetable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="65B55C57" name="bShowHealthWhenTargeted" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4C91BA93" name="bShowDamageTaken" value-Boolean="True" type="BinHex">01</field>
+        <field hash="400A642A" name="bImmuneToAOEEffects" value-Boolean="False" type="BinHex">00</field>
+        <field hash="804674C8" name="bImmuneToFire" value-Boolean="False" type="BinHex">00</field>
+        <field hash="71E85D91" name="bCanFireStick" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9D9F959E" name="sMissionEventOnPlayerKill" type="BinHex">00</field>
+        <field hash="27EA430B" type="BinHex">00</field>
+        <field hash="EC299A11" name="sCompletionEventOnPlayerKill" type="BinHex">FFFFFFFF</field>
+        <field hash="37110E0D" type="BinHex">00</field>
+        <field hash="CAB834AE" name="sCompletionEvent2OnPlayerKill" type="BinHex">FFFFFFFF</field>
+        <field hash="84FE38C1" name="sMissionEventOnDeath" type="BinHex">00</field>
+        <field hash="DC476D19" type="BinHex">00</field>
+        <field hash="C9CBF4EA" name="sPedia" type="BinHex">FFFFFFFF</field>
+        <field hash="CF6B8836" name="fPandorapediaScanDuration" value-Float32="3" type="BinHex">00004040</field>
+        <field hash="B6C2941D" name="DeathRecoveryItemTotalValue" value-Int32="100" type="BinHex">64000000</field>
+        <field hash="5546CEF1" name="DeathRecoveryItem1Value" value-Int32="10" type="BinHex">0A000000</field>
+        <field hash="D3D2BC5F" name="DeathRecoveryItem2Value" value-Int32="20" type="BinHex">14000000</field>
+        <field hash="188E6FFA" name="DeathRecoveryItem3Value" value-Int32="50" type="BinHex">32000000</field>
+        <field hash="AEA4A1CC" name="RecoverPercentage" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="7F511B98" name="archHealthRegenCurve" type="BinHex">00</field>
+        <field hash="EC5AD3DD" name="HealthRegenDamageDelay" value-Float32="3" type="BinHex">00004040</field>
+        <field hash="04304F71" name="fHurtRecoveryDelay" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="8C23F758" type="BinHex">00</field>
+        <field hash="8F437FAD" name="mixBriefingMixingPreset" type="BinHex">FFFFFFFF</field>
+        <field hash="6FC3C2AC" name="bHealthUseAdditiveFX" value-Boolean="False" type="BinHex">00</field>
+        <field hash="90AF88CD" name="bHealthUseMovieSystem" value-Boolean="False" type="BinHex">00</field>
+        <field hash="F5BDD3D4" name="fLowHealthLevel1Percentage" value-Float32="0.4" type="BinHex">CDCCCC3E</field>
+        <field hash="6C5FB5D5" name="fLowHealthLevel2Percentage" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="ADD16A15" name="fLowHealthLevel3Percentage" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="84EA7F96" name="fLowHealthLevel4Percentage" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="07843507" name="LowHealthLevel1FX" value-String="lowhealth" type="BinHex">6C6F776865616C746800</field>
+        <field hash="05C28B5E" name="LowHealthLevel2FX" type="BinHex">00</field>
+        <field hash="0400E169" name="LowHealthLevel3FX" type="BinHex">00</field>
+        <field hash="014FF7EC" name="LowHealthLevel4FX" type="BinHex">00</field>
+        <field hash="92252AF0" type="BinHex">00</field>
+        <field hash="DD077198" name="mixLowHealthLevel1MixingPreset" type="BinHex">FFFFFFFF</field>
+        <field hash="2FEF463E" type="BinHex">00</field>
+        <field hash="60CD1D56" name="mixLowHealthLevel2MixingPreset" type="BinHex">FFFFFFFF</field>
+        <field hash="F2799FBB" type="BinHex">00</field>
+        <field hash="BD5BC4D3" name="mixLowHealthLevel3MixingPreset" type="BinHex">FFFFFFFF</field>
+        <field hash="8F0A99E3" type="BinHex">00</field>
+        <field hash="C028C28B" name="mixLowHealthLevel4MixingPreset" type="BinHex">FFFFFFFF</field>
+        <field hash="DCB72736" name="DeathRecoveryFX" value-String="DeathRecoveryFX" type="BinHex">44656174685265636F76657279465800</field>
+        <field hash="7B0ED33B" name="DeadFX" value-String="lowhealth" type="BinHex">6C6F776865616C746800</field>
+        <field hash="3DF356C5" name="bIsMultipleBoneTargetingEnabled" value-Boolean="True" type="BinHex">01</field>
+        <object hash="3F1DE172" name="enumGender">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Male" type="BinHex">4D616C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Female" type="BinHex">46656D616C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+        </object>
+        <object hash="31A02FAF" name="enumPawnType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar" type="BinHex">41766174617200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Soldier" type="BinHex">536F6C6469657200</field>
+          </object>
+        </object>
+      </object>
+      <object hash="6038D243" name="AvatarPawn_Player">
+        <field hash="D08F5968" name="vectorNoBoneTargetingOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+        <field hash="1311AE27" name="bSupportsBoxCenterTargeting" value-Boolean="False" type="BinHex">00</field>
+        <field hash="978D249D" name="fTargetingThreatFactor" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="2F9C4ECB" name="archFallingDamageCurve" type="BinHex">00</field>
+        <field hash="411878ED" name="archAdaptationIntensityCurve" type="BinHex">00</field>
+        <field hash="AB51131D" name="archAdaptationLookSensitivityCurve" type="BinHex">00</field>
+        <field hash="527E3888" name="ReviveDelay" value-Float32="2" type="BinHex">00000040</field>
+        <field hash="9901E478" name="ReviveInvulnerabilityDelay" value-Float32="5" type="BinHex">0000A040</field>
+        <field hash="6487292C" type="BinHex">00</field>
+        <field hash="8ED94908" name="mixDeathSoundPreset" type="BinHex">FFFFFFFF</field>
+        <field hash="1F1E47FD" name="sndtpReviveSuccessSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        <field hash="A54A807B" name="sndReviveSuccessSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="63EB7F25" name="sndtpDiedSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        <field hash="0BF35057" name="sndDiedSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="4083DCDE" name="sndtpDiedFromRecoverySoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        <field hash="2C8ADB03" name="sndDiedFromRecoverySound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="733EC69D" name="RecoverDelay" value-Float32="0.4" type="BinHex">CDCCCC3E</field>
+        <field hash="7A8ED2B7" name="RecoverSlomoFactor" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+        <field hash="D22F4128" name="RecoverSlomoFadeInSpeed" value-Float32="2" type="BinHex">00000040</field>
+        <field hash="51A4841F" name="RecoverSlomoFadeOutDelay" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+        <field hash="EC18FA72" name="RecoverSlomoFadeOutSpeed" value-Float32="2" type="BinHex">00000040</field>
+        <field hash="C34B11D9" name="RecoverFailureSlomoFadeOutSpeed" value-Float32="2" type="BinHex">00000040</field>
+        <field hash="8C0D5A92" name="RecoveryInvulnerabilityDelay" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="495CEE1E" type="BinHex">00</field>
+        <field hash="EB3678AE" name="mixDeathRecoverySoundPreset" type="BinHex">FFFFFFFF</field>
+        <field hash="51D1C9B5" name="sndtpDeathRecoverySuccessSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        <field hash="4B8EE596" name="sndDeathRecoverySuccessSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="472086E5" name="bUseBriefingTeleport" value-Boolean="False" type="BinHex">00</field>
+        <field hash="371C4128" name="fBriefingProximity" value-Float32="1.5" type="BinHex">0000C03F</field>
+        <field hash="AC3E965A" type="BinHex">00</field>
+        <field hash="66F87A4D" name="BriefingPostFX" type="BinHex">FFFFFFFF</field>
+        <field hash="FE3AF6E2" name="fBriefingMaxZDiff" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+        <field hash="AFC322DE" name="fBriefingCylinderRadius" value-Float32="0.3" type="BinHex">9A99993E</field>
+        <field hash="C9278446" name="fBriefingCylinderHalfHeight" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="D051C62B" name="fBriefingCylinderZOffset" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+        <field hash="A1936D81" name="fScanRange" value-Float32="80" type="BinHex">0000A042</field>
+        <field hash="E753D48D" name="sndtpScanSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        <field hash="FA43BF26" name="sndScanSearchingStartSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="CF515F25" name="sndScanSearchingStopSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="0276231E" name="sndScanAnalyzingStartSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="49E14981" name="sndScanAnalyzingCompletedSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="AC03F9C5" name="sndScanAnalyzingInterruptedSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="15E42290" name="sndScanHideInfoSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="E914C57D" name="sndScanNewArticleSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="27C275D0" type="BinHex">00</field>
+        <field hash="CD9C15F4" name="mixScanMixingPreset" type="BinHex">FFFFFFFF</field>
+        <field hash="7178608B" type="BinHex">00</field>
+        <field hash="ED826911" name="ScanPostFX" type="BinHex">FFFFFFFF</field>
+        <field hash="6638EB34" name="fMaxScanZoom" value-Float32="20" type="BinHex">0000A041</field>
+        <field hash="3FBA5ABC" name="fScanZoomSpeed" value-Float32="5" type="BinHex">0000A040</field>
+        <field hash="93187BA7" name="sndScanZoomInStartSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="925720B6" name="sndScanZoomInStopSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="D346070B" name="sndScanZoomOutStartSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="1320EA5C" name="sndScanZoomOutStopSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="F585C8AE" type="BinHex">00</field>
+        <field hash="3851AEB5" name="MediumHurtShakeAndRumble" type="BinHex">FFFFFFFF</field>
+        <field hash="53CE6C80" name="fMediumHurtShakeAndRumbleIntensityModifier" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="8B80531B" type="BinHex">00</field>
+        <field hash="86679138" name="CriticalHurtShakeAndRumble" type="BinHex">FFFFFFFF</field>
+        <field hash="51E0186D" name="fCriticalHurtShakeAndRumbleIntensityModifier" value-Float32="1" type="BinHex">0000803F</field>
+        <object hash="C403F95F" name="TargetingBones">
+          <object hash="95741049" name="Bone">
+            <field hash="F96FAF0D" name="text_Name" value-String="" type="BinHex">00</field>
+            <field hash="FE11D138" name="Name" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="D6C705F3" name="ArmorStepSounds">
+          <object hash="1ECC6BF5" name="ArmorStepSound">
+            <field hash="E71BEC74" type="BinHex">00</field>
+            <field hash="51596066" name="ArmorTag" type="BinHex">FFFFFFFF</field>
+            <field hash="1B1A3141" name="sndSoundId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          </object>
+        </object>
+        <object hash="58C67B36" name="MaskUserEffects">
+          <object hash="A15D5768" name="MaskUserEffect">
+            <field hash="E71BEC74" type="BinHex">00</field>
+            <field hash="51596066" name="ArmorTag" type="BinHex">FFFFFFFF</field>
+            <field hash="D002B899" type="BinHex">00</field>
+            <field hash="0668411B" name="UserEffectParamSetName" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="5756DEFE" name="OverheadIcon">
+          <field hash="033DAB5D" name="text_BoneId" value-String="" type="BinHex">00</field>
+          <field hash="16B132AE" name="BoneId" type="BinHex">FFFFFFFF</field>
+          <field hash="9BE6E8FB" name="vectorOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+        </object>
+        <object hash="59EE376A" name="TurnAroundTargeting">
+          <field hash="2FB03139" name="fTurnAroundTargetingHeight" value-Float32="1.4" type="BinHex">3333B33F</field>
+          <field hash="6727628D" name="fTurnAroundTargetingMaxWidth" value-Float32="140" type="BinHex">00000C43</field>
+          <field hash="CD7E1AEC" name="fTurnAroundTargetingMaxHeight" value-Float32="100" type="BinHex">0000C842</field>
+          <field hash="88CE961F" name="fTurnAroundTargetingMinDistance" value-Float32="2" type="BinHex">00000040</field>
+          <field hash="44C3ED10" name="fTurnAroundTargetingMaxDistance" value-Float32="150" type="BinHex">00001643</field>
+          <field hash="E532C6E1" name="fTurnAroundTargetingArc" value-Float32="160" type="BinHex">00002043</field>
+          <field hash="8EFDDD85" name="fTurnAroundTargetingDuration" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="7B863914" name="fTurnAroundTargetingDecayDuration" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+          <field hash="D9AD0814" name="fTurnAroundTargetingHArc" value-Float32="200" type="BinHex">00004843</field>
+          <field hash="696B28B8" name="fTurnAroundTargetingVArc" value-Float32="45" type="BinHex">00003442</field>
+        </object>
+        <object hash="4280D68A" name="DodgeTargeting">
+          <field hash="0EFD8102" name="fDodgeTargetingHeight" value-Float32="1.4" type="BinHex">3333B33F</field>
+          <field hash="90F41F74" name="fDodgeTargetingMaxWidth" value-Float32="140" type="BinHex">00000C43</field>
+          <field hash="09E88329" name="fDodgeTargetingMaxHeight" value-Float32="100" type="BinHex">0000C842</field>
+          <field hash="B7905A62" name="fDodgeTargetingMinDistance" value-Float32="2" type="BinHex">00000040</field>
+          <field hash="7B9D216D" name="fDodgeTargetingMaxDistance" value-Float32="150" type="BinHex">00001643</field>
+          <field hash="D69020FB" name="fDodgeTargetingArc" value-Float32="100" type="BinHex">0000C842</field>
+          <field hash="B63FE5A1" name="fDodgeTargetingArcForBreakables" value-Float32="50" type="BinHex">00004842</field>
+          <field hash="792EA07C" name="fDodgeTargetingDuration" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="73C58F6A" name="fDodgeTargetingDecayDuration" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+        </object>
+        <object hash="F94365D3" name="AttackTargeting">
+          <field hash="DD2056E6" name="fAttackTargetingHeight" value-Float32="1.4" type="BinHex">3333B33F</field>
+          <field hash="B251BD36" name="fAttackTargetingMaxWidth" value-Float32="140" type="BinHex">00000C43</field>
+          <field hash="91180637" name="fAttackTargetingMaxHeight" value-Float32="100" type="BinHex">0000C842</field>
+          <field hash="FE038AE2" name="fAttackTargetingMinDistance" value-Float32="2" type="BinHex">00000040</field>
+          <field hash="320EF1ED" name="fAttackTargetingMaxDistance" value-Float32="150" type="BinHex">00001643</field>
+          <field hash="74788626" name="fAttackTargetingArc" value-Float32="100" type="BinHex">0000C842</field>
+          <field hash="DC3C1547" name="fAttackTargetingHArc" value-Float32="360" type="BinHex">0000B443</field>
+          <field hash="6CFA35EB" name="fAttackTargetingVArc" value-Float32="60" type="BinHex">00007042</field>
+        </object>
+        <object hash="BE66C316" name="WeaponZoomTargeting">
+          <field hash="6AA452EF" name="fWeaponZoomTargetingHeight" value-Float32="1.4" type="BinHex">3333B33F</field>
+          <field hash="64FE75E2" name="fWeaponZoomTargetingMaxWidth" value-Float32="140" type="BinHex">00000C43</field>
+          <field hash="1070BF32" name="fWeaponZoomTargetingMaxHeight" value-Float32="100" type="BinHex">0000C842</field>
+          <field hash="31C9F4E7" name="fWeaponZoomTargetingMinDistance" value-Float32="2" type="BinHex">00000040</field>
+          <field hash="FDC48FE8" name="fWeaponZoomTargetingMaxDistance" value-Float32="150" type="BinHex">00001643</field>
+          <field hash="2B6A7899" name="fWeaponZoomTargetingArc" value-Float32="100" type="BinHex">0000C842</field>
+          <field hash="8D24CAEA" name="fWeaponZoomTargetingDuration" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="045FEBD2" name="fWeaponZoomTargetingDecayDuration" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+        </object>
+        <object hash="58E07DB0" name="SuperJump">
+          <field hash="94904B6B" name="fSuperJumpSlomoFactor" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="BC89919D" name="fSuperJumpSlomoFadeTime" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="8AD8C54B" name="fSuperJumpSlomoFadeDuration" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="461AC9B3" type="BinHex">00</field>
+          <field hash="8BCEAFA8" name="mixSuperJumpMixingPreset" type="BinHex">FFFFFFFF</field>
+          <field hash="638EFD63" type="BinHex">00</field>
+          <field hash="E097BE48" name="SuperJumpPostFX" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="63D412C7" name="BlindSettings">
+          <field hash="0E1DB97E" name="fForcedMoveBlendRate" value-Float32="10" type="BinHex">00002041</field>
+          <field hash="17384E57" name="fForcedMoveMultiplier" value-Float32="1.5" type="BinHex">0000C03F</field>
+          <field hash="18F9AA06" name="fForcedLookBlendRate" value-Float32="6" type="BinHex">0000C040</field>
+          <field hash="49F0534A" name="fForcedLookMultiplier" value-Float32="0.5" type="BinHex">0000003F</field>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

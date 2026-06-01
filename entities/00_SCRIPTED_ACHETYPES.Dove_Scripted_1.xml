@@ -1,0 +1,284 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="00_SCRIPTED_ACHETYPES.Dove_Scripted" type="BinHex">30305F53435249505445445F4143484554595045532E446F76655F536372697074656400</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="Avatar_ScriptedEvents.00_SCRIPTED_ACHETYPES.Dove_Scripted" type="BinHex">4176617461725F53637269707465644576656E74732E30305F53435249505445445F4143484554595045532E446F76655F536372697074656400</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="152" type="BinHex">9800000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="3" type="BinHex">03000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\av_vehicles_corp\dove\dove.xml" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.xml" type="BinHex">A9C78FA5</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2" detail="0">
+              <object index="0" meshName="Wheel_Back01_Right" boneName="Wheel_Back01_Right" bboxMin="-0.791841,-0.798943,-0.799129" bboxMax="0.046921,0.798949,0.799138" />
+              <object index="1" meshName="Wheel_Back01_Left" boneName="Wheel_Back01_Left" bboxMin="-0.040346,-0.798943,-0.79913" bboxMax="0.798418,0.798949,0.799137" />
+              <object index="2" meshName="Wheel_Back02_Left" boneName="Wheel_Back02_Left" bboxMin="-0.0403434,-0.798943,-0.79913" bboxMax="0.798421,0.798949,0.799137" />
+              <object index="3" meshName="Wheel_Back02_Right" boneName="Wheel_Back02_Right" bboxMin="-0.791845,-0.79674,-0.794405" bboxMax="0.0469174,0.801152,0.803862" />
+              <object index="4" meshName="CHASSIS" boneName="CHASSIS" bboxMin="-2.05521,-3.69837,-2.06243" bboxMax="2.04971,5.04015,0.633487" />
+              <object index="5" meshName="Turret_Pivot" boneName="Turret_Pivot" bboxMin="-0.660071,-0.687613,-0.0939223" bboxMax="0.654569,3.37545,1.72912" />
+              <object index="6" meshName="Turret_Arm" boneName="Turret_Arm" bboxMin="-0.516083,-0.167608,-0.437739" bboxMax="0.511594,2.38622,0.27171" />
+              <object index="7" meshName="Steering_Wheel" boneName="Steering_Wheel" bboxMin="-0.301895,-0.105322,-0.0911813" bboxMax="0.286053,0.223553,0.0926563" />
+              <object index="8" meshName="Wheel_Front_Right" boneName="Wheel_Front_Right" bboxMin="-0.800844,-0.791792,-0.795144" bboxMax="0.037918,0.8061,0.803123" />
+              <object index="9" meshName="Wheel_Front_Left" boneName="Wheel_Front_Left" bboxMin="-0.0313558,-0.791789,-0.795145" bboxMax="0.807409,0.806103,0.803122" />
+              <resource fileName="graphics\av_Vehicles_Corp\Dove\Dove.xbg" bboxMin="-2.10608,-4.63812,-0.0124338" bboxMax="2.10339,4.10041,4.02063" />
+              <skeleton name="Dove" pos="0,0,0" rot="1,-0,-0,-0">
+                <bone name="Wheel_Back01_Right" pos="-0.415642,1.00007,0.774527" rot="0.859502,0.511133,-0,-0" />
+                <bone name="Wheel_Back01_Left" pos="0.406386,1.00007,0.774527" rot="0.859502,0.511133,-0,-0" />
+                <bone name="Wheel_Back02_Left" pos="0.406386,2.72472,0.774527" rot="0.859502,0.511133,-0,-0" />
+                <bone name="Wheel_Back02_Right" pos="-0.415642,2.72472,0.774527" rot="0.859502,0.511133,-0,-0" />
+                <bone name="CHASSIS" pos="-0.004097,0.402039,2.34889" rot="-1.62921e-007,0,0,1" />
+                <bone name="Turret_Pivot" pos="-0.004626,1.66095,2.29152" rot="-1.62921e-007,0,0,1" />
+                <bone name="Turret_Arm" pos="-0.00414,3.92246,2.24182" rot="-1.62921e-007,0,0,1" />
+                <bone name="Steering_Wheel" pos="0.595753,-1.13451,1.90042" rot="-1.62921e-007,0,0,1" />
+                <bone name="Rotation_Wheel_Front_Right" pos="-1.30524,-2.99365,0.774527" rot="1,0,0,0">
+                  <bone name="Wheel_Front_Right" pos="-0,0,0" rot="0.859502,0.511133,0,0" />
+                </bone>
+                <bone name="Rotation_Wheel_Front_Left" pos="1.29598,-2.99366,0.774527" rot="1,0,0,0">
+                  <bone name="Wheel_Front_Left" pos="0,0,0" rot="0.859502,0.511133,-0,-0" />
+                </bone>
+              </skeleton>
+            </component>
+            <component class="StaticPhysComponent">
+              <resource fileName="graphics\av_Vehicles_Corp\Dove\Dove.hkx" />
+            </component>
+            <component class="GameLogicComponent" />
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="129" type="BinHex">81000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="True" type="BinHex">01</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">EE02C5B5</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Wheel_Back01_Right" type="BinHex">576865656C5F4261636B30315F526967687400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Wheel_Back01_Right" type="BinHex">576865656C5F4261636B30315F526967687400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Wheel_Back01_Right" type="BinHex">518C5151</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Wheel_Back01_Right_LOD0" type="BinHex">576865656C5F4261636B30315F52696768745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Wheel_Back01_Right_LOD0" type="BinHex">B8FF8B08</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="1" type="BinHex">01000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">EE02C5B5</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Wheel_Back01_Left" type="BinHex">576865656C5F4261636B30315F4C65667400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Wheel_Back01_Left" type="BinHex">576865656C5F4261636B30315F4C65667400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Wheel_Back01_Left" type="BinHex">A5AF2034</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Wheel_Back01_Left_LOD0" type="BinHex">576865656C5F4261636B30315F4C6566745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Wheel_Back01_Left_LOD0" type="BinHex">7094014A</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="2" type="BinHex">02000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">EE02C5B5</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Wheel_Back02_Left" type="BinHex">576865656C5F4261636B30325F4C65667400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Wheel_Back02_Left" type="BinHex">576865656C5F4261636B30325F4C65667400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Wheel_Back02_Left" type="BinHex">0BDDB4B2</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Wheel_Back02_Left_LOD0" type="BinHex">576865656C5F4261636B30325F4C6566745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Wheel_Back02_Left_LOD0" type="BinHex">71F2E3D3</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">EE02C5B5</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Wheel_Back02_Right" type="BinHex">576865656C5F4261636B30325F526967687400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Wheel_Back02_Right" type="BinHex">576865656C5F4261636B30325F526967687400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Wheel_Back02_Right" type="BinHex">CC96B960</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Wheel_Back02_Right_LOD0" type="BinHex">576865656C5F4261636B30325F52696768745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Wheel_Back02_Right_LOD0" type="BinHex">482D157F</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="4" type="BinHex">04000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">EE02C5B5</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="CHASSIS" type="BinHex">4348415353495300</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="CHASSIS" type="BinHex">4348415353495300</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="CHASSIS" type="BinHex">C58D8C0A</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="CHASSIS_LOD0" type="BinHex">434841535349535F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="CHASSIS_LOD0" type="BinHex">F13BAF48</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="5" type="BinHex">05000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">EE02C5B5</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Turret_Pivot" type="BinHex">5475727265745F5069766F7400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Turret_Pivot" type="BinHex">5475727265745F5069766F7400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Turret_Pivot" type="BinHex">73A68C01</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Turret_Pivot_LOD0" type="BinHex">5475727265745F5069766F745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Turret_Pivot_LOD0" type="BinHex">B137EF43</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="6" type="BinHex">06000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">EE02C5B5</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Turret_Arm" type="BinHex">5475727265745F41726D00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Turret_Arm" type="BinHex">5475727265745F41726D00</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Turret_Arm" type="BinHex">45B994E4</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Turret_Arm_LOD0" type="BinHex">5475727265745F41726D5F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Turret_Arm_LOD0" type="BinHex">3FC8C854</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="7" type="BinHex">07000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">EE02C5B5</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Steering_Wheel" type="BinHex">5374656572696E675F576865656C00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Steering_Wheel" type="BinHex">5374656572696E675F576865656C00</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Steering_Wheel" type="BinHex">06CF0973</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Steering_Wheel_LOD0" type="BinHex">5374656572696E675F576865656C5F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Steering_Wheel_LOD0" type="BinHex">982204CE</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="8" type="BinHex">08000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">EE02C5B5</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Wheel_Front_Right" type="BinHex">576865656C5F46726F6E745F526967687400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Wheel_Front_Right" type="BinHex">576865656C5F46726F6E745F526967687400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Wheel_Front_Right" type="BinHex">A1467596</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Wheel_Front_Right_LOD0" type="BinHex">576865656C5F46726F6E745F52696768745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Wheel_Front_Right_LOD0" type="BinHex">320EB0E2</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="9" type="BinHex">09000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.xbg" type="BinHex">EE02C5B5</field>
+          <field hash="3D5AC03A" name="hidMeshName" value-String="Wheel_Front_Left" type="BinHex">576865656C5F46726F6E745F4C65667400</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Wheel_Front_Left" type="BinHex">576865656C5F46726F6E745F4C65667400</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Wheel_Front_Left" type="BinHex">DEEB42C7</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Wheel_Front_Left_LOD0" type="BinHex">576865656C5F46726F6E745F4C6566745F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Wheel_Front_Left_LOD0" type="BinHex">F427B7A4</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="E39B8041" name="CAvatarSkinComponent">
+        <field hash="B54515E2" name="hidCreateCopies" type="BinHex">01</field>
+        <object hash="0FA60B61" name="MaterialOverrides">
+          <object hash="85C817C3" name="Material">
+            <field hash="DD2929AC" type="BinHex">00</field>
+            <field hash="E1C0931D" name="fileOriginalMaterial" type="BinHex">FFFFFFFF</field>
+            <field hash="148E2F84" type="BinHex">00</field>
+            <field hash="28679535" name="fileMaterialOverride" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+      </object>
+      <object hash="037FB709" name="CStaticPhysComponent">
+        <field hash="527E7674" name="text_hidResourceId" value-String="graphics\av_vehicles_corp\dove\dove.hkx" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76652E686B7800</field>
+        <field hash="2E50EB85" name="hidResourceId" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove.hkx" type="BinHex">221729F5</field>
+        <field hash="5BABAAC6" name="bUseMaxTerrainSlope" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CFA0AA41" name="bIgnoreInExplosions" value-Boolean="False" type="BinHex">00</field>
+        <field hash="0C838A6E" name="bAnimateable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="387811D0" name="bLargeEntity" value-Boolean="False" type="BinHex">00</field>
+        <field hash="A8699EF0" name="hidResourceIndex" value-Int32="0" type="BinHex">00000000</field>
+        <object hash="78CF3E56" name="EntityPickup">
+          <field hash="743BADAE" name="bCanPickUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="7EC43CB1" name="bCanBePickedUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="4CA7A893" name="fPickupCollisionRadius" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="829623C6" name="fPickupCollisionHeight" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="AD22F2F7" type="BinHex">00</field>
+          <field hash="011D12F4" name="PickupAttachBone" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="A1FBD5FB" name="StaticParams">
+          <field hash="A3DFDD6E" name="bNeedExplosionInfo" value-Boolean="False" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="F62231F2" name="CAnimationComponent">
+        <field hash="F9F2D5F4" name="text_fileSkeleton" value-String="graphics\av_vehicles_corp\dove\dove_ref.skeleton" type="BinHex">67726170686963735C61765F76656869636C65735F636F72705C646F76655C646F76655F7265662E736B656C65746F6E00</field>
+        <field hash="0B80933A" name="fileSkeleton" value-ComputeHash32="graphics\av_vehicles_corp\dove\dove_ref.skeleton" type="BinHex">EF679F3B</field>
+        <field hash="E0AAD6E5" name="text_fileFacialFile" value-String="" type="BinHex">00</field>
+        <field hash="2A6C3AF2" name="fileFacialFile" type="BinHex">FFFFFFFF</field>
+        <field hash="BB681C98" name="selSkeletonType" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="C77E6465" name="sAnimPackage" type="BinHex">00</field>
+        <field hash="C22DBBC8" name="sPartName" value-String="dove" type="BinHex">646F766500</field>
+        <field hash="7B1B17E6" name="bForceBestQuality" value-Boolean="False" type="BinHex">00</field>
+        <field hash="D32F71E1" name="bDisableInterpolation" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9CB5A0AD" name="fCycleRandomTime" value-Float32="0.5" type="BinHex">0000003F</field>
+        <field hash="FE97B45D" name="text_InitialMoveState" value-String="" type="BinHex">00</field>
+        <field hash="52A8545E" name="InitialMoveState" type="BinHex">FFFFFFFF</field>
+        <object hash="FBEB7EA6" name="MercKitFacialFiles">
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="" type="BinHex">00</field>
+            <field hash="BCB3FA35" name="sHeadTag" type="BinHex">FFFFFFFF</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="" type="BinHex">00</field>
+            <field hash="0AD726A1" name="fileFacialActor" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="C0500C11" name="enumSkeletonType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar/Navi" type="BinHex">4176617461722F4E61766900</field>
+          </object>
+        </object>
+      </object>
+      <object hash="19EC7842" name="CAnimDrivenComponent" />
+      <object hash="06956112" name="CParticleEventListenerComponent" />
+    </object>
+  </object>
+</object>

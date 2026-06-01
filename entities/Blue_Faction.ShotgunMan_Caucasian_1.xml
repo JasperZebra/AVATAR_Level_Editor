@@ -1,0 +1,1989 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Blue_Faction.ShotgunMan_Caucasian" type="BinHex">426C75655F46616374696F6E2E53686F7467756E4D616E5F43617563617369616E00</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="enemy_archetypes.Blue_Faction.ShotgunMan_Caucasian" type="BinHex">656E656D795F617263686574797065732E426C75655F46616374696F6E2E53686F7467756E4D616E5F43617563617369616E00</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="863" type="BinHex">5F03000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CPawnEntity" type="BinHex">435061776E456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CPawnEntity" type="BinHex">61927B13</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="62" type="BinHex">3E000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\characters\mercenaries\merc_kit.xml" type="BinHex">67726170686963735C636861726163746572735C6D657263656E61726965735C6D6572635F6B69742E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\characters\mercenaries\merc_kit.xml" type="BinHex">0B6FB703</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicKitComponent">
+              <slot name="HEAD">
+                <part meshName="P_MC_caucasianhead01" id="vgault-P-2008031062022758">
+                  <weight value="2" />
+                  <colors overwrite="1" library="caucasian" />
+                  <textures overwrite="0" library="" />
+                  <tag name="caucasian" />
+                  <tag name="caucasian_face01" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="caucasiantype" criteria="favor" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <facial tag="caucasian_face01" />
+                </part>
+                <part meshName="P_MC_Caucasian_bchest" id="vgault-P-2008031066211248">
+                  <weight value="1" />
+                  <colors overwrite="1" library="caucasian" />
+                  <textures overwrite="0" library="" />
+                  <tag name="caucasian" />
+                  <tag name="bchest" />
+                  <tag name="caucasian_face01" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="aprcourrier" criteria="favor" />
+                  <criteria tag="caucasiantype" criteria="favor" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <facial tag="caucasian_face01" />
+                </part>
+                <part meshName="P_MC_Nubian_Bchest" id="vgault-P-2008031139539767">
+                  <weight value="1" />
+                  <colors overwrite="1" library="nubian" />
+                  <textures overwrite="0" library="" />
+                  <tag name="nubian" />
+                  <tag name="bchest" />
+                  <tag name="nubian_face01" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="nubiantype" criteria="favor" />
+                  <facial tag="nubian_face01" />
+                </part>
+                <part meshName="P_MC_Nubian_head01" id="vgault-P-2008031149720434">
+                  <weight value="1" />
+                  <colors overwrite="1" library="nubian" />
+                  <textures overwrite="0" library="" />
+                  <tag name="nubian" />
+                  <tag name="nubian_face01" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="nubiantype" criteria="favor" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <facial tag="nubian_face01" />
+                </part>
+                <part meshName="P_MC_Arab_head01" id="vgault-P-2008041562096342">
+                  <weight value="2" />
+                  <colors overwrite="1" library="arabskin" />
+                  <textures overwrite="1" library="beard" />
+                  <tag name="caucasian" />
+                  <tag name="mideast_face01" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="mideasttype" criteria="favor" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <facial tag="mideast_face01" />
+                </part>
+                <part meshName="P_MC_asian_head01" id="vgault-P-2008041562094186">
+                  <weight value="2" />
+                  <colors overwrite="1" library="asian" />
+                  <textures overwrite="1" library="beard" />
+                  <tag name="caucasian" />
+                  <tag name="asian_face01" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="asiantype" criteria="favor" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <facial tag="asian_face01" />
+                </part>
+                <part meshName="P_MC_caucasian_head03" id="vgault-P-2008041562095264">
+                  <weight value="2" />
+                  <colors overwrite="1" library="caucasian" />
+                  <textures overwrite="1" library="beard" />
+                  <tag name="caucasian" />
+                  <tag name="caucasian_face03" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="caucasiantype" criteria="favor" />
+                  <facial tag="caucasian_face03" />
+                </part>
+                <part meshName="P_MC_Nubian_head02" id="vgault-P-2008041562095623">
+                  <weight value="1" />
+                  <colors overwrite="1" library="nubian" />
+                  <textures overwrite="1" library="beard" />
+                  <tag name="nubian" />
+                  <tag name="nubian_face02" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="nubiantype" criteria="favor" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <facial tag="nubian_face02" />
+                </part>
+                <part meshName="P_MC_Nubian_head04" id="vgault-P-2008041562095983">
+                  <weight value="1" />
+                  <colors overwrite="1" library="nubian" />
+                  <textures overwrite="1" library="beard" />
+                  <tag name="nubian" />
+                  <tag name="nubian_face04" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="nubiantype" criteria="favor" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <facial tag="nubian_face04" />
+                </part>
+                <part meshName="P_MC_caucasian_head02" id="vgault-P-2008042062192189">
+                  <weight value="2" />
+                  <colors overwrite="1" library="caucasian" />
+                  <textures overwrite="1" library="beard" />
+                  <tag name="caucasian_face02" />
+                  <tag name="caucasian" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="caucasiantype" criteria="favor" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <facial tag="caucasian_face02" />
+                </part>
+                <part meshName="P_MC_Nubian_head06" id="htrandafir-P-2008060352316642">
+                  <weight value="1" />
+                  <colors overwrite="1" library="nubian" />
+                  <textures overwrite="0" library="" />
+                  <tag name="nubian" />
+                  <tag name="nubian_face06" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="nubiantype" criteria="favor" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <facial tag="nubian_face06" />
+                </part>
+                <part meshName="P_MC_CaucHead_04" id="htrandafir-P-2008060567917447">
+                  <weight value="1" />
+                  <colors overwrite="1" library="caucasian" />
+                  <textures overwrite="0" library="" />
+                  <tag name="caucasian" />
+                  <tag name="caucasian_face04" />
+                  <criteria tag="firsperson" criteria="exclude" />
+                  <criteria tag="caucasiantype" criteria="favor" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <facial tag="caucasian_face04" />
+                </part>
+                <part meshName="P_MC_NubianHead_07" id="htrandafir-P-2008060635626686">
+                  <weight value="1" />
+                  <colors overwrite="1" library="nubian" />
+                  <textures overwrite="0" library="" />
+                  <tag name="nubian" />
+                  <tag name="nubian_face07" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="nubiantype" criteria="favor" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <facial tag="nubian_face07" />
+                </part>
+              </slot>
+              <slot name="SHIRT">
+                <part meshName="P_MC_UB_Shirt_TShirt01" id="fchappart-P-2007053052447442">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="tshirt" />
+                  <tag name="shirt" />
+                  <criteria tag="specialops" criteria="favor" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_UB_Shirt_TShirt02" id="ycloutier-P-2007072037478246">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="tshirt" />
+                  <tag name="shirt" />
+                  <tag name="nostrapandleather" />
+                  <criteria tag="specialops" criteria="favor" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_UB_Shirt_Vest02" id="ycloutier-P-2007072458454117">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="shirt" />
+                  <tag name="shirt" />
+                  <tag name="nomilitaryvest" />
+                  <tag name="nostrapandleather" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_UB_Shirt_WBeater01" id="fchappart-P-2007053052769912">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="beater" />
+                  <tag name="wifebeater" />
+                  <tag name="nostrap" />
+                  <criteria tag="specialops" criteria="favor" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_UB_Shirt_WBeater02" id="ycloutier-P-2007072362488160">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="beater" />
+                  <tag name="wifebeater" />
+                  <tag name="nostrapandleather" />
+                  <criteria tag="specialops" criteria="favor" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_LB_VestSport" id="vgault-P-2008021234575986">
+                  <weight value="1" />
+                  <colors overwrite="1" library="sportvest" />
+                  <textures overwrite="0" library="" />
+                  <tag name="longvest" />
+                  <tag name="nostrapandleather" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+              </slot>
+              <slot name="ARMS">
+                <part meshName="P_MC_Caucasian_Beater_arms" id="vgault-P-2008031064606937">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="body" />
+                  <criteria tag="caucasian" criteria="required" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="wifebeater" criteria="required" />
+                </part>
+                <part meshName="P_MC_Caucasian_shirt_arms" id="vgault-P-2008031064983593">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="body" />
+                  <criteria tag="caucasian" criteria="required" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="shirt" criteria="required" />
+                </part>
+                <part meshName="P_MC_Caucasian_Longvest_arms" id="vgault-P-2008031065542890">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="body" />
+                  <criteria tag="caucasian" criteria="required" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="longvest" criteria="required" />
+                </part>
+                <part meshName="P_MC_Nubian_Beater_arms" id="vgault-P-2008031137328325">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="body" />
+                  <criteria tag="nubian" criteria="required" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="wifebeater" criteria="required" />
+                </part>
+                <part meshName="P_MC_Nubian_Shirt_arms" id="vgault-P-2008031137535509">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="body" />
+                  <criteria tag="nubian" criteria="required" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="shirt" criteria="required" />
+                </part>
+                <part meshName="P_MC_Nubian_Longvest_arms" id="vgault-P-2008031137745067">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="body" />
+                  <criteria tag="nubian" criteria="required" />
+                  <criteria tag="bchest" criteria="exclude" />
+                  <criteria tag="longvest" criteria="required" />
+                </part>
+              </slot>
+              <slot name="PANTS">
+                <part meshName="P_MC_LB_MIlitaryPant01" id="ycloutier-P-2007070549872670">
+                  <weight value="1" />
+                  <colors overwrite="1" library="militarypant" />
+                  <textures overwrite="1" library="pants" />
+                  <criteria tag="specialops" criteria="favor" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_LB_Pant_Jeans01" id="fchappart-P-2007053053160147">
+                  <weight value="1" />
+                  <colors overwrite="1" library="jeans" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="border" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_LB_Pant_MilitaryShort01" id="ycloutier-P-2007071734739942">
+                  <weight value="1" />
+                  <colors overwrite="1" library="jeans" />
+                  <textures overwrite="1" library="pants" />
+                  <tag name="shorts" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_LB_Pant_Short01" id="ycloutier-P-2007070548404363">
+                  <weight value="1" />
+                  <colors overwrite="1" library="jeans" />
+                  <textures overwrite="1" library="pants" />
+                  <tag name="shorts" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_LB_Pant_Short2" id="ycloutier-P-2007070548986148">
+                  <weight value="1" />
+                  <colors overwrite="1" library="jeans" />
+                  <textures overwrite="1" library="pants" />
+                  <tag name="shorts" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_LB_PantSport" id="vgault-P-2008021238214849">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="longvest" criteria="required" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_LB_MIlitaryPant02" id="ycloutier-P-2007072942075615">
+                  <weight value="1" />
+                  <colors overwrite="1" library="militarypant" />
+                  <textures overwrite="1" library="pants" />
+                  <tag name="shorts" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+              </slot>
+              <slot name="LEGS">
+                <part meshName="P_MC_Caucasian_Legs" id="vgault-P-2008031435106617">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="body" />
+                  <criteria tag="caucasian" criteria="required" />
+                  <criteria tag="shorts" criteria="required" />
+                </part>
+                <part meshName="P_MC_Nubian_Legs" id="vgault-P-2008031435157790">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="body" />
+                  <criteria tag="nubian" criteria="required" />
+                  <criteria tag="shorts" criteria="required" />
+                </part>
+                <part meshName="P_MC_dummyarmdealerbeard" id="vgault-P-2008072142572613">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="dealerbeard" />
+                  <criteria tag="armdealer" criteria="required" />
+                </part>
+              </slot>
+              <slot name="SHOES">
+                <part meshName="P_MC_LB_Boot01" id="fchappart-P-2007053052387488">
+                  <weight value="1" />
+                  <colors overwrite="1" library="trekshoes" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_LB_Boot02" id="ycloutier-P-2007072941899753">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="specialops" criteria="favor" />
+                  <criteria tag="civilian" criteria="exclude" />
+                </part>
+              </slot>
+              <slot name="HAT">
+                <part meshName="P_MC_Hat_BerretRed01" id="ycloutier-P-2007072957240043">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="specialops" criteria="favor" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Hat_Safari01" id="ycloutier-P-2007072954240849">
+                  <weight value="2" />
+                  <colors overwrite="1" library="safari hat" />
+                  <textures overwrite="1" library="hat" />
+                  <criteria tag="specialops" criteria="favor" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Hat_FullBandana01" id="ycloutier-P-2007072960265020">
+                  <weight value="2" />
+                  <colors overwrite="1" library="safari hat" />
+                  <textures overwrite="1" library="hat" />
+                  <criteria tag="specialops" criteria="favor" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Hat_NoHat01" id="ycloutier-P-2007072954271880">
+                  <weight value="3" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_cap03" id="vgault-P-2008030740807443">
+                  <weight value="1" />
+                  <colors overwrite="1" library="caps" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_beanie01" id="vgault-P-2008030740807803">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_cap02" id="vgault-P-2008030740808162">
+                  <weight value="1" />
+                  <colors overwrite="1" library="caps" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Cap01" id="vgault-P-2008030740808522">
+                  <weight value="1" />
+                  <colors overwrite="1" library="caps" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Afro_hair02" id="vgault-P-2008041841803125">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="nubian" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                  <criteria tag="nubian_face07" criteria="exclude" />
+                  <criteria tag="nubian_face06" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Cauc_hair02" id="vgault-P-2008041841804218">
+                  <weight value="4" />
+                  <colors overwrite="0" library="hair" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="caucasian" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="asian_face01" criteria="exclude" />
+                  <criteria tag="mideast_face01" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Cauc_hair04" id="vgault-P-2008041841803859">
+                  <weight value="4" />
+                  <colors overwrite="1" library="hair" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="caucasian" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Cauc_hair01" id="vgault-P-2008041841802047">
+                  <weight value="4" />
+                  <colors overwrite="1" library="hair" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="caucasian" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Cauc_hair03" id="vgault-P-2008041841802765">
+                  <weight value="1" />
+                  <colors overwrite="0" library="hair" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="nubian" criteria="exclude" />
+                  <criteria tag="asian_face01" criteria="exclude" />
+                  <criteria tag="mideast_face01" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+              </slot>
+              <slot name="GLASSES">
+                <part meshName="P_MC_LB_Glass2" id="mlangevin-P-2007112064198023">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_LB_Glass3" id="ycloutier-P-2007072960704166">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="specialops" criteria="favor" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Class_NoGlass" id="vgault-P-2008020655242910">
+                  <weight value="15" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Goggles" id="vgault-P-2008021149133388">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_dummyborder" id="vgault-P-2008072081250375">
+                  <weight value="1" />
+                  <colors overwrite="1" library="border" />
+                  <textures overwrite="1" library="border" />
+                  <criteria tag="border" criteria="required" />
+                </part>
+                <part meshName="P_MC_dummyarmhair" id="vgault-P-2008072142571705">
+                  <weight value="1" />
+                  <colors overwrite="1" library="dealerhair" />
+                  <textures overwrite="0" library="dealershirt" />
+                  <criteria tag="armdealer" criteria="required" />
+                </part>
+              </slot>
+              <slot name="GEAR">
+                <part meshName="P_MC_Class_NoGear01" id="ycloutier-P-2007070330379177">
+                  <weight value="4" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Gear_MilitaryVest01" id="ycloutier-P-2007070537624752">
+                  <weight value="1" />
+                  <colors overwrite="0" library="jeans" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="specialops" criteria="favor" />
+                  <criteria tag="nomilitaryvest" criteria="exclude" />
+                  <criteria tag="longvest" criteria="exclude" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Gear_Straps01" id="ycloutier-P-2007091436924780">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="nostrap" criteria="exclude" />
+                  <criteria tag="nostrapandleather" criteria="exclude" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Flack_Jacket" id="vgault-P-2008021154559325">
+                  <weight value="1" />
+                  <colors overwrite="1" library="gear jacket" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_CM_Tactical_Vest" id="vgault-P-2008021157195858">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="longvest" criteria="exclude" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Backpack" id="vgault-P-2008021156660191">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_Leather_Vest" id="vgault-P-2008021165620373">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="nostrapandleather" criteria="exclude" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="border" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_dummycivilian" id="vgault-P-2008071558030816">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="civilian" criteria="required" />
+                </part>
+                <part meshName="P_MC_dummyarmdealer" id="vgault-P-2008072085027283">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="1" library="dealershirt" />
+                  <criteria tag="armdealer" criteria="required" />
+                </part>
+              </slot>
+              <slot name="ACCESSORY">
+                <part meshName="P_MC_LB_Access_Holstervelcro" id="vgault-P-2008060252847888">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="civilian" criteria="exclude" />
+                  <criteria tag="armdealer" criteria="exclude" />
+                </part>
+                <part meshName="P_MC_dummycivilianpant" id="vgault-P-2008071560988947">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="civilian" criteria="required" />
+                </part>
+                <part meshName="P_MC_dummyarmdealerpant" id="vgault-P-2008072085027643">
+                  <weight value="1" />
+                  <colors overwrite="1" library="dealerpant" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="armdealer" criteria="required" />
+                </part>
+              </slot>
+              <slot name="BEARD">
+                <part meshName="P_MC_eyes_caucasian_head02" id="vgault-P-2008042335288041">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="caucasian_face02" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <facial tag="caucasian_face02" />
+                </part>
+                <part meshName="P_MC_eyes_caucasian_head03" id="vgault-P-2008042335288416">
+                  <weight value="1" />
+                  <colors overwrite="1" library="eyes" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="caucasian_face03" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <facial tag="caucasian_face03" />
+                </part>
+                <part meshName="P_MC_eyes_caucasianhead01" id="vgault-P-2008042335290213">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="caucasian_face01" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <facial tag="caucasian_face01" />
+                </part>
+                <part meshName="P_MC_eyes_Nubian_head01" id="vgault-P-2008042335289854">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="nubian_face01" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <facial tag="nubian_face01" />
+                </part>
+                <part meshName="P_MC_eyes_Nubian_head02" id="vgault-P-2008042335288775">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="nubian_face02" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <facial tag="nubian_face02" />
+                </part>
+                <part meshName="P_MC_eyes_Nubian_head04" id="vgault-P-2008042335289135">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="nubian_face04" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <facial tag="nubian_face04" />
+                </part>
+                <part meshName="P_MC_eyes_asian_head01" id="vgault-P-2008042337976435">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="asian_face01" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <facial tag="asian_face01" />
+                </part>
+                <part meshName="P_MC_eyes_mideast_head01" id="vgault-P-2008042337976794">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="mideast_face01" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <facial tag="mideast_face01" />
+                </part>
+                <part meshName="P_MC_eyes_Nubian_head06" id="vgault-P-2008060548154336">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="nubian_face06" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <facial tag="nubian_face06" />
+                </part>
+                <part meshName="P_MC_eyes_NubianHead_07" id="vgault-P-2008060685370512">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="nubian_face07" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <facial tag="nubian_face07" />
+                </part>
+                <part meshName="P_MC_eyes_CaucHead_04" id="vgault-P-2008060685369793">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="caucasian_face04" criteria="required" />
+                  <criteria tag="firstperson" criteria="exclude" />
+                  <facial tag="caucasian_face04" />
+                </part>
+              </slot>
+              <resource fileName="graphics\Characters\Mercenaries\Merc_Kit.xbg" />
+              <colors>
+                <library name="arabskin">
+                  <color color1="4211541" color2="4211541" />
+                  <color color1="3487050" color2="3487050" />
+                </library>
+                <library name="asian">
+                  <color color1="3949135" color2="3949135" />
+                  <color color1="5332068" color2="5332068" />
+                  <color color1="6449779" color2="6449779" />
+                </library>
+                <library name="border">
+                  <color color1="0" color2="5592405" />
+                </library>
+                <library name="caps">
+                  <color color1="2566970" color2="5272470" />
+                  <color color1="5973545" color2="6693658" />
+                  <color color1="1060388" color2="5391" />
+                  <color color1="0" color2="0" />
+                </library>
+                <library name="caucasian">
+                  <color color1="6381940" color2="6381940" />
+                  <color color1="7300729" color2="7300729" />
+                  <color color1="5592426" color2="5592426" />
+                  <color color1="4934495" color2="4934495" />
+                  <color color1="7627899" color2="7627899" />
+                </library>
+                <library name="dealerhair">
+                  <color color1="0" color2="3816775" />
+                </library>
+                <library name="dealerpant">
+                  <color color1="9868950" color2="16777215" />
+                </library>
+                <library name="gear jacket">
+                  <color color1="3294305" color2="2110526" />
+                  <color color1="3094611" color2="3947580" />
+                </library>
+                <library name="hair">
+                  <color color1="2634564" color2="10658995" />
+                  <color color1="4147800" color2="8819357" />
+                  <color color1="2171177" color2="7434624" />
+                  <color color1="0" color2="3816775" />
+                  <color color1="0" color2="11186883" />
+                  <color color1="2894904" color2="7112343" />
+                </library>
+                <library name="jeans">
+                  <color color1="2832704" color2="8408629" />
+                  <color color1="3030339" color2="6321515" />
+                  <color color1="4539717" color2="10461087" />
+                  <color color1="3752266" color2="8556441" />
+                </library>
+                <library name="militarypant">
+                  <color color1="3753290" color2="2703678" />
+                  <color color1="3950161" color2="5074050" />
+                  <color color1="0" color2="3621459" />
+                </library>
+                <library name="nubian">
+                  <color color1="10000540" color2="7895164" />
+                  <color color1="8221058" color2="5787483" />
+                  <color color1="6843524" color2="3419964" />
+                </library>
+                <library name="safari hat">
+                  <color color1="731942" color2="2963262" />
+                  <color color1="2106933" color2="2242632" />
+                </library>
+                <library name="sportvest">
+                  <color color1="854537" color2="5967620" />
+                  <color color1="0" color2="198482" />
+                  <color color1="0" color2="0" />
+                  <color color1="0" color2="1076080" />
+                </library>
+              </colors>
+              <textures>
+                <library name="beard">
+                  <texture path="graphics\Actors\_textures\C_Small_Head_Tatoo_Beard_Pinch.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_Small_Flip_Head_Tatoo_Beard_Full_Light.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_Small_Head_Tatoo_Beard_Full.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_Small_Head_Tatoo_Beard_Goatee.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_Small_Head_Tatoo_Beard_Goatee_Clean.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_Small_Head_Tatoo_Beard_HalfGoatee.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_Small_Head_Tatoo_Beard_Mustache.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_CM_Gene_White.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_CM_Gene_White.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_CM_Gene_White.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_CM_Gene_White.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_CM_Gene_White.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_CM_Gene_White.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_CM_Gene_White.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_CM_Gene_White.png" tiling="1" />
+                </library>
+                <library name="beater">
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print32.png" tiling="9" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print37.png" tiling="3" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print38.png" tiling="1" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_03_P.png" tiling="5" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_04_D.png" tiling="3" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_04_P.png" tiling="5" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print01.png" tiling="1" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print07.png" tiling="18" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print10.png" tiling="18" />
+                </library>
+                <library name="body">
+                  <texture path="graphics\Characters\_common\C_CM_Gene_White.png" tiling="1" />
+                </library>
+                <library name="border">
+                  <texture path="graphics\Actors\_texturesMulti\C_CamoRed.png" tiling="3" />
+                </library>
+                <library name="civilian">
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print40.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print04.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print06.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print07.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print08.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print09.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print10.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print11.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print12.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print13.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print14.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print15.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print16.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print17.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print18.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print19.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print20.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print21.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print24.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print25.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print28.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print29.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print30.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print31.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print32.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print33.png" tiling="10" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print35.png" tiling="10" />
+                </library>
+                <library name="dealerbeard">
+                  <texture path="graphics\Actors\_textures\C_Small_Head_Tatoo_Beard_Mustache.png" tiling="1" />
+                </library>
+                <library name="dealershirt">
+                  <texture path="graphics\Characters\_common\C_CM_Camo_03_P.png" tiling="7" />
+                </library>
+                <library name="hat">
+                  <texture path="graphics\Characters\_common\C_CM_Camo_04_P.png" tiling="4" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_03_P.png" tiling="4" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_04_D.png" tiling="4" />
+                  <texture path="graphics\Characters\_common\C_CM_Dirt_01_D.png" tiling="2" />
+                </library>
+                <library name="pants">
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print10.png" tiling="15" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_03_P.png" tiling="4" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_04_D.png" tiling="4" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_04_P.png" tiling="4" />
+                </library>
+                <library name="shirt">
+                  <texture path="graphics\Characters\_common\C_CM_Camo_03_P.png" tiling="5" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_04_P.png" tiling="4" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print04.png" tiling="8" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print06.png" tiling="12" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print08.png" tiling="12" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print09.png" tiling="15" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print12.png" tiling="16" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print13.png" tiling="20" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print16.png" tiling="20" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print18.png" tiling="15" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print21.png" tiling="22" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print28.png" tiling="12" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print29.png" tiling="15" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print30.png" tiling="4" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print32.png" tiling="5" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print34.png" tiling="15" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print35.png" tiling="18" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print39.png" tiling="20" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print40.png" tiling="22" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print55.png" tiling="32" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print56.png" tiling="16" />
+                </library>
+                <library name="tshirt">
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print37.png" tiling="2" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print38.png" tiling="1" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_03_P.png" tiling="5" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_04_D.png" tiling="3" />
+                  <texture path="graphics\Characters\_common\C_CM_Camo_04_P.png" tiling="5" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print28.png" tiling="18" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print30.png" tiling="5" />
+                  <texture path="graphics\Characters\_common\C_CM_Shirt_Print32.png" tiling="7" />
+                  <texture path="graphics\Actors\_textures\C_CM_PlainCloth_03.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_CM_PlainCloth_01.png" tiling="1" />
+                  <texture path="graphics\Actors\_textures\C_CM_PlainCloth_02.png" tiling="1" />
+                </library>
+              </textures>
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="D1E227CB" name="CGraphicKitComponent">
+        <field hash="401B786C" name="bRadomize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="56185012" name="hidOverwriteMaterials" type="BinHex">01</field>
+        <object hash="CF8E3B18" name="Tags">
+          <object hash="89A264BE" name="SpecializationTag">
+            <field hash="9B35862A" name="text_sTag" value-String="caucasian" type="BinHex">63617563617369616E00</field>
+            <field hash="9C4BF81F" name="sTag" value-ComputeHash32="caucasian" type="BinHex">0B3CA4E3</field>
+          </object>
+          <object hash="89A264BE" name="SpecializationTag">
+            <field hash="9B35862A" name="text_sTag" value-String="" type="BinHex">00</field>
+            <field hash="9C4BF81F" name="sTag" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="A3DC894F" name="PartOverwrite">
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008031066211248" type="BinHex">766761756C742D502D3230303830333130363632313132343800</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008031066211248" type="BinHex">264FD089</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" value-Int32="3" type="BinHex">03000000</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="ycloutier-P-2007070548404363" type="BinHex">79636C6F75746965722D502D3230303730373035343834303433363300</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="ycloutier-P-2007070548404363" type="BinHex">DF0725F2</field>
+            <field hash="6D14B5D4" name="TextureIndex" value-Int32="1" type="BinHex">01000000</field>
+            <field hash="2E1D008A" name="ColorIndex" value-Int32="1" type="BinHex">01000000</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008031435106617" type="BinHex">766761756C742D502D3230303830333134333531303636313700</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008031435106617" type="BinHex">7C28D661</field>
+            <field hash="6D14B5D4" name="TextureIndex" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="fchappart-P-2007053052387488" type="BinHex">6663686170706172742D502D3230303730353330353233383734383800</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="fchappart-P-2007053052387488" type="BinHex">B8FF4CD8</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008041841803859" type="BinHex">766761756C742D502D3230303830343138343138303338353900</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008041841803859" type="BinHex">1287C8C9</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" value-Int32="2" type="BinHex">02000000</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008020655242910" type="BinHex">766761756C742D502D3230303830323036353532343239313000</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008020655242910" type="BinHex">242C4DCE</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="ycloutier-P-2007070537624752" type="BinHex">79636C6F75746965722D502D3230303730373035333736323437353200</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="ycloutier-P-2007070537624752" type="BinHex">CD478362</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008060252847888" type="BinHex">766761756C742D502D3230303830363032353238343738383800</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008060252847888" type="BinHex">3CBA41AE</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008042335290213" type="BinHex">766761756C742D502D3230303830343233333532393032313300</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008042335290213" type="BinHex">F3C83069</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2008060252847888" type="BinHex">766761756C742D502D3230303830363032353238343738383800</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2008060252847888" type="BinHex">3CBA41AE</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="" type="BinHex">00</field>
+            <field hash="DBDA2EF7" name="PartID" type="BinHex">FFFFFFFF</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="1025" type="BinHex">01040000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="True" type="BinHex">01</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="True" type="BinHex">01</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="" type="BinHex">00</field>
+          <field hash="09D9B64E" name="objModel" type="BinHex">FFFFFFFF</field>
+          <field hash="3D5AC03A" name="hidMeshName" type="BinHex">00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="" type="BinHex">00</field>
+          <field hash="F1E66E05" name="hidNodeName" type="BinHex">FFFFFFFF</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="" type="BinHex">00</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" type="BinHex">FFFFFFFF</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="35FD2B44" name="CSoundComponent">
+        <field hash="EEACC4D5" name="sndptSoundPoint" type="BinHex">FFFFFFFF</field>
+        <field hash="EC0172F4" type="BinHex">00</field>
+        <field hash="6F1831DF" name="MaskSoundEffect" type="BinHex">FFFFFFFF</field>
+      </object>
+      <object hash="CF0B5949" name="CDynamicDeploadComponent" />
+      <object hash="7CE16278" name="CRadarComponent">
+        <field hash="7C35DA25" name="bActive" value-Boolean="True" type="BinHex">01</field>
+        <field hash="779B3CF8" name="bInvisibleInMap" value-Boolean="False" type="BinHex">00</field>
+        <field hash="2F1BB01A" name="bRotateWithMinimap" value-Boolean="False" type="BinHex">00</field>
+        <field hash="89A1335F" name="bInvisibleInRadar" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B0FD1557" name="fileIconTexture" type="BinHex">00</field>
+        <field hash="BCF881A8" name="fileFocusedTexture" type="BinHex">00</field>
+        <field hash="4557B253" name="fileIconSideQuestTexture" type="BinHex">00</field>
+        <field hash="8228EBCF" name="fileFocusedSideQuestTexture" type="BinHex">00</field>
+        <field hash="8121A460" name="fileSelectedTexture" type="BinHex">00</field>
+        <field hash="500F629A" name="clrColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="FFE3FE56" name="clrSelectedColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="7896667E" name="bForceTracked" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C7661064" name="fileDirectionIcon" type="BinHex">00</field>
+        <field hash="FD093FCA" name="fileDirectionSideQuestIcon" type="BinHex">00</field>
+        <field hash="5F63F74B" name="fileDirectionFocusedIcon" type="BinHex">00</field>
+        <field hash="8A59E549" name="fileDirectionFocusedSideQuestIcon" type="BinHex">00</field>
+        <field hash="3AA03097" name="fileDirectionMapIcon" type="BinHex">00</field>
+        <field hash="40BF5670" name="fileDirectionSelectedTexture" type="BinHex">00</field>
+        <field hash="972611E4" name="clrDirectionColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="E02FD777" name="clrDirectionSelectedColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="36836C65" name="fBlinkPeriod" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="F72FB3AE" name="uiDrawPriority" value-Int32="5" type="BinHex">05000000</field>
+        <field hash="5EFEFCD0" name="fAlphaMultiplier" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="9BAE25A3" name="fAlphaFocusedMultiplier" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="10794251" name="fAlphaSelectedMultiplier" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="FA3C5040" name="bIsHumanoid" value-Boolean="False" type="BinHex">00</field>
+        <field hash="A30B2976" name="bIsAnimal" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1B464C69" name="bIsAvatarLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="3D6785F9" name="bIsSoldierLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="19FB7CD9" name="bIsCorpLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="DCAA0261" name="bIsNaviLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="8A1CB5E2" name="bIsAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="2F279D70" name="bIsVehicle" value-Boolean="False" type="BinHex">00</field>
+        <field hash="E87B0446" name="bIsResource" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85BE4626" name="bIsResource_Metapod" value-Boolean="False" type="BinHex">00</field>
+      </object>
+      <object hash="F62231F2" name="CAnimationComponent">
+        <field hash="F9F2D5F4" name="text_fileSkeleton" value-String="graphics\characters\_common\pelvis_ref.skeleton" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C70656C7669735F7265662E736B656C65746F6E00</field>
+        <field hash="0B80933A" name="fileSkeleton" value-ComputeHash32="graphics\characters\_common\pelvis_ref.skeleton" type="BinHex">77BE81A1</field>
+        <field hash="E0AAD6E5" name="text_fileFacialFile" value-String="graphics\characters\_common\facial\merc_kit\merc_kit.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6B69742E6C666100</field>
+        <field hash="2A6C3AF2" name="fileFacialFile" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_kit.lfa" type="BinHex">F3DC6F03</field>
+        <field hash="BB681C98" name="selSkeletonType" value-Enum="1" type="BinHex">01000000</field>
+        <field hash="C77E6465" name="sAnimPackage" type="BinHex">00</field>
+        <field hash="C22DBBC8" name="sPartName" type="BinHex">00</field>
+        <field hash="7B1B17E6" name="bForceBestQuality" value-Boolean="False" type="BinHex">00</field>
+        <field hash="D32F71E1" name="bDisableInterpolation" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9CB5A0AD" name="fCycleRandomTime" value-Float32="0.5" type="BinHex">0000003F</field>
+        <field hash="FE97B45D" name="text_InitialMoveState" value-String="" type="BinHex">00</field>
+        <field hash="52A8545E" name="InitialMoveState" type="BinHex">FFFFFFFF</field>
+        <object hash="FBEB7EA6" name="MercKitFacialFiles">
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="caucasian_face01" type="BinHex">63617563617369616E5F66616365303100</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="caucasian_face01" type="BinHex">D9D7CBEB</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="nubian_face01" type="BinHex">6E756269616E5F66616365303100</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="nubian_face01" type="BinHex">AE0DCEAA</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="mideast_face01" type="BinHex">6D6964656173745F66616365303100</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="mideast_face01" type="BinHex">317849F0</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="asian_face01" type="BinHex">617369616E5F66616365303100</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="asian_face01" type="BinHex">25961C4A</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="nubian_face02" type="BinHex">6E756269616E5F66616365303200</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="nubian_face02" type="BinHex">145CC733</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="caucasian_face02" type="BinHex">63617563617369616E5F66616365303200</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="caucasian_face02" type="BinHex">6386C272</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="caucasian_face03" type="BinHex">63617563617369616E5F66616365303300</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="caucasian_face03" type="BinHex">F5B6C505</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="nubian_face02" type="BinHex">6E756269616E5F66616365303200</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="nubian_face02" type="BinHex">145CC733</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="nubian_face03" type="BinHex">6E756269616E5F66616365303300</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="nubian_face03" type="BinHex">826CC044</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="nubian_face04" type="BinHex">6E756269616E5F66616365303400</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="nubian_face04" type="BinHex">21F9A4DA</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="nubian_face05" type="BinHex">6E756269616E5F66616365303500</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="nubian_face05" type="BinHex">B7C9A3AD</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="nubian_face06" type="BinHex">6E756269616E5F66616365303600</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="nubian_face06" type="BinHex">0D98AA34</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="nubian_face07" type="BinHex">6E756269616E5F66616365303700</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="nubian_face07" type="BinHex">9BA8AD43</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="caucasian_face04" type="BinHex">63617563617369616E5F66616365303400</field>
+            <field hash="BCB3FA35" name="sHeadTag" value-ComputeHash32="caucasian_face04" type="BinHex">5623A19B</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C66616369616C5C6D6572635F6B69745C6D6572635F6361756330312E6C666100</field>
+            <field hash="0AD726A1" name="fileFacialActor" value-ComputeHash32="graphics\characters\_common\facial\merc_kit\merc_cauc01.lfa" type="BinHex">1E28ED83</field>
+          </object>
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="" type="BinHex">00</field>
+            <field hash="BCB3FA35" name="sHeadTag" type="BinHex">FFFFFFFF</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="" type="BinHex">00</field>
+            <field hash="0AD726A1" name="fileFacialActor" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="C0500C11" name="enumSkeletonType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar/Navi" type="BinHex">4176617461722F4E61766900</field>
+          </object>
+        </object>
+      </object>
+      <object hash="39B1CE18" name="CCharacterPhysComponent">
+        <field hash="527E7674" name="text_hidResourceId" value-String="graphics\characters\_common\generic_ragdoll.hkx" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C67656E657269635F726167646F6C6C2E686B7800</field>
+        <field hash="2E50EB85" name="hidResourceId" value-ComputeHash32="graphics\characters\_common\generic_ragdoll.hkx" type="BinHex">E082EFAD</field>
+        <field hash="FA3B74EF" name="fileRagdoll" value-String="graphics\Characters\_common\generic_ragdoll.hkx" type="BinHex">67726170686963735C436861726163746572735C5F636F6D6D6F6E5C67656E657269635F726167646F6C6C2E686B7800</field>
+        <field hash="0C838A6E" name="bAnimateable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="DED71B57" name="fHeavySpeedMultiplier" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="0D3FAC45" name="bUseRagdollAABB" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5915F173" name="RagdollCollideSpeedLimit" value-Hash32="1073741824" type="BinHex">00000040</field>
+        <field hash="041E4C28" name="text_LockBone" value-String="" type="BinHex">00</field>
+        <field hash="B25CC03A" name="LockBone" type="BinHex">FFFFFFFF</field>
+        <object hash="78CF3E56" name="EntityPickup">
+          <field hash="743BADAE" name="bCanPickUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="7EC43CB1" name="bCanBePickedUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="4CA7A893" name="fPickupCollisionRadius" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="829623C6" name="fPickupCollisionHeight" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="AD22F2F7" type="BinHex">00</field>
+          <field hash="011D12F4" name="PickupAttachBone" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="745C3EA5" name="CharacterParams">
+          <field hash="3D255EB4" name="fMass" value-Float32="80" type="BinHex">0000A042</field>
+          <field hash="C247F4A9" name="bUpdateRotation" value-Boolean="False" type="BinHex">00</field>
+          <field hash="65F524E8" name="bUseRigidBased" value-Boolean="True" type="BinHex">01</field>
+          <field hash="EE776EDD" name="fMaxSlope" value-Float32="60.000004" type="BinHex">01007042</field>
+          <field hash="1C12D8AB" name="fMaxTerrainSlope" value-Float32="55" type="BinHex">00005C42</field>
+          <field hash="3145AE8E" name="fMaxStepUpHeight" value-Float32="0.6" type="BinHex">9A99193F</field>
+          <field hash="D51A07B8" name="bUseFixedMotion" value-Boolean="False" type="BinHex">00</field>
+          <field hash="5FC79F7E" name="bCanStepUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="F446AA20" name="bStoreAllHitEvents" value-Boolean="False" type="BinHex">00</field>
+          <field hash="9E1D267D" name="bCanStandOnVehicles" value-Boolean="False" type="BinHex">00</field>
+          <field hash="5F9EABCE" name="fMaxLinearVelocity" value-Float32="30" type="BinHex">0000F041</field>
+          <field hash="F180BBAF" name="fMaxLinearAcceleration" value-Float32="625" type="BinHex">00401C44</field>
+          <object hash="07550886" name="StandDimensions">
+            <field hash="7AB04571" name="vecStandCapsulePointA" value-Vector3="0,0,0.45" type="BinHex">00000000000000006666E63E</field>
+            <field hash="E3B914CB" name="vecStandCapsulePointB" value-Vector3="0,0,1.25" type="BinHex">00000000000000000000A03F</field>
+            <field hash="D1592ADD" name="fStandCapsuleRadius" value-Float32="0.45" type="BinHex">6666E63E</field>
+          </object>
+          <object hash="C334BFAE" name="CrouchDimensions">
+            <field hash="7AB04571" name="vecStandCapsulePointA" value-Vector3="0,0,0.45" type="BinHex">00000000000000006666E63E</field>
+            <field hash="E3B914CB" name="vecStandCapsulePointB" value-Vector3="0,0,1.05" type="BinHex">00000000000000006666863F</field>
+            <field hash="D1592ADD" name="fStandCapsuleRadius" value-Float32="0.45" type="BinHex">6666E63E</field>
+          </object>
+          <object hash="2D4780F8" name="SwimDimensions">
+            <field hash="7AB04571" name="vecStandCapsulePointA" value-Vector3="0,0,0.45" type="BinHex">00000000000000006666E63E</field>
+            <field hash="E3B914CB" name="vecStandCapsulePointB" value-Vector3="0,0,0.5" type="BinHex">00000000000000000000003F</field>
+            <field hash="D1592ADD" name="fStandCapsuleRadius" value-Float32="0.45" type="BinHex">6666E63E</field>
+          </object>
+        </object>
+      </object>
+      <object hash="911DD85F" name="CPawn">
+        <field hash="731995FE" name="bIsAI" value-Boolean="True" type="BinHex">01</field>
+        <field hash="E247A953" value-String="scripts\game\objects\pawn\statemachine\pawn_state_machines.xml" type="BinHex">736372697074735C67616D655C6F626A656374735C7061776E5C73746174656D616368696E655C7061776E5F73746174655F6D616368696E65732E786D6C00</field>
+        <field hash="4E784950" name="fileStateMachine" value-ComputeHash32="scripts\game\objects\pawn\statemachine\pawn_state_machines.xml" type="BinHex">55634FB2</field>
+        <field hash="6FAA9CAC" name="Usable" type="BinHex">00</field>
+        <field hash="E800C721" name="bIgnoreSTP" value-Boolean="False" type="BinHex">00</field>
+        <field hash="8A37EFA0" name="bUseFallHeight" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CA3D3C70" name="JustSpawnedDelay" value-Float32="3" type="BinHex">00004040</field>
+        <field hash="B4CDA6CA" name="JustSpawnedUnmuteDelay" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="AC6D4E14" name="bSuperJumpEnabled" value-Boolean="False" type="BinHex">00</field>
+        <field hash="F182FB47" name="fSuperJumpMinSpeed" value-Float32="5" type="BinHex">0000A040</field>
+        <field hash="1BB6F62F" name="fDodgeCoolDownDuration" value-Float32="1.5" type="BinHex">0000C03F</field>
+        <field hash="9319A967" name="fDodgeCoolDownDurationCombat" value-Float32="0" type="BinHex">00000000</field>
+        <object hash="CDC489B3" name="sSupportedSTPSubtypes">
+          <field hash="10CA06AB" name="hidSize" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="02CFE006" type="BinHex">00</field>
+          <field hash="01AF68F3" type="BinHex">FFFFFFFF</field>
+          <field hash="75C8D090" type="BinHex">00</field>
+          <field hash="76A85865" type="BinHex">FFFFFFFF</field>
+          <field hash="ECC1812A" type="BinHex">00</field>
+          <field hash="EFA109DF" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="7B9AA48C" name="Body">
+          <field hash="04EFD8BF" name="fJumpHeight" value-Float32="1.2" type="BinHex">9A99993F</field>
+          <field hash="13016A51" name="fJumpHeightExhausted" value-Float32="0.4" type="BinHex">CDCCCC3E</field>
+          <field hash="0C0145D3" name="fSuperJumpHeight" value-Float32="6" type="BinHex">0000C040</field>
+          <field hash="C445724A" name="fJumpDelay" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="47E53307" name="fSuperJumpDelay" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="7B6AB510" name="fGravity" value-Float32="-9.8" type="BinHex">CDCC1CC1</field>
+          <field hash="E3F0C8DF" name="fWalkingMaxSpeed" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="90158390" name="fWalkingMaxSpeedCrouch" value-Float32="3" type="BinHex">00004040</field>
+          <field hash="8F1647CE" name="fWalkingInWaterSpeedFactor" value-Float32="0.6" type="BinHex">9A99193F</field>
+          <field hash="EDCEEFDC" name="fSuperJumpSpeedFactor" value-Float32="2" type="BinHex">00000040</field>
+          <field hash="217F5FE1" name="fScanningSpeedFactor" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+          <field hash="2460B137" name="fWalkingAcceleration" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="54760C64" name="fWalkingDeceleration" value-Float32="10" type="BinHex">00002041</field>
+          <field hash="A7D4D5DD" name="archSprintCurve" type="BinHex">00</field>
+          <field hash="D0FABA42" name="fSprintingDeceleration" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="74003D8F" name="fClimbSpeed" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="C5D19B4B" name="fWalkInWaterMinDepth" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="03E61B77" name="fSwimmingMinDepth" value-Float32="1.56" type="BinHex">14AEC73F</field>
+          <field hash="10035609" name="fSwimmingMaxSpeed" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="CBF7D350" name="fSwimmingAcceleration" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="BBE16E03" name="fSwimmingDeceleration" value-Float32="10" type="BinHex">00002041</field>
+          <field hash="014B5783" name="fDivingMaxSpeed" value-Float32="5" type="BinHex">0000A040</field>
+          <field hash="7D79652A" name="fDivingSpeed" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="71AD2EED" name="fRisingSpeed" value-Float32="1" type="BinHex">0000803F</field>
+          <field hash="58805B6E" name="fSprintingTurnModifier" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="03D186AE" name="fSprintingStrafeLimit" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="D4F9BA6A" name="SwimmingClimbMinHeight" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="0312082B" name="SwimmingClimbMaxHeight" value-Float32="1.6" type="BinHex">CDCCCC3F</field>
+        </object>
+        <object hash="D29D1346" name="Skills" />
+        <object hash="33DCC895" name="Inventory">
+          <field hash="8C965C28" name="text_packInventoryPack" value-String="none" type="BinHex">6E6F6E6500</field>
+          <field hash="15333272" name="packInventoryPack" value-ComputeHash32="none" type="BinHex">CF00907F</field>
+          <field hash="3E2F4A45" name="bUnlimitedAmmo" value-Boolean="True" type="BinHex">01</field>
+          <field hash="E941BDB7" name="bAutoReload" value-Boolean="False" type="BinHex">00</field>
+          <field hash="B5AEE215" name="bAutoDraw" value-Boolean="False" type="BinHex">00</field>
+          <field hash="130CDED8" name="text_sInitialWeaponCategory" value-String="" type="BinHex">00</field>
+          <field hash="C566275A" name="sInitialWeaponCategory" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="1D238520" name="IdleCycleBreaker">
+          <field hash="B1611D35" name="fMinTime" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="B292FD7A" name="fMaxTime" value-Float32="0" type="BinHex">00000000</field>
+        </object>
+      </object>
+      <object hash="A17EE4FA" name="CFrankensteinComponent">
+        <field hash="BF30F894" name="bCheatKnees" value-Boolean="False" type="BinHex">00</field>
+      </object>
+      <object hash="DB1AE1F7" name="CPawnBeautifierComponent" />
+      <object hash="D771A22C" name="CFCXAIComponent">
+        <field hash="2B928622" name="text_Type" value-String="CPawnAgent" type="BinHex">435061776E4167656E7400</field>
+        <field hash="2CECF817" name="Type" value-ComputeHash32="CPawnAgent" type="BinHex">8DF14DC2</field>
+        <field hash="DB65A9C9" name="bIgnoreAISecto" value-Boolean="False" type="BinHex">00</field>
+        <object hash="4F4522C9" name="AIObject">
+          <object hash="19669DE5" name="CAgent">
+            <field hash="24B313D8" name="text_Brain" value-String="::MercBrain/MercBrain" type="BinHex">3A3A4D657263427261696E2F4D657263427261696E00</field>
+            <field hash="7207A985" name="Brain" value-ComputeHash32="::MercBrain/MercBrain" type="BinHex">01B6506D</field>
+            <field hash="071B548C" name="text_aiwsBrainWorkspace" value-String="scripts\game\newbrains\mercbrain.ai.rml" type="BinHex">736372697074735C67616D655C6E6577627261696E735C6D657263627261696E2E61692E726D6C00</field>
+            <field hash="8C3C4908" name="aiwsBrainWorkspace" value-ComputeHash32="scripts\game\newbrains\mercbrain.ai.rml" type="BinHex">DAB95112</field>
+            <object hash="3558B935" name="PersonalityComponent">
+              <field hash="2B928622" name="text_Type" value-String="CHumanPersonality" type="BinHex">4348756D616E506572736F6E616C69747900</field>
+              <field hash="2CECF817" name="Type" value-ComputeHash32="CHumanPersonality" type="BinHex">752F708A</field>
+            </object>
+          </object>
+          <object hash="A385ED76" name="CGameAgent">
+            <field hash="11130C77" name="bIsScripted" value-Boolean="False" type="BinHex">00</field>
+            <field hash="84C3FECA" name="fAccelerationsSlow" value-Float32="2" type="BinHex">00000040</field>
+            <field hash="5901C307" name="fAccelerationsNormal" value-Float32="3" type="BinHex">00004040</field>
+            <field hash="94A2C6D3" name="fAccelerationsFast" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="23FC7BA2" name="fDecelerationsSlow" value-Float32="-2" type="BinHex">000000C0</field>
+            <field hash="69F7F238" name="fDecelerationsNormal" value-Float32="-3" type="BinHex">000040C0</field>
+            <field hash="339D43BB" name="fDecelerationsFast" value-Float32="-3.5" type="BinHex">000060C0</field>
+            <field hash="E3915A7C" name="fSpeedsBabyStep" value-Float32="0.5" type="BinHex">0000003F</field>
+            <field hash="111303B0" name="fSpeedsWalk" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="00CD58B3" name="fSpeedsJog" value-Float32="3" type="BinHex">00004040</field>
+            <field hash="DB09E804" name="fSpeedsRun" value-Float32="4" type="BinHex">00008040</field>
+            <field hash="E5500704" name="fSpeedsSprint" value-Float32="5" type="BinHex">0000A040</field>
+            <field hash="2642C34D" name="fVariationBabyStep" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="9AEBCC74" name="fVariationWalk" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+            <field hash="46BA76E9" name="fVariationJog" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="9D7EC65E" name="fVariationRun" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="411D4197" name="fVariationSprint" value-Float32="0" type="BinHex">00000000</field>
+            <object hash="FF7B3D0A" name="CombatParameters">
+              <field hash="B5E5A5D8" name="fMaxDistToTarget" value-Float32="75" type="BinHex">00009642</field>
+              <field hash="A6642645" name="fMaxDistToFriend" value-Float32="20" type="BinHex">0000A041</field>
+            </object>
+            <object hash="AC138008" name="Army">
+              <field hash="C9404E79" name="selArmy" value-Enum="0" type="BinHex">00000000</field>
+              <object hash="91BA3694" name="enumArmy">
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="BlueGuys" type="BinHex">426C75654775797300</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="RedGuys" type="BinHex">5265644775797300</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="GreyGuys" type="BinHex">477265794775797300</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="NeutralGuys" type="BinHex">4E65757472616C4775797300</field>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object hash="1126D0BD" name="DensityManagement">
+            <field hash="E075C4B5" name="bNeverDelete" value-Boolean="False" type="BinHex">00</field>
+            <field hash="D5FA2962" name="bLastToBeDeleted" value-Boolean="False" type="BinHex">00</field>
+          </object>
+          <object hash="06DD5437" name="CPawnBaseAgent">
+            <field hash="0F08A215" name="bCanEnterCombat" value-Boolean="True" type="BinHex">01</field>
+            <object hash="7F657DFE" name="SensorySystem">
+              <object hash="6AA4144A" name="FOVParameters">
+                <object hash="2B739D17" name="FOVMultipliers">
+                  <field hash="0086F2D4" name="fPreCombatMultiplier" value-Float32="0.75" type="BinHex">0000403F</field>
+                  <field hash="ACF78641" name="fCombatMultiplier" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="ACA698C9" name="fPostCombatMultiplier" value-Float32="1.25" type="BinHex">0000A03F</field>
+                  <field hash="B2140C46" name="fPlayerInVehicleMultiplier" value-Float32="2" type="BinHex">00000040</field>
+                  <field hash="DFB85B55" name="fNightTimeMultiplier" value-Float32="0.5" type="BinHex">0000003F</field>
+                  <field hash="67987FEB" name="fSniperLengthMultiplier" value-Float32="6" type="BinHex">0000C040</field>
+                  <field hash="8A94FD85" name="fSniperAngleMultiplier" value-Float32="0.15" type="BinHex">9A99193E</field>
+                </object>
+                <object hash="9E746E38" name="DesertFOV">
+                  <object hash="B008634F" name="FocusFOV">
+                    <field hash="C2199C86" name="fLength" value-Float32="60" type="BinHex">00007042</field>
+                    <field hash="680DD0F4" name="fAngle" value-Float32="60" type="BinHex">00007042</field>
+                    <field hash="8E891637" name="fUpperZAngleClamp" value-Float32="40" type="BinHex">00002042</field>
+                  </object>
+                  <object hash="0526590F" name="PeripheralFOV">
+                    <field hash="C2199C86" name="fLength" value-Float32="40" type="BinHex">00002042</field>
+                    <field hash="680DD0F4" name="fAngle" value-Float32="120" type="BinHex">0000F042</field>
+                    <field hash="8E891637" name="fUpperZAngleClamp" value-Float32="40" type="BinHex">00002042</field>
+                  </object>
+                </object>
+                <object hash="194FF107" name="SavannahFOV">
+                  <object hash="B008634F" name="FocusFOV">
+                    <field hash="C2199C86" name="fLength" value-Float32="40" type="BinHex">00002042</field>
+                    <field hash="680DD0F4" name="fAngle" value-Float32="60" type="BinHex">00007042</field>
+                    <field hash="8E891637" name="fUpperZAngleClamp" value-Float32="40" type="BinHex">00002042</field>
+                  </object>
+                  <object hash="0526590F" name="PeripheralFOV">
+                    <field hash="C2199C86" name="fLength" value-Float32="30" type="BinHex">0000F041</field>
+                    <field hash="680DD0F4" name="fAngle" value-Float32="120" type="BinHex">0000F042</field>
+                    <field hash="8E891637" name="fUpperZAngleClamp" value-Float32="40" type="BinHex">00002042</field>
+                  </object>
+                </object>
+                <object hash="56B9C19D" name="JungleFOV">
+                  <object hash="B008634F" name="FocusFOV">
+                    <field hash="C2199C86" name="fLength" value-Float32="30" type="BinHex">0000F041</field>
+                    <field hash="680DD0F4" name="fAngle" value-Float32="60" type="BinHex">00007042</field>
+                    <field hash="8E891637" name="fUpperZAngleClamp" value-Float32="40" type="BinHex">00002042</field>
+                  </object>
+                  <object hash="0526590F" name="PeripheralFOV">
+                    <field hash="C2199C86" name="fLength" value-Float32="20" type="BinHex">0000A041</field>
+                    <field hash="680DD0F4" name="fAngle" value-Float32="120" type="BinHex">0000F042</field>
+                    <field hash="8E891637" name="fUpperZAngleClamp" value-Float32="40" type="BinHex">00002042</field>
+                  </object>
+                </object>
+              </object>
+              <object hash="1744BE89" name="VisibilityEvaluatorParameters">
+                <object hash="D56F4AC4" name="Weights">
+                  <field hash="1BA59D89" name="fDistanceEvaluatorWeight" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="52C9FDB4" name="fFOVEvaluatorWeight" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="22B1583B" name="fPawnSamplingEvaluatorWeight" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="544FEE07" name="fOcclusionEvaluatorWeight" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="83CA185E" name="fVegetationEvaluatorWeight" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="36BE35ED" name="fStanceEvaluatorWeight" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="752F022E" name="fSpeedEvaluatorWeight" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="FFB685D9" name="fAmbientLightEvaluatorWeight" value-Float32="1" type="BinHex">0000803F</field>
+                  <field hash="73693885" name="fAvatarSkillEvaluatorWeight" value-Float32="1" type="BinHex">0000803F</field>
+                </object>
+                <object hash="760D463D" name="InternalValues">
+                  <field hash="A688E950" name="fDistanceEvaluator_FullVisibilityRatio" value-Float32="0.25" type="BinHex">0000803E</field>
+                  <field hash="298FE806" name="fDistanceEvaluator_MinVisibilityAtMaxFOVRange" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+                  <field hash="D59E5A34" name="fSpeedEvaluator_StandingStillVisibilityFactor" value-Float32="0.8" type="BinHex">CDCC4C3F</field>
+                  <field hash="F0A33C2A" name="fFOVEvaluator_VisibilityFactorAtFOVLimit" value-Float32="0.5" type="BinHex">0000003F</field>
+                  <field hash="64CC0B3A" name="fAvatarSkillEvaluator_Camo_FullVisibilityDistanceRatio" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="0A19CEE2" name="fAvatarSkillEvaluator_Camo_DistanceMinVisibility" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="220F049F" name="fAvatarSkillEvaluator_Camo_FOVMinVisibility" value-Float32="0" type="BinHex">00000000</field>
+                  <field hash="6DFF7430" name="fAvatarSkillEvaluator_Camo_StandingStillVisibility" value-Float32="0.5" type="BinHex">0000003F</field>
+                  <field hash="E2617045" name="fAvatarSkillEvaluator_Speed_MinVisibility" value-Float32="0.4" type="BinHex">CDCCCC3E</field>
+                  <field hash="213377B9" name="fAvatarSkillEvaluator_SpeedBoostForFullEffect" value-Float32="0.5" type="BinHex">0000003F</field>
+                </object>
+              </object>
+              <object hash="BE16F017" name="SocialMechanic">
+                <field hash="A2A96F10" name="fStareDetectionTime" value-Float32="6" type="BinHex">0000C040</field>
+                <field hash="0D74A79E" name="fAimAtDetectionTime" value-Float32="1.5" type="BinHex">0000C03F</field>
+                <field hash="2EF9F860" name="fIntrusionDistanceInnerRing" value-Float32="0.5" type="BinHex">0000003F</field>
+                <field hash="685DF41A" name="fIntrusionDistanceMidRing" value-Float32="2" type="BinHex">00000040</field>
+                <field hash="BF9C6F17" name="fIntrusionDistanceOuterRing" value-Float32="5" type="BinHex">0000A040</field>
+                <field hash="152ECBD8" name="fMaxChargingDistance" value-Float32="15" type="BinHex">00007041</field>
+                <field hash="6BBAAF19" name="fMaxChargingAngle" value-Float32="10" type="BinHex">00002041</field>
+              </object>
+              <object hash="2D223749" name="VisionPoints">
+                <object hash="2FB2B4AA" name="VisionPoint">
+                  <field hash="F8186C6E" name="fRadius" value-Float32="50" type="BinHex">00004842</field>
+                  <field hash="95FD7609" name="entEntity" type="BinHex">FFFFFFFFFFFFFFFF</field>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object hash="C24DF18D" name="CPawnAgent">
+            <field hash="2D45DA02" name="fMaximumChaseDistance" value-Float32="100" type="BinHex">0000C842</field>
+            <field hash="C82D581F" name="entJumpPoint" type="BinHex">FFFFFFFFFFFFFFFF</field>
+            <field hash="4F9DFD8D" name="bIgnoreFire" value-Boolean="False" type="BinHex">00</field>
+            <field hash="F989E72B" name="bCanAttackPlants" value-Boolean="False" type="BinHex">00</field>
+            <field hash="C934EB13" name="bCanRequestVehicle" value-Boolean="False" type="BinHex">00</field>
+            <field hash="BA2442BD" name="bHasALongRangeWeapon" value-Boolean="False" type="BinHex">00</field>
+            <field hash="D85AEFB3" name="bOppositeArmy" value-Boolean="False" type="BinHex">00</field>
+            <field hash="5A130491" name="m_IdleFuzzyVal" value-Hash32="1050253722" type="BinHex">9A99993E</field>
+            <field hash="D2044234" name="m_IdleClearVal" value-Hash32="1061158912" type="BinHex">0000403F</field>
+            <field hash="8AF2611C" name="m_SocialFuzzyVal" value-Float32="0.3" type="BinHex">9A99993E</field>
+            <field hash="02E527B9" name="m_SocialClearVal" value-Float32="0.75" type="BinHex">0000403F</field>
+            <field hash="25D2F76C" name="m_AlertFuzzyVal" value-Float32="0.25" type="BinHex">0000803E</field>
+            <field hash="ADC5B1C9" name="m_AlertClearVal" value-Float32="0.6" type="BinHex">9A99193F</field>
+            <field hash="3148E943" name="m_CombatFuzzyVal" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+            <field hash="B95FAFE6" name="m_CombatClearVal" value-Float32="0.4" type="BinHex">CDCCCC3E</field>
+            <field hash="1F927C31" name="m_ThresholdFuzzyVal" value-Float32="0.3" type="BinHex">9A99993E</field>
+            <field hash="97853A94" name="m_ThresholdClearVal" value-Float32="0.75" type="BinHex">0000403F</field>
+            <field hash="76EADDA9" name="m_SpecialFuzzyVal" value-Float32="0.3" type="BinHex">9A99993E</field>
+            <field hash="FEFD9B0C" name="m_SpecialClearVal" value-Float32="0.75" type="BinHex">0000403F</field>
+            <field hash="E7B7454C" name="m_DeadFuzzyVal" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="6FA003E9" name="m_DeadClearVal" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="B195DC53" name="m_VehicleFuzzyVal" value-Float32="0.3" type="BinHex">9A99993E</field>
+            <field hash="39829AF6" name="m_VehicleClearVal" value-Float32="0.75" type="BinHex">0000403F</field>
+            <field hash="E8848BCD" name="selODU" value-Enum="0" type="BinHex">00000000</field>
+            <field hash="C159DCA4" name="selAIInfamyMode" value-Enum="2" type="BinHex">02000000</field>
+            <object hash="7AB077F0" name="enumODU">
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Grunt" type="BinHex">4772756E7400</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Medic" type="BinHex">4D6564696300</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Boss" type="BinHex">426F737300</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Engineer" type="BinHex">456E67696E65657200</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Sniper" type="BinHex">536E6970657200</field>
+              </object>
+            </object>
+            <object hash="BCFA68D4" name="ShootingSystem">
+              <field hash="45A8B2E7" name="fPointBlankDistance" value-Float32="2.5" type="BinHex">00002040</field>
+            </object>
+            <object hash="BA61CC2D" name="enumAIInfamyMode">
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="AlwaysLow" type="BinHex">416C776179734C6F7700</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="AlwaysHigh" type="BinHex">416C776179734869676800</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Random" type="BinHex">52616E646F6D00</field>
+              </object>
+            </object>
+          </object>
+        </object>
+      </object>
+      <object hash="1BB04E10" name="CFCXCountersComponentAI">
+        <field hash="84F8E45C" name="archStimEffectTable" value-String="tables.StimEffectTables.NPCDefault" type="BinHex">7461626C65732E5374696D4566666563745461626C65732E4E504344656661756C7400</field>
+        <field hash="3DED5A88" name="bIsInvincibleExceptToPlayer" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C729E709" name="bIsInvincibleToAI" value-Boolean="False" type="BinHex">00</field>
+        <field hash="0E37A34A" name="bIsInvincibleToPlayer" value-Boolean="False" type="BinHex">00</field>
+        <field hash="2D6DDF89" name="WeaponJamProbabilityScale" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="F0A9E476" name="bEnableHitLocations" value-Boolean="True" type="BinHex">01</field>
+        <field hash="2B41D37D" name="fAgentHealth" value-Float32="-1" type="BinHex">000080BF</field>
+        <field hash="00C9A8CA" name="fHealthFailureTorsoHitModifier" value-Float32="0.5" type="BinHex">0000003F</field>
+        <field hash="E7A28A51" name="fHealthFailureLimbsHitModifier" value-Float32="0.2" type="BinHex">CDCC4C3E</field>
+        <field hash="6A478A4A" name="fHealthFailureCantDieDuration" value-Float32="0.4" type="BinHex">CDCCCC3E</field>
+      </object>
+      <object hash="F420CB86" name="AvatarCharacterSheet_Humanoid">
+        <field hash="8A13CD27" name="selGender" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="C4B45F53" name="selPawnType" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="301B8DF1" name="bGivesNoXp" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CF77E1ED" name="bGivesNoEp" value-Boolean="False" type="BinHex">00</field>
+        <field hash="F8579499" name="iEPRewardOverride" value-Int32="-1" type="BinHex">FFFFFFFF</field>
+        <field hash="BB4D0B84" name="bUntargetable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="65B55C57" name="bShowHealthWhenTargeted" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4C91BA93" name="bShowDamageTaken" value-Boolean="True" type="BinHex">01</field>
+        <field hash="400A642A" name="bImmuneToAOEEffects" value-Boolean="False" type="BinHex">00</field>
+        <field hash="804674C8" name="bImmuneToFire" value-Boolean="False" type="BinHex">00</field>
+        <field hash="71E85D91" name="bCanFireStick" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9D9F959E" name="sMissionEventOnPlayerKill" type="BinHex">00</field>
+        <field hash="27EA430B" type="BinHex">00</field>
+        <field hash="EC299A11" name="sCompletionEventOnPlayerKill" type="BinHex">FFFFFFFF</field>
+        <field hash="37110E0D" type="BinHex">00</field>
+        <field hash="CAB834AE" name="sCompletionEvent2OnPlayerKill" type="BinHex">FFFFFFFF</field>
+        <field hash="84FE38C1" name="sMissionEventOnDeath" type="BinHex">00</field>
+        <field hash="DC476D19" type="BinHex">00</field>
+        <field hash="C9CBF4EA" name="sPedia" type="BinHex">FFFFFFFF</field>
+        <field hash="CF6B8836" name="fPandorapediaScanDuration" value-Float32="3" type="BinHex">00004040</field>
+        <field hash="F78D16DE" name="fileCharacterSheetDataXML" type="BinHex">00</field>
+        <field hash="06B677F9" name="sNameID" type="BinHex">00</field>
+        <field hash="0330EB3B" name="iLevel" value-Int32="1" type="BinHex">01000000</field>
+        <field hash="163AAB24" name="bGivesNoEPtoNavis" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CD8C15E2" name="fileLootTableXML" type="BinHex">00</field>
+        <field hash="0E614666" name="fLootDropHeight" value-Float32="1.5" type="BinHex">0000C03F</field>
+        <field hash="6B6049F9" name="bImmuneToFear" value-Boolean="False" type="BinHex">00</field>
+        <field hash="69EE8296" name="sCameraNameID" type="BinHex">00</field>
+        <field hash="BE914A80" name="selFaction" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="7CA90031" name="selDialogClass" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="4E5599BD" name="hidVoicePitchFactor" value-Hash32="3212836864" type="BinHex">000080BF</field>
+        <field hash="BB6A9AFA" name="fResurrectionDelay" value-Float32="-1" type="BinHex">000080BF</field>
+        <field hash="454ACA1C" name="bResurrectable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="94C17879" name="bCannotSeeResurrection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="6D04A9F8" type="BinHex">00</field>
+        <field hash="6ABDBFEE" name="fDodgeChance" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="05A31AA2" name="fDodgeCooldown" value-Float32="5" type="BinHex">0000A040</field>
+        <field hash="C752ACFA" name="fDodgeDistance" value-Float32="7.5" type="BinHex">0000F040</field>
+        <object hash="3F1DE172" name="enumGender">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Male" type="BinHex">4D616C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Female" type="BinHex">46656D616C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+        </object>
+        <object hash="31A02FAF" name="enumPawnType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar" type="BinHex">41766174617200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Soldier" type="BinHex">536F6C6469657200</field>
+          </object>
+        </object>
+        <object hash="A525E1D7" name="enumFaction">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Neutral" type="BinHex">4E65757472616C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Undecided" type="BinHex">556E6465636964656400</field>
+          </object>
+        </object>
+        <object hash="F59227FB" name="enumDialogClass">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Scientist" type="BinHex">536369656E7469737400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Civilian" type="BinHex">436976696C69616E00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Military" type="BinHex">4D696C697461727900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Mystic" type="BinHex">4D797374696300</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Warrior" type="BinHex">57617272696F7200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar" type="BinHex">41766174617200</field>
+          </object>
+        </object>
+        <object hash="3DA97FA6" name="AutoDespawning">
+          <field hash="A2CF6BBC" name="bAutoDespawn" value-Boolean="True" type="BinHex">01</field>
+          <field hash="EC507092" name="fDespawnDelay" value-Float32="20" type="BinHex">0000A041</field>
+          <field hash="33EF12B6" name="fHardDespawnDelay" value-Float32="20" type="BinHex">0000A041</field>
+        </object>
+        <object hash="8C016D94" name="DamageRumbleIntensity">
+          <field hash="64F59345" name="fRumbleIntensityMultiplier" value-Float32="0" type="BinHex">00000000</field>
+        </object>
+      </object>
+      <object hash="53D53912" name="CNewParticlesComponent">
+        <field hash="1943B130" name="text_psPartSys" value-String="" type="BinHex">00</field>
+        <field hash="EA4C82F4" name="psPartSys" type="BinHex">FFFFFFFF</field>
+        <field hash="A25A2A04" name="fLodRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="1106289E" name="fLifeTimeRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="8E45E3C5" name="fSizeXRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="45193060" name="fSizeYRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="5805F3BE" name="fSpeedRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="34EBDC32" name="fAlphaRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="FE66509A" name="fGravityRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="E67155B3" name="fVolumeDim1Ratio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="60E5271D" name="fVolumeDim2Ratio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="ABB9F4B8" name="fVolumeDim3Ratio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="62DEF0AA" name="bAutoStart" value-Boolean="True" type="BinHex">01</field>
+        <field hash="8C5A2F80" name="nPriority" value-Int32="10" type="BinHex">0A000000</field>
+      </object>
+      <object hash="B505F0CF" name="AvatarPawn_Humanoid">
+        <field hash="D08F5968" name="vectorNoBoneTargetingOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+        <field hash="1311AE27" name="bSupportsBoxCenterTargeting" value-Boolean="False" type="BinHex">00</field>
+        <field hash="978D249D" name="fTargetingThreatFactor" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="2F9C4ECB" name="archFallingDamageCurve" type="BinHex">00</field>
+        <field hash="59EA6F5F" type="BinHex">00</field>
+        <field hash="49ACEF0C" name="psAvailable" type="BinHex">FFFFFFFF</field>
+        <field hash="82760C82" type="BinHex">00</field>
+        <field hash="70044A4C" name="psInProgress" type="BinHex">FFFFFFFF</field>
+        <field hash="C1AF4B72" type="BinHex">00</field>
+        <field hash="0B69A765" name="psTalkToMeStep" type="BinHex">FFFFFFFF</field>
+        <field hash="9E247678" type="BinHex">00</field>
+        <field hash="02DE7FE2" name="psComplete" type="BinHex">FFFFFFFF</field>
+        <field hash="236F98C6" type="BinHex">00</field>
+        <field hash="1F862277" name="psSideQuestAvailable" type="BinHex">FFFFFFFF</field>
+        <field hash="0BDFA295" type="BinHex">00</field>
+        <field hash="B785C835" name="psSideQuestInProgress" type="BinHex">FFFFFFFF</field>
+        <field hash="F542C8A2" type="BinHex">00</field>
+        <field hash="F6224057" name="psSideQuestTalkToMeStep" type="BinHex">FFFFFFFF</field>
+        <field hash="718947F3" type="BinHex">00</field>
+        <field hash="9BD727D7" name="psSideQuestComplete" type="BinHex">FFFFFFFF</field>
+        <field hash="9BD40131" type="BinHex">00</field>
+        <field hash="69A647FF" name="psSkillAgent" type="BinHex">FFFFFFFF</field>
+        <field hash="0656EAE7" type="BinHex">00</field>
+        <field hash="7A787716" name="psTravelAgent" type="BinHex">FFFFFFFF</field>
+        <field hash="4FDBDDE5" type="BinHex">00</field>
+        <field hash="820FBBFE" name="psTravelAgentHighlighted" type="BinHex">FFFFFFFF</field>
+        <field hash="F02632D9" type="BinHex">00</field>
+        <field hash="E060B28A" name="psGearAgent" type="BinHex">FFFFFFFF</field>
+        <field hash="1F61DAD6" type="BinHex">00</field>
+        <field hash="0F275A85" name="psInfoAgent" type="BinHex">FFFFFFFF</field>
+        <field hash="DCB9CBE9" name="bStartWithWeaponDrawn" value-Boolean="False" type="BinHex">00</field>
+        <field hash="8AD08FE9" name="bIsAnInfoAgent" value-Boolean="False" type="BinHex">00</field>
+        <field hash="212AC966" name="bAlwaysCriticalHurt" value-Boolean="False" type="BinHex">00</field>
+        <field hash="232A308D" name="bPlayHurts" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4B514E20" type="BinHex">00</field>
+        <field hash="6FF0611F" name="FaceTag" type="BinHex">FFFFFFFF</field>
+        <object hash="C403F95F" name="TargetingBones">
+          <object hash="95741049" name="Bone">
+            <field hash="F96FAF0D" name="text_Name" value-String="" type="BinHex">00</field>
+            <field hash="FE11D138" name="Name" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="D6C705F3" name="ArmorStepSounds">
+          <object hash="1ECC6BF5" name="ArmorStepSound">
+            <field hash="E71BEC74" type="BinHex">00</field>
+            <field hash="51596066" name="ArmorTag" type="BinHex">FFFFFFFF</field>
+            <field hash="1B1A3141" name="sndSoundId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          </object>
+        </object>
+        <object hash="58C67B36" name="MaskUserEffects">
+          <object hash="A15D5768" name="MaskUserEffect">
+            <field hash="E71BEC74" type="BinHex">00</field>
+            <field hash="51596066" name="ArmorTag" type="BinHex">FFFFFFFF</field>
+            <field hash="D002B899" type="BinHex">00</field>
+            <field hash="0668411B" name="UserEffectParamSetName" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="5756DEFE" name="OverheadIcon">
+          <field hash="033DAB5D" name="text_BoneId" value-String="" type="BinHex">00</field>
+          <field hash="16B132AE" name="BoneId" type="BinHex">FFFFFFFF</field>
+          <field hash="9BE6E8FB" name="vectorOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+        </object>
+        <object hash="44B8F094" name="OverrideVisualArmor">
+          <field hash="F28264FE" name="fileHeadArmorInventoryMesh" type="BinHex">00</field>
+          <field hash="3B09F773" name="fileChestArmorInventoryMesh" type="BinHex">00</field>
+          <field hash="EBCC6236" name="fileLegArmorInventoryMesh" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="7273EBB0" name="CPersistComponent">
+        <field hash="7C4CF173" name="selLevel" value-Enum="1" type="BinHex">01000000</field>
+        <object hash="A2AF95CE" name="enumLevel">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Limited" type="BinHex">4C696D6974656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Full" type="BinHex">46756C6C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Critical" type="BinHex">437269746963616C00</field>
+          </object>
+        </object>
+      </object>
+      <object hash="EA9C4D5E" name="CAISoundAndFXComponent">
+        <field hash="8E63B5A2" type="BinHex">00</field>
+        <field hash="44A559B5" name="matimpFootStep" type="BinHex">FFFFFFFF</field>
+        <field hash="2F890F0B" type="BinHex">00</field>
+        <field hash="F9E3F689" name="matimpNaviBootFootStep" type="BinHex">FFFFFFFF</field>
+        <field hash="5E392839" name="sndswtpFootstepSpeedSwitchType" value-Int32="5130996" type="BinHex">F44A4E00</field>
+        <field hash="4142DC47" name="sndtpGearSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        <field hash="71FA0BE2" name="sndswtpGearBounceSwitchType" type="BinHex">FFFFFFFF</field>
+        <field hash="56EC906B" name="text_matimpLanding" value-String="Pawn.Land" type="BinHex">5061776E2E4C616E6400</field>
+        <field hash="2AC20D9A" name="matimpLanding" value-ComputeHash32="Pawn.Land" type="BinHex">ED41ACC4</field>
+        <field hash="B261CD77" name="sndLandingFatalSoundID" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="5CD95CBE" name="sndtpLandingFatalSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        <field hash="068BBA32" name="sndswvlLandingGearMovementSwitchvalue" type="BinHex">FFFFFFFF</field>
+        <field hash="D8457BCB" name="sndswtpFootstepLandingSwitchType" type="BinHex">FFFFFFFF</field>
+        <field hash="588FA76B" name="sndswtpGearLandingSwitchType" type="BinHex">FFFFFFFF</field>
+        <field hash="92C1BE1E" name="text_matimpFakeBulletFx" value-String="" type="BinHex">00</field>
+        <field hash="19E6A39A" name="matimpFakeBulletFx" type="BinHex">FFFFFFFF</field>
+        <field hash="882E5969" name="logmatFakeMulletMaterial" type="BinHex">00</field>
+        <field hash="BFD0DE19" name="text_psSwimMoveHands" value-String="" type="BinHex">00</field>
+        <field hash="3CC99D32" name="psSwimMoveHands" type="BinHex">FFFFFFFF</field>
+        <field hash="22BA5E56" name="text_psSwimMoveChest" value-String="" type="BinHex">00</field>
+        <field hash="A1A31D7D" name="psSwimMoveChest" type="BinHex">FFFFFFFF</field>
+        <field hash="7CF850C3" name="text_psSwimIdleHands" value-String="" type="BinHex">00</field>
+        <field hash="FFE113E8" name="psSwimIdleHands" type="BinHex">FFFFFFFF</field>
+        <field hash="E192D08C" name="text_psSwimIdleChest" value-String="" type="BinHex">00</field>
+        <field hash="628B93A7" name="psSwimIdleChest" type="BinHex">FFFFFFFF</field>
+        <field hash="110F8FFE" name="text_psDiveMove" value-String="" type="BinHex">00</field>
+        <field hash="8DF58664" name="psDiveMove" type="BinHex">FFFFFFFF</field>
+        <field hash="4D99DED8" name="text_psSubmerge" value-String="" type="BinHex">00</field>
+        <field hash="D163D742" name="psSubmerge" type="BinHex">FFFFFFFF</field>
+        <field hash="D06EF3C6" name="text_psEmerge" value-String="" type="BinHex">00</field>
+        <field hash="662C7FD4" name="psEmerge" type="BinHex">FFFFFFFF</field>
+        <field hash="2E7C5759" name="text_psStorm" value-String="" type="BinHex">00</field>
+        <field hash="0ADD7866" name="psStorm" type="BinHex">FFFFFFFF</field>
+        <object hash="F68F03C7" name="Sounds">
+          <object hash="D93CA11D" name="Collision">
+            <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="14" type="BinHex">0E000000</field>
+            <field hash="2F1569B4" name="fSmallCollisionSpeed" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="E8F06BF8" name="fMediumCollisionSpeed" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="35A360CF" name="fBigCollisionSpeed" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="20221E55" name="sndSmallCollision" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+            <field hash="4A272259" name="sndMediumCollision" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+            <field hash="B231F23B" name="sndBigCollision" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          </object>
+          <object hash="FA465D21" name="FootstepSoundLimit">
+            <field hash="4C06F6EC" name="iMaxNumberOfEntityAllowed" value-Int32="2" type="BinHex">02000000</field>
+            <field hash="320C1BBD" name="iMaxNumberAllowed" value-Int32="3" type="BinHex">03000000</field>
+            <field hash="BA785F3F" name="fStopFadeoutTime" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+          </object>
+        </object>
+        <object hash="49B86EE9" name="FootstepSpeedSwitch">
+          <object hash="49B86EE9" name="FootstepSpeedSwitch">
+            <field hash="8DF982AB" name="fSpeedHigherBound" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="58E610EA" name="sndswvlFootstepSwitchValue" type="BinHex">FFFFFFFF</field>
+            <field hash="9606DC1A" name="selMovingPace" value-Enum="-1" type="BinHex">FFFFFFFF</field>
+            <object hash="4C901EC6" name="GearSoundDelay_millisecond">
+              <field hash="7485649F" name="iHead" value-Int32="1112014848" type="BinHex">00004842</field>
+              <field hash="629E949F" name="iChest" value-Int32="1112014848" type="BinHex">00004842</field>
+              <field hash="2E6ED189" name="iLegs" value-Int32="1112014848" type="BinHex">00004842</field>
+            </object>
+            <object hash="7E0AF683" name="enumMovingPace">
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Immobile" type="BinHex">496D6D6F62696C6500</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Sneaking" type="BinHex">536E65616B696E6700</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Walking" type="BinHex">57616C6B696E6700</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Running" type="BinHex">52756E6E696E6700</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Sprinting" type="BinHex">537072696E74696E6700</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="RoadRunner" type="BinHex">526F616452756E6E657200</field>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object hash="2AD027DD" name="FootStepSoundSync">
+          <field hash="240644AF" name="fFootToGroundDistance" value-Float32="3.39615E+38" type="BinHex">787F7F7F</field>
+        </object>
+        <object hash="2CF2076F" name="DodgeAnimation">
+          <field hash="9A6521D9" name="selImpactBone" value-Enum="-1" type="BinHex">FFFFFFFF</field>
+          <field hash="4A47522F" name="fDistToPlayDodgeImpact" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+          <object hash="72690B40" name="enumImpactBone">
+            <object hash="0EBEAE51" name="enum">
+              <field hash="DCB67730" name="Value" value-String="Head" type="BinHex">4865616400</field>
+              <field hash="06794001" name="CustomValue" value-Int32="3" type="BinHex">03000000</field>
+            </object>
+            <object hash="0EBEAE51" name="enum">
+              <field hash="DCB67730" name="Value" value-String="Shoulder" type="BinHex">53686F756C64657200</field>
+              <field hash="06794001" name="CustomValue" value-Int32="4" type="BinHex">04000000</field>
+            </object>
+            <object hash="0EBEAE51" name="enum">
+              <field hash="DCB67730" name="Value" value-String="Torso" type="BinHex">546F72736F00</field>
+              <field hash="06794001" name="CustomValue" value-Int32="5" type="BinHex">05000000</field>
+            </object>
+            <object hash="0EBEAE51" name="enum">
+              <field hash="DCB67730" name="Value" value-String="Lowerback" type="BinHex">4C6F7765726261636B00</field>
+              <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+            </object>
+            <object hash="0EBEAE51" name="enum">
+              <field hash="DCB67730" name="Value" value-String="Pelvis" type="BinHex">50656C76697300</field>
+              <field hash="06794001" name="CustomValue" value-Int32="7" type="BinHex">07000000</field>
+            </object>
+            <object hash="0EBEAE51" name="enum">
+              <field hash="DCB67730" name="Value" value-String="Left_Clavicle" type="BinHex">4C6566745F436C617669636C6500</field>
+              <field hash="06794001" name="CustomValue" value-Int32="17" type="BinHex">11000000</field>
+            </object>
+            <object hash="0EBEAE51" name="enum">
+              <field hash="DCB67730" name="Value" value-String="Right_Clavicle" type="BinHex">52696768745F436C617669636C6500</field>
+              <field hash="06794001" name="CustomValue" value-Int32="13" type="BinHex">0D000000</field>
+            </object>
+            <object hash="0EBEAE51" name="enum">
+              <field hash="DCB67730" name="Value" value-String="Left_Forearm" type="BinHex">4C6566745F466F726561726D00</field>
+              <field hash="06794001" name="CustomValue" value-Int32="15" type="BinHex">0F000000</field>
+            </object>
+            <object hash="0EBEAE51" name="enum">
+              <field hash="DCB67730" name="Value" value-String="Right_Forearm" type="BinHex">52696768745F466F726561726D00</field>
+              <field hash="06794001" name="CustomValue" value-Int32="11" type="BinHex">0B000000</field>
+            </object>
+          </object>
+        </object>
+        <object hash="0549320B" name="LandingSwitchSpeedValues_MustBeNegative">
+          <object hash="6C007F97" name="LandingLow">
+            <field hash="90BBD645" name="fFallingSpeedUpperLimit" value-Float32="3.40282E+38" type="BinHex">EEFF7F7F</field>
+            <field hash="58E610EA" name="sndswvlFootstepSwitchValue" type="BinHex">FFFFFFFF</field>
+            <field hash="2EAB591F" name="sndswvlGearSwitchValue" type="BinHex">FFFFFFFF</field>
+            <object hash="4C901EC6" name="GearSoundDelay_millisecond">
+              <field hash="629E949F" name="iChest" value-Int32="1112014848" type="BinHex">00004842</field>
+              <field hash="2E6ED189" name="iLegs" value-Int32="1112014848" type="BinHex">00004842</field>
+            </object>
+          </object>
+          <object hash="1393BCF4" name="LandingMed">
+            <field hash="90BBD645" name="fFallingSpeedUpperLimit" value-Float32="3.40282E+38" type="BinHex">EEFF7F7F</field>
+            <field hash="58E610EA" name="sndswvlFootstepSwitchValue" type="BinHex">FFFFFFFF</field>
+            <field hash="2EAB591F" name="sndswvlGearSwitchValue" type="BinHex">FFFFFFFF</field>
+            <object hash="4C901EC6" name="GearSoundDelay_millisecond">
+              <field hash="629E949F" name="iChest" value-Int32="1112014848" type="BinHex">00004842</field>
+              <field hash="2E6ED189" name="iLegs" value-Int32="1112014848" type="BinHex">00004842</field>
+            </object>
+          </object>
+          <object hash="3E41F9CB" name="LandingHigh">
+            <field hash="90BBD645" name="fFallingSpeedUpperLimit" value-Float32="3.40282E+38" type="BinHex">EEFF7F7F</field>
+            <field hash="58E610EA" name="sndswvlFootstepSwitchValue" type="BinHex">FFFFFFFF</field>
+            <field hash="2EAB591F" name="sndswvlGearSwitchValue" type="BinHex">FFFFFFFF</field>
+            <object hash="4C901EC6" name="GearSoundDelay_millisecond">
+              <field hash="629E949F" name="iChest" value-Int32="1112014848" type="BinHex">00004842</field>
+              <field hash="2E6ED189" name="iLegs" value-Int32="1112014848" type="BinHex">00004842</field>
+            </object>
+          </object>
+        </object>
+        <object hash="D50E54D1" name="PlayGearSoundLimit">
+          <field hash="4C06F6EC" name="iMaxNumberOfEntityAllowed" value-Int32="2" type="BinHex">02000000</field>
+          <field hash="320C1BBD" name="iMaxNumberAllowed" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="BA785F3F" name="fStopFadeoutTime" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+        </object>
+        <object hash="EEBE1F58" name="PlayWeaponSoundLimit">
+          <field hash="4C06F6EC" name="iMaxNumberOfEntityAllowed" value-Int32="2" type="BinHex">02000000</field>
+          <field hash="320C1BBD" name="iMaxNumberAllowed" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="BA785F3F" name="fStopFadeoutTime" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+        </object>
+        <object hash="38F38F93" name="WaterImpact">
+          <field hash="27247D8C" name="sndInWaterImpactSoundID" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          <field hash="8AB26869" name="sndOutWaterImpactSoundID" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          <field hash="2FF5EDA3" name="sndtpWaterImpactSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        </object>
+      </object>
+      <object hash="7240ED7D" name="COcclusionQueryComponent" />
+      <object hash="3443C059" name="AvatarFilterComponent">
+        <field hash="BEA75BC0" name="selFactionFilter" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="A4CF0E39" name="selPawnFilter" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="1588877B" name="iMinLevel" value-Int32="-1" type="BinHex">FFFFFFFF</field>
+        <field hash="F3E8289A" name="iMaxLevel" value-Int32="-1" type="BinHex">FFFFFFFF</field>
+        <object hash="2AB85854" name="enumFactionFilter">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-Int32="7958081" type="BinHex">416E7900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Undeceided_Only" type="BinHex">556E64656365696465645F4F6E6C7900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Navi_Only" type="BinHex">4E6176695F4F6E6C7900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Corporation_Only" type="BinHex">436F72706F726174696F6E5F4F6E6C7900</field>
+          </object>
+        </object>
+        <object hash="4CC324A0" name="enumPawnFilter">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-Int32="7958081" type="BinHex">416E7900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar_Only" type="BinHex">4176617461725F4F6E6C7900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Soldier_Only" type="BinHex">536F6C646965725F4F6E6C7900</field>
+          </object>
+        </object>
+      </object>
+      <object hash="D18498C8" name="CMissionComponent">
+        <field hash="7AF1FD74" name="text_hidMissionLayerPath" value-String="" type="BinHex">00</field>
+        <field hash="90AF9D50" name="hidMissionLayerPath" type="BinHex">FFFFFFFF</field>
+        <field hash="27B31D2E" name="text_hidCategory" value-String="" type="BinHex">00</field>
+        <field hash="37F59D7D" name="hidCategory" type="BinHex">FFFFFFFF</field>
+        <field hash="136C40D8" name="ForceMerge" type="BinHex">01</field>
+      </object>
+    </object>
+  </object>
+</object>

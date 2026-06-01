@@ -1,0 +1,201 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="HarmonicsQuest.HarmonicSocket.HarmonicSocketC" type="BinHex">4861726D6F6E69637351756573742E4861726D6F6E6963536F636B65742E4861726D6F6E6963536F636B65744300</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="Interactive.HarmonicsQuest.HarmonicSocket.HarmonicSocketC" type="BinHex">496E7465726163746976652E4861726D6F6E69637351756573742E4861726D6F6E6963536F636B65742E4861726D6F6E6963536F636B65744300</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="1017" type="BinHex">F903000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="COmniMapTickedEntity" type="BinHex">434F6D6E694D61705469636B6564456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="COmniMapTickedEntity" type="BinHex">7773ED6B</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="4" type="BinHex">04000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\av_environment\navi\props\navi_unobtanium_hamonics_crystal_03_no_col.xml" type="BinHex">67726170686963735C61765F656E7669726F6E6D656E745C6E6176695C70726F70735C6E6176695F756E6F6274616E69756D5F68616D6F6E6963735F6372797374616C5F30335F6E6F5F636F6C2E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\av_environment\navi\props\navi_unobtanium_hamonics_crystal_03_no_col.xml" type="BinHex">89CBC97E</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2" detail="0">
+              <object index="0" boneName="Navi_Unobtanium_Hamonics_Crystal_03_NO_COL_LOD0" bboxMin="-0.916836,-0.810959,-0.931346" bboxMax="1.03851,1.05588,0.877035" />
+              <resource fileName="graphics\av_Environment\NaVi\Props\Navi_Unobtanium_Hamonics_Crystal_03_NO_COL.xbg" bboxMin="-0.916836,-0.810959,-0.931346" bboxMax="1.03851,1.05588,0.877035" />
+              <skeleton name="Navi_Unobtanium_Hamonics_Crystal_03_NO_COL" pos="0,0,0" rot="1,-0,-0,-0" />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="FE7AD4CF" name="CObjectIgnitorCreatorComponent" />
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="129" type="BinHex">81000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_environment\navi\props\navi_unobtanium_hamonics_crystal_03_no_col.xbg" type="BinHex">67726170686963735C61765F656E7669726F6E6D656E745C6E6176695C70726F70735C6E6176695F756E6F6274616E69756D5F68616D6F6E6963735F6372797374616C5F30335F6E6F5F636F6C2E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_environment\navi\props\navi_unobtanium_hamonics_crystal_03_no_col.xbg" type="BinHex">CE0E836E</field>
+          <field hash="3D5AC03A" name="hidMeshName" type="BinHex">00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Navi_Unobtanium_Hamonics_Crystal_03_NO_COL" type="BinHex">4E6176695F556E6F6274616E69756D5F48616D6F6E6963735F4372797374616C5F30335F4E4F5F434F4C00</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Navi_Unobtanium_Hamonics_Crystal_03_NO_COL" type="BinHex">F8B265A7</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Navi_Unobtanium_Hamonics_Crystal_03_NO_COL_LOD0" type="BinHex">4E6176695F556E6F6274616E69756D5F48616D6F6E6963735F4372797374616C5F30335F4E4F5F434F4C5F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Navi_Unobtanium_Hamonics_Crystal_03_NO_COL_LOD0" type="BinHex">BA86CC04</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="8679517E" name="CTriggerComponent">
+        <field hash="80C02825" name="static" type="BinHex">01</field>
+        <field hash="67743E36" name="selCollisionShape" value-Enum="0" type="BinHex">00000000</field>
+        <object hash="90827668" name="enumCollisionShape">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-Int32="7892802" type="BinHex">426F7800</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Cylinder" type="BinHex">43796C696E64657200</field>
+          </object>
+        </object>
+      </object>
+      <object hash="CDC02E2D" name="AvatarActionOvertimeComponent">
+        <field hash="7C35DA25" name="bActive" value-Boolean="True" type="BinHex">01</field>
+        <field hash="C66A1418" name="bOnlyOnce" value-Boolean="True" type="BinHex">01</field>
+        <field hash="D37BD17F" name="fDuration" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="8D582D7D" name="bShowProgressBar" value-Boolean="True" type="BinHex">01</field>
+        <field hash="2B589E2E" name="sTextID" value-String="Obj_HarmonicsSocket" type="BinHex">4F626A5F4861726D6F6E696373536F636B657400</field>
+        <field hash="E5A6B2E8" name="sMissionEvent" type="BinHex">00</field>
+        <field hash="2A9C47C3" name="sEntityEvent" type="BinHex">00</field>
+        <field hash="C7921F6D" name="entTargetEntity" type="BinHex">FFFFFFFFFFFFFFFF</field>
+        <field hash="446C504A" name="vectorSize" value-Vector3="1.5,1.5,1.5" type="BinHex">0000C03F0000C03F0000C03F</field>
+        <field hash="DC476D19" type="BinHex">00</field>
+        <field hash="C9CBF4EA" name="sPedia" type="BinHex">FFFFFFFF</field>
+        <field hash="EED9BE68" name="iGatherAnimIndex" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DE20969B" name="sndStartSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="18DB44D6" name="sndStopSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="141ACC95" name="sndEndSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+        <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+        <object hash="EB53023D" name="UseRestrictions">
+          <field hash="4B667E68" name="bCanSetUsability" value-Boolean="True" type="BinHex">01</field>
+          <field hash="04FB57A5" name="bLookAtCheck" value-Boolean="False" type="BinHex">00</field>
+          <field hash="E03BF2BB" name="bFacingCheck" value-Boolean="False" type="BinHex">00</field>
+          <field hash="738ACD6D" name="bAngleCheck" value-Boolean="False" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="BD96CA20" name="AvatarHarmonicSocketComponent">
+        <field hash="C62D4BD2" value-String="SampleHarmonic" type="BinHex">53616D706C654861726D6F6E696300</field>
+        <field hash="4D0A5656" name="sAssociatedMission" value-ComputeHash32="SampleHarmonic" type="BinHex">16EB3D7D</field>
+        <field hash="69B0CBF3" value-Int16="49" type="BinHex">3100</field>
+        <field hash="CBDA5D43" name="sMissionEventOnSocketFilled" value-Float32="-1.2985474E-36" type="BinHex">B7EFDC83</field>
+        <object hash="F68F03C7" name="Sounds">
+          <field hash="231E40E2" name="sndInitialHummmSound" value-String="0x00064560" type="BinHex">3078303030363435363000</field>
+          <field hash="2D09A6EE" name="sndHarmonyBeginSound" value-String="0x000683EF" type="BinHex">3078303030363833454600</field>
+          <field hash="348AAD2B" name="sndHarmonyCycleSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="11" type="BinHex">0B000000</field>
+        </object>
+        <object hash="5C67EA09" name="ShakeAndRumble">
+          <field hash="6742546C" name="fPulseDelay" value-Float32="0.5" type="BinHex">0000003F</field>
+          <field hash="F01F70A1" value-String="genericshakeandrumblesmall" type="BinHex">67656E657269637368616B65616E6472756D626C65736D616C6C00</field>
+          <field hash="465DFCB3" name="CurvesID" value-ComputeHash32="genericshakeandrumblesmall" type="BinHex">FCEA80FE</field>
+          <field hash="FB0BCFB4" name="fRange" value-Float32="10" type="BinHex">00002041</field>
+          <field hash="B23932DE" name="fIntensity" value-Float32="3" type="BinHex">00004040</field>
+        </object>
+      </object>
+      <object hash="53D53912" name="CNewParticlesComponent">
+        <field hash="1943B130" name="text_psPartSys" value-String="av_gameplay_missions.harmonics.harmonic_link_25m" type="BinHex">61765F67616D65706C61795F6D697373696F6E732E6861726D6F6E6963732E6861726D6F6E69635F6C696E6B5F32356D00</field>
+        <field hash="EA4C82F4" name="psPartSys" value-ComputeHash32="av_gameplay_missions.harmonics.harmonic_link_25m" type="BinHex">C3B9327A</field>
+        <field hash="A25A2A04" name="fLodRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="1106289E" name="fLifeTimeRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="8E45E3C5" name="fSizeXRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="45193060" name="fSizeYRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="5805F3BE" name="fSpeedRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="34EBDC32" name="fAlphaRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="FE66509A" name="fGravityRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="E67155B3" name="fVolumeDim1Ratio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="60E5271D" name="fVolumeDim2Ratio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="ABB9F4B8" name="fVolumeDim3Ratio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="62DEF0AA" name="bAutoStart" value-Boolean="True" type="BinHex">01</field>
+        <field hash="8C5A2F80" name="nPriority" value-Int32="10" type="BinHex">0A000000</field>
+      </object>
+      <object hash="3443C059" name="AvatarFilterComponent">
+        <field hash="BEA75BC0" name="selFactionFilter" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="A4CF0E39" name="selPawnFilter" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="1588877B" name="iMinLevel" value-Int32="-1" type="BinHex">FFFFFFFF</field>
+        <field hash="F3E8289A" name="iMaxLevel" value-Int32="-1" type="BinHex">FFFFFFFF</field>
+        <object hash="2AB85854" name="enumFactionFilter">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-Int32="7958081" type="BinHex">416E7900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Undeceided_Only" type="BinHex">556E64656365696465645F4F6E6C7900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Navi_Only" type="BinHex">4E6176695F4F6E6C7900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Corporation_Only" type="BinHex">436F72706F726174696F6E5F4F6E6C7900</field>
+          </object>
+        </object>
+        <object hash="4CC324A0" name="enumPawnFilter">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-Int32="7958081" type="BinHex">416E7900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar_Only" type="BinHex">4176617461725F4F6E6C7900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Soldier_Only" type="BinHex">536F6C646965725F4F6E6C7900</field>
+          </object>
+        </object>
+      </object>
+      <object hash="B084186E" name="AvatarScannableComponent">
+        <field hash="F78D16DE" name="fileCharacterSheetDataXML" type="BinHex">00</field>
+        <field hash="06B677F9" name="sNameID" type="BinHex">00</field>
+        <field hash="DC476D19" type="BinHex">00</field>
+        <field hash="C9CBF4EA" name="sPedia" type="BinHex">FFFFFFFF</field>
+        <field hash="CF6B8836" name="fPandorapediaScanDuration" value-Float32="3" type="BinHex">00004040</field>
+      </object>
+    </object>
+  </object>
+</object>

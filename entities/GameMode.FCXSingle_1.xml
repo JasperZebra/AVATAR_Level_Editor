@@ -1,0 +1,321 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="GameMode.FCXSingle" type="BinHex">47616D654D6F64652E46435853696E676C6500</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="engine.GameMode.FCXSingle" type="BinHex">656E67696E652E47616D654D6F64652E46435853696E676C6500</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="970" type="BinHex">CA03000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CGameModeEntity" type="BinHex">4347616D654D6F6465456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CGameModeEntity" type="BinHex">0EF4CDB1</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="255" type="BinHex">FF000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="3101AE35" name="CGameModeComponent">
+        <field hash="F1B1D97B" name="text_sName" value-String="Single" type="BinHex">53696E676C6500</field>
+        <field hash="A7056326" name="sName" value-ComputeHash32="Single" type="BinHex">2F220BCD</field>
+        <field hash="8E4FDD0E" name="text_sVoiceIntroEventName" value-String="" type="BinHex">00</field>
+        <field hash="B2A667BF" name="sVoiceIntroEventName" type="BinHex">FFFFFFFF</field>
+        <field hash="25438FC1" name="text_sVoiceOutroEventName" value-String="" type="BinHex">00</field>
+        <field hash="19AA3570" name="sVoiceOutroEventName" type="BinHex">FFFFFFFF</field>
+        <field hash="3F4C7746" name="text_sVoiceSeparatorEventName" value-String="" type="BinHex">00</field>
+        <field hash="F298115D" name="sVoiceSeparatorEventName" type="BinHex">FFFFFFFF</field>
+        <object hash="399A1672" name="CommonSoundEvents">
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="" type="BinHex">00</field>
+            <field hash="A7056326" name="sName" type="BinHex">FFFFFFFF</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+        </object>
+        <object hash="CBB23DE4" name="SpecificSoundEvents">
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="" type="BinHex">00</field>
+            <field hash="A7056326" name="sName" type="BinHex">FFFFFFFF</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+        </object>
+        <object hash="DC12CC44" name="CommonArchetypeReferences">
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="player.MainCharacter.PawnPlayerAvatar" type="BinHex">706C617965722E4D61696E4368617261637465722E5061776E506C6179657241766174617200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="player.MainCharacter.PawnPlayerAvatar.Female" type="BinHex">706C617965722E4D61696E4368617261637465722E5061776E506C617965724176617461722E46656D616C6500</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="player.MainCharacter.PawnPlayerCorp" type="BinHex">706C617965722E4D61696E4368617261637465722E5061776E506C61796572436F727000</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="player.MainCharacter.PawnPlayerCorp.Female" type="BinHex">706C617965722E4D61696E4368617261637465722E5061776E506C61796572436F72702E46656D616C6500</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="player.MainCharacter.PawnPaperDollAvatar" type="BinHex">706C617965722E4D61696E4368617261637465722E5061776E5061706572446F6C6C41766174617200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="player.MainCharacter.PawnPaperDollCorp" type="BinHex">706C617965722E4D61696E4368617261637465722E5061776E5061706572446F6C6C436F727000</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="player.MainCharacter.PawnPaperDollAvatarFemale" type="BinHex">706C617965722E4D61696E4368617261637465722E5061776E5061706572446F6C6C41766174617246656D616C6500</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="player.MainCharacter.PawnPaperDollCorpFemale" type="BinHex">706C617965722E4D61696E4368617261637465722E5061776E5061706572446F6C6C436F727046656D616C6500</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="animals.Avatar.Viperwolf_Pet.BlackViperwolf_Player" type="BinHex">616E696D616C732E4176617461722E5669706572776F6C665F5065742E426C61636B5669706572776F6C665F506C6179657200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="animals.Avatar.Viperwolf_Pet.EliteWasp_Player" type="BinHex">616E696D616C732E4176617461722E5669706572776F6C665F5065742E456C697465576173705F506C6179657200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="animals.Avatar.Viperwolf_Pet.Galactonotus_Player" type="BinHex">616E696D616C732E4176617461722E5669706572776F6C665F5065742E47616C6163746F6E6F7475735F506C6179657200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="animals.Avatar.Thanator_Pet" type="BinHex">616E696D616C732E4176617461722E5468616E61746F725F50657400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="animals.Avatar.Viperwolf_HunterPet_BlackViperwolf" type="BinHex">616E696D616C732E4176617461722E5669706572776F6C665F48756E7465725065745F426C61636B5669706572776F6C6600</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="animals.Avatar.Viperwolf_HunterPet_EliteWasp" type="BinHex">616E696D616C732E4176617461722E5669706572776F6C665F48756E7465725065745F456C6974655761737000</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="animals.Avatar.Viperwolf_HunterPet_Galactonotus" type="BinHex">616E696D616C732E4176617461722E5669706572776F6C665F48756E7465725065745F47616C6163746F6E6F74757300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.Bow_Standard.Bow_Standard_01" type="BinHex">776561706F6E732E4176617461725F426F77732E426F775F5374616E646172642E426F775F5374616E646172645F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.Bow_Standard.Bow_Standard_02" type="BinHex">776561706F6E732E4176617461725F426F77732E426F775F5374616E646172642E426F775F5374616E646172645F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.Bow_Standard.Bow_Standard_03" type="BinHex">776561706F6E732E4176617461725F426F77732E426F775F5374616E646172642E426F775F5374616E646172645F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.Bow_Standard.Bow_Standard_04" type="BinHex">776561706F6E732E4176617461725F426F77732E426F775F5374616E646172642E426F775F5374616E646172645F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.SlingDart.SlingDart_01" type="BinHex">776561706F6E732E4176617461725F426F77732E536C696E67446172742E536C696E67446172745F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.SlingDart.SlingDart_02" type="BinHex">776561706F6E732E4176617461725F426F77732E536C696E67446172742E536C696E67446172745F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.SlingDart.SlingDart_03" type="BinHex">776561706F6E732E4176617461725F426F77732E536C696E67446172742E536C696E67446172745F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Bows.SlingDart.SlingDart_04" type="BinHex">776561706F6E732E4176617461725F426F77732E536C696E67446172742E536C696E67446172745F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.M30.M30_01" type="BinHex">776561706F6E732E4176617461725F47756E732E4D33302E4D33305F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.M30.M30_02" type="BinHex">776561706F6E732E4176617461725F47756E732E4D33302E4D33305F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.M30.M30_03" type="BinHex">776561706F6E732E4176617461725F47756E732E4D33302E4D33305F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.M30.M30_04" type="BinHex">776561706F6E732E4176617461725F47756E732E4D33302E4D33305F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Fighting_Staff.Fighting_Staff_01" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4669676874696E675F53746166662E4669676874696E675F53746166665F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Fighting_Staff.Fighting_Staff_02" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4669676874696E675F53746166662E4669676874696E675F53746166665F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Fighting_Staff.Fighting_Staff_03" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4669676874696E675F53746166662E4669676874696E675F53746166665F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Fighting_Staff.Fighting_Staff_04" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4669676874696E675F53746166662E4669676874696E675F53746166665F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Knives.Knives_01" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4B6E697665732E4B6E697665735F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Machetee.Machetee_01" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4D616368657465652E4D616368657465655F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Axe.Axe_01" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4178652E4178655F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Axe.Axe_02" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4178652E4178655F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Axe.Axe_03" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4178652E4178655F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Axe.Axe_04" type="BinHex">776561706F6E732E4176617461725F4D656C65652E4178652E4178655F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Bare_Hands" type="BinHex">776561706F6E732E4176617461725F4D656C65652E426172655F48616E647300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Wasp.Wasp_01" type="BinHex">776561706F6E732E4176617461725F47756E732E576173702E576173705F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Wasp.Wasp_02" type="BinHex">776561706F6E732E4176617461725F47756E732E576173702E576173705F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Wasp.Wasp_03" type="BinHex">776561706F6E732E4176617461725F47756E732E576173702E576173705F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Wasp.Wasp_04" type="BinHex">776561706F6E732E4176617461725F47756E732E576173702E576173705F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Dual_Wasp.Dual_Wasp_01" type="BinHex">776561706F6E732E4176617461725F47756E732E4475616C5F576173702E4475616C5F576173705F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Dual_Wasp.Dual_Wasp_02" type="BinHex">776561706F6E732E4176617461725F47756E732E4475616C5F576173702E4475616C5F576173705F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Dual_Wasp.Dual_Wasp_03" type="BinHex">776561706F6E732E4176617461725F47756E732E4475616C5F576173702E4475616C5F576173705F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Dual_Wasp.Dual_Wasp_04" type="BinHex">776561706F6E732E4176617461725F47756E732E4475616C5F576173702E4475616C5F576173705F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Combat_Shotgun.Combat_Shotgun_01" type="BinHex">776561706F6E732E4176617461725F47756E732E436F6D6261745F53686F7467756E2E436F6D6261745F53686F7467756E5F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Combat_Shotgun.Combat_Shotgun_02" type="BinHex">776561706F6E732E4176617461725F47756E732E436F6D6261745F53686F7467756E2E436F6D6261745F53686F7467756E5F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Combat_Shotgun.Combat_Shotgun_03" type="BinHex">776561706F6E732E4176617461725F47756E732E436F6D6261745F53686F7467756E2E436F6D6261745F53686F7467756E5F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Combat_Shotgun.Combat_Shotgun_04" type="BinHex">776561706F6E732E4176617461725F47756E732E436F6D6261745F53686F7467756E2E436F6D6261745F53686F7467756E5F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Standard_Issue.Standard_Issue_01" type="BinHex">776561706F6E732E4176617461725F47756E732E5374616E646172645F49737375652E5374616E646172645F49737375655F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Standard_Issue.Standard_Issue_02" type="BinHex">776561706F6E732E4176617461725F47756E732E5374616E646172645F49737375652E5374616E646172645F49737375655F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Standard_Issue.Standard_Issue_03" type="BinHex">776561706F6E732E4176617461725F47756E732E5374616E646172645F49737375652E5374616E646172645F49737375655F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Standard_Issue.Standard_Issue_04" type="BinHex">776561706F6E732E4176617461725F47756E732E5374616E646172645F49737375652E5374616E646172645F49737375655F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.M60" type="BinHex">776561706F6E732E4176617461725F47756E732E4D363000</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Flame_Thrower.Flame_Thrower_01" type="BinHex">776561706F6E732E4176617461725F47756E732E466C616D655F5468726F7765722E466C616D655F5468726F7765725F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Flame_Thrower.Flame_Thrower_02" type="BinHex">776561706F6E732E4176617461725F47756E732E466C616D655F5468726F7765722E466C616D655F5468726F7765725F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Flame_Thrower.Flame_Thrower_03" type="BinHex">776561706F6E732E4176617461725F47756E732E466C616D655F5468726F7765722E466C616D655F5468726F7765725F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Flame_Thrower.Flame_Thrower_04" type="BinHex">776561706F6E732E4176617461725F47756E732E466C616D655F5468726F7765722E466C616D655F5468726F7765725F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Assault_Rifle.Assault_Rifle_01" type="BinHex">776561706F6E732E4176617461725F47756E732E41737361756C745F5269666C652E41737361756C745F5269666C655F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Assault_Rifle.Assault_Rifle_02" type="BinHex">776561706F6E732E4176617461725F47756E732E41737361756C745F5269666C652E41737361756C745F5269666C655F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Assault_Rifle.Assault_Rifle_03" type="BinHex">776561706F6E732E4176617461725F47756E732E41737361756C745F5269666C652E41737361756C745F5269666C655F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Assault_Rifle.Assault_Rifle_04" type="BinHex">776561706F6E732E4176617461725F47756E732E41737361756C745F5269666C652E41737361756C745F5269666C655F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Grenade_Launcher.Grenade_Launcher_01" type="BinHex">776561706F6E732E4176617461725F47756E732E4772656E6164655F4C61756E636865722E4772656E6164655F4C61756E636865725F303100</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Grenade_Launcher.Grenade_Launcher_02" type="BinHex">776561706F6E732E4176617461725F47756E732E4772656E6164655F4C61756E636865722E4772656E6164655F4C61756E636865725F303200</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Grenade_Launcher.Grenade_Launcher_03" type="BinHex">776561706F6E732E4176617461725F47756E732E4772656E6164655F4C61756E636865722E4772656E6164655F4C61756E636865725F303300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Guns.Grenade_Launcher.Grenade_Launcher_04" type="BinHex">776561706F6E732E4176617461725F47756E732E4772656E6164655F4C61756E636865722E4772656E6164655F4C61756E636865725F303400</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" value-String="weapons.Avatar_Melee.Bare_Hands" type="BinHex">776561706F6E732E4176617461725F4D656C65652E426172655F48616E647300</field>
+          </object>
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" type="BinHex">00</field>
+          </object>
+        </object>
+        <object hash="214C9832" name="SpecificArchetypeReferences">
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" type="BinHex">00</field>
+          </object>
+        </object>
+        <object hash="699EF488" name="AnimationPackageReferences">
+          <object hash="11D55E09" name="Package">
+            <field hash="A7056326" name="sName" type="BinHex">00</field>
+          </object>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

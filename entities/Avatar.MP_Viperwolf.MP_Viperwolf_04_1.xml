@@ -1,0 +1,888 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Avatar.MP_Viperwolf.MP_Viperwolf_04" type="BinHex">4176617461722E4D505F5669706572776F6C662E4D505F5669706572776F6C665F303400</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="Animals.Avatar.MP_Viperwolf.MP_Viperwolf_04" type="BinHex">416E696D616C732E4176617461722E4D505F5669706572776F6C662E4D505F5669706572776F6C665F303400</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="29" type="BinHex">1D00000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="17" type="BinHex">11000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="35FD2B44" name="CSoundComponent">
+        <field hash="EEACC4D5" name="sndptSoundPoint" type="BinHex">FFFFFFFF</field>
+        <field hash="EC0172F4" type="BinHex">00</field>
+        <field hash="6F1831DF" name="MaskSoundEffect" type="BinHex">FFFFFFFF</field>
+      </object>
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\av_creatures\viperwolf\_kit\viperwolf.xml" type="BinHex">67726170686963735C61765F6372656174757265735C7669706572776F6C665C5F6B69745C7669706572776F6C662E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\av_creatures\viperwolf\_kit\viperwolf.xml" type="BinHex">300046A5</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicKitComponent">
+              <slot name="HEAD">
+                <part meshName="Viperwolf_Body" fileName="graphics\av_Creatures\Viperwolf\_Kit\Viperwolf\Viperwolf_Body.glm" id="vgault-P-2009030459254733">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                </part>
+              </slot>
+              <slot name="GEAR">
+                <part meshName="Slaver" fileName="graphics\av_Creatures\Viperwolf\_Kit\Viperwolf\Slaver.glm" id="gmolle-P-2009022654178529">
+                  <weight value="1" />
+                  <colors overwrite="0" library="" />
+                  <textures overwrite="0" library="" />
+                  <criteria tag="slaver" criteria="required" />
+                </part>
+              </slot>
+              <resource fileName="graphics\av_Creatures\Viperwolf\_Kit\Viperwolf.xbg" />
+              <colors />
+              <textures />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="D1E227CB" name="CGraphicKitComponent">
+        <field hash="401B786C" name="bRadomize" value-Boolean="False" type="BinHex">00</field>
+        <field hash="56185012" name="hidOverwriteMaterials" type="BinHex">01</field>
+        <object hash="CF8E3B18" name="Tags">
+          <object hash="89A264BE" name="SpecializationTag">
+            <field hash="9B35862A" name="text_sTag" value-String="skin_03" type="BinHex">736B696E5F303300</field>
+            <field hash="9C4BF81F" name="sTag" value-ComputeHash32="skin_03" type="BinHex">3541726A</field>
+          </object>
+          <object hash="89A264BE" name="SpecializationTag">
+            <field hash="9B35862A" name="text_sTag" value-String="" type="BinHex">00</field>
+            <field hash="9C4BF81F" name="sTag" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="A3DC894F" name="PartOverwrite">
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="vgault-P-2009030459254733" type="BinHex">766761756C742D502D3230303930333034353932353437333300</field>
+            <field hash="DBDA2EF7" name="PartID" value-ComputeHash32="vgault-P-2009030459254733" type="BinHex">CD00A982</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+          <object hash="3E59FA1F" name="ActivePartOverwrite">
+            <field hash="CE56B704" name="text_PartID" value-String="" type="BinHex">00</field>
+            <field hash="DBDA2EF7" name="PartID" type="BinHex">FFFFFFFF</field>
+            <field hash="6D14B5D4" name="TextureIndex" type="BinHex">FFFFFFFF</field>
+            <field hash="2E1D008A" name="ColorIndex" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+      </object>
+      <object hash="E39B8041" name="CAvatarSkinComponent">
+        <field hash="B54515E2" name="hidCreateCopies" type="BinHex">01</field>
+        <object hash="0FA60B61" name="MaterialOverrides">
+          <object hash="85C817C3" name="Material">
+            <field hash="DD2929AC" value-String="graphics\_materials\vgault-m-2009061649668337.xbm" type="BinHex">67726170686963735C5F6D6174657269616C735C766761756C742D6D2D323030393036313634393636383333372E78626D00</field>
+            <field hash="E1C0931D" name="fileOriginalMaterial" value-ComputeHash32="graphics\_materials\vgault-m-2009061649668337.xbm" type="BinHex">BF19E3BF</field>
+            <field hash="148E2F84" value-String="graphics\_materials\xrang-m-2009021252351608.xbm" type="BinHex">67726170686963735C5F6D6174657269616C735C7872616E672D6D2D323030393032313235323335313630382E78626D00</field>
+            <field hash="28679535" name="fileMaterialOverride" value-ComputeHash32="graphics\_materials\xrang-m-2009021252351608.xbm" type="BinHex">5B23AE54</field>
+          </object>
+          <object hash="85C817C3" name="Material">
+            <field hash="DD2929AC" type="BinHex">00</field>
+            <field hash="E1C0931D" name="fileOriginalMaterial" type="BinHex">FFFFFFFF</field>
+            <field hash="148E2F84" type="BinHex">00</field>
+            <field hash="28679535" name="fileMaterialOverride" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="1" type="BinHex">01000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="True" type="BinHex">01</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="" type="BinHex">00</field>
+          <field hash="09D9B64E" name="objModel" type="BinHex">FFFFFFFF</field>
+          <field hash="3D5AC03A" name="hidMeshName" type="BinHex">00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="" type="BinHex">00</field>
+          <field hash="F1E66E05" name="hidNodeName" type="BinHex">FFFFFFFF</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="" type="BinHex">00</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" type="BinHex">FFFFFFFF</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="7CE16278" name="CRadarComponent">
+        <field hash="7C35DA25" name="bActive" value-Boolean="False" type="BinHex">00</field>
+        <field hash="779B3CF8" name="bInvisibleInMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="2F1BB01A" name="bRotateWithMinimap" value-Boolean="False" type="BinHex">00</field>
+        <field hash="89A1335F" name="bInvisibleInRadar" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B0FD1557" name="fileIconTexture" type="BinHex">00</field>
+        <field hash="BCF881A8" name="fileFocusedTexture" type="BinHex">00</field>
+        <field hash="4557B253" name="fileIconSideQuestTexture" type="BinHex">00</field>
+        <field hash="8228EBCF" name="fileFocusedSideQuestTexture" type="BinHex">00</field>
+        <field hash="8121A460" name="fileSelectedTexture" type="BinHex">00</field>
+        <field hash="500F629A" name="clrColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="FFE3FE56" name="clrSelectedColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="7896667E" name="bForceTracked" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C7661064" name="fileDirectionIcon" type="BinHex">00</field>
+        <field hash="FD093FCA" name="fileDirectionSideQuestIcon" type="BinHex">00</field>
+        <field hash="5F63F74B" name="fileDirectionFocusedIcon" type="BinHex">00</field>
+        <field hash="8A59E549" name="fileDirectionFocusedSideQuestIcon" type="BinHex">00</field>
+        <field hash="3AA03097" name="fileDirectionMapIcon" type="BinHex">00</field>
+        <field hash="40BF5670" name="fileDirectionSelectedTexture" type="BinHex">00</field>
+        <field hash="972611E4" name="clrDirectionColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="E02FD777" name="clrDirectionSelectedColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="36836C65" name="fBlinkPeriod" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="F72FB3AE" name="uiDrawPriority" value-Int32="5" type="BinHex">05000000</field>
+        <field hash="5EFEFCD0" name="fAlphaMultiplier" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="9BAE25A3" name="fAlphaFocusedMultiplier" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="10794251" name="fAlphaSelectedMultiplier" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="FA3C5040" name="bIsHumanoid" value-Boolean="False" type="BinHex">00</field>
+        <field hash="A30B2976" name="bIsAnimal" value-Boolean="True" type="BinHex">01</field>
+        <field hash="1B464C69" name="bIsAvatarLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="3D6785F9" name="bIsSoldierLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="19FB7CD9" name="bIsCorpLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="DCAA0261" name="bIsNaviLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="8A1CB5E2" name="bIsAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="2F279D70" name="bIsVehicle" value-Boolean="False" type="BinHex">00</field>
+        <field hash="E87B0446" name="bIsResource" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85BE4626" name="bIsResource_Metapod" value-Boolean="False" type="BinHex">00</field>
+      </object>
+      <object hash="39B1CE18" name="CCharacterPhysComponent">
+        <field hash="527E7674" name="text_hidResourceId" value-String="graphics\characters\_common\viperwolf_ragdoll.hkx" type="BinHex">67726170686963735C636861726163746572735C5F636F6D6D6F6E5C7669706572776F6C665F726167646F6C6C2E686B7800</field>
+        <field hash="2E50EB85" name="hidResourceId" value-ComputeHash32="graphics\characters\_common\viperwolf_ragdoll.hkx" type="BinHex">5A4B11FE</field>
+        <field hash="FA3B74EF" name="fileRagdoll" value-String="graphics\Characters\_common\Viperwolf_Ragdoll.hkr" type="BinHex">67726170686963735C436861726163746572735C5F636F6D6D6F6E5C5669706572776F6C665F526167646F6C6C2E686B7200</field>
+        <field hash="0C838A6E" name="bAnimateable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="DED71B57" name="fHeavySpeedMultiplier" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="0D3FAC45" name="bUseRagdollAABB" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5915F173" name="RagdollCollideSpeedLimit" value-Hash32="1073741824" type="BinHex">00000040</field>
+        <field hash="041E4C28" name="text_LockBone" value-String="" type="BinHex">00</field>
+        <field hash="B25CC03A" name="LockBone" type="BinHex">FFFFFFFF</field>
+        <object hash="78CF3E56" name="EntityPickup">
+          <field hash="743BADAE" name="bCanPickUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="7EC43CB1" name="bCanBePickedUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="4CA7A893" name="fPickupCollisionRadius" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="829623C6" name="fPickupCollisionHeight" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="AD22F2F7" type="BinHex">00</field>
+          <field hash="011D12F4" name="PickupAttachBone" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="745C3EA5" name="CharacterParams">
+          <field hash="3D255EB4" name="fMass" value-Float32="200" type="BinHex">00004843</field>
+          <field hash="C247F4A9" name="bUpdateRotation" value-Boolean="True" type="BinHex">01</field>
+          <field hash="65F524E8" name="bUseRigidBased" value-Boolean="False" type="BinHex">00</field>
+          <field hash="EE776EDD" name="fMaxSlope" value-Float32="60.000004" type="BinHex">01007042</field>
+          <field hash="1C12D8AB" name="fMaxTerrainSlope" value-Float32="55" type="BinHex">00005C42</field>
+          <field hash="3145AE8E" name="fMaxStepUpHeight" value-Float32="0.6" type="BinHex">9A99193F</field>
+          <field hash="D51A07B8" name="bUseFixedMotion" value-Boolean="False" type="BinHex">00</field>
+          <field hash="5FC79F7E" name="bCanStepUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="F446AA20" name="bStoreAllHitEvents" value-Boolean="False" type="BinHex">00</field>
+          <field hash="9E1D267D" name="bCanStandOnVehicles" value-Boolean="False" type="BinHex">00</field>
+          <field hash="5F9EABCE" name="fMaxLinearVelocity" value-Float32="30" type="BinHex">0000F041</field>
+          <field hash="F180BBAF" name="fMaxLinearAcceleration" value-Float32="625" type="BinHex">00401C44</field>
+          <object hash="07550886" name="StandDimensions">
+            <field hash="7AB04571" name="vecStandCapsulePointA" value-Vector3="0,-0.1,0.5" type="BinHex">00000000CDCCCCBD0000003F</field>
+            <field hash="E3B914CB" name="vecStandCapsulePointB" value-Vector3="0,1,0.8" type="BinHex">000000000000803FCDCC4C3F</field>
+            <field hash="D1592ADD" name="fStandCapsuleRadius" value-Float32="0.5" type="BinHex">0000003F</field>
+          </object>
+          <object hash="C334BFAE" name="CrouchDimensions">
+            <field hash="7AB04571" name="vecStandCapsulePointA" value-Vector3="0,0,0.45" type="BinHex">00000000000000006666E63E</field>
+            <field hash="E3B914CB" name="vecStandCapsulePointB" value-Vector3="0,0,1.05" type="BinHex">00000000000000006666863F</field>
+            <field hash="D1592ADD" name="fStandCapsuleRadius" value-Float32="0.45" type="BinHex">6666E63E</field>
+          </object>
+          <object hash="2D4780F8" name="SwimDimensions">
+            <field hash="7AB04571" name="vecStandCapsulePointA" value-Vector3="0,0,0.45" type="BinHex">00000000000000006666E63E</field>
+            <field hash="E3B914CB" name="vecStandCapsulePointB" value-Vector3="0,0,0.5" type="BinHex">00000000000000000000003F</field>
+            <field hash="D1592ADD" name="fStandCapsuleRadius" value-Float32="0.45" type="BinHex">6666E63E</field>
+          </object>
+        </object>
+      </object>
+      <object hash="DAA468D1" name="CBtzAnimal">
+        <field hash="731995FE" name="bIsAI" value-Boolean="True" type="BinHex">01</field>
+        <field hash="E247A953" value-String="scripts\game\objects\animals\statemachine\animal_state_machines.xml" type="BinHex">736372697074735C67616D655C6F626A656374735C616E696D616C735C73746174656D616368696E655C616E696D616C5F73746174655F6D616368696E65732E786D6C00</field>
+        <field hash="4E784950" name="fileStateMachine" value-ComputeHash32="scripts\game\objects\animals\statemachine\animal_state_machines.xml" type="BinHex">615B53F5</field>
+        <field hash="6FAA9CAC" name="Usable" type="BinHex">00</field>
+        <field hash="E800C721" name="bIgnoreSTP" value-Boolean="False" type="BinHex">00</field>
+        <field hash="DF08C8DB" name="bIsAggressive" value-Boolean="True" type="BinHex">01</field>
+        <field hash="7B6AB510" name="fGravity" value-Float32="-18" type="BinHex">000090C1</field>
+        <field hash="953332AE" name="vectorJumpImpulse" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+        <field hash="C445724A" name="fJumpDelay" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="8A37EFA0" name="bUseFallHeight" value-Boolean="False" type="BinHex">00</field>
+        <field hash="13EF7E64" type="BinHex">00</field>
+        <field hash="E19D38AA" name="headBoneName" type="BinHex">FFFFFFFF</field>
+        <field hash="58FE4874" name="selAnimalSpecies" value-Enum="7" type="BinHex">07000000</field>
+        <field hash="ABE8BFBB" name="bUsesArcAttack" value-Boolean="True" type="BinHex">01</field>
+        <field hash="F59D35D8" type="BinHex">00</field>
+        <field hash="C9748F69" name="matimpAttackImpactFx" type="BinHex">FFFFFFFF</field>
+        <field hash="EDC1423F" name="bIgnoreInputListener" value-Boolean="False" type="BinHex">00</field>
+        <object hash="CDC489B3" name="sSupportedSTPSubtypes">
+          <field hash="10CA06AB" name="hidSize" value-Int32="3" type="BinHex">03000000</field>
+          <field hash="02CFE006" type="BinHex">00</field>
+          <field hash="01AF68F3" type="BinHex">FFFFFFFF</field>
+          <field hash="75C8D090" type="BinHex">00</field>
+          <field hash="76A85865" type="BinHex">FFFFFFFF</field>
+          <field hash="ECC1812A" type="BinHex">00</field>
+          <field hash="EFA109DF" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="CCE14BE0" name="enumAnimalSpecies">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Gazelle" type="BinHex">47617A656C6C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Zebra" type="BinHex">5A6562726100</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Wildebeest" type="BinHex">57696C6465626565737400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="CapeBuffalo" type="BinHex">4361706542756666616C6F00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Goat" type="BinHex">476F617400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Chicken" type="BinHex">436869636B656E00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Crocodile" type="BinHex">43726F636F64696C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Viperwolf" type="BinHex">5669706572776F6C6600</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Direhorse" type="BinHex">44697265686F72736500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Sturmbeest" type="BinHex">537475726D626565737400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Hexapede" type="BinHex">486578617065646500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Tapirus" type="BinHex">5461706972757300</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Banshee" type="BinHex">42616E7368656500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Hammerhead" type="BinHex">48616D6D65726865616400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Thanator" type="BinHex">5468616E61746F7200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="HellfireWasp" type="BinHex">48656C6C666972655761737000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Stingbat" type="BinHex">5374696E6762617400</field>
+          </object>
+        </object>
+        <object hash="D00AFAA7" name="Rotation">
+          <field hash="0BFDF9F4" name="fScaredRotationSpeedThreshold" value-Float32="2" type="BinHex">00000040</field>
+          <field hash="64EE94D1" name="fRotationStiffnessConstant" value-Float32="9" type="BinHex">00001041</field>
+          <field hash="5945FCB4" name="fRotationDampingConstant" value-Float32="3" type="BinHex">00004040</field>
+          <field hash="1F09DB95" name="fScaredRotationStiffnessConstant" value-Float32="100" type="BinHex">0000C842</field>
+          <field hash="8E6B1581" name="fScaredRotationDampingConstant" value-Float32="20" type="BinHex">0000A041</field>
+          <field hash="0171CCF2" name="fNormalMaxAngularVelocity" value-Float32="80" type="BinHex">0000A042</field>
+          <field hash="94E31AA3" name="fScaredMaxAngularVelocity" value-Float32="250" type="BinHex">00007A43</field>
+        </object>
+        <object hash="5DB4311B" name="EarFlipping">
+          <field hash="E3A8847E" name="fFlipDuration" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="8F00EC33" name="archSpeedCurve" type="BinHex">00</field>
+          <object hash="BDCD4D49" name="EarBones">
+            <object hash="7FD525A5" name="EarBone">
+              <field hash="795F32D4" name="text_BoneName" value-String="" type="BinHex">00</field>
+              <field hash="CF1DBEC6" name="BoneName" type="BinHex">FFFFFFFF</field>
+              <field hash="690B1187" name="fMaxRotationInDegree" value-Float32="0" type="BinHex">00000000</field>
+              <field hash="16FE339C" name="selRotationAxis" value-Enum="-1" type="BinHex">FFFFFFFF</field>
+              <object hash="6DC62315" name="enumRotationAxis">
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-Int16="88" type="BinHex">5800</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-Int16="89" type="BinHex">5900</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-Int16="90" type="BinHex">5A00</field>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+      </object>
+      <object hash="CF0B5949" name="CDynamicDeploadComponent" />
+      <object hash="F62231F2" name="CAnimationComponent">
+        <field hash="F9F2D5F4" name="text_fileSkeleton" value-String="graphics\av_creatures\viperwolf\pelvis_ref.skeleton" type="BinHex">67726170686963735C61765F6372656174757265735C7669706572776F6C665C70656C7669735F7265662E736B656C65746F6E00</field>
+        <field hash="0B80933A" name="fileSkeleton" value-ComputeHash32="graphics\av_creatures\viperwolf\pelvis_ref.skeleton" type="BinHex">34C26141</field>
+        <field hash="E0AAD6E5" name="text_fileFacialFile" value-String="" type="BinHex">00</field>
+        <field hash="2A6C3AF2" name="fileFacialFile" type="BinHex">FFFFFFFF</field>
+        <field hash="BB681C98" name="selSkeletonType" value-Enum="1" type="BinHex">01000000</field>
+        <field hash="C77E6465" name="sAnimPackage" type="BinHex">00</field>
+        <field hash="C22DBBC8" name="sPartName" type="BinHex">00</field>
+        <field hash="7B1B17E6" name="bForceBestQuality" value-Boolean="False" type="BinHex">00</field>
+        <field hash="D32F71E1" name="bDisableInterpolation" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9CB5A0AD" name="fCycleRandomTime" value-Float32="0.5" type="BinHex">0000003F</field>
+        <field hash="FE97B45D" name="text_InitialMoveState" value-String="" type="BinHex">00</field>
+        <field hash="52A8545E" name="InitialMoveState" type="BinHex">FFFFFFFF</field>
+        <object hash="FBEB7EA6" name="MercKitFacialFiles">
+          <object hash="091C008F" name="Faces">
+            <field hash="0AF17627" name="text_sHeadTag" value-String="" type="BinHex">00</field>
+            <field hash="BCB3FA35" name="sHeadTag" type="BinHex">FFFFFFFF</field>
+            <field hash="89CE658A" name="text_fileFacialActor" value-String="" type="BinHex">00</field>
+            <field hash="0AD726A1" name="fileFacialActor" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="C0500C11" name="enumSkeletonType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar/Navi" type="BinHex">4176617461722F4E61766900</field>
+          </object>
+        </object>
+      </object>
+      <object hash="BAFC1CFE" name="CAnimalNetworkComponent" />
+      <object hash="2320E215" name="CAnimalBeautifierSelector">
+        <field hash="37848899" name="selBeautifier" value-Enum="2" type="BinHex">02000000</field>
+        <object hash="DF88A200" name="enumBeautifier">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Gazelle" type="BinHex">47617A656C6C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="GenericQuadruped" type="BinHex">47656E6572696351756164727570656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="AvatarAnimal" type="BinHex">417661746172416E696D616C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="HybridAnimal" type="BinHex">487962726964416E696D616C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Plant" type="BinHex">506C616E7400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Turret" type="BinHex">54757272657400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Undefined" type="BinHex">556E646566696E656400</field>
+          </object>
+        </object>
+      </object>
+      <object hash="D771A22C" name="CFCXAIComponent">
+        <field hash="2B928622" name="text_Type" value-String="CViperwolfAgent" type="BinHex">435669706572776F6C664167656E7400</field>
+        <field hash="2CECF817" name="Type" value-ComputeHash32="CViperwolfAgent" type="BinHex">0C3E5583</field>
+        <field hash="DB65A9C9" name="bIgnoreAISecto" value-Boolean="False" type="BinHex">00</field>
+        <object hash="4F4522C9" name="AIObject">
+          <object hash="19669DE5" name="CAgent">
+            <field hash="24B313D8" name="text_Brain" value-String="::Viperwolf Brain/CBrainViperwolf" type="BinHex">3A3A5669706572776F6C6620427261696E2F43427261696E5669706572776F6C6600</field>
+            <field hash="7207A985" name="Brain" value-ComputeHash32="::Viperwolf Brain/CBrainViperwolf" type="BinHex">D15F84F0</field>
+            <field hash="071B548C" name="text_aiwsBrainWorkspace" value-String="scripts\game\newbrains\viperwolfbrain.ai.rml" type="BinHex">736372697074735C67616D655C6E6577627261696E735C7669706572776F6C66627261696E2E61692E726D6C00</field>
+            <field hash="8C3C4908" name="aiwsBrainWorkspace" value-ComputeHash32="scripts\game\newbrains\viperwolfbrain.ai.rml" type="BinHex">103D67CC</field>
+            <object hash="3558B935" name="PersonalityComponent">
+              <field hash="2B928622" name="text_Type" value-String="CAnimalPersonality" type="BinHex">43416E696D616C506572736F6E616C69747900</field>
+              <field hash="2CECF817" name="Type" value-ComputeHash32="CAnimalPersonality" type="BinHex">ED96B109</field>
+            </object>
+          </object>
+          <object hash="A385ED76" name="CGameAgent">
+            <field hash="11130C77" name="bIsScripted" value-Boolean="False" type="BinHex">00</field>
+            <field hash="84C3FECA" name="fAccelerationsSlow" value-Float32="2" type="BinHex">00000040</field>
+            <field hash="5901C307" name="fAccelerationsNormal" value-Float32="15" type="BinHex">00007041</field>
+            <field hash="94A2C6D3" name="fAccelerationsFast" value-Float32="30" type="BinHex">0000F041</field>
+            <field hash="23FC7BA2" name="fDecelerationsSlow" value-Float32="-2" type="BinHex">000000C0</field>
+            <field hash="69F7F238" name="fDecelerationsNormal" value-Float32="-15" type="BinHex">000070C1</field>
+            <field hash="339D43BB" name="fDecelerationsFast" value-Float32="-30" type="BinHex">0000F0C1</field>
+            <field hash="E3915A7C" name="fSpeedsBabyStep" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="111303B0" name="fSpeedsWalk" value-Float32="2.3" type="BinHex">33331340</field>
+            <field hash="00CD58B3" name="fSpeedsJog" value-Float32="6" type="BinHex">0000C040</field>
+            <field hash="DB09E804" name="fSpeedsRun" value-Float32="8" type="BinHex">00000041</field>
+            <field hash="E5500704" name="fSpeedsSprint" value-Float32="11.5" type="BinHex">00003841</field>
+            <field hash="2642C34D" name="fVariationBabyStep" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="9AEBCC74" name="fVariationWalk" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+            <field hash="46BA76E9" name="fVariationJog" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="9D7EC65E" name="fVariationRun" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+            <field hash="411D4197" name="fVariationSprint" value-Float32="0" type="BinHex">00000000</field>
+            <object hash="FF7B3D0A" name="CombatParameters">
+              <field hash="B5E5A5D8" name="fMaxDistToTarget" value-Float32="75" type="BinHex">00009642</field>
+              <field hash="A6642645" name="fMaxDistToFriend" value-Float32="20" type="BinHex">0000A041</field>
+            </object>
+            <object hash="AC138008" name="Army">
+              <field hash="C9404E79" name="selArmy" value-Enum="2" type="BinHex">02000000</field>
+              <object hash="91BA3694" name="enumArmy">
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="BlueGuys" type="BinHex">426C75654775797300</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="RedGuys" type="BinHex">5265644775797300</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="GreyGuys" type="BinHex">477265794775797300</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="NeutralGuys" type="BinHex">4E65757472616C4775797300</field>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object hash="1126D0BD" name="DensityManagement">
+            <field hash="E075C4B5" name="bNeverDelete" value-Boolean="False" type="BinHex">00</field>
+            <field hash="D5FA2962" name="bLastToBeDeleted" value-Boolean="False" type="BinHex">00</field>
+          </object>
+          <object hash="06DD5437" name="CPawnBaseAgent">
+            <field hash="0F08A215" name="bCanEnterCombat" value-Boolean="True" type="BinHex">01</field>
+            <object hash="7F657DFE" name="SensorySystem">
+              <field hash="67B4E37E" name="fAwarenessDelay" value-Float32="1" type="BinHex">0000803F</field>
+              <field hash="D1E29CFD" value-Float32="5" type="BinHex">0000A040</field>
+              <object hash="02B6D954" name="Corporation">
+                <field hash="EBC956CE" name="fAwarenessRadius" value-Float32="50" type="BinHex">00004842</field>
+                <field hash="AA225C62" name="fAttackRadius" value-Float32="45" type="BinHex">00003442</field>
+              </object>
+              <object hash="5E915689" name="Navi">
+                <field hash="EBC956CE" name="fAwarenessRadius" value-Float32="20" type="BinHex">0000A041</field>
+                <field hash="AA225C62" name="fAttackRadius" value-Float32="0" type="BinHex">00000000</field>
+              </object>
+            </object>
+          </object>
+          <object hash="3F341A31" name="CBaseAnimalAgent">
+            <field hash="58FE4874" name="selAnimalSpecies" value-Enum="7" type="BinHex">07000000</field>
+            <object hash="CCE14BE0" name="enumAnimalSpecies">
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Unset" type="BinHex">556E73657400</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Gazelle" type="BinHex">47617A656C6C6500</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Zebra" type="BinHex">5A6562726100</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Cape Buffalo" type="BinHex">436170652042756666616C6F00</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Wildebeest" type="BinHex">57696C6465626565737400</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Goat" type="BinHex">476F617400</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Chicken" type="BinHex">436869636B656E00</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Viperwolf" type="BinHex">5669706572776F6C6600</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Direhorse" type="BinHex">44697265686F72736500</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Sturmbeest" type="BinHex">537475726D626565737400</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Hexapede" type="BinHex">486578617065646500</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Tapirus" type="BinHex">5461706972757300</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Banshee" type="BinHex">42616E7368656500</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Hammerhead" type="BinHex">48616D6D65726865616400</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Thanator" type="BinHex">5468616E61746F7200</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="HellfireWasp" type="BinHex">48656C6C666972655761737000</field>
+              </object>
+              <object hash="0EBEAE51" name="enum">
+                <field hash="DCB67730" name="Value" value-String="Stingbat" type="BinHex">5374696E6762617400</field>
+              </object>
+            </object>
+          </object>
+          <object hash="08EBE2B5" name="CBtzAnimalAgent">
+            <field hash="2D45DA02" name="fMaximumChaseDistance" value-Float32="200" type="BinHex">00004843</field>
+            <field hash="B7659D2B" name="fGroupRadius" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="FBC93ECF" name="bIsPet" value-Boolean="False" type="BinHex">00</field>
+            <field hash="23DCF17A" name="fCatchUpDist" value-Float32="30" type="BinHex">0000F041</field>
+            <object hash="0CC426BA" name="Stim_AnimalPanic">
+              <field hash="60534B32" name="hidEventName" value-String="Stims" type="BinHex">5374696D7300</field>
+              <field hash="83F9B027" name="eventMask" value-Int32="2" type="BinHex">02000000</field>
+              <field hash="F600E384" name="eventLayerMask" value-Int32="15" type="BinHex">0F000000</field>
+              <field hash="DCC35857" name="hidTargetEntityId" type="BinHex">FFFFFFFFFFFFFFFF</field>
+              <field hash="FC25E1F1" name="text_sDetail" value-String="" type="BinHex">00</field>
+              <field hash="D884CECE" name="sDetail" type="BinHex">FFFFFFFF</field>
+              <field hash="49BF3666" name="selType" value-Enum="9" type="BinHex">09000000</field>
+              <field hash="1E35DB83" name="nLevel" value-Int32="1" type="BinHex">01000000</field>
+              <field hash="F8186C6E" name="fRadius" value-Float32="20" type="BinHex">0000A041</field>
+              <field hash="EA50B2B5" name="bFalloff" value-Boolean="False" type="BinHex">00</field>
+              <field hash="8657F948" name="nFalloffMinLevel" value-Int32="1" type="BinHex">01000000</field>
+              <field hash="71E5697F" name="hidShowType" type="BinHex">01</field>
+              <field hash="16FC7418" name="hidShowRadius" type="BinHex">01</field>
+              <object hash="11454E8B" name="enumType">
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Bang" type="BinHex">42616E6700</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Snap" type="BinHex">536E617000</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Pierce" type="BinHex">50696572636500</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Crush" type="BinHex">437275736800</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-Int32="7632195" type="BinHex">43757400</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Health" type="BinHex">4865616C746800</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Burn" type="BinHex">4275726E00</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Water" type="BinHex">576174657200</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Panic" type="BinHex">50616E696300</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Fear" type="BinHex">4665617200</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Morale" type="BinHex">4D6F72616C6500</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Dirt" type="BinHex">4469727400</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Reliability" type="BinHex">52656C696162696C69747900</field>
+                </object>
+                <object hash="0EBEAE51" name="enum">
+                  <field hash="DCB67730" name="Value" value-String="Interest" type="BinHex">496E74657265737400</field>
+                </object>
+              </object>
+            </object>
+            <object hash="0DABF7A1" name="Movement">
+              <field hash="67559753" name="fDesiredTurningSpeed" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+              <field hash="9EB76285" name="fMaxTurningSpeed" value-Float32="10" type="BinHex">00002041</field>
+              <field hash="E14E0499" name="iNumberOfSteps" value-Int32="3" type="BinHex">03000000</field>
+              <field hash="9591C43E" name="fPathfindRadius" value-Float32="1" type="BinHex">0000803F</field>
+              <field hash="ADE3CD64" name="fTargetTokenWalkDistance" value-Float32="3" type="BinHex">00004040</field>
+              <field hash="54CC19DC" name="fTargetTokenRunDistance" value-Float32="4" type="BinHex">00008040</field>
+              <field hash="B9881A2B" name="fAvoidanceTokenWalkDistance" value-Float32="4" type="BinHex">00008040</field>
+              <field hash="3E4719C0" name="fAvoidanceTokenRunDistance" value-Float32="6" type="BinHex">0000C040</field>
+            </object>
+          </object>
+          <object hash="83553E0C" name="CViperwolfAgent">
+            <field hash="69DB69B8" name="fStepbackDuration" value-Float32="0.25" type="BinHex">0000803E</field>
+            <field hash="31E7C5A1" name="fStepbackCooldown" value-Float32="3.5" type="BinHex">00006040</field>
+            <field hash="A7BF3F09" name="fFrontAttackProb" value-Float32="30" type="BinHex">0000F041</field>
+            <field hash="8C53D4A1" name="fBackAttackProb" value-Float32="70" type="BinHex">00008C42</field>
+            <field hash="BEDEA32F" name="fFleeProb" value-Float32="100" type="BinHex">0000C842</field>
+            <field hash="BAB718F2" name="bUseAvoidance" value-Boolean="False" type="BinHex">00</field>
+          </object>
+        </object>
+      </object>
+      <object hash="28DB2B66" name="CFCXCountersComponentAnimal">
+        <field hash="84F8E45C" name="archStimEffectTable" value-String="tables.StimEffectTables.NPCDefault" type="BinHex">7461626C65732E5374696D4566666563745461626C65732E4E504344656661756C7400</field>
+        <field hash="3DED5A88" name="bIsInvincibleExceptToPlayer" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C729E709" name="bIsInvincibleToAI" value-Boolean="False" type="BinHex">00</field>
+        <field hash="0E37A34A" name="bIsInvincibleToPlayer" value-Boolean="False" type="BinHex">00</field>
+        <field hash="2D6DDF89" name="WeaponJamProbabilityScale" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="F0A9E476" name="bEnableHitLocations" value-Boolean="False" type="BinHex">00</field>
+      </object>
+      <object hash="6757950D" name="AvatarCharacterSheet_Animal">
+        <field hash="8A13CD27" name="selGender" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="C4B45F53" name="selPawnType" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="301B8DF1" name="bGivesNoXp" value-Boolean="True" type="BinHex">01</field>
+        <field hash="CF77E1ED" name="bGivesNoEp" value-Boolean="True" type="BinHex">01</field>
+        <field hash="F8579499" name="iEPRewardOverride" value-Int32="-1" type="BinHex">FFFFFFFF</field>
+        <field hash="BB4D0B84" name="bUntargetable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="65B55C57" name="bShowHealthWhenTargeted" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4C91BA93" name="bShowDamageTaken" value-Boolean="True" type="BinHex">01</field>
+        <field hash="400A642A" name="bImmuneToAOEEffects" value-Boolean="False" type="BinHex">00</field>
+        <field hash="804674C8" name="bImmuneToFire" value-Boolean="False" type="BinHex">00</field>
+        <field hash="71E85D91" name="bCanFireStick" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9D9F959E" name="sMissionEventOnPlayerKill" type="BinHex">00</field>
+        <field hash="27EA430B" type="BinHex">00</field>
+        <field hash="EC299A11" name="sCompletionEventOnPlayerKill" type="BinHex">FFFFFFFF</field>
+        <field hash="37110E0D" type="BinHex">00</field>
+        <field hash="CAB834AE" name="sCompletionEvent2OnPlayerKill" type="BinHex">FFFFFFFF</field>
+        <field hash="84FE38C1" name="sMissionEventOnDeath" type="BinHex">00</field>
+        <field hash="DC476D19" value-String="Pan_Fauna_Viperwolf" type="BinHex">50616E5F4661756E615F5669706572776F6C6600</field>
+        <field hash="C9CBF4EA" name="sPedia" value-ComputeHash32="Pan_Fauna_Viperwolf" type="BinHex">A9CFD29F</field>
+        <field hash="CF6B8836" name="fPandorapediaScanDuration" value-Float32="3" type="BinHex">00004040</field>
+        <field hash="F78D16DE" name="fileCharacterSheetDataXML" value-String="databases\baltazar\npcstatsheets\mp_leucomelasviperwolf.xml" type="BinHex">6461746162617365735C62616C74617A61725C6E7063737461747368656574735C6D705F6C6575636F6D656C61737669706572776F6C662E786D6C00</field>
+        <field hash="06B677F9" name="sNameID" value-String="Viperwolf" type="BinHex">5669706572776F6C6600</field>
+        <field hash="0330EB3B" name="iLevel" value-Int32="13" type="BinHex">0D000000</field>
+        <field hash="163AAB24" name="bGivesNoEPtoNavis" value-Boolean="True" type="BinHex">01</field>
+        <field hash="CD8C15E2" name="fileLootTableXML" type="BinHex">00</field>
+        <field hash="0E614666" name="fLootDropHeight" value-Float32="1.5" type="BinHex">0000C03F</field>
+        <field hash="6B6049F9" name="bImmuneToFear" value-Boolean="False" type="BinHex">00</field>
+        <field hash="69EE8296" name="sCameraNameID" type="BinHex">00</field>
+        <field hash="BE914A80" name="selFaction" value-Enum="1" type="BinHex">01000000</field>
+        <field hash="7CA90031" name="selDialogClass" value-Enum="0" type="BinHex">00000000</field>
+        <field hash="4E5599BD" name="hidVoicePitchFactor" value-Hash32="3212836864" type="BinHex">000080BF</field>
+        <field hash="BB6A9AFA" name="fResurrectionDelay" value-Float32="-1" type="BinHex">000080BF</field>
+        <field hash="454ACA1C" name="bResurrectable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="94C17879" name="bCannotSeeResurrection" value-Boolean="True" type="BinHex">01</field>
+        <field hash="6D04A9F8" type="BinHex">00</field>
+        <field hash="BE14496E" name="fDamageOnAnimalRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="7740CA3B" type="BinHex">00</field>
+        <field hash="9D1EAA1F" name="sControlSchemePedia" type="BinHex">FFFFFFFF</field>
+        <field hash="20FC37F0" type="BinHex">00</field>
+        <field hash="CAA257D4" name="sWeakWeaponCategory" type="BinHex">FFFFFFFF</field>
+        <field hash="163500E5" name="fWeakWeaponDamageMultiplier" value-Float32="1" type="BinHex">0000803F</field>
+        <object hash="3F1DE172" name="enumGender">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Male" type="BinHex">4D616C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Female" type="BinHex">46656D616C6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+        </object>
+        <object hash="31A02FAF" name="enumPawnType">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar" type="BinHex">41766174617200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Soldier" type="BinHex">536F6C6469657200</field>
+          </object>
+        </object>
+        <object hash="A525E1D7" name="enumFaction">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Neutral" type="BinHex">4E65757472616C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Undecided" type="BinHex">556E6465636964656400</field>
+          </object>
+        </object>
+        <object hash="F59227FB" name="enumDialogClass">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Scientist" type="BinHex">536369656E7469737400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Civilian" type="BinHex">436976696C69616E00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Military" type="BinHex">4D696C697461727900</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Mystic" type="BinHex">4D797374696300</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Warrior" type="BinHex">57617272696F7200</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Avatar" type="BinHex">41766174617200</field>
+          </object>
+        </object>
+        <object hash="3DA97FA6" name="AutoDespawning">
+          <field hash="A2CF6BBC" name="bAutoDespawn" value-Boolean="True" type="BinHex">01</field>
+          <field hash="EC507092" name="fDespawnDelay" value-Float32="20" type="BinHex">0000A041</field>
+          <field hash="33EF12B6" name="fHardDespawnDelay" value-Float32="20" type="BinHex">0000A041</field>
+        </object>
+        <object hash="8C016D94" name="DamageRumbleIntensity">
+          <field hash="64F59345" name="fRumbleIntensityMultiplier" value-Float32="0" type="BinHex">00000000</field>
+        </object>
+      </object>
+      <object hash="928A8B39" name="AvatarPawn_Animal">
+        <field hash="D08F5968" name="vectorNoBoneTargetingOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+        <field hash="1311AE27" name="bSupportsBoxCenterTargeting" value-Boolean="False" type="BinHex">00</field>
+        <field hash="978D249D" name="fTargetingThreatFactor" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="2F9C4ECB" name="archFallingDamageCurve" type="BinHex">00</field>
+        <object hash="C403F95F" name="TargetingBones">
+          <object hash="95741049" name="Bone">
+            <field hash="F96FAF0D" name="text_Name" value-String="Engine_Spine2" type="BinHex">456E67696E655F5370696E653200</field>
+            <field hash="FE11D138" name="Name" value-ComputeHash32="Engine_Spine2" type="BinHex">CD106D44</field>
+          </object>
+          <object hash="95741049" name="Bone">
+            <field hash="F96FAF0D" name="text_Name" value-String="Engine_Head" type="BinHex">456E67696E655F4865616400</field>
+            <field hash="FE11D138" name="Name" value-ComputeHash32="Engine_Head" type="BinHex">8A1066EB</field>
+          </object>
+          <object hash="95741049" name="Bone">
+            <field hash="F96FAF0D" name="text_Name" value-String="Engine_Neck1" type="BinHex">456E67696E655F4E65636B3100</field>
+            <field hash="FE11D138" name="Name" value-ComputeHash32="Engine_Neck1" type="BinHex">98DE0685</field>
+          </object>
+          <object hash="95741049" name="Bone">
+            <field hash="F96FAF0D" name="text_Name" value-String="Engine_Neck" type="BinHex">456E67696E655F4E65636B00</field>
+            <field hash="FE11D138" name="Name" value-ComputeHash32="Engine_Neck" type="BinHex">4530846C</field>
+          </object>
+          <object hash="95741049" name="Bone">
+            <field hash="F96FAF0D" name="text_Name" value-String="Engine_Spine1" type="BinHex">456E67696E655F5370696E653100</field>
+            <field hash="FE11D138" name="Name" value-ComputeHash32="Engine_Spine1" type="BinHex">774164DD</field>
+          </object>
+          <object hash="95741049" name="Bone">
+            <field hash="F96FAF0D" name="text_Name" value-String="Pelvis" type="BinHex">50656C76697300</field>
+            <field hash="FE11D138" name="Name" value-ComputeHash32="Pelvis" type="BinHex">58FD21B0</field>
+          </object>
+          <object hash="95741049" name="Bone">
+            <field hash="F96FAF0D" name="text_Name" value-String="Engine_L_Calf" type="BinHex">456E67696E655F4C5F43616C6600</field>
+            <field hash="FE11D138" name="Name" value-ComputeHash32="Engine_L_Calf" type="BinHex">953E6B8C</field>
+          </object>
+          <object hash="95741049" name="Bone">
+            <field hash="F96FAF0D" name="text_Name" value-String="Engine_R_Calf" type="BinHex">456E67696E655F525F43616C6600</field>
+            <field hash="FE11D138" name="Name" value-ComputeHash32="Engine_R_Calf" type="BinHex">7E5DB7B5</field>
+          </object>
+          <object hash="95741049" name="Bone">
+            <field hash="F96FAF0D" name="text_Name" value-String="" type="BinHex">00</field>
+            <field hash="FE11D138" name="Name" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="D6C705F3" name="ArmorStepSounds">
+          <object hash="1ECC6BF5" name="ArmorStepSound">
+            <field hash="E71BEC74" type="BinHex">00</field>
+            <field hash="51596066" name="ArmorTag" type="BinHex">FFFFFFFF</field>
+            <field hash="1B1A3141" name="sndSoundId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          </object>
+        </object>
+        <object hash="58C67B36" name="MaskUserEffects">
+          <object hash="A15D5768" name="MaskUserEffect">
+            <field hash="E71BEC74" type="BinHex">00</field>
+            <field hash="51596066" name="ArmorTag" type="BinHex">FFFFFFFF</field>
+            <field hash="D002B899" type="BinHex">00</field>
+            <field hash="0668411B" name="UserEffectParamSetName" type="BinHex">FFFFFFFF</field>
+          </object>
+        </object>
+        <object hash="5756DEFE" name="OverheadIcon">
+          <field hash="033DAB5D" name="text_BoneId" value-String="" type="BinHex">00</field>
+          <field hash="16B132AE" name="BoneId" type="BinHex">FFFFFFFF</field>
+          <field hash="9BE6E8FB" name="vectorOffset" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+        </object>
+      </object>
+      <object hash="063E5E54" name="CAnimalSoundAndFXComponent">
+        <field hash="97E75667" name="bAirAnimal" value-Boolean="False" type="BinHex">00</field>
+        <field hash="F9DE5F2B" name="RayCastCooldown" value-Float32="0.5" type="BinHex">0000003F</field>
+        <object hash="F68F03C7" name="Sounds">
+          <object hash="D93CA11D" name="Collision">
+            <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+            <field hash="2F1569B4" name="fSmallCollisionSpeed" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="E8F06BF8" name="fMediumCollisionSpeed" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="35A360CF" name="fBigCollisionSpeed" value-Float32="0" type="BinHex">00000000</field>
+            <field hash="20221E55" name="sndSmallCollision" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+            <field hash="4A272259" name="sndMediumCollision" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+            <field hash="B231F23B" name="sndBigCollision" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          </object>
+          <object hash="FA465D21" name="FootstepSoundLimit">
+            <field hash="4C06F6EC" name="iMaxNumberOfEntityAllowed" value-Int32="2" type="BinHex">02000000</field>
+            <field hash="320C1BBD" name="iMaxNumberAllowed" value-Int32="3" type="BinHex">03000000</field>
+            <field hash="BA785F3F" name="fStopFadeoutTime" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+          </object>
+        </object>
+        <object hash="16CB8FD4" name="AISounds">
+          <field hash="875C26C3" name="sndPreAlertSound" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+          <field hash="6E2929DD" name="sndAlertSound" value-String="0x0011E866" type="BinHex">3078303031314538363600</field>
+          <field hash="B72DADE2" name="sndDeathSound" value-String="0x00462B0C" type="BinHex">3078303034363242304300</field>
+          <field hash="437415B7" name="sndPainSmallSound" value-String="0x00462B0E" type="BinHex">3078303034363242304500</field>
+          <field hash="5D640543" name="sndPainMediumSound" value-String="0x00462B0D" type="BinHex">3078303034363242304400</field>
+          <field hash="C28657F2" name="sndPainBigSound" value-String="0x00040659" type="BinHex">3078303030343036353900</field>
+          <field hash="314BF280" name="sndPainFatalSound" value-String="0x00107302" type="BinHex">3078303031303733303200</field>
+          <field hash="BB32EB8B" name="sndIntimidateSound" value-String="0x0011E867" type="BinHex">3078303031314538363700</field>
+          <field hash="5CD37063" name="sndGroupIntimidateSound" value-String="0x00123E13" type="BinHex">3078303031323345313300</field>
+          <field hash="B35D41D0" name="sndAttackAnticipationSound" value-String="0x001072FF" type="BinHex">3078303031303732464600</field>
+          <field hash="536AA80B" name="sndFearSound" value-String="0x000406C2" type="BinHex">3078303030343036433200</field>
+          <field hash="8FE662AD" name="sndtpSoundType" value-UInt32="5" type="BinHex">05000000</field>
+          <field hash="75C6F0C6" name="iPainBigThreshold" value-Int32="250" type="BinHex">FA000000</field>
+          <field hash="02461FFA" name="MinTimeBetweenPainSound" value-Int32="0" type="BinHex">00000000</field>
+          <object hash="927D4C66" name="AlertSoundLimit">
+            <field hash="4C06F6EC" name="iMaxNumberOfEntityAllowed" value-Int32="2" type="BinHex">02000000</field>
+            <field hash="320C1BBD" name="iMaxNumberAllowed" value-Int32="3" type="BinHex">03000000</field>
+            <field hash="BA785F3F" name="fStopFadeoutTime" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+          </object>
+          <object hash="975CFC61" name="PainSoundLimit">
+            <field hash="4C06F6EC" name="iMaxNumberOfEntityAllowed" value-Int32="2" type="BinHex">02000000</field>
+            <field hash="320C1BBD" name="iMaxNumberAllowed" value-Int32="3" type="BinHex">03000000</field>
+            <field hash="BA785F3F" name="fStopFadeoutTime" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+          </object>
+        </object>
+        <object hash="64FDEADD" name="StepRumbleEffect">
+          <field hash="F96FAF0D" name="text_Name" value-String="" type="BinHex">00</field>
+          <field hash="FE11D138" name="Name" type="BinHex">FFFFFFFF</field>
+          <field hash="FB0BCFB4" name="fRange" value-Float32="20" type="BinHex">0000A041</field>
+          <field hash="B23932DE" name="fIntensity" value-Float32="1" type="BinHex">0000803F</field>
+        </object>
+      </object>
+      <object hash="7273EBB0" name="CPersistComponent">
+        <field hash="7C4CF173" name="selLevel" value-Enum="2" type="BinHex">02000000</field>
+        <object hash="A2AF95CE" name="enumLevel">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Limited" type="BinHex">4C696D6974656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Full" type="BinHex">46756C6C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Critical" type="BinHex">437269746963616C00</field>
+          </object>
+        </object>
+      </object>
+      <object hash="7240ED7D" name="COcclusionQueryComponent" />
+    </object>
+  </object>
+</object>

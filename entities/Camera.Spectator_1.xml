@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Camera.Spectator" type="BinHex">43616D6572612E537065637461746F7200</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="cameras.Camera.Spectator" type="BinHex">63616D657261732E43616D6572612E537065637461746F7200</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="267" type="BinHex">0B01000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="2" type="BinHex">02000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="73D9F2B1" name="CCameraSpectatorComponent">
+        <field hash="337A5FDE" name="fCameraBlendTime" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="3905BE36" name="fNearDistance" value-Float32="0.1" type="BinHex">CDCCCC3D</field>
+        <field hash="E2F17F88" name="fFarDistance" value-Float32="1000" type="BinHex">00007A44</field>
+        <field hash="BEF721BA" name="fFOV" value-Float32="75" type="BinHex">00009642</field>
+        <field hash="67AA6B0B" name="fSpeed" value-Float32="5" type="BinHex">0000A040</field>
+        <field hash="CB4C6567" name="fFastSpeed" value-Float32="12" type="BinHex">00004041</field>
+        <field hash="904B87E2" name="fMaxHeight" value-Float32="60" type="BinHex">00007042</field>
+      </object>
+      <object hash="FFF3A294" name="CRainComponent">
+        <field hash="967351FD" name="text_psRainEmitter" value-String="environment.weather.rain" type="BinHex">656E7669726F6E6D656E742E776561746865722E7261696E00</field>
+        <field hash="EA5DCC0C" name="psRainEmitter" value-ComputeHash32="environment.weather.rain" type="BinHex">3C34784B</field>
+        <field hash="24AFCA78" name="text_psRainSplash" value-String="environment.weather.rain_splash" type="BinHex">656E7669726F6E6D656E742E776561746865722E7261696E5F73706C61736800</field>
+        <field hash="D6DD8CB6" name="psRainSplash" value-ComputeHash32="environment.weather.rain_splash" type="BinHex">DC0D9436</field>
+        <field hash="62DEF0AA" name="bAutoStart" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B23932DE" name="fIntensity" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="378FE512" name="uiMaxRaysPerRegion" value-Int32="25" type="BinHex">19000000</field>
+        <field hash="764BD6BF" name="fRaysPerSecond" value-Float32="25" type="BinHex">0000C841</field>
+        <field hash="6E7AC0F4" name="uiGridSize" value-Int32="8" type="BinHex">08000000</field>
+        <field hash="E7D5416C" name="uiHalfNumGrids" value-Int32="2" type="BinHex">02000000</field>
+        <field hash="FBB9B5B1" name="fEmitterDistanceOffset" value-Float32="10" type="BinHex">00002041</field>
+        <field hash="476FE675" name="fSpeedScaling" value-Float32="20" type="BinHex">0000A041</field>
+      </object>
+      <object hash="7273EBB0" name="CPersistComponent">
+        <field hash="7C4CF173" name="selLevel" value-Enum="1" type="BinHex">01000000</field>
+        <object hash="A2AF95CE" name="enumLevel">
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="None" type="BinHex">4E6F6E6500</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Limited" type="BinHex">4C696D6974656400</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Full" type="BinHex">46756C6C00</field>
+          </object>
+          <object hash="0EBEAE51" name="enum">
+            <field hash="DCB67730" name="Value" value-String="Critical" type="BinHex">437269746963616C00</field>
+          </object>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

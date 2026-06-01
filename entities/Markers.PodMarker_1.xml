@@ -1,0 +1,79 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Markers.PodMarker" type="BinHex">4D61726B6572732E506F644D61726B657200</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="Avatar_MinimapMarkers.Markers.PodMarker" type="BinHex">4176617461725F4D696E696D61704D61726B6572732E4D61726B6572732E506F644D61726B657200</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="126" type="BinHex">7E00000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="COmniMapEntity" type="BinHex">434F6D6E694D6170456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="COmniMapEntity" type="BinHex">B2648188</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="1" type="BinHex">01000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="072C385D" name="SmartRadarMarkerComponent">
+        <field hash="1C379DC2" type="BinHex">00</field>
+        <field hash="80CD9458" name="sMarkerTag" type="BinHex">FFFFFFFF</field>
+        <field hash="C62D4BD2" type="BinHex">00</field>
+        <field hash="4D0A5656" name="sAssociatedMission" type="BinHex">FFFFFFFF</field>
+      </object>
+      <object hash="7CE16278" name="CRadarComponent">
+        <field hash="7C35DA25" name="bActive" value-Boolean="True" type="BinHex">01</field>
+        <field hash="779B3CF8" name="bInvisibleInMap" value-Boolean="False" type="BinHex">00</field>
+        <field hash="2F1BB01A" name="bRotateWithMinimap" value-Boolean="False" type="BinHex">00</field>
+        <field hash="89A1335F" name="bInvisibleInRadar" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B0FD1557" name="fileIconTexture" value-String="UI\radar\PodIcon.png" type="BinHex">55495C72616461725C506F6449636F6E2E706E6700</field>
+        <field hash="BCF881A8" name="fileFocusedTexture" type="BinHex">00</field>
+        <field hash="4557B253" name="fileIconSideQuestTexture" type="BinHex">00</field>
+        <field hash="8228EBCF" name="fileFocusedSideQuestTexture" type="BinHex">00</field>
+        <field hash="8121A460" name="fileSelectedTexture" type="BinHex">00</field>
+        <field hash="500F629A" name="clrColor" value-Vector3="1,1,0" type="BinHex">0000803F0000803F00000000</field>
+        <field hash="FFE3FE56" name="clrSelectedColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="7896667E" name="bForceTracked" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C7661064" name="fileDirectionIcon" type="BinHex">00</field>
+        <field hash="FD093FCA" name="fileDirectionSideQuestIcon" type="BinHex">00</field>
+        <field hash="5F63F74B" name="fileDirectionFocusedIcon" type="BinHex">00</field>
+        <field hash="8A59E549" name="fileDirectionFocusedSideQuestIcon" type="BinHex">00</field>
+        <field hash="3AA03097" name="fileDirectionMapIcon" type="BinHex">00</field>
+        <field hash="40BF5670" name="fileDirectionSelectedTexture" type="BinHex">00</field>
+        <field hash="972611E4" name="clrDirectionColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="E02FD777" name="clrDirectionSelectedColor" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+        <field hash="36836C65" name="fBlinkPeriod" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="F72FB3AE" name="uiDrawPriority" value-Int32="5" type="BinHex">05000000</field>
+        <field hash="5EFEFCD0" name="fAlphaMultiplier" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="9BAE25A3" name="fAlphaFocusedMultiplier" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="10794251" name="fAlphaSelectedMultiplier" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="FA3C5040" name="bIsHumanoid" value-Boolean="False" type="BinHex">00</field>
+        <field hash="A30B2976" name="bIsAnimal" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1B464C69" name="bIsAvatarLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="3D6785F9" name="bIsSoldierLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="19FB7CD9" name="bIsCorpLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="DCAA0261" name="bIsNaviLandmark" value-Boolean="False" type="BinHex">00</field>
+        <field hash="8A1CB5E2" name="bIsAlwaysVisible" value-Boolean="True" type="BinHex">01</field>
+        <field hash="2F279D70" name="bIsVehicle" value-Boolean="False" type="BinHex">00</field>
+        <field hash="E87B0446" name="bIsResource" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85BE4626" name="bIsResource_Metapod" value-Boolean="False" type="BinHex">00</field>
+      </object>
+    </object>
+  </object>
+</object>

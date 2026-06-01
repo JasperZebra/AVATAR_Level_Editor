@@ -1,0 +1,108 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="ShootingSystem.DistanceAccuracy" type="BinHex">53686F6F74696E6753797374656D2E44697374616E6365416363757261637900</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="Curves.ShootingSystem.DistanceAccuracy" type="BinHex">4375727665732E53686F6F74696E6753797374656D2E44697374616E6365416363757261637900</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="401" type="BinHex">9101000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CCurve" type="BinHex">43437572766500</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CCurve" type="BinHex">CF5C7468</field>
+    <object hash="0AE03924" name="curveCurve">
+      <field hash="AECEF355" name="hidNumKnots" value-Int32="18" type="BinHex">12000000</field>
+      <object hash="F32C0E1C" name="Knots">
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="0,0.9973,0.5,0" type="BinHex">000000000E4F7F3F0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="8.098,0.9577,0.5,0" type="BinHex">68910141D42B753F0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="8.098,0.9577,0.499999,-6.51926E-09" type="BinHex">68910141D42B753FDEFFFF3E0400E0B1</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="24.5636,0.9192,8.23011,0.00436797" type="BinHex">4182C441B1506B3F88AE034130218F3B</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="24.5636,0.9192,8.23011,0.00436797" type="BinHex">4182C441B1506B3F88AE034130218F3B</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="54.102,0.8943,8.23011,0.00436797" type="BinHex">73685842D8F0643F88AE034130218F3B</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="54.102,0.8943,8.23011,0.00436797" type="BinHex">73685842D8F0643F88AE034130218F3B</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="91.5759,0.8071,0.5,0" type="BinHex">DC26B7421B9E4E3F0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="91.5759,0.8071,0.5,0" type="BinHex">DC26B7421B9E4E3F0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="112.996,0.6694,0.5,0" type="BinHex">F4FDE142CC5D2B3F0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="112.996,0.6694,0.5,0" type="BinHex">F4FDE142CC5D2B3F0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="121.126,0.4024,0.5,0" type="BinHex">8340F2425F07CE3E0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="121.126,0.4024,0.5,0" type="BinHex">8340F2425F07CE3E0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="130.768,0.3053,0.5,0" type="BinHex">9CC4024348509C3E0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="130.768,0.3053,0.5,0" type="BinHex">9CC4024348509C3E0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="151.351,0.2017,0.5,0" type="BinHex">DB591743728A4E3E0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="151.351,0.2017,0.5,0" type="BinHex">DB591743728A4E3E0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+        <object hash="9A152447" name="Knot">
+          <field hash="DCB67730" name="Value" value-Vector4="220,0.0998,0.5,0" type="BinHex">00005C43F163CC3D0000003F00000000</field>
+          <field hash="6BBB9E69" name="Info" value-Vector4="6.2832,1,0,0" type="BinHex">F90FC9400000803F0000000000000000</field>
+          <field hash="2CECF817" name="Type" value-Int32="0" type="BinHex">00000000</field>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>

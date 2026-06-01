@@ -1,0 +1,272 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="Avatar.Plaza_Navi_Metagame_Station" type="BinHex">4176617461722E506C617A615F4E6176695F4D65746167616D655F53746174696F6E00</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="Interactive.Avatar.Plaza_Navi_Metagame_Station" type="BinHex">496E7465726163746976652E4176617461722E506C617A615F4E6176695F4D65746167616D655F53746174696F6E00</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="1009" type="BinHex">F103000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CEntity" type="BinHex">43456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CEntity" type="BinHex">6750C950</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="2" type="BinHex">02000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="049C7D70" name="CFileDescriptorComponent">
+        <field hash="2A7BCA49" name="text_fileName" value-String="graphics\av_environment\navi\props\navi_willow_tree.xml" type="BinHex">67726170686963735C61765F656E7669726F6E6D656E745C6E6176695C70726F70735C6E6176695F77696C6C6F775F747265652E786D6C00</field>
+        <field hash="9C39465B" name="fileName" value-ComputeHash32="graphics\av_environment\navi\props\navi_willow_tree.xml" type="BinHex">E08E604D</field>
+        <field hash="A137E136" name="hidDescriptor" legacy="1">
+          <hidDescriptor>
+            <component class="GraphicComponent" version="2" detail="0">
+              <object index="0" boneName="Navi_Willow_Tree_LOD0" bboxMin="-3.0188,-3.63587,-1.66606" bboxMax="4.39641,3.99005,0.84058" />
+              <resource fileName="graphics\av_Environment\NaVi\Props\Navi_Willow_Tree.xbg" bboxMin="-3.0188,-4.25619,-44.4557" bboxMax="4.39641,6.21879,5.08051" />
+              <skeleton name="Navi_Willow_Tree" pos="0,0,0" rot="1,-0,-0,-0">
+                <bone name="Engine_aniamable_B_Body01" pos="0,0,-0.5" rot="1,0,0,0">
+                  <bone name="Engine_aniamable_B_Body02" pos="0.375554,-0.286627,1.18626" rot="0.913116,0.0398678,-0.0176983,0.40536">
+                    <bone name="Engine_aniamable_B_Body03" pos="1.27037,-0.068807,1.36562" rot="0.900113,-0.233541,0.00273156,0.36776">
+                      <bone name="Engine_aniamable_B_Body04" pos="0.52007,1.26865,0.418779" rot="0.861325,0.0830302,-0.144145,0.480049">
+                        <bone name="Engine_aniamable_B_Body05" pos="-0.553466,0.016155,1.28855" rot="0.666021,-0.129856,-0.0377875,0.733571">
+                          <bone name="Engine_aniamable_B_Body06" pos="-0.580607,-1.06487,0.582866" rot="0.831375,-0.0626053,-0.328114,0.444113">
+                            <bone name="Engine_aniamable_B_Body07" pos="0.200953,0.121435,0.572194" rot="0.96653,0.0421428,0.1842,-0.173536">
+                              <bone name="Engine_aniamable_B_Body08" pos="-0.329414,-0.143288,0.31966" rot="0.797859,-0.388768,0.389713,0.245772">
+                                <bone name="Engine_aniamable_B2_Branch01" pos="-0.005811,0.122417,0.092989" rot="0.842902,0.47617,0.175114,-0.179203">
+                                  <bone name="Engine_aniamable_B2_Branch02" pos="0.25139,0.100983,0.069128" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch03" pos="-0.053958,0.064122,-0.49048" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch04" pos="-0.383031,-0.111944,-0.258787" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch05" pos="-0.082856,-0.293456,-0.433145" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch06" pos="-0.309927,0.247132,-0.344852" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch07" pos="-0.077816,0.307789,-0.119296" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch08" pos="0.178153,0.12478,-0.264924" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch09" pos="-0.226562,-0.091759,0.020027" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch10" pos="0.149255,-0.232799,-0.207589" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch11" pos="-0.121338,-0.014367,-0.277204" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                </bone>
+                                <bone name="Engine_aniamable_B1_Branch01" pos="-0.005884,0.168318,0.102826" rot="0.842902,0.47617,0.175114,-0.179203">
+                                  <bone name="Engine_aniamable_B1_Branch02" pos="0.25139,0.100983,0.069128" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch03" pos="-0.053958,0.064122,-0.49048" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch04" pos="-0.383031,-0.111944,-0.258787" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch05" pos="-0.082856,-0.293456,-0.433145" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch06" pos="-0.309927,0.247132,-0.344852" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch07" pos="-0.077816,0.307789,-0.119296" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch08" pos="0.178153,0.12478,-0.264924" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch09" pos="-0.226562,-0.091759,0.020027" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch10" pos="0.149255,-0.232799,-0.207589" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch11" pos="-0.121338,-0.014367,-0.277204" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                </bone>
+                                <bone name="Engine_aniamable_B2_Branch12" pos="39.6326,23.2197,-11.6412" rot="0.842902,0.47617,0.175114,-0.179203">
+                                  <bone name="Engine_aniamable_B2_Branch13" pos="0.018095,-0.059143,0.270803" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch14" pos="-1.13919,0.116794,-3.6374" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch15" pos="-4.63785,-0.656975,-1.85373" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch16" pos="-2.05551,-2.10246,-2.91209" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch17" pos="-3.50486,1.65513,-3.87507" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch18" pos="-0.777473,1.77881,-0.214036" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch19" pos="0.574774,0.376955,-1.58838" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch20" pos="-1.42864,-0.31244,1.75389" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch21" pos="-0.541432,-2.05249,-0.682864" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B2_Branch22" pos="-2.03603,-0.184748,-1.82791" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                </bone>
+                                <bone name="Engine_aniamable_B1_Branch12" pos="39.6326,23.2197,-11.6412" rot="0.842902,0.47617,0.175114,-0.179203">
+                                  <bone name="Engine_aniamable_B1_Branch13" pos="0.018094,-0.059144,0.265881" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch14" pos="-1.07383,0.126093,-3.66184" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch15" pos="-4.57249,-0.647676,-1.87818" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch16" pos="-1.99016,-2.09316,-2.93655" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch17" pos="-3.4395,1.66443,-3.89951" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch18" pos="-0.809467,1.98426,-0.221407" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch19" pos="0.640126,0.386255,-1.61283" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch20" pos="-1.36328,-0.30314,1.72944" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch21" pos="-0.50352,-2.29596,-0.67413" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_B1_Branch22" pos="-1.97068,-0.175449,-1.85236" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                </bone>
+                              </bone>
+                            </bone>
+                          </bone>
+                        </bone>
+                      </bone>
+                    </bone>
+                  </bone>
+                </bone>
+                <bone name="Engine_aniamable_A_Body01" pos="1.09703,-0.322665,-0.439979" rot="0.21644,0,0,0.976296">
+                  <bone name="Engine_aniamable_A_Body02" pos="0.644744,-1.41585,0.688737" rot="0.913116,0.0398674,-0.0176983,0.40536">
+                    <bone name="Engine_aniamable_A_Body03" pos="1.59399,-2.99425,1.34515" rot="0.871684,-0.274841,0.12201,0.386967">
+                      <bone name="Engine_aniamable_A_Body04" pos="2.47332,2.49612,1.62654" rot="0.864474,0.0394451,-0.214585,0.452859">
+                        <bone name="Engine_aniamable_A_Body05" pos="-0.592901,0.58549,1.94515" rot="0.839759,-0.208252,0.394271,0.309817">
+                          <bone name="Engine_aniamable_A_Body06" pos="-0.077812,-0.344905,-0.199013" rot="0.642025,-0.141973,-0.374117,0.653976">
+                            <bone name="Engine_aniamable_A_Body07" pos="-0.925511,0.289057,0.629991" rot="0.915289,0.0471394,0.159514,0.36685">
+                              <bone name="Engine_aniamable_A_Body08" pos="-0.434002,-0.262841,0.028374" rot="0.946339,0.158247,0.260533,-0.107342">
+                                <bone name="Engine_aniamable_A2_Branch01" pos="-0.276519,-0.170397,-0.257097" rot="0.923195,-0.330038,-0.0853415,0.177488">
+                                  <bone name="Engine_aniamable_A2_Branch02" pos="0.25139,0.100983,0.069128" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch03" pos="-0.053958,0.064122,-0.49048" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch04" pos="-0.383031,-0.111944,-0.258788" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch05" pos="-0.082856,-0.293456,-0.433145" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch06" pos="-0.309927,0.247132,-0.344852" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch07" pos="-0.077816,0.307789,-0.119296" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch08" pos="0.178153,0.12478,-0.264924" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch09" pos="-0.226562,-0.091759,0.020027" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch10" pos="0.149255,-0.232799,-0.207589" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch11" pos="-0.121338,-0.014367,-0.277204" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                </bone>
+                                <bone name="Engine_aniamable_A1_Branch01" pos="-0.262373,-0.155788,-0.272739" rot="0.923195,-0.330038,-0.0853415,0.177488">
+                                  <bone name="Engine_aniamable_A1_Branch02" pos="-0.053958,0.064122,-0.49048" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch03" pos="-0.383031,-0.111944,-0.258788" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch04" pos="-0.082856,-0.293456,-0.433145" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch05" pos="-0.309927,0.247132,-0.344852" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch06" pos="-0.077816,0.307789,-0.119296" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch07" pos="0.178153,0.12478,-0.264924" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch08" pos="-0.226562,-0.091759,0.020027" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch09" pos="0.149255,-0.232799,-0.207589" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch10" pos="-0.121338,-0.014367,-0.277204" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch11" pos="0.25139,0.100983,0.069129" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                </bone>
+                                <bone name="Engine_aniamable_A2_Branch12" pos="20.1525,-23.4378,-33.4611" rot="0.923195,-0.330038,-0.0853415,0.177488">
+                                  <bone name="Engine_aniamable_A2_Branch13" pos="0.345895,0.102361,0.274778" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch14" pos="-1.55716,-0.096337,-3.54298" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch15" pos="-4.07303,-0.464342,-1.58646" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch16" pos="-2.16392,-2.16281,-2.95696" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch17" pos="-3.23169,2.00481,-3.04515" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch18" pos="-0.7766,2.22448,-0.034881" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch19" pos="0.936747,0.453864,-1.95334" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch20" pos="-1.135,-0.136842,1.22534" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch21" pos="-0.597815,-2.28287,-0.836115" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A2_Branch22" pos="-1.97068,-0.175448,-1.85236" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                </bone>
+                                <bone name="Engine_aniamable_A1_Branch12" pos="20.1529,-23.4376,-33.461" rot="0.923195,-0.330038,-0.0853415,0.177488">
+                                  <bone name="Engine_aniamable_A1_Branch13" pos="-1.55716,-0.096337,-3.54298" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch14" pos="-4.07303,-0.464342,-1.58646" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch15" pos="-2.16392,-2.16281,-2.95696" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch16" pos="-3.23169,2.00481,-3.04515" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch17" pos="-0.772462,2.17577,-0.035568" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch18" pos="0.725538,0.431954,-1.67297" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch19" pos="-1.135,-0.136842,1.22534" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch20" pos="-0.59227,-2.34813,-0.837037" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch21" pos="-1.97068,-0.175448,-1.85236" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                  <bone name="Engine_aniamable_A1_Branch22" pos="0.345895,0.102361,0.274777" rot="-0.20955,0.28554,-0.015633,0.935047" />
+                                </bone>
+                              </bone>
+                            </bone>
+                          </bone>
+                        </bone>
+                      </bone>
+                    </bone>
+                  </bone>
+                </bone>
+              </skeleton>
+            </component>
+            <component class="StaticPhysComponent">
+              <resource fileName="graphics\av_Environment\NaVi\Props\Navi_Willow_Tree.hkx" />
+            </component>
+          </hidDescriptor>
+        </field>
+      </object>
+      <object hash="035982C6" name="CGraphicComponent">
+        <field hash="A44AF3A2" name="bCastShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B1114234" name="bOnlyCastShadow" value-Boolean="False" type="BinHex">00</field>
+        <field hash="1BBE7E7E" name="bReceiveShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="0315431A" name="bCastAmbientShadow" value-Boolean="True" type="BinHex">01</field>
+        <field hash="A89A2879" name="bUseTerrainHemiMap" value-Boolean="True" type="BinHex">01</field>
+        <field hash="9EE14321" name="olgLightGroup" value-Int32="129" type="BinHex">81000000</field>
+        <field hash="2CAEC0CE" name="bShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="C768C8C1" name="bAlwaysShowInReflection" value-Boolean="False" type="BinHex">00</field>
+        <field hash="5AEB5E41" name="bAllowCullBySize" value-Boolean="True" type="BinHex">01</field>
+        <field hash="4EC99E9C" name="bAlwaysVisible" value-Boolean="False" type="BinHex">00</field>
+        <field hash="7D7F1556" name="bReceiveDecals" value-Boolean="True" type="BinHex">01</field>
+        <field hash="840042F4" name="iFirstLOD" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="CF7AA838" name="iLastLOD" value-Int32="7" type="BinHex">07000000</field>
+        <field hash="F8450B30" name="bIsCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="85D95FB2" name="bIsCorpCharacter" value-Boolean="False" type="BinHex">00</field>
+        <field hash="EF847967" name="bExcludeFromMotionBlur" value-Boolean="False" type="BinHex">00</field>
+        <field hash="9858BBD3" name="lpAmbientPreset" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="1FAF42E0" name="agAmbientGroup" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="DBF260D7" name="bBehaveLikeAPickup" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CBD76A30" name="bOverrideLODSphere" value-Boolean="False" type="BinHex">00</field>
+        <field hash="B896A095" name="fLODSphereRadius" value-Float32="0" type="BinHex">00000000</field>
+        <field hash="4A89D015" name="hidSkyOcclusion0" type="BinHex">FFFFFFFF</field>
+        <field hash="3D8EE083" name="hidSkyOcclusion1" type="BinHex">FFFFFFFF</field>
+        <field hash="A487B139" name="hidSkyOcclusion2" type="BinHex">FFFFFFFF</field>
+        <field hash="D38081AF" name="hidSkyOcclusion3" type="BinHex">FFFFFFFF</field>
+        <field hash="8FF10D55" name="hidGroundColor" type="BinHex">FFFFFFFF</field>
+        <field hash="8405934E" name="hidObjectHeightAboveGround" value-Hash32="1077936128" type="BinHex">00004040</field>
+        <field hash="D5F53674" name="hidGroundHeightAtInstance" value-Int32="0" type="BinHex">00000000</field>
+        <field hash="2371C028" name="hidHasAmbientValues" type="BinHex">00</field>
+        <object hash="A8ADABEC" name="object">
+          <field hash="6CF79F05" name="hidIndex" value-Int32="0" type="BinHex">00000000</field>
+          <field hash="BF9B3A5C" name="text_objModel" value-String="graphics\av_environment\navi\props\navi_willow_tree.xbg" type="BinHex">67726170686963735C61765F656E7669726F6E6D656E745C6E6176695C70726F70735C6E6176695F77696C6C6F775F747265652E78626700</field>
+          <field hash="09D9B64E" name="objModel" value-ComputeHash32="graphics\av_environment\navi\props\navi_willow_tree.xbg" type="BinHex">A74B2A5D</field>
+          <field hash="3D5AC03A" name="hidMeshName" type="BinHex">00</field>
+          <field hash="E1A0EE56" name="text_hidNodeName" value-String="Navi_Willow_Tree" type="BinHex">4E6176695F57696C6C6F775F5472656500</field>
+          <field hash="F1E66E05" name="hidNodeName" value-ComputeHash32="Navi_Willow_Tree" type="BinHex">FF6F106A</field>
+          <field hash="0D9C8B1A" name="text_hidNodeNameLOD0" value-String="Navi_Willow_Tree_LOD0" type="BinHex">4E6176695F57696C6C6F775F547265655F4C4F443000</field>
+          <field hash="8E85C831" name="hidNodeNameLOD0" value-ComputeHash32="Navi_Willow_Tree_LOD0" type="BinHex">5638BC4E</field>
+          <field hash="8D88DEAA" name="hidDetailObject" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="09D5E1B2" name="CSimpleAnimationComponent">
+        <field hash="F9F2D5F4" name="text_fileSkeleton" value-String="" type="BinHex">00</field>
+        <field hash="0B80933A" name="fileSkeleton" type="BinHex">FFFFFFFF</field>
+        <field hash="C22DBBC8" name="sPartName" type="BinHex">00</field>
+        <field hash="EC1D5173" name="text_fileAnimation" value-String="" type="BinHex">00</field>
+        <field hash="9033CC82" name="fileAnimation" type="BinHex">FFFFFFFF</field>
+        <field hash="D32F71E1" name="bDisableInterpolation" value-Boolean="False" type="BinHex">00</field>
+      </object>
+      <object hash="037FB709" name="CStaticPhysComponent">
+        <field hash="527E7674" name="text_hidResourceId" value-String="graphics\av_environment\navi\props\navi_willow_tree.hkx" type="BinHex">67726170686963735C61765F656E7669726F6E6D656E745C6E6176695C70726F70735C6E6176695F77696C6C6F775F747265652E686B7800</field>
+        <field hash="2E50EB85" name="hidResourceId" value-ComputeHash32="graphics\av_environment\navi\props\navi_willow_tree.hkx" type="BinHex">6B5EC61D</field>
+        <field hash="5BABAAC6" name="bUseMaxTerrainSlope" value-Boolean="False" type="BinHex">00</field>
+        <field hash="CFA0AA41" name="bIgnoreInExplosions" value-Boolean="False" type="BinHex">00</field>
+        <field hash="0C838A6E" name="bAnimateable" value-Boolean="False" type="BinHex">00</field>
+        <field hash="387811D0" name="bLargeEntity" value-Boolean="False" type="BinHex">00</field>
+        <field hash="A8699EF0" name="hidResourceIndex" value-Int32="0" type="BinHex">00000000</field>
+        <object hash="78CF3E56" name="EntityPickup">
+          <field hash="743BADAE" name="bCanPickUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="7EC43CB1" name="bCanBePickedUp" value-Boolean="False" type="BinHex">00</field>
+          <field hash="4CA7A893" name="fPickupCollisionRadius" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="829623C6" name="fPickupCollisionHeight" value-Float32="0" type="BinHex">00000000</field>
+          <field hash="AD22F2F7" type="BinHex">00</field>
+          <field hash="011D12F4" name="PickupAttachBone" type="BinHex">FFFFFFFF</field>
+        </object>
+        <object hash="A1FBD5FB" name="StaticParams">
+          <field hash="A3DFDD6E" name="bNeedExplosionInfo" value-Boolean="False" type="BinHex">00</field>
+        </object>
+      </object>
+      <object hash="53D53912" name="CNewParticlesComponent">
+        <field hash="1943B130" name="text_psPartSys" value-String="" type="BinHex">00</field>
+        <field hash="EA4C82F4" name="psPartSys" type="BinHex">FFFFFFFF</field>
+        <field hash="A25A2A04" name="fLodRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="1106289E" name="fLifeTimeRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="8E45E3C5" name="fSizeXRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="45193060" name="fSizeYRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="5805F3BE" name="fSpeedRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="34EBDC32" name="fAlphaRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="FE66509A" name="fGravityRatio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="E67155B3" name="fVolumeDim1Ratio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="60E5271D" name="fVolumeDim2Ratio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="ABB9F4B8" name="fVolumeDim3Ratio" value-Float32="1" type="BinHex">0000803F</field>
+        <field hash="62DEF0AA" name="bAutoStart" value-Boolean="True" type="BinHex">01</field>
+        <field hash="8C5A2F80" name="nPriority" value-Int32="10" type="BinHex">0A000000</field>
+      </object>
+      <object hash="9717C8A7" name="CUsableComponent">
+        <field hash="5CFE93AD" name="sUsageString" type="BinHex">00</field>
+        <field hash="F5C425C9" name="bEnabled" value-Boolean="True" type="BinHex">01</field>
+        <field hash="B41FA94F" name="vectorBoundingBoxSize" value-Vector3="1,1,1" type="BinHex">0000803F0000803F0000803F</field>
+      </object>
+    </object>
+  </object>
+</object>

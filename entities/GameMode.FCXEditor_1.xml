@@ -1,0 +1,117 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Converted by FCBConverter v20230711-1830, author ArmanIII.-->
+<!--Please remember that types are calculated and they may not be exactly the same as they are. Take care about this.-->
+<!--Based on Gibbed's Dunia Tools. Special thanks to: Fireboyd78 (FCBastard), Ekey (FC5 Unpacker), Gibbed, xBaebsae, id-daemon, Ganic, legendhavoc175, miru, eprilx-->
+<object hash="256A1FF9" name="EntityPrototype">
+  <field hash="FE11D138" name="Name" value-String="GameMode.FCXEditor" type="BinHex">47616D654D6F64652E464358456469746F7200</field>
+  <object hash="0984415E" name="Entity">
+    <field hash="B9295CC7" name="hidName" value-String="engine.GameMode.FCXEditor" type="BinHex">656E67696E652E47616D654D6F64652E464358456469746F7200</field>
+    <field hash="052A103F" name="disEntityId" value-Id64="959" type="BinHex">BF03000000000000</field>
+    <field hash="D2B3429E" name="text_hidEntityClass" value-String="CGameModeEntity" type="BinHex">4347616D654D6F6465456E7469747900</field>
+    <field hash="1875AE89" name="hidEntityClass" value-ComputeHash32="CGameModeEntity" type="BinHex">0EF4CDB1</field>
+    <field hash="ADC3BD93" name="hidResourceCount" value-Int32="0" type="BinHex">00000000</field>
+    <field hash="32D620A2" name="hidPos" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="6553B60B" name="hidAngles" value-Vector3="0,-0,0" type="BinHex">000000000000008000000000</field>
+    <field hash="00C2DD80" name="hidScale" value-Hash32="1065353216" type="BinHex">0000803F</field>
+    <field hash="7D7860C6" name="hidPos_precise" value-Vector3="0,0,0" type="BinHex">000000000000000000000000</field>
+    <field hash="B554978A" name="hidConstEntity" type="BinHex">00</field>
+    <field hash="DE5F232E" name="selSpecificToTerritoryController" value-Enum="6" type="BinHex">06000000</field>
+    <object hash="453BB77B" name="enumSpecificToTerritoryController">
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Corp" type="BinHex">436F727000</field>
+        <field hash="06794001" name="CustomValue" value-Int32="1" type="BinHex">01000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-String="Navi" type="BinHex">4E61766900</field>
+        <field hash="06794001" name="CustomValue" value-Int32="2" type="BinHex">02000000</field>
+      </object>
+      <object hash="0EBEAE51" name="enum">
+        <field hash="DCB67730" name="Value" value-Int32="7105601" type="BinHex">416C6C00</field>
+        <field hash="06794001" name="CustomValue" value-Int32="6" type="BinHex">06000000</field>
+      </object>
+    </object>
+    <object hash="A115F62D" name="Components">
+      <object hash="3101AE35" name="CGameModeComponent">
+        <field hash="F1B1D97B" name="text_sName" value-String="Editor" type="BinHex">456469746F7200</field>
+        <field hash="A7056326" name="sName" value-ComputeHash32="Editor" type="BinHex">8CF45DCB</field>
+        <field hash="8E4FDD0E" name="text_sVoiceIntroEventName" value-String="" type="BinHex">00</field>
+        <field hash="B2A667BF" name="sVoiceIntroEventName" type="BinHex">FFFFFFFF</field>
+        <field hash="25438FC1" name="text_sVoiceOutroEventName" value-String="" type="BinHex">00</field>
+        <field hash="19AA3570" name="sVoiceOutroEventName" type="BinHex">FFFFFFFF</field>
+        <field hash="3F4C7746" name="text_sVoiceSeparatorEventName" value-String="" type="BinHex">00</field>
+        <field hash="F298115D" name="sVoiceSeparatorEventName" type="BinHex">FFFFFFFF</field>
+        <object hash="399A1672" name="CommonSoundEvents">
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="" type="BinHex">00</field>
+            <field hash="A7056326" name="sName" type="BinHex">FFFFFFFF</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+        </object>
+        <object hash="CBB23DE4" name="SpecificSoundEvents">
+          <object hash="E7538D14" name="EventEntry">
+            <field hash="F1B1D97B" name="text_sName" value-String="" type="BinHex">00</field>
+            <field hash="A7056326" name="sName" type="BinHex">FFFFFFFF</field>
+            <field hash="99B91D84" name="unPriority" value-Int32="0" type="BinHex">00000000</field>
+            <field hash="49ABFE1B" name="fChildPlayProbability" value-Float32="1" type="BinHex">0000803F</field>
+            <field hash="DBB74670" name="text_sChildEventName" value-String="" type="BinHex">00</field>
+            <field hash="58AE055B" name="sChildEventName" type="BinHex">FFFFFFFF</field>
+            <object hash="EBF1A5D4" name="TeamEntries">
+              <object hash="E4D5B4B7" name="TeamEntry">
+                <field hash="6B720162" name="text_sTeam" value-String="" type="BinHex">00</field>
+                <field hash="3DC6BB3F" name="sTeam" type="BinHex">FFFFFFFF</field>
+                <object hash="5C55C3E1" name="SoundEntries">
+                  <object hash="B2EDBB21" name="SoundEntry">
+                    <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+                    <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+                    <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+                  </object>
+                </object>
+              </object>
+            </object>
+            <object hash="BE714F44" name="SoundOverride">
+              <field hash="8713DFC3" name="sndId" value-String="0xFFFFFFFF" type="BinHex">3078464646464646464600</field>
+              <field hash="F176B9D2" name="sndtpType" value-UInt32="4294967295" type="BinHex">FFFFFFFF</field>
+              <field hash="F7461912" name="nWeight" value-Int32="1" type="BinHex">01000000</field>
+            </object>
+          </object>
+        </object>
+        <object hash="DC12CC44" name="CommonArchetypeReferences">
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" type="BinHex">00</field>
+          </object>
+        </object>
+        <object hash="214C9832" name="SpecificArchetypeReferences">
+          <object hash="63243E40" name="Archetype">
+            <field hash="FAE3F112" name="archName" type="BinHex">00</field>
+          </object>
+        </object>
+        <object hash="699EF488" name="AnimationPackageReferences">
+          <object hash="11D55E09" name="Package">
+            <field hash="A7056326" name="sName" type="BinHex">00</field>
+          </object>
+        </object>
+      </object>
+    </object>
+  </object>
+</object>
