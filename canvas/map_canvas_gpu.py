@@ -1528,26 +1528,11 @@ class MapCanvas(QOpenGLWidget):
                     batch.add_lines(self._ov_transform(cube, M), color)
                 else:                 # sphere(1) / cylinder(2)
                     sphere_cyl.append((entity, shape_type, fsx, fsy, fsz, rot, color, is_selected))
-            if sphere_cyl:
-                gl.glDisable(gl.GL_LIGHTING)
-                gl.glDisable(gl.GL_TEXTURE_2D)
-                for entity, stype, fsx, fsy, fsz, rot, color, is_sel in sphere_cyl:
-                    gl.glColor3f(*color)
-                    gl.glLineWidth(2.0 if is_sel else 1.0)
-                    gl.glPushMatrix()
-                    gl.glTranslatef(entity.x, entity.z, -entity.y)
-                    gl.glRotatef(-90, 1, 0, 0)
-                    if rot[2] != 0: gl.glRotatef(-rot[2], 0, 0, 1)
-                    if rot[0] != 0: gl.glRotatef(rot[0], 1, 0, 0)
-                    if rot[1] != 0: gl.glRotatef(rot[1], 0, 1, 0)
-                    gl.glScalef(fsx, fsy, fsz)
-                    if stype == 1:
-                        self._draw_wireframe_sphere(16, 16)
-                    elif stype == 2:
-                        self._draw_wireframe_cylinder(16, 1.0, 1.0)
-                    gl.glPopMatrix()
-                gl.glEnable(gl.GL_LIGHTING)
-                gl.glLineWidth(1.0)
+            # Sphere/cylinder prims can't be line-batched — hand them to the
+            # caller (drawn immediate-mode via _draw_sphere_cyl_prims). Stored
+            # rather than drawn inline so the cached-overlay path can replay
+            # them on frames where this function doesn't run at all.
+            self._ov_sphere_cyl_pending = sphere_cyl
             return
 
         # Disable lighting for wireframes
@@ -1616,6 +1601,98 @@ class MapCanvas(QOpenGLWidget):
         
         # Re-enable lighting
         gl.glEnable(gl.GL_LIGHTING)
+
+    def _draw_sphere_cyl_prims(self, items):
+        """Immediate-mode draw of the rare sphere/cylinder primitives collected
+        by _render_primitives_3d's batch path (no batched geometry for them)."""
+        if not items:
+            return
+        gl.glDisable(gl.GL_LIGHTING)
+        gl.glDisable(gl.GL_TEXTURE_2D)
+        for entity, stype, fsx, fsy, fsz, rot, color, is_sel in items:
+            gl.glColor3f(*color)
+            gl.glLineWidth(2.0 if is_sel else 1.0)
+            gl.glPushMatrix()
+            gl.glTranslatef(entity.x, entity.z, -entity.y)
+            gl.glRotatef(-90, 1, 0, 0)
+            if rot[2] != 0: gl.glRotatef(-rot[2], 0, 0, 1)
+            if rot[0] != 0: gl.glRotatef(rot[0], 1, 0, 0)
+            if rot[1] != 0: gl.glRotatef(rot[1], 0, 1, 0)
+            gl.glScalef(fsx, fsy, fsz)
+            if stype == 1:
+                self._draw_wireframe_sphere(16, 16)
+            elif stype == 2:
+                self._draw_wireframe_cylinder(16, 1.0, 1.0)
+            gl.glPopMatrix()
+        gl.glEnable(gl.GL_LIGHTING)
+        gl.glLineWidth(1.0)
+
+    def _render_overlays_3d(self, visible_entities):
+        """Prims + triggers + shape-points + movie paths, with a cross-frame cache.
+
+        All the batched overlay geometry is WORLD-SPACE (camera-independent), so
+        the packed line/point arrays only change when an entity, the selection,
+        or a show-flag changes — not when the camera moves. The cached path
+        builds the arrays once over the FULL entity list (so they stay valid for
+        any camera) and replays them each frame via LineBatch.flush_packed —
+        replacing the 8-14 ms/frame Python rebuild (the 'shape/prims/triggers'
+        profiler stages) with one cheap draw.
+
+        Classic per-frame path runs when: the LineBatch is unavailable, a movie
+        sequence is selected (preview animates entity positions without bumping
+        the position version), or the cache was disabled by a GL failure.
+
+        Cache invalidation: key fields below, plus mark_entity_modified clears
+        _ov_cache_key directly (rotation/scale edits don't bump the position
+        version). Visual note: overlays are no longer frustum-gated, so distant
+        in-frustum wireframes (beyond the old cull FAR) are now drawn too — GL
+        clips off-screen ones for free."""
+        from time import perf_counter as _pc
+        batch = self._overlay_batch()
+        mw = getattr(self, 'main_window', None)
+        movie_active = bool(mw is not None and getattr(mw, 'selected_movie_sequence', None))
+        use_cache = (batch is not None and not movie_active
+                     and getattr(self, '_use_overlay_cache', True))
+
+        if not use_cache:
+            _ts = _pc()
+            self._overlay_batch_begin()
+            self._ov_sphere_cyl_pending = []
+            self._render_primitives_3d(visible_entities)
+            self._draw_sphere_cyl_prims(getattr(self, '_ov_sphere_cyl_pending', None))
+            _ts = self._pf('prims', _ts)
+            self._render_triggers_3d(visible_entities)
+            _ts = self._pf('triggers', _ts)
+            self._render_shape_points_3d(visible_entities)
+            self._overlay_batch_flush()
+            render_movie_paths_3d(self)
+            self._pf('shape', _ts)
+            return
+
+        _ts = _pc()
+        key = (getattr(self, '_pos_arrays_version', 0),
+               id(self.entities), len(self.entities),
+               frozenset(id(e) for e in (self.selected or [])),
+               bool(self.show_trigger_zones))
+        if key != getattr(self, '_ov_cache_key', None):
+            full = self._get_map_filtered_entities()
+            batch.begin()
+            self._ov_sphere_cyl_pending = []
+            self._render_primitives_3d(full)
+            self._render_triggers_3d(full)
+            self._render_shape_points_3d(full)
+            self._ov_cache_lines, self._ov_cache_points = batch.snapshot()
+            self._ov_cache_spherecyl = getattr(self, '_ov_sphere_cyl_pending', []) or []
+            self._ov_cache_key = key
+            batch.begin()   # drop the accumulators — snapshot holds the packed copy
+        if not batch.flush_packed(getattr(self, '_ov_cache_lines', None),
+                                  getattr(self, '_ov_cache_points', None)):
+            # GL failure → classic (then immediate-mode) path from next frame on.
+            self._use_overlay_cache = False
+            self._ov_cache_key = None
+        self._draw_sphere_cyl_prims(getattr(self, '_ov_cache_spherecyl', None))
+        render_movie_paths_3d(self)
+        self._pf('overlay3d', _ts)
 
     def _render_triggers_3d(self, visible_entities=None):
         """Render trigger volumes in 3D mode as yellow wireframe boxes"""
@@ -3784,19 +3861,11 @@ class MapCanvas(QOpenGLWidget):
                 visible = self._filter_entities_by_source(visible)
                 _ts = self._pf('srcfilter', _ts)
                 self._render_entities_3d(visible)        # times prepare/models/cubes internally
-                _ts = _time.perf_counter()
-                # Wireframe overlays accumulate into one LineBatch (prims + triggers
-                # + shape points) and flush in a single draw instead of per-entity
-                # immediate mode.
-                self._overlay_batch_begin()
-                self._render_primitives_3d(visible)
-                _ts = self._pf('prims', _ts)
-                self._render_triggers_3d(visible)
-                _ts = self._pf('triggers', _ts)
-                self._render_shape_points_3d(visible)
-                self._overlay_batch_flush()
-                render_movie_paths_3d(self)
-                _ts = self._pf('shape', _ts)
+                # Wireframe overlays (prims + triggers + shape points + movie
+                # paths) — cached across frames in world space; rebuilt only on
+                # entity/selection changes. See _render_overlays_3d ('overlay3d'
+                # profiler stage when cached; 'prims/triggers/shape' when not).
+                self._render_overlays_3d(visible)
 
             _ts = _time.perf_counter()
             # Pulsing glow tint on selected entity's mesh (before beacon lines so lines stay on top)
@@ -6505,6 +6574,10 @@ class MapCanvas(QOpenGLWidget):
 
         # Force interior AABB cache rebuild (entity's bounds may have shifted)
         self._interior_aabb_cache_key = None
+
+        # Invalidate the cached 3D overlay buffer — rotation/scale edits change
+        # wireframe orientation without bumping the position-array version.
+        self._ov_cache_key = None
 
         self.invalidate_entity_caches()
 

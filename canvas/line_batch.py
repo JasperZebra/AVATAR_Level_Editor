@@ -170,6 +170,48 @@ class LineBatch:
         inter[:, 3:6] = C
         return inter
 
+    def snapshot(self):
+        """Pack the accumulated lines/points into reusable (N,6) arrays so the
+        caller can cache them across frames (overlay geometry is world-space =
+        camera-independent). Returns (lines_arr|None, points_arr|None)."""
+        lines = self._pack(self._lines) if self._lines else None
+        points = self._pack(self._points) if self._points else None
+        return lines, points
+
+    def flush_packed(self, lines, points):
+        """Draw pre-packed arrays from snapshot() — the cached-overlay fast path.
+        Returns True if it ran (incl. nothing-to-draw); False on GL failure."""
+        if self._failed:
+            return False
+        if (lines is None or not len(lines)) and (points is None or not len(points)):
+            return True
+        if not self._built and not self._build():
+            return False
+        try:
+            glUseProgram(self.prog)
+            glBindVertexArray(self.vao)
+            glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
+            glEnable(GL_DEPTH_TEST)
+            if lines is not None and len(lines):
+                glBufferData(GL_ARRAY_BUFFER, lines.nbytes, lines, GL_DYNAMIC_DRAW)
+                glDrawArrays(GL_LINES, 0, lines.shape[0])
+            if points is not None and len(points):
+                glBufferData(GL_ARRAY_BUFFER, points.nbytes, points, GL_DYNAMIC_DRAW)
+                glPointSize(self._point_size)
+                glDrawArrays(GL_POINTS, 0, points.shape[0])
+            glBindBuffer(GL_ARRAY_BUFFER, 0)
+            glBindVertexArray(0)
+            glUseProgram(0)
+            return True
+        except Exception as e:
+            print(f"[line-batch] flush_packed failed ({e}) — fallback next frame")
+            self._failed = True
+            try:
+                glUseProgram(0); glBindVertexArray(0)
+            except Exception:
+                pass
+            return False
+
     def flush(self):
         """Draw all accumulated lines + points. Returns True if it ran (incl. the
         empty case); False means the caller should have used the fallback."""
