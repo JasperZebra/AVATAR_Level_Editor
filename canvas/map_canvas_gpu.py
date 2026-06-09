@@ -1209,6 +1209,35 @@ class MapCanvas(QOpenGLWidget):
         
         _cs = _pc()
         if show_cubes:
+            # GDR fast path: numpy-gathered instance array (no per-entity loop).
+            # Falls through to the classic loop on any failure or in non-GDR mode.
+            _fast_done = False
+            if (getattr(self.model_loader, 'gdr_drew_last', False)
+                    and getattr(self, '_use_cube_instancing', True)):
+                try:
+                    _ci = self._build_marker_cube_instances()
+                    if _ci is not None:
+                        cubes_rendered = len(_ci)
+                        _fast_done = True
+                        if cubes_rendered:
+                            if self._cube_batch is None:
+                                from cube_batch import CubeBatch
+                                self._cube_batch = CubeBatch()
+                            if not self._cube_batch.render(_ci):
+                                _fast_done = False   # GL path failed → classic loop
+                except Exception as _ce:
+                    print(f"[cube-fast] error -> classic path: {_ce}")
+                    _fast_done = False
+            if _fast_done:
+                self._pf('cubes', _cs)
+                # Skip the classic cube loop entirely.
+                self._render_log_frame = getattr(self, '_render_log_frame', 0) + 1
+                if self._render_log_frame >= 600:
+                    self._render_log_frame = 0
+                    total_visible = len(entities_sorted)
+                    print(f"3D Rendering: {total_visible} visible | {models_rendered} models | {cubes_rendered} cubes (cubes: ON, fast)")
+                return
+
             # Build list of (color, entity) for cubes only, skipping modelled entities
             selected_set = set(id(e) for e in self.selected)
             cube_list = []
@@ -1361,6 +1390,68 @@ class MapCanvas(QOpenGLWidget):
         if is_selected:
             return (min(base[0]*1.3, 1.0), min(base[1]*1.3, 1.0), min(base[2]*1.3, 1.0))
         return base
+
+    def _build_marker_cube_instances(self):
+        """Numpy fast path for the marker-cube instance array (GDR mode only).
+
+        Replaces the per-frame Python loop over every visible entity (membership
+        test + color lookup + tuple append + np.asarray) with cached per-entity
+        color/marker arrays gathered by index. Cache is keyed on things that
+        actually change marker membership/colors — NOT the position-array
+        version, so drags don't trigger O(N) rebuilds. Positions come straight
+        from _positions_3d (already GL-space, kept fresh by the existing
+        invalidate/patch machinery).
+
+        Returns an (M, 6) float32 [x, y, z, r, g, b] array, or None when the
+        fast path can't run (caller falls back to the classic loop)."""
+        ml = self.model_loader
+        valid = getattr(self, '_valid_entities_3d', None)
+        pos = getattr(self, '_positions_3d', None)
+        vis = getattr(self, '_visible_idx_3d', None)
+        if not valid or pos is None or vis is None or len(pos) != len(valid):
+            return None
+        modelled = ml._gdr_modelled_ids
+        key = (id(self.entities), len(valid), len(modelled),
+               getattr(self, '_rel_cache_key', None))
+        if getattr(self, '_cube_arr_key', None) != key:
+            n = len(valid)
+            colors = np.zeros((n, 3), np.float32)
+            marker = np.zeros(n, bool)
+            idx_of = {}
+            for i, e in enumerate(valid):
+                idx_of[id(e)] = i
+                if id(e) in modelled:
+                    continue
+                marker[i] = True
+                colors[i] = self._get_entity_color_for_3d(
+                    e, self._vehicle_ids, self._seated_npc_ids,
+                    self._structure_parent_ids, self._structure_child_ids, False)
+            nc = [idx_of[id(e)] for e in (getattr(self, '_never_cull_entities_3d', None) or [])
+                  if id(e) in idx_of]
+            self._cube_colors_3d = colors
+            self._cube_marker_mask = marker
+            self._cube_nc_idx = np.asarray(nc, np.int64)
+            self._cube_idx_of = idx_of
+            self._cube_arr_key = key
+        mask = np.zeros(len(valid), bool)
+        mask[vis] = True
+        if self._cube_nc_idx.size:
+            mask[self._cube_nc_idx] = True
+        rows = np.nonzero(mask & self._cube_marker_mask)[0]
+        inst = np.empty((rows.size, 6), np.float32)
+        inst[:, 0:3] = pos[rows]
+        inst[:, 3:6] = self._cube_colors_3d[rows]
+        # Selected markers get the brightened color (selection sets are small).
+        for e in (self.selected or []):
+            i = self._cube_idx_of.get(id(e))
+            if i is None or not self._cube_marker_mask[i]:
+                continue
+            w = np.searchsorted(rows, i)
+            if w < rows.size and rows[w] == i:
+                inst[w, 3:6] = self._get_entity_color_for_3d(
+                    e, self._vehicle_ids, self._seated_npc_ids,
+                    self._structure_parent_ids, self._structure_child_ids, True)
+        return inst
 
 
     def _overlay_batch(self):
