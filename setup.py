@@ -464,6 +464,7 @@ build_options = {
         'canvas.gpu_driven_renderer',   # ← GL 4.3+ MultiDrawIndirect fast path (modern GPUs; falls back otherwise)
         'canvas.night_sky',             # ← night-sky star dome (Night Sky.glb), day/night cycle
         'canvas.sky_atmosphere',        # ← daytime spectral atmosphere sky (fgarlin shadertoy port)
+        'canvas.sky_shader_sources',    # ← embedded GLSL sources for sky_atmosphere (no loose files)
         'canvas.shadow_map',            # ← sun shadow mapping (depth FBO + light-space matrix)
         'canvas.cube_batch',            # ← instanced marker-cube renderer (one draw for all cubes)
         'canvas.line_batch',            # ← batched wireframe-overlay renderer (prims/triggers/shape)

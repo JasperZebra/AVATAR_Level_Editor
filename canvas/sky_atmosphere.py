@@ -12,13 +12,15 @@ Pipeline (same as the ShaderToy, adapted to desktop GL + the editor camera):
      sky-view LUT, ACES tonemap. The physics darkens the sky by itself as the sun
      sets, so it crossfades naturally into the night-sky dome.
 
-The GLSL is READ from the reference files and wrapped (ShaderToy `mainImage` →
-`main`, `iResolution`/`iChannel0` → uniforms, `get_sun_direction` → `u_sun_dir`),
-so we run the author's exact maths. Any failure (missing files, no float FBO, …)
+The GLSL sources are EMBEDDED in canvas/sky_shader_sources.py (they used to be
+read from loose `canvas/Night Sky/Shader toy/*.txt` files, which were never in
+git and got lost once — and needed separate bundling for frozen builds). They
+are wrapped at runtime exactly as before (ShaderToy `mainImage` → `main`,
+`iResolution`/`iChannel0` → uniforms, `get_sun_direction` → `u_sun_dir`), so we
+run the author's exact maths. Any failure (no float FBO, compile error, …)
 sets `_failed` and the caller falls back to the gradient sky — never a hard error.
 """
 
-import os
 import math
 import ctypes
 import numpy as np
@@ -92,13 +94,16 @@ void main() {
 """
 
 
-def _shader_dir():
-    return os.path.join(os.path.dirname(__file__), 'Night Sky', 'Shader toy')
-
-
 def _read(name):
-    with open(os.path.join(_shader_dir(), name), 'r', encoding='utf-8', errors='replace') as f:
-        return f.read()
+    """Return an embedded GLSL source by its historical file name.
+
+    Sources live in canvas/sky_shader_sources.py (no runtime file dependency —
+    works identically in dev and frozen builds)."""
+    try:
+        from canvas import sky_shader_sources as _sss
+    except ImportError:
+        import sky_shader_sources as _sss   # flat import (canvas dir on sys.path)
+    return _sss.SOURCES[name]
 
 
 def _adapt_common(src):
