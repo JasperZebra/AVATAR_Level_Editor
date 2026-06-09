@@ -170,6 +170,11 @@ class ModelLoader:
         self._gdr_frame = None         # per-frame {inst, counts, offsets} for the GDR
         self._gdr_fallback_args = None # (entities, selected) to rebuild batches if GDR fails
         self.gdr_drew_last = False     # True when the last frame drew via the GDR
+        # Contribution culling (GDR mode): skip model instances whose bounding
+        # sphere projects smaller than this many pixels on screen — distant
+        # clutter costs full vertex work for sub-noise visuals. The big lever
+        # for vertex-bound GPUs (integrated Radeon/Intel). 0 disables. F9 cycles.
+        self.gdr_min_pixel_size = 4.0
         # Depth prepass (early-Z occlusion) on the GPU-driven path. F8 toggles it.
         # Default OFF: a prepass only pays off when the scene is GPU-fragment-bound
         # (heavy overdraw of the expensive material shader). It adds a full extra
@@ -2309,6 +2314,25 @@ class ModelLoader:
             from gpu_driven_renderer import assemble_frame
             ent_vis = np.zeros(len(valid), bool)
             ent_vis[vis_idx] = True
+
+            # Contribution cull: drop entities whose bounding sphere projects
+            # under gdr_min_pixel_size px. projected_px ≈ (2r/d)·k with
+            # k = (screen_h/2)/tan(vfov/2); compared squared (no sqrt):
+            # keep ⇔ r² ≥ d²·(min_px/2k)². Markers (radius 0) are unaffected —
+            # they have no model rows. VFOV 50 matches the renderer/cull.
+            min_px = float(getattr(self, 'gdr_min_pixel_size', 0.0) or 0.0)
+            if min_px > 0.0:
+                radii = getattr(canvas, '_radii_3d', None)
+                cam = getattr(getattr(canvas, 'camera_3d', None), 'position', None)
+                scr_h = float(canvas.height() or 0)
+                if radii is not None and len(radii) == len(valid) and cam is not None and scr_h > 0:
+                    import math as _m
+                    k = (scr_h * 0.5) / _m.tan(_m.radians(25.0))
+                    dpts = pos - np.asarray(cam, np.float32)
+                    d2 = np.einsum('ij,ij->i', dpts, dpts)
+                    lim = min_px / (2.0 * k)
+                    ent_vis &= (radii * radii >= d2 * (lim * lim)) | (radii <= 0.0)
+
             inst, counts, offsets = assemble_frame(
                 self._gdr_row_ent, self._gdr_row_slot, self._gdr_row_rot,
                 self._gdr_row_scale, self._gdr_overlay,

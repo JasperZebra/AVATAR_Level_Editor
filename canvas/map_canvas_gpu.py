@@ -3986,7 +3986,7 @@ class MapCanvas(QOpenGLWidget):
         # Controls hint (just above badge)
         painter.setFont(QFont("Arial", 8))
         painter.setPen(QPen(QColor(160, 160, 160, 180), 1))
-        controls_text = "WASD+QE: Move | T: 2D/3D | F1: Profiler | F2/F3: GPU-driven | F4: Day/Night | F5: flip green | F6: flip normal | F7: Shadows | F8: Occlusion"
+        controls_text = "WASD+QE: Move | T: 2D/3D | F1: Profiler | F2/F3: GPU-driven | F4: Day/Night | F5: flip green | F6: flip normal | F7: Shadows | F8: Occlusion | F9: Detail cull"
         painter.drawText(margin, self.height() - margin - metrics.height() - badge_h - 4, controls_text)
 
     def _draw_2d_mode_indicator(self, painter):
@@ -4532,6 +4532,20 @@ class MapCanvas(QOpenGLWidget):
         # F8 — depth prepass (early-Z occlusion) on the GPU-driven path
         if k == Qt.Key.Key_F8:
             self._toggle_depth_prepass()
+            return
+        # F9 — contribution cull threshold (GPU-driven path): skip model
+        # instances smaller than N px on screen. The vertex-load lever for
+        # integrated/weak GPUs. Cycles OFF → 3 → 6 → 10 px.
+        if k == Qt.Key.Key_F9:
+            ml = getattr(self, 'model_loader', None)
+            if ml is not None:
+                steps = [0.0, 3.0, 6.0, 10.0]
+                cur = float(getattr(ml, 'gdr_min_pixel_size', 4.0))
+                nxt = steps[(steps.index(cur) + 1) % len(steps)] if cur in steps else 0.0
+                ml.gdr_min_pixel_size = nxt
+                label = 'OFF (draw everything)' if nxt == 0 else f'{nxt:.0f}px minimum on-screen size'
+                print(f"🔬 [F9] contribution cull: {label}")
+                self.update()
             return
 
         # Toggle 2D/3D view mode
