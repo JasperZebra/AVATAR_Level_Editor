@@ -205,6 +205,99 @@ def consolidate_geometry(models):
     }
 
 
+# ───────────────────── vectorised frame assembly (GPU-free) ─────────────────────
+# These three functions are the per-frame hot path of the GPU-driven renderer in
+# array mode. They are pure numpy (no GL) so they can be unit-tested without a
+# context — tests/test_gdr_frame_assembly.py asserts they match a naive loop.
+
+def assemble_frame(row_ent, row_slot, row_rot, row_scale, row_overlay,
+                   positions, ent_visible_mask, n_slots):
+    """Build the per-frame instance array + per-model-slot counts/offsets.
+
+    Rows are the static (entity, model-slot) pairs built once per level (one row
+    per model an entity contributes — kit parts add extra rows). Per frame we
+    mask rows by entity visibility, group them by model slot, and gather the
+    instance data with numpy fancy indexing — zero Python-level per-entity work.
+
+    Args:
+        row_ent     (R,)  int32  — index into the canvas's _valid_entities_3d
+        row_slot    (R,)  int32  — model slot id (dense, 0..n_slots-1)
+        row_rot     (R,3) f32    — rotation per row
+        row_scale   (R,)  f32    — scale per row
+        row_overlay (R,)  f32    — selection overlay per row (0 or 0.35)
+        positions   (N,3) f32    — GL-space entity positions (canvas _positions_3d)
+        ent_visible_mask (N,) bool — entity visibility from the frustum cull
+        n_slots     int          — number of model slots
+
+    Returns (inst (M,8) f32 contiguous, counts (n_slots,) i64, offsets (n_slots,) i64)
+    where inst rows are grouped by model slot in slot order:
+    [pos.xyz, scale, rot.xyz, overlay] — matching the shader's Inst struct.
+    """
+    row_mask = ent_visible_mask[row_ent]
+    rows = np.nonzero(row_mask)[0]
+    counts = np.bincount(row_slot[rows], minlength=n_slots).astype(np.int64)
+    offsets = np.zeros(n_slots, np.int64)
+    if n_slots > 1:
+        np.cumsum(counts[:-1], out=offsets[1:])
+    if rows.size == 0:
+        return np.zeros((0, 8), np.float32), counts, offsets
+    order = np.argsort(row_slot[rows], kind='stable')
+    rs = rows[order]
+    inst = np.empty((rs.size, 8), np.float32)
+    inst[:, 0:3] = positions[row_ent[rs]]
+    inst[:, 3] = row_scale[rs]
+    inst[:, 4:7] = row_rot[rs]
+    inst[:, 7] = row_overlay[rs]
+    return np.ascontiguousarray(inst), counts, offsets
+
+
+def build_group_templates(table, slot_of_path):
+    """Static per-render-group command templates, built once per geometry build.
+
+    For each render group (0 opaque / 1 two-sided / 2 blend) packs the constant
+    columns of every mesh's draw command (count/firstIndex/baseVertex/matId) plus
+    the model slot each command instances from. Meshes whose model_path has no
+    slot (model not in the entity row tables) are dropped — they can never have
+    instances in array mode.
+    """
+    out = []
+    for grp in (0, 1, 2):
+        ents = [e for e in table
+                if e.render_group == grp and slot_of_path.get(e.model_path, -1) >= 0]
+        out.append({
+            'count': np.array([e.count for e in ents], np.uint32),
+            'first': np.array([e.first_index for e in ents], np.uint32),
+            'basev': np.array([e.base_vertex for e in ents], np.uint32),
+            'mat':   np.array([e.global_mat_id for e in ents], np.uint32),
+            'slot':  np.array([slot_of_path[e.model_path] for e in ents], np.int64),
+        })
+    return out
+
+
+def build_group_commands(tmpl, counts, offsets):
+    """Per-frame indirect command buffer for one render group — pure numpy.
+
+    Selects the template rows whose model slot has visible instances and fills
+    instanceCount/baseInstance from the frame's counts/offsets. Replaces the old
+    per-mesh Python loop + per-row structured-array fill (the second-biggest
+    CPU cost of the GPU-driven frame after prepare_batches).
+
+    Returns (cmd_arr structured DRAW_CMD_DTYPE, drawmat uint32 array).
+    """
+    slot = tmpl['slot']
+    ic = counts[slot] if slot.size else np.zeros(0, np.int64)
+    act = ic > 0
+    n = int(act.sum())
+    cmd = np.empty(n, dtype=DRAW_CMD_DTYPE)
+    if n:
+        cmd['count'] = tmpl['count'][act]
+        cmd['instanceCount'] = ic[act]
+        cmd['firstIndex'] = tmpl['first'][act]
+        cmd['baseVertex'] = tmpl['basev'][act]
+        cmd['baseInstance'] = offsets[slot][act]
+    return cmd, (tmpl['mat'][act] if n else np.zeros(0, np.uint32))
+
+
 _GDR_VERT = """
 #version 460 compatibility
 layout(location=0) in vec3 a_position;
@@ -439,6 +532,10 @@ class GPUDrivenRenderer:
         self._resident = set()   # bindless handles we've made resident
         self.u_time_loc = -1     # u_time uniform location (animated UV)
         self.u_night_loc = -1    # u_night uniform location (bioluminescence)
+        self._uloc = {}          # cached uniform locations for the main program
+        self._table = None       # MeshEntry list from the last geometry build
+        self.group_templates = None      # static per-group command templates (array mode)
+        self._tmpl_slots_version = None  # ml._gdr_slots_version the templates were built for
 
     def _gl(self):
         import OpenGL.GL as g
@@ -478,6 +575,10 @@ class GPUDrivenRenderer:
                 return False
             self.u_time_loc = g.glGetUniformLocation(self.program, b'u_time')
             self.u_night_loc = g.glGetUniformLocation(self.program, b'u_night')
+            # Cache the rest once — glGetUniformLocation per frame is wasted CPU.
+            self._uloc = {n: g.glGetUniformLocation(self.program, n) for n in
+                          (b'u_flip_green', b'u_flip_normal', b'u_shadows_on',
+                           b'u_light_vp', b'u_shadow_tex')}
         if self.depth_program == 0:
             # Non-fatal: if it fails, cast() no-ops and the scene renders unshadowed.
             self.depth_program = _compile_program(g, _GDR_DEPTH_VS, _GDR_DEPTH_FS)
@@ -489,6 +590,9 @@ class GPUDrivenRenderer:
         models = [(p, m) for p, m in ml.models_cache.items() if getattr(m, 'loaded', False)]
         geo = consolidate_geometry(models)
         self.by_model = geo['by_model']
+        self._table = geo['table']
+        self.group_templates = None      # geometry changed → rebuild templates lazily
+        self._tmpl_slots_version = None
         if geo['index_count'] == 0:
             return False
 
@@ -654,6 +758,54 @@ class GPUDrivenRenderer:
         g.glBufferData(g.GL_SHADER_STORAGE_BUFFER, inst_arr.nbytes, inst_arr, g.GL_DYNAMIC_DRAW)
         g.glBindBufferBase(g.GL_SHADER_STORAGE_BUFFER, 0, self.inst_ssbo)
 
+    def _rebuild_templates(self):
+        """(Re)build the static per-group command templates against the model
+        loader's current slot mapping. Cheap Python loop over the mesh table —
+        runs only when geometry or the slot list actually changes, never per frame."""
+        paths = getattr(self.ml, '_gdr_model_paths', None)
+        if not paths or self._table is None:
+            self.group_templates = None
+            return
+        slot_of = {p: i for i, p in enumerate(paths)}
+        self.group_templates = build_group_templates(self._table, slot_of)
+        self._tmpl_slots_version = getattr(self.ml, '_gdr_slots_version', None)
+
+    def _build_frame(self):
+        """Unified per-frame data: (inst_arr, [(cmd_arr, drawmat_arr) × 3 groups]).
+
+        FAST PATH (array mode): the model loader's prepare_gpu_frame() left
+        {inst, counts, offsets} in ml._gdr_frame — derive the command buffers
+        with pure numpy (build_group_commands), no per-mesh Python loop.
+
+        LEGACY PATH: fall back to _collect_frame()'s per-instance walk over
+        instance_batches (used when prepare_batches ran instead — e.g. picking
+        rebuilds, or array assembly unavailable).
+        Returns None if nothing is visible."""
+        fr = getattr(self.ml, '_gdr_frame', None)
+        if fr is not None:
+            if (self.group_templates is None
+                    or self._tmpl_slots_version != getattr(self.ml, '_gdr_slots_version', None)):
+                self._rebuild_templates()
+            if self.group_templates is not None:
+                counts, offsets = fr['counts'], fr['offsets']
+                groups = [build_group_commands(self.group_templates[grp], counts, offsets)
+                          for grp in (0, 1, 2)]
+                if not any(len(c) for c, _ in groups):
+                    return None
+                return (fr['inst'], groups)
+        legacy = self._collect_frame()
+        if legacy is None:
+            return None
+        inst_arr, gcmds, gmat = legacy
+        groups = []
+        for grp in (0, 1, 2):
+            cmds = gcmds[grp]
+            cmd_arr = np.zeros(len(cmds), dtype=DRAW_CMD_DTYPE)
+            for i, c in enumerate(cmds):
+                cmd_arr[i] = c
+            groups.append((cmd_arr, np.asarray(gmat[grp], np.uint32)))
+        return (inst_arr, groups)
+
     def cast(self, light_vp):
         """Depth-only MDI of opaque + two-sided groups into the currently-bound
         shadow FBO (caller binds it via ShadowMap.begin()). Caches the frame so
@@ -665,11 +817,11 @@ class GPUDrivenRenderer:
                 return False
             g = self._gl()
             import ctypes
-            frame = self._collect_frame()
+            frame = self._build_frame()
             self._frame = frame
             if frame is None:
                 return False
-            inst_arr, gcmds, _ = frame
+            inst_arr, groups = frame
             g.glUseProgram(self.depth_program)
             g.glUniformMatrix4fv(g.glGetUniformLocation(self.depth_program, b'u_light_vp'),
                                  1, g.GL_TRUE, np.ascontiguousarray(light_vp, np.float32))
@@ -678,16 +830,13 @@ class GPUDrivenRenderer:
             g.glEnable(g.GL_DEPTH_TEST); g.glDepthMask(g.GL_TRUE); g.glDepthFunc(g.GL_LESS)
             g.glDisable(g.GL_BLEND); g.glDisable(g.GL_CULL_FACE)   # two-sided foliage casts too
             for grp in (0, 1):                                    # skip 2 (transparent/FX)
-                cmds = gcmds[grp]
-                if not cmds:
+                cmd_arr, _dm = groups[grp]
+                if not len(cmd_arr):
                     continue
-                cmd_arr = np.zeros(len(cmds), dtype=DRAW_CMD_DTYPE)
-                for i, c in enumerate(cmds):
-                    cmd_arr[i] = c
                 g.glBindBuffer(g.GL_DRAW_INDIRECT_BUFFER, self.cmd_buf)
                 g.glBufferData(g.GL_DRAW_INDIRECT_BUFFER, cmd_arr.nbytes, cmd_arr, g.GL_DYNAMIC_DRAW)
                 g.glMultiDrawElementsIndirect(g.GL_TRIANGLES, g.GL_UNSIGNED_INT,
-                                              ctypes.c_void_p(0), len(cmds), 0)
+                                              ctypes.c_void_p(0), len(cmd_arr), 0)
             g.glBindBuffer(g.GL_DRAW_INDIRECT_BUFFER, 0)
             g.glBindBuffer(g.GL_SHADER_STORAGE_BUFFER, 0)
             g.glBindVertexArray(0); g.glUseProgram(0)
@@ -700,35 +849,35 @@ class GPUDrivenRenderer:
     def _draw(self, anim_t=0.0, shadow_tex=0, light_vp=None, shadows_on=False):
         g = self._gl()
         import ctypes
-        # Reuse the frame cast() just built (identical instance layout); else collect.
+        # Reuse the frame cast() just built (identical instance layout); else build.
         #   group 0 = opaque, single-sided   → cull back, depth write, no blend
         #   group 1 = opaque, two-sided       → no cull,  depth write, no blend
         #   group 2 = blend (glass/FX)        → no cull,  depth test only, blend, after opaque
-        frame = self._frame if self._frame is not None else self._collect_frame()
+        frame = self._frame if self._frame is not None else self._build_frame()
         self._frame = None
         if frame is None:
             return True
-        inst_arr, gcmds, gmat = frame
+        inst_arr, groups = frame
 
         g.glUseProgram(self.program)
         if self.u_time_loc != -1:
             g.glUniform1f(self.u_time_loc, float(anim_t))   # animated-UV scroll
         if self.u_night_loc != -1:
             g.glUniform1f(self.u_night_loc, float(getattr(self.ml, 'night_factor', 1.0)))
-        g.glUniform1i(g.glGetUniformLocation(self.program, b'u_flip_green'),
+        g.glUniform1i(self._uloc[b'u_flip_green'],
                       1 if getattr(self.ml, 'dbg_flip_green', False) else 0)
-        g.glUniform1i(g.glGetUniformLocation(self.program, b'u_flip_normal'),
+        g.glUniform1i(self._uloc[b'u_flip_normal'],
                       1 if getattr(self.ml, 'dbg_flip_normal', False) else 0)
         # Shadow receive (sun = light 0 only). Depth map → unit 4; material
         # textures are bindless so there's no texture-unit conflict.
         use_shadow = 1 if (shadows_on and shadow_tex and light_vp is not None) else 0
-        g.glUniform1i(g.glGetUniformLocation(self.program, b'u_shadows_on'), use_shadow)
+        g.glUniform1i(self._uloc[b'u_shadows_on'], use_shadow)
         if use_shadow:
-            g.glUniformMatrix4fv(g.glGetUniformLocation(self.program, b'u_light_vp'),
+            g.glUniformMatrix4fv(self._uloc[b'u_light_vp'],
                                  1, g.GL_TRUE, np.ascontiguousarray(light_vp, np.float32))
             g.glActiveTexture(g.GL_TEXTURE4)
             g.glBindTexture(g.GL_TEXTURE_2D, int(shadow_tex))
-            g.glUniform1i(g.glGetUniformLocation(self.program, b'u_shadow_tex'), 4)
+            g.glUniform1i(self._uloc[b'u_shadow_tex'], 4)
             g.glActiveTexture(g.GL_TEXTURE0)
         g.glBindVertexArray(self.vao)
         self._upload_instances(g, inst_arr)
@@ -736,26 +885,18 @@ class GPUDrivenRenderer:
         g.glEnable(g.GL_DEPTH_TEST)
         g.glFrontFace(g.GL_CW); g.glCullFace(g.GL_BACK)
 
-        def _upload_cmds(grp):
-            cmds = gcmds[grp]
-            cmd_arr = np.zeros(len(cmds), dtype=DRAW_CMD_DTYPE)
-            for i, c in enumerate(cmds):
-                cmd_arr[i] = c
-            g.glBindBuffer(g.GL_DRAW_INDIRECT_BUFFER, self.cmd_buf)
-            g.glBufferData(g.GL_DRAW_INDIRECT_BUFFER, cmd_arr.nbytes, cmd_arr, g.GL_DYNAMIC_DRAW)
-            return len(cmds)
-
         def _pass(grp):
-            if not gcmds[grp]:
+            cmd_arr, dm = groups[grp]
+            if not len(cmd_arr):
                 return
-            dm = np.asarray(gmat[grp], np.uint32)
             # binding 1: per-draw material id, indexed by gl_DrawID (per MDI call).
             g.glBindBuffer(g.GL_SHADER_STORAGE_BUFFER, self.drawmat_buf)
             g.glBufferData(g.GL_SHADER_STORAGE_BUFFER, dm.nbytes, dm, g.GL_DYNAMIC_DRAW)
             g.glBindBufferBase(g.GL_SHADER_STORAGE_BUFFER, 1, self.drawmat_buf)
-            n = _upload_cmds(grp)
+            g.glBindBuffer(g.GL_DRAW_INDIRECT_BUFFER, self.cmd_buf)
+            g.glBufferData(g.GL_DRAW_INDIRECT_BUFFER, cmd_arr.nbytes, cmd_arr, g.GL_DYNAMIC_DRAW)
             g.glMultiDrawElementsIndirect(g.GL_TRIANGLES, g.GL_UNSIGNED_INT,
-                                          ctypes.c_void_p(0), n, 0)
+                                          ctypes.c_void_p(0), len(cmd_arr), 0)
 
         # ── Depth prepass (early-Z occlusion, F8) ──
         # Lay the nearest depth for every opaque/two-sided pixel FIRST so the
@@ -764,7 +905,7 @@ class GPUDrivenRenderer:
         # of MDI draw order. Skipped if its program failed or the toggle is off.
         prepass = bool(self.camdepth_program
                        and getattr(self.ml, 'gpu_depth_prepass', True)
-                       and (gcmds[0] or gcmds[1]))
+                       and (len(groups[0][0]) or len(groups[1][0])))
         if prepass:
             # _pass() binds the per-draw material ids (binding 1) the prepass FS
             # needs for its alpha test; the camdepth program reads bindings 0/1/2.

@@ -149,6 +149,27 @@ class ModelLoader:
         # otherwise the universal instanced path. _gpu_driven is lazily created.
         self.force_render_tier = None
         self._gpu_driven = None
+
+        # ── Array-native instance pipeline (GPU-driven mode only) ──
+        # Static "row" tables aligned to the canvas's _valid_entities_3d list:
+        # one row per (entity, model) pair (kit parts add extra rows). Per frame,
+        # prepare_gpu_frame() turns the cull's index array into the instance
+        # SSBO + per-model counts with pure numpy — replacing the per-entity
+        # Python loops of prepare_batches/_collect_frame on the hot path.
+        self._gdr_row_ent = None       # (R,) int32 — index into _valid_entities_3d
+        self._gdr_row_slot = None      # (R,) int32 — model slot id
+        self._gdr_row_rot = None       # (R,3) f32
+        self._gdr_row_scale = None     # (R,) f32
+        self._gdr_overlay = None       # (R,) f32 — selection overlay (0 / 0.35)
+        self._gdr_row_map = {}         # id(entity) -> [row indices]
+        self._gdr_model_paths = []     # slot id -> model_path
+        self._gdr_modelled_ids = set() # id(entity) for entities with a loaded model
+        self._gdr_rows_version = None  # canvas._pos_arrays_version rows were built for
+        self._gdr_slots_version = 0    # bumps only when the slot list CONTENT changes
+        self._gdr_sel_ids = frozenset()  # selection snapshot the overlay reflects
+        self._gdr_frame = None         # per-frame {inst, counts, offsets} for the GDR
+        self._gdr_fallback_args = None # (entities, selected) to rebuild batches if GDR fails
+        self.gdr_drew_last = False     # True when the last frame drew via the GDR
         # Depth prepass (early-Z occlusion) on the GPU-driven path. F8 toggles it.
         # Default OFF: a prepass only pays off when the scene is GPU-fragment-bound
         # (heavy overdraw of the expensive material shader). It adds a full extra
@@ -2045,12 +2066,62 @@ class ModelLoader:
         
         return True
 
+    def _get_entity_rs(self, entity):
+        """Rotation (rx, ry, rz) + scale for an entity, parsed from XML once and
+        cached in _entity_rs_cache (mark_entity_modified pops the cache entry).
+        Shared by prepare_batches (classic path) and the GDR row tables."""
+        eid = id(entity)
+        cached = self._entity_rs_cache.get(eid)
+        if cached is not None:
+            return cached
+        rotation_x = rotation_y = rotation_z = 0.0
+        scale = 1.0
+        xml_elem = getattr(entity, 'xml_element', None)
+        if xml_elem is not None:
+            angles_field = xml_elem.find(".//field[@name='hidAngles']")
+            if angles_field is not None:
+                angles_value = angles_field.get('value-Vector3')
+                if angles_value:
+                    try:
+                        parts = angles_value.split(',')
+                        if len(parts) >= 3:
+                            rotation_x = float(parts[0].strip())
+                            rotation_y = float(parts[1].strip())
+                            rotation_z = (360 - float(parts[2].strip())) % 360
+                    except (ValueError, IndexError):
+                        pass
+            if rotation_z == 0.0 and rotation_x == 0.0 and rotation_y == 0.0:
+                angles_elem = xml_elem.find("./value[@name='hidAngles']")
+                if angles_elem is not None:
+                    x_elem = angles_elem.find("./x")
+                    y_elem = angles_elem.find("./y")
+                    z_elem = angles_elem.find("./z")
+                    if x_elem is not None and x_elem.text:
+                        rotation_x = float(x_elem.text.strip())
+                    if y_elem is not None and y_elem.text:
+                        rotation_y = float(y_elem.text.strip())
+                    if z_elem is not None and z_elem.text:
+                        rotation_z = (360 - float(z_elem.text.strip())) % 360
+            scale_field = xml_elem.find(".//field[@name='hidScale']")
+            if scale_field is not None and scale_field.text and len(scale_field.text) >= 8:
+                try:
+                    import struct
+                    s = struct.unpack('<f', bytes.fromhex(scale_field.text[:8]))[0]
+                    if 0 < s <= 100:
+                        scale = s
+                except Exception:
+                    pass
+        rs = (rotation_x, rotation_y, rotation_z, scale)
+        self._entity_rs_cache[eid] = rs
+        return rs
+
     def prepare_batches(self, entities, selected_entities):
         """Prepare instance batches for all entities - call once per frame before rendering
-        
+
         OPTIMIZATION: For 10K+ entities, this tracks entity count and logs performance stats
         """
         self.instance_batches.clear()
+        self._gdr_frame = None   # classic path active — drop any stale array frame
 
         # Selection lookup as an id-set (was `entity in selected_entities` on a
         # LIST → O(N×S) per frame; this makes it O(1) per entity).
@@ -2081,48 +2152,7 @@ class ModelLoader:
             pos_z = float(-entity.y)
 
             # Rotation + scale — extracted once and cached; re-extracted only after invalidation
-            eid = id(entity)
-            if eid not in self._entity_rs_cache:
-                rotation_x = rotation_y = rotation_z = 0.0
-                scale = 1.0
-                xml_elem = getattr(entity, 'xml_element', None)
-                if xml_elem is not None:
-                    angles_field = xml_elem.find(".//field[@name='hidAngles']")
-                    if angles_field is not None:
-                        angles_value = angles_field.get('value-Vector3')
-                        if angles_value:
-                            try:
-                                parts = angles_value.split(',')
-                                if len(parts) >= 3:
-                                    rotation_x = float(parts[0].strip())
-                                    rotation_y = float(parts[1].strip())
-                                    rotation_z = (360 - float(parts[2].strip())) % 360
-                            except (ValueError, IndexError):
-                                pass
-                    if rotation_z == 0.0 and rotation_x == 0.0 and rotation_y == 0.0:
-                        angles_elem = xml_elem.find("./value[@name='hidAngles']")
-                        if angles_elem is not None:
-                            x_elem = angles_elem.find("./x")
-                            y_elem = angles_elem.find("./y")
-                            z_elem = angles_elem.find("./z")
-                            if x_elem is not None and x_elem.text:
-                                rotation_x = float(x_elem.text.strip())
-                            if y_elem is not None and y_elem.text:
-                                rotation_y = float(y_elem.text.strip())
-                            if z_elem is not None and z_elem.text:
-                                rotation_z = (360 - float(z_elem.text.strip())) % 360
-                    scale_field = xml_elem.find(".//field[@name='hidScale']")
-                    if scale_field is not None and scale_field.text and len(scale_field.text) >= 8:
-                        try:
-                            import struct
-                            s = struct.unpack('<f', bytes.fromhex(scale_field.text[:8]))[0]
-                            if 0 < s <= 100:
-                                scale = s
-                        except Exception:
-                            pass
-                self._entity_rs_cache[eid] = (rotation_x, rotation_y, rotation_z, scale)
-            else:
-                rotation_x, rotation_y, rotation_z, scale = self._entity_rs_cache[eid]
+            rotation_x, rotation_y, rotation_z, scale = self._get_entity_rs(entity)
 
             is_selected = id(entity) in selected_ids
 
@@ -2145,6 +2175,157 @@ class ModelLoader:
             self._batch_log_frame = 0
             unique_models = len(self.instance_batches)
             print(f"📊 Batch Stats: {entities_with_models}/{total_entities} entities with models, {unique_models} unique models")
+
+    # ──────────────── Array-native instance pipeline (GPU-driven mode) ────────────────
+
+    def _ensure_gdr_rows(self, canvas):
+        """(Re)build the static row tables aligned to canvas._valid_entities_3d.
+
+        One row per (entity, model) pair — kit parts contribute extra rows at the
+        same transform, mirroring prepare_batches exactly. Rebuilt only when the
+        canvas position arrays rebuild (level load, model-count change, entity
+        move invalidation) — keyed on canvas._pos_arrays_version. Returns True
+        when rows are usable."""
+        version = getattr(canvas, '_pos_arrays_version', None)
+        if version is None:
+            return False
+        valid = getattr(canvas, '_valid_entities_3d', None)
+        if not valid:
+            return False
+        if self._gdr_rows_version == version and self._gdr_row_ent is not None:
+            return True
+
+        paths = []
+        slot_of = {}
+        row_ent, row_slot, row_rot, row_scale = [], [], [], []
+        row_map = {}
+        modelled = set()
+        mc = self.models_cache
+        for i, e in enumerate(valid):
+            mf = getattr(e, 'model_file', None)
+            kits = getattr(e, 'kit_model_files', []) or []
+            if not mf and not kits:
+                continue
+            if not all(hasattr(e, a) for a in ('x', 'y', 'z')):
+                continue
+            rx, ry, rz, sc = self._get_entity_rs(e)
+            first_row = len(row_ent)
+            mpaths = ([mf] if mf else []) + [kg for kg, _kb in kits]
+            for p in mpaths:
+                s = slot_of.get(p)
+                if s is None:
+                    s = len(paths)
+                    slot_of[p] = s
+                    paths.append(p)
+                row_ent.append(i)
+                row_slot.append(s)
+                row_rot.append((rx, ry, rz))
+                row_scale.append(sc)
+            row_map[id(e)] = list(range(first_row, len(row_ent)))
+            for p in mpaths:
+                m = mc.get(p)
+                if m is not None and getattr(m, 'loaded', False):
+                    modelled.add(id(e))
+                    break
+
+        if not row_ent:
+            return False
+        self._gdr_row_ent = np.asarray(row_ent, np.int32)
+        self._gdr_row_slot = np.asarray(row_slot, np.int32)
+        self._gdr_row_rot = np.asarray(row_rot, np.float32).reshape(-1, 3)
+        self._gdr_row_scale = np.asarray(row_scale, np.float32)
+        self._gdr_row_map = row_map
+        self._gdr_modelled_ids = modelled
+        if paths != self._gdr_model_paths:
+            # Slot CONTENT changed → the GDR's command templates must rebuild.
+            # (Per-drag-frame array rebuilds keep the same paths/order, so this
+            # stays stable during drags and templates are NOT rebuilt per frame.)
+            self._gdr_model_paths = paths
+            self._gdr_slots_version += 1
+        # Re-apply the current selection overlay onto the fresh rows.
+        self._gdr_overlay = np.zeros(len(row_ent), np.float32)
+        for eid in self._gdr_sel_ids:
+            for r in row_map.get(eid, ()):
+                self._gdr_overlay[r] = 0.35
+        self._gdr_rows_version = version
+        return True
+
+    def _gdr_update_overlay(self, selected_entities):
+        """Update the per-row selection overlay only when the selection changed."""
+        sel_ids = frozenset(id(e) for e in selected_entities) if selected_entities else frozenset()
+        if sel_ids == self._gdr_sel_ids:
+            return
+        row_map = self._gdr_row_map
+        ov = self._gdr_overlay
+        for eid in self._gdr_sel_ids - sel_ids:
+            for r in row_map.get(eid, ()):
+                ov[r] = 0.0
+        for eid in sel_ids - self._gdr_sel_ids:
+            for r in row_map.get(eid, ()):
+                ov[r] = 0.35
+        self._gdr_sel_ids = sel_ids
+
+    def gdr_refresh_entity(self, entity):
+        """Refresh one entity's rotation/scale rows after mark_entity_modified
+        (rotation/scale edits don't bump the canvas position-array version, so
+        rows would otherwise go stale). Call AFTER _entity_rs_cache is popped."""
+        if self._gdr_row_ent is None:
+            return
+        rows = self._gdr_row_map.get(id(entity))
+        if not rows:
+            return
+        rx, ry, rz, sc = self._get_entity_rs(entity)
+        for r in rows:
+            self._gdr_row_rot[r] = (rx, ry, rz)
+            self._gdr_row_scale[r] = sc
+
+    def prepare_gpu_frame(self, canvas, entities_sorted):
+        """Array-native replacement for prepare_batches when the GPU-driven path
+        is active. Pure numpy from the cull's index array to the instance SSBO
+        contents — no per-entity Python loop on the hot path.
+
+        Returns True when a frame was staged in self._gdr_frame (the canvas then
+        SKIPS prepare_batches); False → caller must run prepare_batches as usual.
+        Interior-exempt anchors are already inside the cull's index array via the
+        inside-sphere bypass; never-cull markers have no models — neither needs
+        special handling here."""
+        self._gdr_frame = None
+        if not self.force_render_tier or self._gpu_driven is False:
+            return False
+        # GDR exists but permanently failed → stop staging frames (the classic
+        # prepare_batches + universal path is the steady state from here on).
+        if self._gpu_driven is not None and getattr(self._gpu_driven, '_failed', False):
+            return False
+        try:
+            if not self._ensure_gdr_rows(canvas):
+                return False
+            vis_idx = getattr(canvas, '_visible_idx_3d', None)
+            pos = getattr(canvas, '_positions_3d', None)
+            valid = canvas._valid_entities_3d
+            if vis_idx is None or pos is None or len(pos) != len(valid):
+                return False
+            self._gdr_update_overlay(getattr(canvas, 'selected', None) or [])
+
+            from gpu_driven_renderer import assemble_frame
+            ent_vis = np.zeros(len(valid), bool)
+            ent_vis[vis_idx] = True
+            inst, counts, offsets = assemble_frame(
+                self._gdr_row_ent, self._gdr_row_slot, self._gdr_row_rot,
+                self._gdr_row_scale, self._gdr_overlay,
+                pos, ent_vis, len(self._gdr_model_paths))
+            self._gdr_frame = {'inst': inst, 'counts': counts, 'offsets': offsets}
+            # If the GDR fails mid-frame we must rebuild instance_batches for the
+            # universal fallback (we skipped prepare_batches this frame).
+            self._gdr_fallback_args = (entities_sorted, getattr(canvas, 'selected', None) or [])
+            return True
+        except Exception as _e:
+            if not getattr(self, '_gdr_prep_error_logged', False):
+                self._gdr_prep_error_logged = True
+                import traceback
+                print(f"[gpu-driven] prepare_gpu_frame failed -> classic path: {_e}")
+                traceback.print_exc()
+            self._gdr_frame = None
+            return False
 
     def set_shadow_inputs(self, shadow_tex, light_vp, on):
         """Canvas sets the sun shadow map + light matrix each frame; the
@@ -2169,7 +2350,8 @@ class ModelLoader:
         normal map + spec + emission, lit by the studio rig) when it compiles;
         falls back to the fixed-function display-list path on ANY shader problem,
         so the 3D view can never go blank."""
-        if not self.instance_batches:
+        if not self.instance_batches and self._gdr_frame is None:
+            self.gdr_drew_last = False
             return 0
         if not getattr(self, '_render_diag_done', False):
             self._render_diag_done = True
@@ -2180,6 +2362,7 @@ class ModelLoader:
 
         # GPU-driven fast path (F2/F3): one glMultiDrawElementsIndirect for all
         # models. Falls through to the universal path if unavailable or it errors.
+        self.gdr_drew_last = False
         if self.force_render_tier:
             if self._gpu_driven is None:
                 try:
@@ -2190,9 +2373,26 @@ class ModelLoader:
                     self._gpu_driven = False
             if self._gpu_driven:
                 anim_t = time.monotonic() - self._anim_t0
-                if self._gpu_driven.render(anim_t, self._shadow_tex,
-                                           self._shadow_light_vp, self._shadows_on):
+                had_array_frame = self._gdr_frame is not None
+                drew = self._gpu_driven.render(anim_t, self._shadow_tex,
+                                               self._shadow_light_vp, self._shadows_on)
+                self._gdr_frame = None   # consumed (or invalid) — never reuse next frame
+                if drew:
+                    self.gdr_drew_last = True
                     return 0   # drew via MDI
+                if had_array_frame and self._gdr_fallback_args is not None:
+                    # We skipped prepare_batches this frame (array mode) but the
+                    # GDR failed — rebuild instance_batches so the universal path
+                    # below has something to draw. One-time cost on failure only.
+                    ents, sel = self._gdr_fallback_args
+                    self.prepare_batches(ents, sel)
+            elif self._gdr_frame is not None:
+                # Renderer import failed but an array frame was staged: the
+                # universal path needs instance_batches.
+                self._gdr_frame = None
+                if self._gdr_fallback_args is not None:
+                    ents, sel = self._gdr_fallback_args
+                    self.prepare_batches(ents, sel)
 
         if self._ensure_shader():
             try:
@@ -3056,4 +3256,21 @@ class ModelLoader:
 
         self.models_cache.clear()
         self.has_animated_materials = False
+
+        # Reset the array-native GDR row tables — they reference the old level's
+        # entity indices/model slots and must rebuild against the new level.
+        self._gdr_row_ent = None
+        self._gdr_row_slot = None
+        self._gdr_row_rot = None
+        self._gdr_row_scale = None
+        self._gdr_overlay = None
+        self._gdr_row_map = {}
+        self._gdr_model_paths = []
+        self._gdr_modelled_ids = set()
+        self._gdr_rows_version = None
+        self._gdr_slots_version += 1
+        self._gdr_sel_ids = frozenset()
+        self._gdr_frame = None
+        self._gdr_fallback_args = None
+        self.gdr_drew_last = False
         print("Cache cleared")

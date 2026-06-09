@@ -1303,7 +1303,16 @@ class MapCanvas(QOpenGLWidget):
                     self.model_loader.night_factor = (
                         self._night_factor if self.day_night_enabled else 1.0)
                     _ps = _pc()
-                    self.model_loader.prepare_batches(entities_sorted, self.selected)
+                    # Array-native fast path (GPU-driven mode): assemble the
+                    # instance data with pure numpy from the cull's index array.
+                    # Falls back to the classic per-entity prepare_batches loop
+                    # when unavailable (universal path, no rows yet, 2D, …).
+                    _ml = self.model_loader
+                    _gdr_prepared = False
+                    if getattr(_ml, 'force_render_tier', None):
+                        _gdr_prepared = _ml.prepare_gpu_frame(self, entities_sorted)
+                    if not _gdr_prepared:
+                        _ml.prepare_batches(entities_sorted, self.selected)
                     _ps = self._pf('prepare', _ps)
                     # Sun shadow map: cast model depth NOW (instance_batches is
                     # current for this frame) so render_batched_models can sample it.
@@ -1313,11 +1322,17 @@ class MapCanvas(QOpenGLWidget):
                     models_rendered = instances_rendered
 
                     # Track which entities got models rendered
-                    for model_path, instances in self.model_loader.instance_batches.items():
-                        model = self.model_loader.models_cache.get(model_path)
-                        if model and model.loaded and (model.display_list or (hasattr(model, 'use_immediate_mode') and model.use_immediate_mode)):
-                            for instance_data in instances:
-                                entities_with_models.add(id(instance_data[0]))
+                    if getattr(_ml, 'gdr_drew_last', False):
+                        # Array mode: instance_batches wasn't filled this frame.
+                        # The modelled-id set is maintained with the row tables —
+                        # constant per level, no per-frame loop needed.
+                        entities_with_models = _ml._gdr_modelled_ids
+                    else:
+                        for model_path, instances in self.model_loader.instance_batches.items():
+                            model = self.model_loader.models_cache.get(model_path)
+                            if model and model.loaded and (model.display_list or (hasattr(model, 'use_immediate_mode') and model.use_immediate_mode)):
+                                for instance_data in instances:
+                                    entities_with_models.add(id(instance_data[0]))
                 finally:
                     _gc.enable()
                     _gc.collect(0)  # fast gen-0 sweep so short-lived objects don't accumulate
@@ -4086,6 +4101,10 @@ class MapCanvas(QOpenGLWidget):
         else:
             self._valid_entities_3d = []
             self._positions_3d = None
+        # Version counter for everything keyed to these arrays (GDR row tables in
+        # model_loader). Bumps on every rebuild — level load, model-count change,
+        # invalidate_position_cache after entity moves.
+        self._pos_arrays_version = getattr(self, '_pos_arrays_version', 0) + 1
 
         # Pre-build bounding-sphere radii and geometric-center Y offsets for frustum culling.
         # Entity origins sit at the model foot/base; using the bounding-box centre as the sphere
@@ -4288,9 +4307,16 @@ class MapCanvas(QOpenGLWidget):
         _render_entities_3d does NOT need to re-sort it.
         """
         if not hasattr(self, 'entities') or not self.entities:
+            self._visible_idx_3d = None
             return []
         if not self.show_entities:
+            self._visible_idx_3d = None
             return []
+
+        # Index array (into _valid_entities_3d) of this frame's frustum survivors.
+        # Consumed by model_loader.prepare_gpu_frame (array-native GDR pipeline).
+        # Reset here so early-return paths never leave a stale index array behind.
+        self._visible_idx_3d = None
 
         entities_to_check = self._get_map_filtered_entities()
 
@@ -4397,6 +4423,12 @@ class MapCanvas(QOpenGLWidget):
             # _render_entities_3d must NOT re-sort – the list arrives pre-sorted.
             sorted_order = np.argsort(dist_sq[final_idx])
             ordered_idx  = final_idx[sorted_order]
+
+            # Stash for the array-native GDR pipeline. Interior-exempt anchors are
+            # already included (camera inside the AABB ⇒ inside the bounding
+            # sphere ⇒ the inside_sphere bypass kept them); never-cull markers
+            # have no models, so neither extra needs to be added here.
+            self._visible_idx_3d = ordered_idx
 
             visible_entities = [valid[i] for i in ordered_idx]
 
@@ -5382,6 +5414,15 @@ class MapCanvas(QOpenGLWidget):
             tested_ids = set()
 
             if hasattr(self, 'model_loader') and self.model_loader is not None:
+                # Array-native GDR mode skips prepare_batches, so instance_batches
+                # is empty/stale. Rebuild it once at click time (a few ms) so the
+                # ray test below sees current per-instance transforms.
+                if getattr(self.model_loader, 'gdr_drew_last', False):
+                    try:
+                        self.model_loader.prepare_batches(
+                            self._get_visible_entities(), self.selected)
+                    except Exception as _pe:
+                        print(f"select_entity_3d: pick-time batch rebuild failed: {_pe}")
                 for model_path, instances in self.model_loader.instance_batches.items():
                     model      = self.model_loader.models_cache.get(model_path)
                     has_bounds = (model is not None and
@@ -6490,6 +6531,14 @@ class MapCanvas(QOpenGLWidget):
         # Clear cached rotation/scale so prepare_batches re-reads from XML next frame
         if hasattr(self, 'model_loader') and self.model_loader is not None:
             self.model_loader._entity_rs_cache.pop(id(entity), None)
+            # Array-native GDR rows cache rotation/scale too — refresh this
+            # entity's rows now (re-parses RS since the cache was just popped).
+            # Position-only moves are covered by invalidate_position_cache, but
+            # rotation/scale edits don't bump the position-array version.
+            try:
+                self.model_loader.gdr_refresh_entity(entity)
+            except Exception:
+                pass
 
         # Force interior AABB cache rebuild (entity's bounds may have shifted)
         self._interior_aabb_cache_key = None
