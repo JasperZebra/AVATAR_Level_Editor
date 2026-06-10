@@ -2247,16 +2247,21 @@ class ModelLoader:
             # stays stable during drags and templates are NOT rebuilt per frame.)
             self._gdr_model_paths = paths
             self._gdr_slots_version += 1
-        # Re-apply the current selection overlay onto the fresh rows.
+        # Fresh overlay rows — all zeros. The blue selection tint is disabled
+        # (selection shows via the pulsing yellow glow pass only), so there is
+        # nothing to re-apply after a rebuild; _gdr_sel_ids is kept for the
+        # change-detection in _gdr_update_overlay.
         self._gdr_overlay = np.zeros(len(row_ent), np.float32)
-        for eid in self._gdr_sel_ids:
-            for r in row_map.get(eid, ()):
-                self._gdr_overlay[r] = 0.35
         self._gdr_rows_version = version
         return True
 
     def _gdr_update_overlay(self, selected_entities):
-        """Update the per-row selection overlay only when the selection changed."""
+        """Update the per-row selection overlay only when the selection changed.
+
+        Selection is indicated by the pulsing yellow glow pass ONLY (June 2026,
+        user request) — the blue shader tint is disabled, so selected rows also
+        get 0.0. The plumbing is kept (and still clears stale values) in case a
+        tint is ever wanted again; to re-enable, change the second 0.0 below."""
         sel_ids = frozenset(id(e) for e in selected_entities) if selected_entities else frozenset()
         if sel_ids == self._gdr_sel_ids:
             return
@@ -2267,7 +2272,7 @@ class ModelLoader:
                 ov[r] = 0.0
         for eid in sel_ids - self._gdr_sel_ids:
             for r in row_map.get(eid, ()):
-                ov[r] = 0.35
+                ov[r] = 0.0   # was 0.35 — blue tint removed, yellow pulse only
         self._gdr_sel_ids = sel_ids
 
     def gdr_refresh_entity(self, entity):
@@ -2657,8 +2662,10 @@ class ModelLoader:
         if n == 0:
             return 0
         # (px,py,pz, rx,ry,rz, scale, overlay) per instance — one np.array build.
+        # Overlay fixed at 0.0: the blue selection tint is disabled (selection
+        # shows via the pulsing yellow glow pass only — June 2026 user request).
         arr = np.array(
-            [(i[1], i[2], i[3], i[4], i[5], i[6], i[7], 0.35 if i[8] else 0.0)
+            [(i[1], i[2], i[3], i[4], i[5], i[6], i[7], 0.0)
              for i in instances], dtype=np.float32)
         if self._instance_vbo is None:
             self._instance_vbo = int(glGenBuffers(1))

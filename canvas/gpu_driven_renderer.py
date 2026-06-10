@@ -743,7 +743,8 @@ class GPUDrivenRenderer:
             base_instance = len(insts)
             for it in instances:
                 insts.append((it[1], it[2], it[3], it[7],          # pos.xyz, scale
-                              it[4], it[5], it[6], 0.35 if it[8] else 0.0))  # rot.xyz, overlay
+                              it[4], it[5], it[6], 0.0))  # rot.xyz, overlay (blue
+                              # selection tint disabled — yellow glow pass only)
             n = len(instances)
             for e in entries:
                 grp = e.render_group
