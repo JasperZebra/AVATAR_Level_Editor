@@ -3078,7 +3078,7 @@ class ModelLoader:
 
         return instances_rendered
 
-    def render_selection_glow(self, glow_intensity):
+    def render_selection_glow(self, glow_intensity, selected_entities=None):
         """Re-render selected instances with a pulsing pure-yellow overlay.
 
         Renders raw vertex geometry only (no textures, no lighting) so the glow
@@ -3086,6 +3086,12 @@ class ModelLoader:
         The old approach used GL_EMISSION × GL_MODULATE, which multiplied yellow
         by the texture colour — blue models turned dark, orange models turned red.
         Bypassing the display list and textures entirely fixes this.
+
+        In GPU-driven array mode instance_batches is empty/stale (prepare_batches
+        doesn't run), so the glow transforms are built directly from
+        `selected_entities` — same position/RS data the instance SSBO uses.
+        Without this the yellow pulse silently vanished in GDR mode and only the
+        shader's static blue tint remained.
         """
         if glow_intensity <= 0:
             return
@@ -3104,15 +3110,30 @@ class ModelLoader:
 
             glColor4f(1.0, 0.85, 0.0, glow_intensity)  # pure yellow, no texture influence
 
-            for model_path, instances in self.instance_batches.items():
-                selected = [i for i in instances if i[8]]
-                if not selected:
-                    continue
-                model = self.models_cache.get(model_path)
-                if not model or not model.loaded or not model.meshes:
-                    continue
-                for instance_data in selected:
-                    self._render_glow_geometry(model, instance_data)
+            if self.gdr_drew_last and selected_entities:
+                # Array mode: build the few selected transforms directly.
+                for e in selected_entities:
+                    mf = getattr(e, 'model_file', None)
+                    kits = getattr(e, 'kit_model_files', []) or []
+                    paths = ([mf] if mf else []) + [kg for kg, _kb in kits]
+                    if not paths or not all(hasattr(e, a) for a in ('x', 'y', 'z')):
+                        continue
+                    rx, ry, rz, sc = self._get_entity_rs(e)
+                    inst = (e, float(e.x), float(e.z), float(-e.y), rx, ry, rz, sc, True)
+                    for p in paths:
+                        model = self.models_cache.get(p)
+                        if model and model.loaded and model.meshes:
+                            self._render_glow_geometry(model, inst)
+            else:
+                for model_path, instances in self.instance_batches.items():
+                    selected = [i for i in instances if i[8]]
+                    if not selected:
+                        continue
+                    model = self.models_cache.get(model_path)
+                    if not model or not model.loaded or not model.meshes:
+                        continue
+                    for instance_data in selected:
+                        self._render_glow_geometry(model, instance_data)
         finally:
             glPopAttrib()
 

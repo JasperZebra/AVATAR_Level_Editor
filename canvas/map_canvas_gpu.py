@@ -575,8 +575,9 @@ class MapCanvas(QOpenGLWidget):
         # Day/night cycle. When enabled, time_of_day (0=midnight, .25=sunrise,
         # .5=noon, .75=sunset) drives the sun direction/colour, ambient, sky colour
         # and the bioluminescence night factor (emission glows at night, off by
-        # day). Off by default → the static sun rig is unchanged. F4 toggles play.
-        self.day_night_enabled = False
+        # day). ENABLED by default (June 2026, user request) — paused at noon so
+        # lighting stays stable while editing; ▶ Play / F4 starts the cycle.
+        self.day_night_enabled = True
         self.time_of_day = 0.5          # noon
         self._daynight_play = False
         self._daynight_speed = 1.0 / 600.0   # ~20 s full cycle at the 30 FPS glow tick
@@ -1086,7 +1087,10 @@ class MapCanvas(QOpenGLWidget):
         phase = math.sin(time.time() * 6.0) * 0.5 + 0.5   # 0..1 at ~6 Hz
         glow_intensity = phase * 0.35                      # 0.00..0.35
 
-        self.model_loader.render_selection_glow(glow_intensity)
+        # Pass the selection explicitly — in GPU-driven array mode the glow
+        # can't read instance_batches (empty/stale) and builds transforms from
+        # these entities instead.
+        self.model_loader.render_selection_glow(glow_intensity, self.selected)
 
     def _render_entities_3d(self, entities_sorted=None):
         """Render entities in 3D mode - OPTIMIZED FOR PERFORMANCE

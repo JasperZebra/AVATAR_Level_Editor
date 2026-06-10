@@ -1821,6 +1821,11 @@ class SimplifiedMapEditor(QMainWindow):
         self._daynight_play_btn.toggled.connect(_on_dn_play)
         self._daynight_time_slider.valueChanged.connect(_on_dn_time)
 
+        # Day/night is auto-enabled by default (canvas.day_night_enabled = True,
+        # paused at noon) — reflect that in the UI. If the canvas exists the
+        # stateChanged handler re-applies the same value (idempotent).
+        self._daynight_enable_cb.setChecked(True)
+
         # While playing, the canvas advances time itself; poll it so the slider +
         # clock follow along (block signals to avoid a feedback loop).
         from PyQt6.QtCore import QTimer as _QTimer
