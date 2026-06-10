@@ -671,9 +671,14 @@ class TerrainExporter:
         print(f"Generated {len(vertices) // 3} vertices, {len(indices) // 3} triangles "
               f"(decimated {width}x{height} -> {gw}x{gh}, stride {stride})")
         
-        # Generate water planes
-        water_planes = self.create_water_planes(sectors_x, sectors_y)
-        water_mesh_data = self.create_water_mesh_data(water_planes, sectors_x, sectors_y) if water_planes else None
+        # Baked water REMOVED (June 2026): water is rendered procedurally by
+        # canvas/water_plane_renderer.py from live csdat water data. The baked
+        # mesh duplicated it as a second translucent plane at the same height.
+        # Cached terrain GLTFs that still contain a 'Water' node are stripped at
+        # load time (strip_baked_water in water_plane_renderer.py). The
+        # create_water_planes/create_water_mesh_data helpers are kept below for
+        # reference but are no longer called.
+        water_mesh_data = None
         
         # Convert to binary buffers - TERRAIN
         vertices_bytes = struct.pack(f'{len(vertices)}f', *vertices)
@@ -1164,13 +1169,14 @@ class TerrainExporter:
         # Keep texture at current resolution
         texture = combined_texture
         
-        # Create water texture
-        water_texture = self.create_water_texture()
-        
+        # No baked water — the editor renders water procedurally
+        # (canvas/water_plane_renderer.py); see the note in create_gltf.
+        water_texture = None
+
         # Create GLTF
         gltf_data, buffer_data = self.create_gltf(
-            heightmap, width, height, 
-            texture, 
+            heightmap, width, height,
+            texture,
             sectors_x, sectors_y,
             water_texture=water_texture
         )
@@ -1198,7 +1204,7 @@ class TerrainExporter:
         print(f"  Scale: {self.meters_per_coordinate} meters per coordinate")
         print(f"  Triangles: {len(buffer_data) // 12 // 2}")
         print(f"  Texture: {'Yes' if texture is not None else 'No'}")
-        print(f"  Water: {'Yes' if water_texture is not None else 'No'}")
+        print(f"  Water: procedural (no baked mesh)")
         print(f"  Custom Normals: No (Blender will auto-smooth)")
         
         return True

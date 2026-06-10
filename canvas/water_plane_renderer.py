@@ -1,15 +1,51 @@
-"""Renders translucent per-sector water planes in the 3D view."""
+"""Renders translucent per-sector water planes in the 3D view.
+
+This is the editor's ONLY water display. Older terrain GLTFs also contained a
+baked water mesh (a second, slightly transparent plane at the same height);
+terrain generation no longer emits it, and `strip_baked_water` removes it from
+cached terrain files at load time.
+"""
 
 from OpenGL.GL import *
+
+
+def strip_baked_water(model):
+    """Remove the baked water mesh from a terrain GLTF model (if present).
+
+    Older generated terrain embedded per-sector water quads as a 'Water' node
+    (see the removed create_water_planes in terrain_to_gltf.py) — a duplicate
+    of the procedural planes this module draws. Identified exactly the way
+    water_mesh_editor finds it: a GLTF node named 'Water' pointing at a mesh.
+    MUST run before _create_opengl_resources so the rebuilt display list
+    excludes the water geometry. GPU-free; returns the number of meshes removed.
+    """
+    try:
+        gltf = getattr(model, 'gltf_data', None)
+        meshes = getattr(model, 'meshes', None)
+        if not gltf or not meshes or 'nodes' not in gltf:
+            return 0
+        water_idx = {n.get('mesh') for n in gltf['nodes']
+                     if n.get('name') == 'Water' and n.get('mesh') is not None}
+        if not water_idx:
+            return 0
+        kept = [m for i, m in enumerate(meshes) if i not in water_idx]
+        removed = len(meshes) - len(kept)
+        if removed:
+            model.meshes = kept
+            print(f"[WaterPlane] stripped {removed} baked water mesh(es) from terrain "
+                  f"(procedural water planes are the single source now)")
+        return removed
+    except Exception as e:
+        print(f"[WaterPlane] baked-water strip failed (harmless): {e}")
+        return 0
 
 
 class WaterPlaneRenderer:
     """Draws a flat translucent quad for every sector whose water flag is active.
 
-    Renders ALL active sectors procedurally regardless of whether the GLTF
-    terrain model also contains a baked water mesh. glPolygonOffset ensures the
-    procedural plane wins the depth test when the two overlap at the same height,
-    eliminating Z-fighting flicker.
+    The single water display: rich translucent blue matching the look of the
+    old baked GLTF water (dodger-blue texture at ~0.7 alpha) that it replaced.
+    glPolygonOffset keeps the plane in front of terrain at near-equal depth.
     """
 
     def force_update_sector(self, sector_num, terrain_renderer):
@@ -50,10 +86,12 @@ class WaterPlaneRenderer:
             glDisable(GL_CULL_FACE)
             glEnable(GL_DEPTH_TEST)
             glDepthMask(GL_FALSE)
-            # Pull procedural planes in front of baked GLTF water at the same depth
+            # Pull the planes in front of terrain at near-equal depth (shoreline)
             glEnable(GL_POLYGON_OFFSET_FILL)
             glPolygonOffset(-1.0, -1.0)
-            glColor4f(0.05, 0.35, 0.90, 0.45)
+            # Match the old baked-water look it replaced: dodger-blue at ~0.7
+            # alpha (was 0.45 — too pale once the baked plane was removed).
+            glColor4f(0.09, 0.45, 0.95, 0.70)
 
             glBegin(GL_QUADS)
             for sector_num, wd in terrain_renderer.water_data.items():

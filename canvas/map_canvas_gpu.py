@@ -41,7 +41,7 @@ from .opengl_utils import OpenGLUtils
 from .model_loader import ModelLoader
 from .undo_redo import UndoRedoManager, MoveCommand, RotateCommand
 from water_mesh_editor import ImprovedWaterMeshEditor
-from water_plane_renderer import WaterPlaneRenderer
+from water_plane_renderer import WaterPlaneRenderer, strip_baked_water
 from .movie_renderer import draw_movie_paths_2d, render_movie_paths_3d
 
 """Enhanced 3D Camera with 2D-style smooth movement"""
@@ -842,6 +842,10 @@ class MapCanvas(QOpenGLWidget):
             self.terrain_model = self.model_loader.load_static_gltf(gltf_path, bin_path)
 
             if self.terrain_model:
+                # Drop any baked water mesh (older cached terrain GLTFs) — the
+                # procedural WaterPlaneRenderer is the single water display.
+                # Must happen before the display-list rebuild below.
+                strip_baked_water(self.terrain_model)
                 # Normals must be computed BEFORE the display list is used, but
                 # load_static_gltf already compiled the list without normals.
                 # Delete the old list and recompile with normals now present.
@@ -920,6 +924,7 @@ class MapCanvas(QOpenGLWidget):
 
             model = self.model_loader.load_static_gltf(gltf_path, bin_path)
             if model:
+                strip_baked_water(model)   # cached FC2 cells may still embed water
                 self._compute_mesh_normals(model)
                 _old_dl = getattr(model, 'display_list', None)
                 if _old_dl:
