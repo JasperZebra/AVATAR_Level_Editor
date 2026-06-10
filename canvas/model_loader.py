@@ -175,6 +175,19 @@ class ModelLoader:
         # clutter costs full vertex work for sub-noise visuals. The big lever
         # for vertex-bound GPUs (integrated Radeon/Intel). 0 disables. F9 cycles.
         self.gdr_min_pixel_size = 4.0
+
+        # True while load_complete_level runs: mid-load repaints must NOT hit the
+        # model render paths (the GPU-driven rebuild on a churning models_cache
+        # froze the GUI thread). prepare_batches / prepare_gpu_frame /
+        # render_batched_models / cast_shadows all early-out on this.
+        self.loading_suspended = False
+
+        # Memo for _extract_gltf_path_from_resource: (resource_path, game_mode)
+        # -> (gltf_path, bin_path). Resolution does case-insensitive directory
+        # walks, and the load pipeline resolves the same resource for hundreds
+        # of entities — twice (pre-unified pass + full-pool pass). Negative
+        # results are cached too. Cleared in clear_cache.
+        self._extract_cache = {}
         # Depth prepass (early-Z occlusion) on the GPU-driven path. F8 toggles it.
         # Default OFF: a prepass only pays off when the scene is GPU-fragment-bound
         # (heavy overdraw of the expensive material shader). It adds a full extra
@@ -221,9 +234,26 @@ class ModelLoader:
         print("ModelLoader initialized with embedded texture support and batch rendering")
 
     def _extract_gltf_path_from_resource(self, resource_path, game_mode="avatar", _recursion_depth=0):
+        """Cached wrapper around _extract_gltf_path_uncached.
+
+        Resolution walks directories case-insensitively; the same resource path
+        is resolved for hundreds of entities and in BOTH assignment passes, so
+        memoizing (incl. negative results) makes the second pass near-free.
+        Recursive sub-resolutions (depth > 0) are NOT cached — near the depth
+        limit they can return truncated results that must not be reused."""
+        if _recursion_depth:
+            return self._extract_gltf_path_uncached(resource_path, game_mode, _recursion_depth)
+        key = (resource_path, game_mode)
+        if key in self._extract_cache:
+            return self._extract_cache[key]
+        result = self._extract_gltf_path_uncached(resource_path, game_mode, 0)
+        self._extract_cache[key] = result
+        return result
+
+    def _extract_gltf_path_uncached(self, resource_path, game_mode="avatar", _recursion_depth=0):
         """
         Extract GLTF path from resource - WITH AUTOMATIC XBG CONVERSION
-        
+
         FIXED: Added recursion depth limit to prevent infinite loops
         """
         # RECURSION GUARD: Prevent infinite loops
@@ -444,6 +474,7 @@ class ModelLoader:
 
         matched = 0
         unmatched = 0
+        skipped_done = 0   # entities already resolved by an earlier pass this load
         unfound_models = []
         found_models = []
         converted_xbg_count = 0
@@ -478,6 +509,15 @@ class ModelLoader:
                     log("Model assignment cancelled by user")
                     return
             
+            # Assign-then-skip: the load pipeline runs assignment TWICE (pre-
+            # unified snapshot, then the full pool after unified sectors swaps
+            # in new worldsector objects). Objects that survived the swap keep
+            # this marker and are skipped — only the new objects are resolved.
+            if getattr(entity, '_model_assign_done', False):
+                skipped_done += 1
+                continue
+            entity._model_assign_done = True
+
             entity_name = getattr(entity, "hid_name", getattr(entity, "name", None))
             if not entity_name:
                 unmatched += 1
@@ -650,7 +690,9 @@ class ModelLoader:
                 else:
                     unmatched += 1
 
-        log(f"Model assignment complete: {matched} matched, {unmatched} unmatched, {converted_xbg_count} read directly from XBG")
+        log(f"Model assignment complete: {matched} matched, {unmatched} unmatched, "
+            f"{converted_xbg_count} read directly from XBG"
+            + (f", {skipped_done} already assigned (skipped)" if skipped_done else ""))
         
         if kit_fallback_count > 0:
             log(f"  _Kit fallbacks used: {kit_fallback_count}")
@@ -2127,6 +2169,8 @@ class ModelLoader:
         """
         self.instance_batches.clear()
         self._gdr_frame = None   # classic path active — drop any stale array frame
+        if self.loading_suspended:
+            return   # level load in progress — mid-load paints draw no models
 
         # Selection lookup as an id-set (was `entity in selected_entities` on a
         # LIST → O(N×S) per frame; this makes it O(1) per entity).
@@ -2300,6 +2344,8 @@ class ModelLoader:
         inside-sphere bypass; never-cull markers have no models — neither needs
         special handling here."""
         self._gdr_frame = None
+        if self.loading_suspended:
+            return True   # claim the frame so prepare_batches is skipped too
         if not self.force_render_tier or self._gpu_driven is False:
             return False
         # GDR exists but permanently failed → stop staging frames (the classic
@@ -2367,6 +2413,8 @@ class ModelLoader:
         """Render model depth into the currently-bound shadow FBO (GPU-driven
         path only). Caller binds the FBO via ShadowMap.begin() first. Returns
         True if it cast anything."""
+        if self.loading_suspended:
+            return False   # never touch the GDR build mid-level-load
         if self.force_render_tier and self._gpu_driven:
             try:
                 return self._gpu_driven.cast(light_vp)
@@ -2379,6 +2427,11 @@ class ModelLoader:
         normal map + spec + emission, lit by the studio rig) when it compiles;
         falls back to the fixed-function display-list path on ANY shader problem,
         so the 3D view can never go blank."""
+        if self.loading_suspended:
+            # Level load in progress: skip ALL model rendering (GDR rebuilds on a
+            # churning models_cache from mid-load repaints froze the GUI thread).
+            self.gdr_drew_last = False
+            return 0
         if not self.instance_batches and self._gdr_frame is None:
             self.gdr_drew_last = False
             return 0
@@ -3308,6 +3361,7 @@ class ModelLoader:
 
         self.models_cache.clear()
         self.has_animated_materials = False
+        self._extract_cache.clear()   # resource→path memo (paths may change with level/resource folder)
 
         # Reset the array-native GDR row tables — they reference the old level's
         # entity indices/model slots and must rebuild against the new level.

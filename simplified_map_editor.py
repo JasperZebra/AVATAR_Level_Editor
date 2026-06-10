@@ -4843,6 +4843,15 @@ class SimplifiedMapEditor(QMainWindow):
         """
         print(f"\n=== LOADING COMPLETE LEVEL: {level_info['name']} ===")
 
+        # Suspend the heavy model-render paths for the whole load: every log()/
+        # progress update calls processEvents, and a mid-load repaint in 3D mode
+        # otherwise runs the GPU-driven renderer against a CHURNING models_cache —
+        # each repaint triggered a full multi-second geometry+material rebuild on
+        # the GUI thread ("not responding" when loading a level from 3D mode).
+        _ml_suspend = getattr(getattr(self, 'canvas', None), 'model_loader', None)
+        if _ml_suspend is not None:
+            _ml_suspend.loading_suspended = True
+
         try:
             # Create enhanced progress dialog - THE ONLY ONE
             progress_dialog = EnhancedProgressDialog("Loading Complete Level", self, game_mode=self.game_mode)
@@ -5717,6 +5726,15 @@ class SimplifiedMapEditor(QMainWindow):
             print(f"Error loading complete level: {e}")
             import traceback
             traceback.print_exc()
+        finally:
+            # Always release the render suspension — even on error/cancel —
+            # then repaint once so the (single) GPU-driven rebuild happens now.
+            if _ml_suspend is not None:
+                _ml_suspend.loading_suspended = False
+                try:
+                    self.canvas.update()
+                except Exception:
+                    pass
 
     def load_level_objects_internal(self, levels_path, progress_dialog=None, progress_callback=None):
         """Internal method to load level objects without UI dialogs"""
