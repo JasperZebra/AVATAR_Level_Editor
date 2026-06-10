@@ -6040,13 +6040,31 @@ class SimplifiedMapEditor(QMainWindow):
         # them), so we never end up with ghost duplicates on the canvas.
         new_entity_ids = {e.id for e in new_entities}
         before_count = len(self.entities)
+
+        # Carry model assignments over from the replaced objects: the pre-unified
+        # assignment pass already resolved these IDs, and the fresh objects would
+        # otherwise be fully re-resolved by the second pass (directory walks ×
+        # thousands — the "assigns models twice" slowdown). With the transfer,
+        # the second pass skips everything that survived the swap.
+        carried = 0
+        old_by_id = {e.id: e for e in self.entities if e.id in new_entity_ids}
+        for ne in new_entities:
+            oe = old_by_id.get(ne.id)
+            if oe is not None and getattr(oe, '_model_assign_done', False):
+                ne.model_file = getattr(oe, 'model_file', None)
+                ne.bin_file = getattr(oe, 'bin_file', None)
+                ne.kit_model_files = getattr(oe, 'kit_model_files', []) or []
+                ne._model_assign_done = True
+                carried += 1
+
         self.entities = [
             e for e in self.entities
             if e.id not in new_entity_ids
         ] + new_entities
         removed = before_count - (len(self.entities) - len(new_entities))
         _log(f"Unified load complete: {total_entities} entities from {len(xml_files)} sectors "
-             f"(replaced {removed} pre-existing worldsector entities)")
+             f"(replaced {removed} pre-existing worldsector entities, "
+             f"carried {carried} model assignments over)")
 
         # ── 4. Activate unified mode ──────────────────────────────────────────
         if hasattr(self, 'canvas'):

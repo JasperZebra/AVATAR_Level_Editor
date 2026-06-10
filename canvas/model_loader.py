@@ -512,11 +512,14 @@ class ModelLoader:
             # Assign-then-skip: the load pipeline runs assignment TWICE (pre-
             # unified snapshot, then the full pool after unified sectors swaps
             # in new worldsector objects). Objects that survived the swap keep
-            # this marker and are skipped — only the new objects are resolved.
+            # this marker and are skipped; load_all_worldsectors also TRANSFERS
+            # marker + assignment from replaced objects to their new twins.
+            # The marker is set at the END of each iteration (not here) — the
+            # unified-sectors thread reads it concurrently for that transfer
+            # and must never see a marked-but-half-assigned entity.
             if getattr(entity, '_model_assign_done', False):
                 skipped_done += 1
                 continue
-            entity._model_assign_done = True
 
             entity_name = getattr(entity, "hid_name", getattr(entity, "name", None))
             if not entity_name:
@@ -689,6 +692,11 @@ class ModelLoader:
                     matched += 1
                 else:
                     unmatched += 1
+
+            # Marked LAST (see comment at the top of the loop): the concurrent
+            # unified-sectors swap only carries assignments from fully-processed
+            # entities.
+            entity._model_assign_done = True
 
         log(f"Model assignment complete: {matched} matched, {unmatched} unmatched, "
             f"{converted_xbg_count} read directly from XBG"
@@ -3167,6 +3175,14 @@ class ModelLoader:
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
             glDepthFunc(GL_LEQUAL)   # passes at same depth as already-rendered model
             glDepthMask(GL_FALSE)    # don't overwrite depth — overlay only
+            # The model's depth was written by a SHADER (GDR/universal) while the
+            # glow re-renders with fixed-function matrices — the two depth values
+            # aren't bit-identical, so without an offset the glow loses the
+            # GL_LEQUAL fight in patches (yellow only partially covered the
+            # model). Pull the glow slightly toward the viewer; still occluded
+            # correctly by genuinely closer geometry.
+            glEnable(GL_POLYGON_OFFSET_FILL)
+            glPolygonOffset(-2.0, -2.0)
 
             glColor4f(1.0, 0.85, 0.0, glow_intensity)  # pure yellow, no texture influence
 
