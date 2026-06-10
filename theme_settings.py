@@ -33,8 +33,21 @@ class ThemeSettings:
         }
     
     def _save_settings(self):
-        """Save settings to JSON file"""
+        """Save settings to JSON file.
+
+        Merge-writes: re-reads the file and overlays this class's keys on top,
+        so keys written by other components (e.g. the canvas's 'render_tier')
+        are never clobbered by this class's startup snapshot."""
         try:
+            on_disk = {}
+            if os.path.exists(self.config_file):
+                try:
+                    with open(self.config_file, 'r') as f:
+                        on_disk = json.load(f) or {}
+                except Exception:
+                    on_disk = {}
+            on_disk.update(self.settings)
+            self.settings = on_disk
             with open(self.config_file, 'w') as f:
                 json.dump(self.settings, f, indent=4)
             print(f"✓ Saved theme settings to {self.config_file}")

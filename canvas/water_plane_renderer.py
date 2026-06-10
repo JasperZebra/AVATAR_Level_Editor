@@ -85,7 +85,11 @@ class WaterPlaneRenderer:
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
             glDisable(GL_CULL_FACE)
             glEnable(GL_DEPTH_TEST)
-            glDepthMask(GL_FALSE)
+            # WRITE depth, like the old baked water mesh did. Water draws before
+            # entities; without the depth write, submerged models painted OVER
+            # the surface (looked "inside out"). With it, anything below the
+            # plane is correctly hidden under the water.
+            glDepthMask(GL_TRUE)
             # Pull the planes in front of terrain at near-equal depth (shoreline)
             glEnable(GL_POLYGON_OFFSET_FILL)
             glPolygonOffset(-1.0, -1.0)

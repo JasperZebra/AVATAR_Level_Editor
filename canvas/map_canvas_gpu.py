@@ -606,6 +606,10 @@ class MapCanvas(QOpenGLWidget):
 
         self.model_loader = ModelLoader()
 
+        # Restore the user's GPU-driven render tier (F2/F3 choice) from
+        # editor_config.json so it survives restarts.
+        self._load_saved_render_tier()
+
         self.setup_canvas()
 
         self.terrain_model = None
@@ -3233,7 +3237,50 @@ class MapCanvas(QOpenGLWidget):
         label = {'bindless': 'NVIDIA / bindless', 'texarray': 'AMD / texture-array'}.get(tier, tier)
         state = label if ml.force_render_tier else 'OFF (universal fallback path)'
         print(f"🖥️ [GPU-driven] render tier: {state}")
+        self._save_render_tier(ml.force_render_tier)
         self.update()
+
+    _CONFIG_FILE = "editor_config.json"
+
+    def _load_saved_render_tier(self):
+        """Apply the GPU-driven render tier saved in editor_config.json
+        ('render_tier': 'bindless' | 'texarray' | null). Written by
+        _set_render_tier (F2/F3) so the user's GPU choice survives restarts.
+        Missing/invalid value → universal path (None), exactly as before.
+        Safe even if the saved tier doesn't match the hardware — the GDR
+        falls back to the universal renderer on any build failure."""
+        try:
+            import json as _json
+            if not os.path.exists(self._CONFIG_FILE):
+                return
+            with open(self._CONFIG_FILE, 'r') as f:
+                tier = (_json.load(f) or {}).get('render_tier')
+            if tier in ('bindless', 'texarray'):
+                self.model_loader.force_render_tier = tier
+                label = {'bindless': 'NVIDIA / bindless',
+                         'texarray': 'AMD / texture-array'}[tier]
+                print(f"🖥️ [GPU-driven] render tier restored from {self._CONFIG_FILE}: {label}")
+        except Exception as e:
+            print(f"⚠ Could not restore render tier: {e}")
+
+    def _save_render_tier(self, tier):
+        """Persist the F2/F3 tier choice. Read-modify-write so other keys in
+        editor_config.json (theme, welcome, …) are preserved."""
+        try:
+            import json as _json
+            cfg = {}
+            if os.path.exists(self._CONFIG_FILE):
+                try:
+                    with open(self._CONFIG_FILE, 'r') as f:
+                        cfg = _json.load(f) or {}
+                except Exception:
+                    cfg = {}
+            cfg['render_tier'] = tier
+            with open(self._CONFIG_FILE, 'w') as f:
+                _json.dump(cfg, f, indent=4)
+            print(f"💾 Render tier saved to {self._CONFIG_FILE}: {tier or 'off'}")
+        except Exception as e:
+            print(f"⚠ Could not save render tier: {e}")
 
     def _toggle_day_night(self):
         """F4: cycle OFF → ON(playing) → PAUSED → OFF. (Temporary control while the
