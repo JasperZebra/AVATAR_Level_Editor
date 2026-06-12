@@ -1375,8 +1375,8 @@ class SimplifiedMapEditor(QMainWindow):
 
     1. Click the green <b>"Start Modding!"</b> button below (or press <b>Ctrl+O</b> later)<br>
     2. Pick a level from the visual level selector<br>
-    3. <b>First load takes a while</b> — game files are converted and cached;
-    reopening the same level is much faster<br><br>
+    3. <b>First load takes a while</b> — the game's files are converted to an
+    editable format first<br><br>
 
     <b>Getting Around:</b><br>
 
