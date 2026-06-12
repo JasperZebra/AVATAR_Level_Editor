@@ -856,7 +856,6 @@ Avatar_Level_Editor/
 | `objects/` | Game object collections |
 | `__pycache__/` | Python bytecode |
 | `cache/` | Runtime FCB conversion and XML cache |
-| `canvas/.model_cache/` | 3D model cache |
 | `patch_config.json` | User's selected patch folder path |
 | `converter_debug.txt` | Debug log written on startup |
 
