@@ -136,6 +136,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/sky_shader_sources.py` + `canvas/sky_atmosphere.py` | `tests/test_sky_shader_sources.py` | — | Embedded atmosphere GLSL present + `_adapt_common`/`_wrap_buffer` adaptation works with no files on disk; modules loaded by **file path** — excluded from `--cov` |
 | `canvas/water_plane_renderer.py` | `tests/test_strip_baked_water.py` | — | `strip_baked_water` removes the 'Water'-node mesh from terrain models, no-ops without one; loaded by **file path** — excluded from `--cov` |
 | `theme_settings.py` | `tests/test_theme_settings_merge.py` | — | `_save_settings` merge-write preserves foreign keys (e.g. `render_tier`); handles missing/corrupt file — excluded from `--cov` |
+| `simplified_map_editor.py` | `tests/test_first_run_flow.py` | — | First-run dialog sequencing: `_prompt_first_run_setup` chains into the welcome screen, never schedules `select_level`; uses stub editor + fake QTimer/QMessageBox — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -183,8 +184,10 @@ The left dock (`entity_browser_dock`) contains a shared filter bar and a `QTabWi
 On startup, if `patch_config.json` does not exist (true first run), `SimplifiedMapEditor.__init__` fires `_prompt_first_run_setup` via `QTimer.singleShot(500, ...)` after the startup dialog closes. The two checks are **independent**:
 1. **Patch folder** — if `patch_manager.is_configured()` is False, shows a `QMessageBox.question` for the active game (Avatar / Far Cry 2). Yes → `patch_manager.set_patch_folder()` + `update_worlds_folder()`.
 2. **Resource folder** — if `self.resource_folder` is None/falsy, shows a second `QMessageBox.question`. Yes → `set_resource_folder(self)` (handles its own file dialog + info dialog).
-3. **Auto-open level selector** — after both prompts, if `patch_manager.is_configured()` is True, fires `self.select_level()` via `QTimer.singleShot(200, ...)`.
+3. **Welcome screen last (June 2026)** — after both prompts, fires `show_welcome_message_conditionally` via `QTimer.singleShot(100, ...)`. The welcome screen's "Start Modding!" button is the **single** entry point to the level selector on first run — do NOT schedule `select_level` from `_prompt_first_run_setup`.
 If `patch_config.json` exists but the game-specific patch folder is missing, the original status-bar tip is shown instead (no dialog).
+
+**Sequencing gotcha (June 2026):** the dialogs used to race — `__init__` queued the welcome at +100ms and the setup at +500ms, so the setup prompts stacked on top of the (modal, `exec()`-blocked) welcome dialog, and the auto-opened level selector left the welcome screen modal underneath; after loading a level the user was blocked by it, and "Start Modding!" reopened the selector a second time. Now `__init__` sets `self._is_first_run` and skips the welcome timer on first run; `_prompt_first_run_setup` shows the welcome at its end instead. Keep the flow strictly sequential: folder prompts → welcome → "Start Modding!" → level selector. Regression test: `tests/test_first_run_flow.py`.
 
 ### FC2 sdat discovery — uses `generated/sdat` inside each sector folder
 FC2 terrain data lives at `patch\levels\w1_c_3\generated\sdat\` — the same `generated/sdat` sub-path as Avatar, but inside each individual grid-sector folder (not the world folder). The discovery candidate list must include `lpath/generated/sdat` as the first (highest priority) option.

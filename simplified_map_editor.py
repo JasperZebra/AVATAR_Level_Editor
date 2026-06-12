@@ -1140,14 +1140,19 @@ class SimplifiedMapEditor(QMainWindow):
         # Patch folder integration
         startup_dialog.set_status("Integrating patch manager...")
         startup_dialog.set_progress(90)
+        self._is_first_run = False
         try:
             from set_patch_folder import integrate_patch_manager
             integrate_patch_manager(self)
             log("✓ Patch manager integrated")
-                
+
             from set_patch_folder import PATCH_CONFIG_FILE
             if not os.path.exists(PATCH_CONFIG_FILE):
-                # First run — no config at all; check both folders after startup settles
+                # First run — no config at all; check both folders after startup
+                # settles. The welcome screen is NOT queued here — it is shown by
+                # _prompt_first_run_setup after the folder prompts, so the dialogs
+                # run strictly in sequence instead of stacking.
+                self._is_first_run = True
                 QTimer.singleShot(500, self._prompt_first_run_setup)
             elif hasattr(self, 'patch_manager') and not self.patch_manager.is_configured():
                 QTimer.singleShot(1000, lambda: self.status_bar.showMessage(
@@ -1165,9 +1170,11 @@ class SimplifiedMapEditor(QMainWindow):
         startup_dialog.stop_icon()
         startup_dialog.close()
 
-        # Welcome screen
+        # Welcome screen (on first run it is shown by _prompt_first_run_setup
+        # after the folder prompts instead, so the dialogs don't stack)
         try:
-            QTimer.singleShot(100, self.show_welcome_message_conditionally)
+            if not self._is_first_run:
+                QTimer.singleShot(100, self.show_welcome_message_conditionally)
         except Exception as e:
             print(f"Warning: Could not show welcome message: {e}")
 
@@ -1222,9 +1229,11 @@ class SimplifiedMapEditor(QMainWindow):
                 self.status_bar.showMessage(
                     "Tip: Set your resource folder via File → Set Resource Folder", 5000)
 
-        # --- Open level selector if patch folder is now ready ---
-        if hasattr(self, 'patch_manager') and self.patch_manager.is_configured():
-            QTimer.singleShot(200, self.select_level)
+        # --- Setup done — now show the welcome screen. Its "Start Modding!"
+        # button is the single place that opens the level selector (if the
+        # welcome screen is disabled by preference, the conditional handler
+        # auto-opens the selector itself when the patch folder is configured).
+        QTimer.singleShot(100, self.show_welcome_message_conditionally)
 
     def capture_canvas_logs(self, startup_dialog):
         """Capture and display canvas initialization logs"""
