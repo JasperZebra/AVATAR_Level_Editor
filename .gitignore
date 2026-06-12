@@ -20,7 +20,7 @@ build/
 .pytest_cache/
 functional_tests/
 tests/
-AGENTS.md
+.vscode/
 crash_log.txt
 converter_debug.txt
 build_level_editor.bat
