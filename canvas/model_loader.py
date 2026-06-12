@@ -101,8 +101,8 @@ class ModelLoader:
         # Per-entity rotation/scale cache — keyed by id(entity), cleared on entity modification
         self._entity_rs_cache = {}  # id(entity) -> (rx, ry, rz, scale)
 
-        # Models are read directly from .xbg game files (no GLTF conversion /
-        # .model_cache). See load_static_xbg / canvas/xbg_direct_loader.py.
+        # Models are read directly from .xbg game files (no GLTF conversion).
+        # See load_static_xbg / canvas/xbg_direct_loader.py.
 
         # GLSL material shader (per-pixel diffuse+normal+spec+emission). Compiled
         # lazily on first render; falls back to fixed-function display lists if
@@ -285,7 +285,7 @@ class ModelLoader:
 
         # ==========================================
         # DIRECT XBG — read the .xbg straight from the game files. No GLTF /
-        # .bin / .model_cache. entity.model_file becomes the .xbg path; the
+        # .bin intermediates. entity.model_file becomes the .xbg path; the
         # loaders (Phase A/B, get_model_for_entity) route '.xbg' to
         # load_static_xbg / build_xbg_model. If the .xbg isn't at this exact
         # path, the STEP 3 fallbacks below fix the path and re-enter here.
@@ -1229,7 +1229,7 @@ class ModelLoader:
         return model
 
     # ==================================================================
-    # DIRECT XBG LOADING (no GLTF / .bin / .model_cache cache)
+    # DIRECT XBG LOADING (no GLTF / .bin intermediates)
     # ------------------------------------------------------------------
     # load_static_xbg() parses an .xbg straight into the same GLTFModel the
     # gltf path produced (geometry via canvas/xbg_direct_loader, textures via

@@ -816,7 +816,7 @@ Avatar_Level_Editor/
 │   ├── terrain_renderer.py      # Heightmap rendering from .csdat / .sdat files
 │   ├── entity_renderer.py       # Renders entities as colored points by type
 │   ├── model_loader.py          # Loads 3D models DIRECTLY from .xbg (+ XBM/XBT); fixed-function renderer
-│   ├── xbg_direct_loader.py     # GL-free .xbg → GLTFModel/GLTFMesh builder (no GLTF/.bin/.model_cache)
+│   ├── xbg_direct_loader.py     # GL-free .xbg → GLTFModel/GLTFMesh builder (no GLTF/.bin intermediates)
 │   ├── camera_controller.py     # 2D pan/zoom + 3D FPS-style camera
 │   ├── grid_renderer.py         # Adaptive grid (granularity changes with zoom)
 │   ├── gizmo_renderer.py        # Rotation transform gizmos
@@ -2565,9 +2565,9 @@ The GLSL fragment shader reads these same `gl_LightSource[0..NUM_LIGHTS-1]` + `g
 
 ---
 
-## Direct XBG loading — no GLTF/.bin/.model_cache (Phase 1, May 2026)
+## Direct XBG loading — no GLTF/.bin intermediates (Phase 1, May 2026)
 
-The editor now reads `.xbg` models **directly** at runtime instead of converting them to `.gltf`+`.bin`+cooked textures in `canvas/.model_cache/`. This kills the disk cache (saves space) and removes the runtime `xbg2gltf.py` subprocess. **Geometry/material output is identical** to the old gltf round-trip — the gltf exporter wrote XBG verts/UVs raw (the −90°X correction is the render-time `glRotatef(-90,1,0,0)`), so feeding XBG data straight into `GLTFModel`/`GLTFMesh` produces the same numbers.
+The editor now reads `.xbg` models **directly** at runtime instead of converting them to `.gltf`+`.bin`+cooked textures in an on-disk model cache. This kills the disk cache (saves space) and removes the runtime `xbg2gltf.py` subprocess. There is NO model caching of any kind on disk — models are parsed into memory per session. **Geometry/material output is identical** to the old gltf round-trip — the gltf exporter wrote XBG verts/UVs raw (the −90°X correction is the render-time `glRotatef(-90,1,0,0)`), so feeding XBG data straight into `GLTFModel`/`GLTFMesh` produces the same numbers.
 
 This was **Phase 1** (direct loading only). **Phase 2 (the GLSL per-pixel material pipeline — normal maps + spec + emission + animated UVs) is now implemented** — see the "GLSL material pipeline" section below. Normals stay geometry-computed (`mesh.compute_face_normals`) on purpose (authored XBG normals look wrong in-editor — user decision).
 
@@ -2590,7 +2590,7 @@ This was **Phase 1** (direct loading only). **Phase 2 (the GLSL per-pixel materi
 ### Gotchas / still-TODO
 
 - `entity.bin_file` is `None` for `.xbg` models; the Phase-A `_unique` bin-path default (`.replace('.gltf','.bin')`) yields a junk path but the `.xbg` worker branch ignores it.
-- **Removed (the whole gltf pipeline is gone):** `canvas/xbg2gltf.py` + `canvas/gltf_exporter.py` (deleted), `model_loader.convert_xbg_to_gltf` / `_find_xbg_converter` / `_get_model_cache_dir` + the `__init__` converter fields (deleted), the STEP 1/2 gltf-find + conversion inside `_extract_gltf_path_from_resource` (deleted — only STEP 0 DIRECT XBG + the STEP 3 path-fallback recursion remain), the `canvas/.model_cache/` dir, and the `canvas.xbg2gltf` / `canvas.gltf_exporter` entries in `setup.py`. `load_static_gltf` / `_parse_gltf` / `_load_embedded_textures` are **kept** — terrain (`terrain_to_gltf.py` via `map_canvas_gpu`) still uses them.
+- **Removed (the whole gltf pipeline is gone):** `canvas/xbg2gltf.py` + `canvas/gltf_exporter.py` (deleted), `model_loader.convert_xbg_to_gltf` / `_find_xbg_converter` / `_get_model_cache_dir` + the `__init__` converter fields (deleted), the STEP 1/2 gltf-find + conversion inside `_extract_gltf_path_from_resource` (deleted — only STEP 0 DIRECT XBG + the STEP 3 path-fallback recursion remain), the on-disk model cache dir (all references scrubbed June 2026: .gitignore entry, setup.py post-build cleanup block, code comments), and the `canvas.xbg2gltf` / `canvas.gltf_exporter` entries in `setup.py`. `load_static_gltf` / `_parse_gltf` / `_load_embedded_textures` are **kept** — terrain (`terrain_to_gltf.py` via `map_canvas_gpu`) still uses them.
 - `build_xbg_model` was validated manually against a real game model (`npc_avatar_grace_body.xbg` → 10 meshes / 9 materials / correct bounds / 11.5K tris) — no committed `.xbg` fixture exists in-repo for an automated test.
 - Phase 2 (GLSL per-pixel materials) is **mostly done** — see "GLSL material pipeline" below: normal maps + spec + emission + **animated UVs**. By decision, authored XBG normals are intentionally NOT used (face-averaged normals look better in-editor). Still TODO: the Unlit/Glass special looks (the shader treats everything as the lit aaa path).
 

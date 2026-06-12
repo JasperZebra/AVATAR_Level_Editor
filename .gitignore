@@ -12,7 +12,6 @@ canvas/unfound_models_farcry.txt
 canvas/unfound_models_farcry2.txt
 canvas/unfound_models.txt
 .git/
-canvas/.model_cache/
 .claude/
 .coverage
 cache/

@@ -10,7 +10,7 @@ import ctypes.util
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
 # Collect all files and folders recursively
-EXCLUDE_DIRS = {'objects', 'mass_exported_objects'}  # .model_cache no longer generated (direct XBG loading)
+EXCLUDE_DIRS = {'objects', 'mass_exported_objects'}
 
 def collect_files(directory):
     files = []
@@ -592,18 +592,7 @@ if __name__ == '__main__':
         executables=executables
     )
 
-    # ============================================================================
-    # POST-BUILD CLEANUP: Remove directories that should not ship in the build
-    # (cx_Freeze copies the full canvas package dir, bypassing EXCLUDE_DIRS)
-    # ============================================================================
     import shutil
-    cleanup_dirs = [
-        os.path.join(base_dir, 'build', 'Avatar_Level_Editor', 'lib', 'canvas', '.model_cache'),
-    ]
-    for cleanup_path in cleanup_dirs:
-        if os.path.exists(cleanup_path):
-            shutil.rmtree(cleanup_path)
-            print(f"✓ Removed from build: {cleanup_path}")
 
     # ============================================================================
     # POST-BUILD: Strip unneeded PyQt6 / Qt6 components (~2+ GB savings)

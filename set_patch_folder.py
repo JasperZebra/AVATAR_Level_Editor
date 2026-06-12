@@ -1504,9 +1504,8 @@ class LevelSelectorDialog(QDialog):
                 return
             
             # Steps 4 & 5 (removed): the editor now reads .xbg models DIRECTLY at
-            # load time (no GLTF conversion, no .model_cache). The old
-            # "Convert XBG Models?" prompt + batch conversion are gone — there is
-            # nothing to convert.
+            # load time (no GLTF conversion). The old "Convert XBG Models?"
+            # prompt + batch conversion are gone — there is nothing to convert.
             converted_count = 0
             progress_dialog.append_log(
                 f"✓ {len(xbg_files)} XBG models — loaded directly, no conversion needed")

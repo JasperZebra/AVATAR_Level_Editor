@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Direct XBG → in-memory model loader (no GLTF / .bin / .model_cache caching).
+Direct XBG → in-memory model loader (no GLTF / .bin intermediates).
 
 This replaces the old offline pipeline (xbg2gltf.py → .gltf/.bin → _parse_gltf)
 with a direct parse: an .xbg is read straight into the same GLTFModel / GLTFMesh
