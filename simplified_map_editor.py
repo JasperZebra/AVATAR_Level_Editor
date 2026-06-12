@@ -1330,14 +1330,15 @@ class SimplifiedMapEditor(QMainWindow):
 
     def show_welcome_message_updated(self):
         """Show welcome message and open visual level selector when Start Modding is pressed"""
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QCheckBox
+        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QPushButton,
+                                     QHBoxLayout, QCheckBox, QScrollArea, QFrame)
         from PyQt6.QtGui import QIcon
 
         # Create custom dialog
         dialog = QDialog(self)
-        dialog.setWindowTitle("Welcome to Simplified Map Editor")
-        dialog.setMinimumSize(600, 500)
-        dialog.resize(600, 500)
+        dialog.setWindowTitle("2009 AVATAR: The Game")
+        dialog.setMinimumSize(620, 560)
+        dialog.resize(680, 720)
 
         # Set window icon depending on game
         if hasattr(self, "game_mode") and self.game_mode == "farcry2":
@@ -1349,7 +1350,7 @@ class SimplifiedMapEditor(QMainWindow):
         layout.setSpacing(15)
 
         # Title
-        title_label = QLabel("Simplified Map Editor")
+        title_label = QLabel("Welcome to the AVATAR: The Game Level Editor!")
         title_label.setStyleSheet(
             "font-size: 24px; font-weight: bold; color: #2196F3; margin-bottom: 10px;"
         )
@@ -1357,34 +1358,63 @@ class SimplifiedMapEditor(QMainWindow):
 
         # Avatar content (full original text)
         avatar_text = """
-    <b>Welcome to the Avatar: The Game Level Editor!</b><br><br>
+    <b>Devs:</b><br>
+    - Jasper_Zebra<br>
+    - Quiet-Joker<br><br>
 
-    <b>Quick Start:</b><br>
+    <b>One-Time Setup:</b><br>
 
-    1. Click the green <b>"Select Level"</b> button to load a complete level<br>
-    2. First: Select your <b>"WORLDS"</b> folder <b>(contains XML files)</b><br>
-    3. Second: Select your <b>"LEVELS"</b> folder <b>(contains worldsectors)</b><br>
-    4. Start editing entities with full copy/paste support!<br><br>
+    <b>Patch folder</b> — your game folder containing the <b>levels</b> and/or
+    <b>worlds</b> subfolders. This is where the editor reads and saves levels.<br>
+    <b>Resource folder</b> — your unpacked <b>Data_Win32</b> folder (contains
+    <b>graphics/</b>). Optional, but without it 3D mode shows colored boxes
+    instead of real models.<br>
+    Both can be changed any time via the <b>File</b> menu.<br><br>
 
-    <b>Key Features:</b><br>
+    <b>Loading a Level:</b><br>
 
-    <b>Two-step loading:</b> Load both world data and level objects<br>
-    <b>Smart entity placement:</b> Automatically places entities in correct files<br>
-    <b>Copy/Paste system:</b> Duplicate entities with unique IDs and names<br>
-    <b>Sector management:</b> Move entities between different sectors<br>
-    <b>Visual editing:</b> 2D mode with gizmo controls<br>
-    <b>Entity browser:</b> Color-coded entity browser with type grouping<br><br>
+    1. Click the green <b>"Start Modding!"</b> button below (or press <b>Ctrl+O</b> later)<br>
+    2. Pick a level from the visual level selector<br>
+    3. <b>First load takes a while</b> — game files are converted and cached;
+    reopening the same level is much faster<br><br>
 
-    <b>Keyboard Shortcuts:</b><br>
+    <b>Getting Around:</b><br>
 
-    <b>Ctrl+O:</b> Select Level (two-step loading)<br>
-    <b>Delete:</b> Delete selected entities<br>
+    <b>2D (top-down):</b> <b>W/A/S/D</b> pan &nbsp;•&nbsp; <b>mouse wheel</b> zoom
+    &nbsp;•&nbsp; <b>middle-click drag</b> pan<br>
+    <b>3D (free camera):</b> press <b>Tab</b> or <b>T</b> to toggle &nbsp;•&nbsp;
+    <b>W/A/S/D</b> move &nbsp;•&nbsp; <b>Q/E</b> up/down &nbsp;•&nbsp;
+    <b>right-click drag</b> look around<br>
+    Hold <b>Shift</b> to move faster &nbsp;•&nbsp; <b>Ctrl+R</b> resets the camera<br><br>
 
-    <b>Right-click menu:</b><br>
+    <b>View Mode vs Edit Mode (important!):</b><br>
 
-    Move entities to different sectors<br>
-    Copy, paste, and duplicate operations<br>
-    View and selection controls<br><br>
+    Press <b>Space</b> to toggle. In <b>View Mode</b> you can look around without
+    accidentally moving anything. In <b>Edit Mode</b> you can select and move
+    entities. The current mode is shown on the canvas.<br><br>
+
+    <b>Editing Entities:</b><br>
+
+    <b>Left-click</b> an entity (or pick it in the left-hand browser) to select it<br>
+    <b>Ctrl+click</b> to multi-select &nbsp;•&nbsp; <b>drag</b> or use the colored
+    <b>gizmo arrows</b> to move<br>
+    <b>Ctrl+E:</b> Entity Editor — edit names, positions, angles, and properties<br>
+    <b>Ctrl+C / Ctrl+V / Ctrl+D:</b> copy / paste / duplicate (new unique IDs are
+    generated automatically)<br>
+    <b>Delete:</b> remove selected entities &nbsp;•&nbsp; <b>right-click</b> for
+    more actions (move to sector, etc.)<br><br>
+
+    <b>Saving Your Work:</b><br>
+
+    <b>Ctrl+S</b> saves the level — your changes are converted back to the game's
+    own format. Moves and property edits are also auto-saved as you make them.<br><br>
+
+    <b>Handy Extras:</b><br>
+
+    <b>F1:</b> full controls reference &nbsp;•&nbsp; <b>G:</b> toggle grid
+    &nbsp;•&nbsp; <b>`</b> (backtick): hide/show entities<br>
+    The left browser color-codes entities by type and has a <b>Mission Layers</b>
+    tab that groups them by mission script<br><br>
 
     <b>Ready to get started? Click the green "Start Modding!" button!</b><br>
     """
@@ -1432,11 +1462,18 @@ class SimplifiedMapEditor(QMainWindow):
         else:
             content_text = avatar_text
 
-        # Main content label
+        # Main content label inside a scroll area (the guide is longer than the
+        # dialog — without this the bottom sections and button get pushed off)
         content_label = QLabel(content_text)
         content_label.setWordWrap(True)
         content_label.setStyleSheet("font-size: 13px; line-height: 1.4;")
-        layout.addWidget(content_label)
+        content_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(content_label)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        layout.addWidget(scroll_area, stretch=1)
 
         dont_show_checkbox = QCheckBox("Don't show this welcome screen again")
         apply_checkbox_style(dont_show_checkbox, dark=self.force_dark_theme)
