@@ -886,64 +886,36 @@ class EntityEditorWindow(QDialog):
             self._apply_editor_search(self._editor_search.text())
 
     def _load_archetype_root(self):
-        """Parse and return the root XML element for this entity's archetype file, or None.
+        """Return the root XML element for this entity's archetype, or None.
 
-        Lookup strategy (in order):
-        1. hidName field  — strip trailing _NN, then try each dot-separated suffix
-           shortest-first so 'Avatar_SE.00_SCRIPTED.Samson_Scripted_01' resolves to
-           '00_SCRIPTED.Samson_Scripted_1.xml' before trying 'Samson_Scripted_1.xml'.
-        2. tplCreatureType field — same suffix-stripping logic, as a fallback.
+        Source order (handled inside ArchetypeLibrary.get_prototype_element):
+        1. The loaded level's converted entitylibrary — keyed by hidName, then
+           tplCreatureType, with instance-suffix / prefix / dot-suffix matching.
+        2. Fallback: the local entities/ per-file archetype folder (the old
+           '*<name>_1.xml' lookup), used when no library is loaded or a name
+           misses — so behaviour is unchanged until the level-load hook
+           populates the library.
 
-        For each candidate name the search order is:
-          a. Exact filename in entities/
-          b. Glob  *<name>_1.xml  (handles prefix like 00_SCRIPTED_ACHETYPES.)
+        The returned element is the <object name="EntityPrototype"> root, exactly
+        as the old per-file parse returned, so all callers are unaffected.
         """
-        import re, os, glob, xml.etree.ElementTree as ET
-
-        def _find_in_entities(name, entities_dir):
-            """Strip trailing _N, then try dot-suffix variants. Returns path or None."""
-            base = re.sub(r'_\d+$', '', name.strip())
-            if not base:
-                return None
-            parts = base.split('.')
-            # Try suffixes from longest (full) down to shortest (last segment)
-            for i in range(len(parts)):
-                suffix = '.'.join(parts[i:])
-                filename = suffix + '_1.xml'
-                exact = os.path.join(entities_dir, filename)
-                if os.path.exists(exact):
-                    return exact
-                matches = glob.glob(os.path.join(entities_dir, '*' + filename))
-                if matches:
-                    return matches[0]
-            return None
-
         try:
             xml_elem = getattr(self.current_entity, 'xml_element', None)
             if xml_elem is None:
                 return None
 
-            entities_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'entities')
-
-            # 1. Try hidName
+            hid_name = ''
             hid_field = xml_elem.find(".//field[@name='hidName']")
             if hid_field is not None:
-                hid_name = hid_field.get('value-String', '').strip()
-                if hid_name:
-                    path = _find_in_entities(hid_name, entities_dir)
-                    if path:
-                        return ET.parse(path).getroot()
+                hid_name = (hid_field.get('value-String') or '').strip()
 
-            # 2. Fall back to tplCreatureType
+            ct_val = ''
             ct_field = xml_elem.find(".//field[@name='tplCreatureType']")
             if ct_field is not None:
                 ct_val = (ct_field.get('value-String') or ct_field.get('strVal') or '').strip()
-                if ct_val:
-                    path = _find_in_entities(ct_val, entities_dir)
-                    if path:
-                        return ET.parse(path).getroot()
 
-            return None
+            from archetype_library import get_library
+            return get_library().get_prototype_element(hid_name, ct_val)
         except Exception:
             return None
 

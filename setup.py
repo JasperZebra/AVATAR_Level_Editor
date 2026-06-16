@@ -40,6 +40,7 @@ for directory in directories_to_include:
 # Add individual Python files that are part of your level editor
 root_files = [
     'all_in_one_copy_paste.py',
+    'archetype_library.py',
     'avatar_icon.ico',
     'cache_manager.py',
     'check_exe_arch.py',
