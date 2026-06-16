@@ -686,13 +686,11 @@ class MPSpawnCreatorDialog(QDialog):
     # ── helpers ───────────────────────────────────────────────────────────────
 
     def _load_archetypes(self):
-        json_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'entities', 'archetype_names.json'
-        )
+        # Names come from the loaded level's entitylibrary (via ArchetypeLibrary);
+        # empty when no library is loaded — the completer just offers nothing then.
         try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            from archetype_library import get_library
+            return sorted(get_library().all_names())
         except Exception:
             return []
 

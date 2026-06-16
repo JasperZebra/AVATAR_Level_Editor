@@ -27,7 +27,8 @@ directories_to_include = [
     'icon',                 # Icons for the application
     #'cache',                # Cache directory
     'thumbnails',           # Thumbnails directory
-    'entities',             # Entity XML templates/library
+    # 'entities' removed — archetypes now come from the level's patch-folder
+    # entitylibrary.fcb (converted on load), not a bundled local folder.
     #'objects',              # Objects directory (contains binhex_converter.py, etc.)
 ]
 

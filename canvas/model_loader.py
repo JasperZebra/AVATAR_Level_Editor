@@ -1440,35 +1440,19 @@ class ModelLoader:
         if tpl in self._archetype_part_cache:
             return self._archetype_part_cache[tpl]
 
-        # Strip known archetype prefixes to get the bare name
-        bare = tpl
-        for prefix in ('enemy_archetypes.', 'STP_archetypes.', 'object_archetypes.',
-                        'AvatarInteractive.', 'Avatar_ScriptedEvents.', 'weapons.',
-                        'Animals.Avatar.', 'vehicle.Avatar.', 'Plants.Avatar.',
-                        'Animals.', 'vehicle.', 'Plants.'):
-            if bare.startswith(prefix):
-                bare = bare[len(prefix):]
-                break
-
-        entities_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'entities')
-        if not os.path.isdir(entities_dir):
-            self._archetype_part_cache[tpl] = {}
-            return {}
-
-        import glob as _glob
-        matches = _glob.glob(os.path.join(entities_dir, bare + '_*.xml'))
-        if not matches:
-            self._archetype_part_cache[tpl] = {}
-            return {}
-
+        # Resolve through the shared ArchetypeLibrary (the level's patch-folder
+        # entitylibrary). Returns {} when no library is loaded — matching the old
+        # "entities/ folder missing" behaviour.
+        part_map = {}
         try:
-            arch_root = ET.parse(matches[0]).getroot()
-            part_map = {p.get('id'): p.get('fileName', '')
-                        for p in arch_root.findall('.//part')
-                        if p.get('id') and p.get('fileName', '')}
+            from archetype_library import get_library
+            arch_root = get_library().get_prototype_element(tpl)
+            if arch_root is not None:
+                part_map = {p.get('id'): p.get('fileName', '')
+                            for p in arch_root.findall('.//part')
+                            if p.get('id') and p.get('fileName', '')}
         except Exception as e:
-            print(f"  Archetype parse failed for {bare}: {e}")
+            print(f"  Archetype part lookup failed for {tpl}: {e}")
             part_map = {}
 
         self._archetype_part_cache[tpl] = part_map
@@ -1490,31 +1474,15 @@ class ModelLoader:
         if tpl in self._archetype_active_cache:
             return self._archetype_active_cache[tpl]
 
-        bare = tpl
-        for prefix in ('enemy_archetypes.', 'STP_archetypes.', 'object_archetypes.',
-                        'AvatarInteractive.', 'Avatar_ScriptedEvents.', 'weapons.',
-                        'Animals.Avatar.', 'vehicle.Avatar.', 'Plants.Avatar.',
-                        'Animals.', 'vehicle.', 'Plants.'):
-            if bare.startswith(prefix):
-                bare = bare[len(prefix):]
-                break
-
-        entities_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'entities')
-
-        import glob as _glob
-        matches = _glob.glob(os.path.join(entities_dir, bare + '_*.xml')) if os.path.isdir(entities_dir) else []
-        if not matches:
-            self._archetype_active_cache[tpl] = []
-            return []
-
+        active_ids = []
         try:
-            arch_root = ET.parse(matches[0]).getroot()
-            active_ids = []
-            for overwrite in arch_root.findall(".//object[@name='ActivePartOverwrite']"):
-                field = overwrite.find("field[@name='text_PartID']")
-                pid = field.get('value-String', '') if field is not None else ''
-                active_ids.append(pid)
+            from archetype_library import get_library
+            arch_root = get_library().get_prototype_element(tpl)
+            if arch_root is not None:
+                for overwrite in arch_root.findall(".//object[@name='ActivePartOverwrite']"):
+                    field = overwrite.find("field[@name='text_PartID']")
+                    pid = field.get('value-String', '') if field is not None else ''
+                    active_ids.append(pid)
         except Exception:
             active_ids = []
 

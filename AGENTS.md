@@ -463,17 +463,25 @@ When an entity is moved on the canvas its `hidPos` changes in memory. `managers.
 
 **Gotcha:** Do NOT filter by `source_file` when syncing — entities in `managers.xml` can come from omnis or mapsdata, not just worldsector files.
 
-### entities/ folder — archetype XML files (April 2026)
+### Archetype library — `archetype_library.py` (June 2026, replaces the old `entities/` folder)
 
-`Avatar_Level_Editor/entities/` holds FCB-converted XML archetype files for all vehicle/mount/NPC entity types. These are the canonical default definitions used to auto-populate missing data and show "Add from archetype" UI.
+Archetypes now come from the **loaded level's own patch-folder entitylibrary**, not a bundled local folder. The `entities/` folder (2,733 per-prototype XMLs + `archetype_names.json`) was **deleted** — it was an editor-invented decomposition of the game's native `EntityLibraries → EntityLibrary → EntityPrototype → Entity` structure, and a partial one (no `VO.`/`SO.` scenery).
 
-**Naming convention:** `<ArchetypeName>_1.xml`
-- Example: `Avatar.Samson_Pilotable_1.xml`, `Avatar.Buggy_Drivable_1.xml`
-- The `_1` suffix is the archetype version (always 1 for base archetypes)
+**Source of truth:** `<worlds_path>/generated/entitylibrary.fcb` (the regular per-level library, ~0.9 MB → ~48 MB XML; **not** `entitylibrary_full.fcb`). It holds full prototype definitions for the entities in that level (e.g. Hells Gate = 775 prototype blocks / 583 unique Names, incl. `CFileDescriptorComponent` model paths). **No local fallback:** if a level's patch folder has no `entitylibrary.fcb`, archetype-driven UI is simply empty by design.
 
-**Lookup from entity in level:** Take the entity's `hidName` field (e.g. `Avatar.Samson_Pilotable_0`), strip the trailing `_N` instance suffix with regex `re.sub(r'_\d+$', '', hid_name)`, append `_1.xml`, look in `entities/`.
+**`archetype_library.py`** — module-level singleton via `get_library()`:
+- `ensure_converted_xml(fcb, converter, fc2=True)` — converts FCB→`.converted.xml` if stale (mtime-skip), FCBConverter **batch mode** `-source=<folder> -filter=*entitylibrary.fcb -fc2`. Blocking — run on a worker thread.
+- `build_index(xml)` — one streaming pass building `name → (byte start, end)` over each `<object name="EntityPrototype">` block (depth-counted by `<object>`/`</object>` token, robust to formatting; self-closing `<… />` handled). Indexes the prototype `Name` and aliases the inner `Entity/hidName`. ~0.28 s for the 48 MB Hells Gate library.
+- `get_prototype_element(*names)` — **seek+slice** one block and `ET.fromstring` it (never parses the whole 48 MB); LRU(64). `_candidates()` tries each name exact / instance-stripped (`_<N>`) / known-prefix-stripped / dot-suffix longest-first. Pass `hidName` then `tplCreatureType` to mirror old precedence. Returns the `<object name="EntityPrototype">` element — same shape the old per-file parse returned, so callers are unchanged.
+- `all_names()` — prototype Names (for the MP-spawn autocomplete).
 
-**Key method:** `EntityEditorWindow._load_archetype_root()` in `entity_editor.py` — returns the parsed root element or `None` if the file doesn't exist. Not cached — called only at render time.
+**Load hook (`simplified_map_editor.py`):** `load_complete_level` calls `_load_level_entity_library(log)` right after `worlds_folder` is set. It locates `entitylibrary.fcb`, and if `.converted.xml` is missing/stale runs `_run_entitylib_conversion_threaded` — a `QThread` worker behind a **small modal `QDialog` with an indeterminate `QProgressBar`** whose own `exec()` event loop keeps the UI responsive (NOT folded into the main load dialog — the user explicitly wanted a separate, visibly-alive bar). `_entitylib_converter_path()` prefers the rebuilt fixed binary `tools/FCBConverter-master/bin/net7.0-windows/win-x64/FCBConverter.exe` (the stock one crashes on the library). Then `build_index`. All wrapped so a failure just leaves archetypes unavailable, never breaks the load.
+
+**Consumers routed through `get_library()`:** `entity_editor._load_archetype_root` (all "Add from archetype" panels), `model_loader._load_archetype_part_map` + `_load_archetype_active_ids` (kit `<part>` map / ActivePartOverwrite IDs — still cached by `tpl`), `mp_spawn_creator._load_archetypes` (uses `all_names()`).
+
+**Status — Job 1 done; Job 2 pending:** reviving the dead library-based **model lookup** (`model_loader._load_local_entity_library`/`entity_patterns`/`assign_models_to_entities` STEP 2) to read model paths from this same loaded library is the next step. (STEP 1 = entity's own `.//resource[@fileName]` still works; STEP 2 has been empty/dead — the local asset file never existed and `_entity_library_loaded` is force-set True at `game_paths_config.py:217` / `map_canvas_gpu.py:6019`.)
+
+**`setup.py`:** `entities` removed from `directories_to_include`; `archetype_library.py` added to `root_files`.
 
 ### entity_editor.py — InitialUsers panel (April 2026)
 

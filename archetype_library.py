@@ -10,9 +10,9 @@ placed entity in a worldsector is only a *delta*; the bulk of its definition
 lives in this library and the game merges the two at runtime.
 
 This module lets the editor do the same. On level load the editor converts that
-FCB → ``entitylibrary.fcb.converted.xml`` (reusing the fixed FCBConverter
-binary, on a worker thread — see the load hook in ``simplified_map_editor``),
-then hands the resulting XML path to :meth:`ArchetypeLibrary.build_index`.
+FCB → ``entitylibrary.fcb.converted.xml`` (via :func:`ensure_converted_xml`,
+run on a worker thread — see the load hook in ``simplified_map_editor``), then
+hands the resulting XML path to :meth:`ArchetypeLibrary.build_index`.
 
 The converted XML is large (~48 MB for a regular per-level library), so we never
 ``ET.parse`` the whole thing. Instead we scan it **once** to build a
@@ -20,32 +20,30 @@ The converted XML is large (~48 MB for a regular per-level library), so we never
 ``seek`` + read just that one ``<object name="EntityPrototype">`` block and parse
 only it. A small LRU keeps recently used prototypes hot.
 
-When no converted library is available (or a name isn't in it), every lookup
-**falls back to the local ``entities/`` folder** — the old per-file archetype
-store — so nothing breaks and we delete nothing.
+There is **no local fallback**: if the level's patch folder has no
+``entitylibrary.fcb`` (or a name isn't in it), the lookup simply returns None and
+the archetype-driven UI stays empty. By design — the patch folder is the single
+source of truth.
 
 Lookup keys
 -----------
 A placed entity references its archetype by ``hidName`` (e.g.
 ``Avatar.Valkyrie_Scripted_1``) or ``tplCreatureType`` (e.g.
 ``vehicle.Avatar.Valkyrie_Scripted``). The library keys prototypes by their
-``Name`` field (e.g. ``Avatar.Valkyrie_Scripted``) and we also alias each
+``Name`` field (e.g. ``Avatar.Valkyrie_Scripted``) and also aliases each
 prototype's inner ``Entity/hidName`` (e.g. ``vehicle.Avatar.Valkyrie_Scripted``).
-:meth:`_candidates` reproduces — and unions — the matching strategies the old
-consumers used: strip a trailing ``_<N>`` instance suffix, strip known
-archetype prefixes, and try dot-separated suffixes longest-first.
+:meth:`_candidates` strips a trailing ``_<N>`` instance suffix, strips known
+archetype prefixes, and tries dot-separated suffixes longest-first.
 """
 
 import os
 import re
-import glob
+import subprocess
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
 
 
-# Prefixes the old model_loader stripped from a tplCreatureType to reach the bare
-# archetype name. Kept here so the unified matcher is at least as capable as the
-# code it replaces.
+# Prefixes a tplCreatureType may carry over the bare archetype name.
 _KNOWN_PREFIXES = (
     'enemy_archetypes.', 'STP_archetypes.', 'object_archetypes.',
     'AvatarInteractive.', 'Avatar_ScriptedEvents.', 'weapons.',
@@ -58,19 +56,68 @@ _PROTO_HASH = '256A1FF9'
 
 _INSTANCE_SUFFIX_RE = re.compile(r'_\d+$')
 
+_CREATE_NO_WINDOW = 0x08000000 if os.name == 'nt' else 0
+
 
 def _strip_instance(name):
     """Drop a single trailing ``_<digits>`` instance suffix (``Foo_3`` → ``Foo``)."""
     return _INSTANCE_SUFFIX_RE.sub('', name.strip())
 
 
-class ArchetypeLibrary:
-    """Offset-indexed, lazy reader over one converted entitylibrary XML, with a
-    local ``entities/`` folder fallback. Construct once and reuse across a level;
-    call :meth:`build_index` whenever a new level's library becomes available."""
+def ensure_converted_xml(fcb_path, converter_exe, fc2=True, timeout=600, log=None):
+    """Return the path to ``entitylibrary.fcb.converted.xml``, converting the FCB
+    if the XML is missing or older than it. Returns None if the FCB doesn't
+    exist or conversion produced nothing.
 
-    def __init__(self, local_entities_dir=None, cache_size=64):
-        self.local_entities_dir = local_entities_dir
+    This is a blocking subprocess call — run it on a worker thread so the UI
+    stays responsive. Uses FCBConverter batch mode (``-source=<folder>
+    -filter=*<file> -fc2``) to match the editor's Tools→Convert Entity Library
+    path, which needs the rebuilt/fixed binary to avoid crashing on the library.
+    """
+    def _log(m):
+        if log:
+            try:
+                log(m)
+            except Exception:
+                pass
+
+    if not (fcb_path and os.path.isfile(fcb_path)):
+        _log(f"entitylibrary FCB not found: {fcb_path}")
+        return None
+
+    xml_path = fcb_path + '.converted.xml'
+    try:
+        if os.path.isfile(xml_path) and os.path.getmtime(xml_path) >= os.path.getmtime(fcb_path):
+            return xml_path                      # already up to date — skip conversion
+    except OSError:
+        pass
+
+    if not (converter_exe and os.path.isfile(converter_exe)):
+        _log(f"FCBConverter not found: {converter_exe}")
+        return xml_path if os.path.isfile(xml_path) else None
+
+    folder = os.path.dirname(fcb_path)
+    fname = os.path.basename(fcb_path)
+    cmd = [converter_exe, f"-source={folder}", f"-filter=*{fname}"]
+    if fc2:
+        cmd.append("-fc2")
+    try:
+        _log(f"Converting {fname} → XML …")
+        subprocess.run(cmd, stdin=subprocess.DEVNULL,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                       timeout=timeout, creationflags=_CREATE_NO_WINDOW)
+    except Exception as exc:
+        _log(f"entitylibrary conversion failed: {exc}")
+        return xml_path if os.path.isfile(xml_path) else None
+    return xml_path if os.path.isfile(xml_path) else None
+
+
+class ArchetypeLibrary:
+    """Offset-indexed, lazy reader over one converted entitylibrary XML. Construct
+    once and reuse across a level; call :meth:`build_index` whenever a new level's
+    library becomes available."""
+
+    def __init__(self, cache_size=64):
         self._xml_path = None
         # name(lower) -> (byte_start, byte_end) of the <object EntityPrototype> block
         self._index = {}
@@ -94,12 +141,10 @@ class ArchetypeLibrary:
     def build_index(self, xml_path):
         """Scan ``xml_path`` once and build the prototype-name → byte-range index.
 
-        Robust to formatting: it tracks ``<object>`` nesting depth by token
-        rather than relying on indentation, and records each EntityPrototype's
-        byte span plus its ``Name`` (and inner ``Entity/hidName`` alias).
-
-        Returns True on success. On any failure the library is left cleared so
-        callers transparently fall back to the local ``entities/`` folder.
+        Tracks ``<object>`` nesting depth by token (robust to formatting) and
+        records each EntityPrototype's byte span plus its ``Name`` (and inner
+        ``Entity/hidName`` alias). Returns True on success; on any failure the
+        library is left cleared.
         """
         try:
             if not (xml_path and os.path.isfile(xml_path)):
@@ -108,51 +153,38 @@ class ArchetypeLibrary:
 
             index = {}
             names = []
-
-            # We read raw bytes and work with byte offsets so the later seek/slice
-            # is exact regardless of multi-byte UTF-8 content.
             with open(xml_path, 'rb') as fh:
                 data = fh.read()
 
             depth = 0
-            # Stack of (depth_at_open, byte_start) for prototypes currently open.
-            proto_stack = []
+            proto_stack = []          # (depth_at_open, byte_start) for open prototypes
             pos = 0
             n = len(data)
-            OPEN = b'<object'
             CLOSE = b'</object>'
             proto_marker = ('hash="%s"' % _PROTO_HASH).encode('ascii')
 
             while pos < n:
                 o = data.find(b'<object', pos)
-                c = data.find(b'</object>', pos)
+                c = data.find(CLOSE, pos)
                 if o == -1 and c == -1:
                     break
-                # Process whichever token comes first.
                 if c == -1 or (o != -1 and o < c):
-                    # An opening <object ...>. Determine if self-closing (/>).
                     tag_end = data.find(b'>', o)
                     if tag_end == -1:
                         break
                     tag = data[o:tag_end + 1]
                     self_closing = tag.rstrip().endswith(b'/>')
                     is_proto = proto_marker in tag and b'name="EntityPrototype"' in tag
-                    if self_closing:
-                        # opens and closes immediately — never a prototype container
-                        pass
-                    else:
+                    if not self_closing:
                         depth += 1
                         if is_proto:
                             proto_stack.append((depth, o))
                     pos = tag_end + 1
                 else:
-                    # A closing </object>. If it closes a prototype we tracked,
-                    # finalise that block.
                     block_end = c + len(CLOSE)
                     if proto_stack and proto_stack[-1][0] == depth:
                         _d, start = proto_stack.pop()
-                        block = data[start:block_end]
-                        self._record(block, start, block_end, index, names)
+                        self._record(data[start:block_end], start, block_end, index, names)
                     depth -= 1
                     pos = block_end
 
@@ -171,13 +203,11 @@ class ArchetypeLibrary:
             return False
 
     def _record(self, block_bytes, start, end, index, names):
-        """Extract the prototype Name (+ inner hidName alias) from a block and
-        register both as keys pointing at the block's byte range."""
+        """Register the prototype Name (+ inner hidName alias) as keys for a block."""
         try:
             text = block_bytes.decode('utf-8', errors='replace')
         except Exception:
             return
-        # Prototype Name: first <field ... name="Name" value-String="...">
         m = re.search(r'name="Name"\s+value-String="([^"]*)"', text)
         proto_name = m.group(1) if m else None
         if proto_name:
@@ -185,8 +215,6 @@ class ArchetypeLibrary:
             if key not in index:
                 index[key] = (start, end)
                 names.append(proto_name)
-        # Inner Entity hidName alias (so a tplCreatureType like
-        # "vehicle.Avatar.Valkyrie_Scripted" resolves directly).
         h = re.search(r'name="hidName"\s+value-String="([^"]*)"', text)
         if h:
             hid = h.group(1).strip()
@@ -195,16 +223,13 @@ class ArchetypeLibrary:
 
     # --------------------------------------------------------------- matching
     def _candidates(self, raw_name):
-        """Yield candidate lookup keys for an entity name, best-first.
-
-        Mirrors (and unions) the old strategies: exact, instance-stripped,
-        prefix-stripped, and dot-suffix variants longest-first.
-        """
+        """Yield candidate lookup keys for an entity name, best-first: exact,
+        instance-stripped, prefix-stripped, and dot-suffix variants longest-first."""
         if not raw_name:
             return
         seen = set()
 
-        def emit(v):
+        def norm(v):
             if v:
                 k = v.strip().lower()
                 if k and k not in seen:
@@ -214,29 +239,26 @@ class ArchetypeLibrary:
 
         base = _strip_instance(raw_name)
         for variant in (raw_name, base):
-            c = emit(variant)
+            c = norm(variant)
             if c:
                 yield c
-            # known-prefix stripped
             for pfx in _KNOWN_PREFIXES:
                 if variant.lower().startswith(pfx.lower()):
-                    c = emit(variant[len(pfx):])
+                    c = norm(variant[len(pfx):])
                     if c:
                         yield c
                     break
-            # dot-suffix variants, longest-first
             parts = variant.split('.')
             for i in range(1, len(parts)):
-                c = emit('.'.join(parts[i:]))
+                c = norm('.'.join(parts[i:]))
                 if c:
                     yield c
 
     # ---------------------------------------------------------------- lookups
     def get_prototype_element(self, *names):
         """Return the ``<object name="EntityPrototype">`` Element for the first
-        matching name, or None. Tries the converted library first (seek+slice),
-        then the local ``entities/`` folder. ``names`` are tried in order — pass
-        ``hidName`` then ``tplCreatureType`` to mirror the old precedence."""
+        matching name, or None. ``names`` are tried in order — pass ``hidName``
+        then ``tplCreatureType`` to mirror the old precedence."""
         for raw in names:
             if not raw:
                 continue
@@ -244,11 +266,6 @@ class ArchetypeLibrary:
                 el = self._from_library(key)
                 if el is not None:
                     return el
-        # fall back to the local per-file folder
-        for raw in names:
-            el = self._from_local_folder(raw)
-            if el is not None:
-                return el
         return None
 
     def _from_library(self, key):
@@ -276,36 +293,9 @@ class ArchetypeLibrary:
             self._cache.popitem(last=False)
         return el
 
-    def _from_local_folder(self, raw_name):
-        """Old per-file lookup: try ``<suffix>_1.xml`` (exact then ``*`` glob),
-        dot-suffixes longest-first, in the local ``entities/`` directory."""
-        d = self.local_entities_dir
-        if not (d and raw_name and os.path.isdir(d)):
-            return None
-        base = _strip_instance(raw_name)
-        if not base:
-            return None
-        parts = base.split('.')
-        for i in range(len(parts)):
-            filename = '.'.join(parts[i:]) + '_1.xml'
-            exact = os.path.join(d, filename)
-            if os.path.exists(exact):
-                return self._parse_file(exact)
-            matches = glob.glob(os.path.join(d, '*' + filename))
-            if matches:
-                return self._parse_file(matches[0])
-        return None
-
-    @staticmethod
-    def _parse_file(path):
-        try:
-            return ET.parse(path).getroot()
-        except Exception:
-            return None
-
     def all_names(self):
         """All prototype Names from the loaded library (for autocomplete). Empty
-        when no library is loaded — callers should fall back to their own list."""
+        when no library is loaded."""
         return list(self._names)
 
 
@@ -318,13 +308,9 @@ class ArchetypeLibrary:
 _LIBRARY = None
 
 
-def _default_local_entities_dir():
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'entities')
-
-
 def get_library():
     """Return the shared ArchetypeLibrary (created on first use)."""
     global _LIBRARY
     if _LIBRARY is None:
-        _LIBRARY = ArchetypeLibrary(local_entities_dir=_default_local_entities_dir())
+        _LIBRARY = ArchetypeLibrary()
     return _LIBRARY
