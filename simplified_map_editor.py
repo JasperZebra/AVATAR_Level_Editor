@@ -2875,7 +2875,26 @@ class SimplifiedMapEditor(QMainWindow):
         # ── Stretch ──────────────────────────────────────────────────────────
         dock_layout.addStretch()
 
-        dock.setWidget(dock_widget)
+        # Tabbed right panel: "Level Information" + "Object Library" (mirrors the
+        # AM3D editor's right_tabs). The existing level-info content becomes tab 0
+        # inside a scroll area; the Object Library thumbnail grid is tab 1.
+        _li_scroll = QScrollArea()
+        _li_scroll.setWidgetResizable(True)
+        _li_scroll.setWidget(dock_widget)
+
+        right_tabs = QTabWidget()
+        right_tabs.setDocumentMode(True)
+        right_tabs.addTab(_li_scroll, "Level Information")
+        try:
+            from object_library import build_object_library_tab
+            right_tabs.addTab(build_object_library_tab(self), "Object Library")
+        except Exception as _ol_e:
+            import traceback
+            traceback.print_exc()
+            print(f"Object Library tab failed to build: {_ol_e}")
+        self.right_tabs = right_tabs
+
+        dock.setWidget(right_tabs)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
         self.controls_dock = dock
         dock.setVisible(True)
@@ -3159,11 +3178,22 @@ class SimplifiedMapEditor(QMainWindow):
             canvas.update()
 
     def open_object_library(self):
-        """Open the Object Library palette — place new entities by referencing an
-        archetype from this level's loaded entitylibrary (no file import)."""
+        """Focus the Object Library tab in the right panel (place new entities by
+        referencing an archetype from this level's loaded entitylibrary)."""
         try:
-            from object_library import open_object_library
-            open_object_library(self)
+            dock = getattr(self, 'controls_dock', None)
+            tabs = getattr(self, 'right_tabs', None)
+            if dock is not None:
+                dock.setVisible(True)
+                dock.raise_()
+            if tabs is not None:
+                for i in range(tabs.count()):
+                    if tabs.tabText(i) == "Object Library":
+                        tabs.setCurrentIndex(i)
+                        break
+            w = getattr(self, '_object_library_widget', None)
+            if w is not None:
+                w.refresh()
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -5075,6 +5105,14 @@ class SimplifiedMapEditor(QMainWindow):
                 progress_dialog.set_status("Loading entity library...")
                 QApplication.processEvents()
                 self._load_level_entity_library(log=log, progress_dialog=progress_dialog)
+
+                # Refresh the Object Library tab with this level's archetypes
+                _ol_w = getattr(self, '_object_library_widget', None)
+                if _ol_w is not None:
+                    try:
+                        _ol_w.refresh()
+                    except Exception:
+                        pass
 
             if progress_dialog.was_cancelled:
                 progress_dialog.close()

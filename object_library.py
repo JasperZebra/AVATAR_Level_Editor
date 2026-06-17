@@ -24,11 +24,15 @@ v1 places at the current view centre; the user then drags it with the gizmo.
 A cursor-ghost / click-to-place mode can layer on top later.
 """
 
+import os
 import xml.etree.ElementTree as ET
 
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QLineEdit, QListWidget, QLabel, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QLabel,
+    QScrollArea, QGridLayout, QToolButton, QButtonGroup,
 )
+from PyQt6.QtCore import Qt, QSize, QTimer
+from PyQt6.QtGui import QIcon
 
 from entity_editor import string_to_binhex, int64_to_binhex, vector3_to_binhex
 from canvas.mp_spawn_creator import _generate_id, _collect_existing_ids
@@ -298,83 +302,231 @@ def place_archetype(editor, proto_name, world_pos=None):
 
 
 # --------------------------------------------------------------------------- #
-# Palette dialog
+# Thumbnail rendering — resolve an archetype to a model and render it offscreen
 # --------------------------------------------------------------------------- #
 
-class ObjectLibraryDialog(QDialog):
-    """Lists the loaded level's archetypes; double-click / Place drops one at the
-    view centre. Non-modal so the user can keep working."""
+def _resolve_model_for_archetype(editor, proto_name):
+    """Return a loaded model object for an archetype's prototype, or None.
+
+    Builds a throwaway proxy entity carrying the archetype's <Entity> XML and runs
+    the normal model-assignment + load path (the archetype's CFileDescriptorComponent
+    resolves its model). Requires the live model_loader (GL context)."""
+    from archetype_library import get_library
+    arch = get_library().get_prototype_element(proto_name)
+    if arch is None:
+        return None
+    ent = arch.find("object[@name='Entity']")
+    if ent is None:
+        ent = arch.find(".//object[@name='Entity']")
+    if ent is None:
+        return None
+    ml = getattr(getattr(editor, 'canvas', None), 'model_loader', None)
+    if ml is None:
+        return None
+
+    proxy = type('_ArchProxy', (), {})()
+    proxy.xml_element = ent
+    proxy.name = proto_name
+    proxy.hid_name = proto_name
+    proxy.id = '0'
+    try:
+        ml.assign_models_to_entities([proxy])
+    except Exception:
+        pass
+    model_file = getattr(proxy, 'model_file', None)
+    if not model_file:
+        return None
+    model = None
+    try:
+        model = ml.models_cache.get(model_file)
+    except Exception:
+        model = None
+    if model is None:
+        try:
+            model = ml.get_model_for_entity(proxy)
+        except Exception:
+            model = None
+    return model
+
+
+def render_archetype_thumb(editor, proto_name, size=84):
+    """Render an archetype's model to a QImage thumbnail, or None."""
+    canvas = getattr(editor, 'canvas', None)
+    if canvas is None or not hasattr(canvas, 'render_model_thumbnail'):
+        return None
+    model = _resolve_model_for_archetype(editor, proto_name)
+    if model is None:
+        return None
+    try:
+        return canvas.render_model_thumbnail(model, size=size)
+    except Exception as exc:
+        print(f"[ObjectLibrary] thumb render failed for {proto_name}: {exc}")
+        return None
+
+
+# --------------------------------------------------------------------------- #
+# Object Library tab — searchable grid of model thumbnails (mirrors the AM3D one)
+# --------------------------------------------------------------------------- #
+
+_THUMB = 84
+# Above this many filtered items we don't auto-render thumbnails (each one loads a
+# full model — rendering hundreds at once would balloon memory). Filter to narrow.
+_THUMB_AUTO_LIMIT = 80
+
+
+class ObjectLibraryWidget(QWidget):
+    """The Object Library tab: a filterable grid of archetype buttons with rendered
+    model thumbnails. Clicking a button places that object at the view centre."""
 
     def __init__(self, editor):
-        super().__init__(editor)
+        super().__init__()
         self.editor = editor
-        self.setWindowTitle("Object Library")
-        self.resize(360, 560)
 
-        v = QVBoxLayout(self)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(4, 4, 4, 4)
+        lay.setSpacing(4)
+
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Search:"))
         self._filter = QLineEdit()
-        self._filter.setPlaceholderText("Filter archetypes…")
+        self._filter.setPlaceholderText("Filter objects…")
         self._filter.setClearButtonEnabled(True)
-        self._filter.textChanged.connect(self._apply_filter)
-        v.addWidget(self._filter)
+        self._filter.textChanged.connect(lambda _t: self._populate())
+        row.addWidget(self._filter, 1)
+        lay.addLayout(row)
 
-        self._list = QListWidget()
-        self._list.itemDoubleClicked.connect(lambda _i: self._place())
-        v.addWidget(self._list, 1)
+        sc = QScrollArea()
+        sc.setWidgetResizable(True)
+        sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        sc.setStyleSheet("QScrollArea { border: none; }")
+        gw = QWidget()
+        self._grid = QGridLayout(gw)
+        self._grid.setSpacing(4)
+        self._grid.setContentsMargins(2, 2, 2, 2)
+        sc.setWidget(gw)
+        lay.addWidget(sc, 1)
 
-        self._info = QLabel("Pick an archetype, then Place (or double-click). "
-                            "It drops at the view centre — drag it where you want.")
+        self._grp = QButtonGroup(gw)
+        self._grp.setExclusive(True)
+        self._btns = []
+
+        self._info = QLabel("Click an object to place it at the view centre, "
+                            "then drag it into position.")
         self._info.setWordWrap(True)
         self._info.setStyleSheet("color:#888; font-size:10px;")
-        v.addWidget(self._info)
+        lay.addWidget(self._info)
 
-        self._place_btn = QPushButton("Place at View Center")
-        self._place_btn.clicked.connect(self._place)
-        v.addWidget(self._place_btn)
+        self._queue = []
+        self._timer = QTimer(self)
+        self._timer.setInterval(0)
+        self._timer.timeout.connect(self._render_some)
 
         self._all = []
-        self._populate()
+        self.refresh()
 
-    def _populate(self):
+    # -- data -----------------------------------------------------------------
+    def refresh(self):
+        """Reload the archetype list from the current level's library."""
         from archetype_library import get_library
         self._all = sorted(get_library().all_names())
-        self._apply_filter(self._filter.text())
+        self._populate()
+
+    def _cache_dir(self):
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         '_thumb_cache', 'objlib')
+        os.makedirs(p, exist_ok=True)
+        return p
+
+    @staticmethod
+    def _short(name):
+        parts = name.split('.')
+        return parts[-1] if len(parts) <= 1 else '.'.join(parts[-2:])
+
+    @staticmethod
+    def _safe(name):
+        return ''.join(c if (c.isalnum() or c in '._-') else '_' for c in name)
+
+    # -- grid -----------------------------------------------------------------
+    def _populate(self):
+        self._timer.stop()
+        grid = self._grid
+        while grid.count():
+            it = grid.takeAt(0)
+            w = it.widget()
+            if w:
+                w.setParent(None)
+        self._btns = []
+        self._queue = []
+
         if not self._all:
             self._info.setText("No entity library is loaded for this level — "
-                               "archetypes are unavailable. (The level's patch "
-                               "folder needs entitylibrary.fcb.)")
-
-    def _apply_filter(self, text):
-        text = (text or '').lower()
-        self._list.clear()
-        for name in self._all:
-            if text in name.lower():
-                self._list.addItem(name)
-
-    def _place(self):
-        item = self._list.currentItem()
-        if item is None:
-            self._info.setText("Select an archetype in the list first.")
+                               "open a level whose patch folder has entitylibrary.fcb.")
             return
-        ent = place_archetype(self.editor, item.text())
+
+        text = (self._filter.text() or '').lower()
+        names = [n for n in self._all if text in n.lower()]
+        auto_thumbs = len(names) <= _THUMB_AUTO_LIMIT
+
+        COLS = 3
+        for i, name in enumerate(names):
+            b = QToolButton()
+            b.setText(self._short(name))
+            b.setToolTip(name)
+            b.setCheckable(True)
+            b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+            b.setIconSize(QSize(_THUMB, _THUMB))
+            b.setFixedSize(_THUMB + 18, _THUMB + 40)
+            b.setStyleSheet(
+                "QToolButton { background:#23232f; border:1px solid #444;"
+                " border-radius:4px; color:#bbb; font-size:9px; }"
+                "QToolButton:checked { border:2px solid #4a9fff; background:#1a3558;"
+                " color:#fff; }")
+            b.setProperty('arch_name', name)
+            b.clicked.connect(lambda _c, bb=b: self._on_click(bb))
+            self._grp.addButton(b)
+            grid.addWidget(b, i // COLS, i % COLS)
+            self._btns.append(b)
+
+            cache = os.path.join(self._cache_dir(), self._safe(name) + '.png')
+            if os.path.isfile(cache):
+                b.setIcon(QIcon(cache))
+            elif auto_thumbs:
+                self._queue.append((b, name, cache))
+
+        if not auto_thumbs:
+            self._info.setText(f"{len(names)} objects — filter to ≤ {_THUMB_AUTO_LIMIT} "
+                               f"to load thumbnails. Click any to place it.")
+        else:
+            self._info.setText("Click an object to place it at the view centre.")
+
+        if self._queue:
+            self._timer.start()
+
+    def _render_some(self):
+        # One per tick — each render loads a full model; keep the UI responsive.
+        if not self._queue:
+            self._timer.stop()
+            return
+        b, name, cache = self._queue.pop(0)
+        img = render_archetype_thumb(self.editor, name, _THUMB)
+        if img is not None:
+            try:
+                img.save(cache)
+                b.setIcon(QIcon(cache))
+            except RuntimeError:
+                pass        # button removed (re-populated)
+            except Exception:
+                pass
+
+    def _on_click(self, b):
+        name = b.property('arch_name')
+        ent = place_archetype(self.editor, name)
         if ent is not None:
-            self._info.setText(f"Placed {ent.name}. Drag it into position, "
-                               f"then Save Level. Place more or close.")
+            self._info.setText(f"Placed {ent.name}. Drag into position, Ctrl+S to save.")
 
 
-def open_object_library(editor):
-    """Open (or re-focus) the Object Library palette for the editor."""
-    existing = getattr(editor, '_object_library_dialog', None)
-    if existing is not None:
-        try:
-            existing._populate()      # refresh list for the current level
-            existing.show()
-            existing.raise_()
-            existing.activateWindow()
-            return existing
-        except Exception:
-            pass
-    dlg = ObjectLibraryDialog(editor)
-    editor._object_library_dialog = dlg
-    dlg.show()
-    return dlg
+def build_object_library_tab(editor):
+    """Create the Object Library tab widget and stash it on the editor."""
+    w = ObjectLibraryWidget(editor)
+    editor._object_library_widget = w
+    return w
