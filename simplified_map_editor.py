@@ -4893,48 +4893,53 @@ class SimplifiedMapEditor(QMainWindow):
         except Exception:
             return None
 
-    def _run_entitylib_conversion_threaded(self, fcb_path, converter):
-        """Run the (blocking) FCB→XML conversion on a worker thread behind a small,
-        responsive progress dialog so the main window never freezes. Separate from
-        the main load dialog; returns the produced .converted.xml path (or None)."""
-        from PyQt6.QtCore import QThread, pyqtSignal
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
+    def _run_entitylib_conversion(self, fcb_path, converter, progress_dialog=None, log=None):
+        """Run the (blocking) FCB→XML conversion on a worker thread while pumping
+        the MAIN load progress dialog so it stays responsive. No separate window —
+        the progress shows inside the main 'Loading Complete Level' dialog. Returns
+        the produced .converted.xml path (or None)."""
+        from PyQt6.QtCore import QThread
+        import time
         import archetype_library
 
-        result = {'xml': None}
+        state = {'xml': None, 'done': False}
 
         class _Worker(QThread):
-            done = pyqtSignal()
-
             def run(self_w):
-                result['xml'] = archetype_library.ensure_converted_xml(
-                    fcb_path, converter, fc2=True, timeout=600, log=print)
-                self_w.done.emit()
+                try:
+                    state['xml'] = archetype_library.ensure_converted_xml(
+                        fcb_path, converter, fc2=True, timeout=600, log=log or print)
+                finally:
+                    state['done'] = True
 
-        dlg = QDialog(self)
-        dlg.setWindowTitle("Loading Entity Library")
-        dlg.setModal(True)
-        dlg.setMinimumWidth(380)
-        v = QVBoxLayout(dlg)
-        v.addWidget(QLabel("Converting this level's entity library…\n"
-                           "(first load only — cached for next time)"))
-        bar = QProgressBar()
-        bar.setRange(0, 0)                 # indeterminate marquee = visibly alive
-        v.addWidget(bar)
-
+        if log:
+            log("Converting entity library (first load only — cached afterward)...")
         worker = _Worker()
-        worker.done.connect(dlg.accept)
         worker.start()
-        dlg.exec()                         # own event loop → responsive, not frozen
+        # Busy-wait on the MAIN thread, pumping the main load dialog. Same top-level
+        # processEvents pattern as the patch-folder scanner — safe because it is NOT
+        # inside a signal handler (nesting processEvents in a handler is the
+        # stack-overflow footgun called out elsewhere in this file).
+        dots = 0
+        while not state['done']:
+            dots = (dots % 3) + 1
+            if progress_dialog is not None:
+                try:
+                    progress_dialog.set_status("Loading entity library" + "." * dots)
+                except Exception:
+                    pass
+            QApplication.processEvents()
+            time.sleep(0.05)
         worker.wait()
-        return result['xml']
+        return state['xml']
 
-    def _load_level_entity_library(self, log=None):
+    def _load_level_entity_library(self, log=None, progress_dialog=None):
         """Convert the loaded level's ``worlds/generated/entitylibrary.fcb`` to XML
         and build the shared archetype index. The conversion runs on a worker
-        thread (see :meth:`_run_entitylib_conversion_threaded`) so the UI stays
-        responsive. Archetypes are simply unavailable if the FCB or the converter
-        is missing — by design the patch folder is the only source."""
+        thread (see :meth:`_run_entitylib_conversion`) while the MAIN load dialog is
+        pumped, so the UI stays responsive without a second window. Archetypes are
+        simply unavailable if the FCB or the converter is missing — by design the
+        patch folder is the only source."""
         from archetype_library import get_library
 
         def _log(m):
@@ -4965,7 +4970,8 @@ class SimplifiedMapEditor(QMainWindow):
                 pass
             if not up_to_date:
                 converter = self._entitylib_converter_path()
-                xml = self._run_entitylib_conversion_threaded(fcb, converter) or xml
+                xml = self._run_entitylib_conversion(
+                    fcb, converter, progress_dialog=progress_dialog, log=log) or xml
             if os.path.isfile(xml) and get_library().build_index(xml):
                 _log(f"Archetype library loaded: "
                      f"{len(get_library().all_names())} prototypes")
@@ -5050,7 +5056,7 @@ class SimplifiedMapEditor(QMainWindow):
                 # Archetypes (entity-editor panels, kit parts) come from here.
                 progress_dialog.set_status("Loading entity library...")
                 QApplication.processEvents()
-                self._load_level_entity_library(log=log)
+                self._load_level_entity_library(log=log, progress_dialog=progress_dialog)
 
             if progress_dialog.was_cancelled:
                 progress_dialog.close()
