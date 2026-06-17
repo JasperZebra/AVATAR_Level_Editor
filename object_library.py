@@ -176,19 +176,28 @@ def _any_sector(editor):
     return None
 
 
-def _pick_layer(root):
-    """Pick a MissionLayer to place into — prefer 'main', else the first. Returns
-    (layer_element, layer_name) or (None, 'main')."""
-    layers = root.findall(".//object[@name='MissionLayer']")
-    for ml in layers:
+def _get_or_create_main_layer(root):
+    """Return the sector's **'main'** MissionLayer element, creating it if absent.
+
+    Placed objects always go into 'main' (per user request). A new 'main' layer
+    uses the documented hashes — MissionLayer 494C09F2, text_PathId C56F9204
+    (value-String 'main', BinHex 6D61696E00), PathId D0E30BF7 (value-Int32
+    4026341 / djb2('main'), BinHex E56F3D00 — NOT value-ComputeHash32, which
+    FCBConverter would recompute wrong on round-trip)."""
+    for ml in root.findall(".//object[@name='MissionLayer']"):
         pid = ml.find("field[@name='text_PathId']")
         if pid is not None and (pid.get('value-String') or '') == 'main':
-            return ml, 'main'
-    if layers:
-        ml = layers[0]
-        pid = ml.find("field[@name='text_PathId']")
-        return ml, ((pid.get('value-String') if pid is not None else 'main') or 'main')
-    return None, 'main'
+            return ml
+    ml = ET.SubElement(root, 'object')
+    ml.set('hash', '494C09F2')
+    ml.set('name', 'MissionLayer')
+    tp = ET.SubElement(ml, 'field')
+    tp.set('hash', 'C56F9204'); tp.set('name', 'text_PathId')
+    tp.set('type', 'BinHex'); tp.set('value-String', 'main'); tp.text = '6D61696E00'
+    pid = ET.SubElement(ml, 'field')
+    pid.set('hash', 'D0E30BF7'); pid.set('name', 'PathId')
+    pid.set('type', 'BinHex'); pid.set('value-Int32', '4026341'); pid.text = 'E56F3D00'
+    return ml
 
 
 def _unique_name(editor, base):
@@ -252,10 +261,9 @@ def place_archetype(editor, proto_name, world_pos=None):
             _status(editor, "No worldsector is loaded to place this object into")
             return None
         sid = target['sid']
-    ml_elem, layer_name = _pick_layer(target['root'])
-    if ml_elem is None:
-        _status(editor, f"Sector {sid} has no MissionLayer to place into")
-        return None
+    # Always place into the sector's 'main' MissionLayer (create it if absent).
+    ml_elem = _get_or_create_main_layer(target['root'])
+    layer_name = 'main'
 
     new_id = _generate_id(_collect_existing_ids(editor))
     hid_name = _unique_name(editor, proto_name)
