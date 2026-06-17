@@ -483,6 +483,22 @@ Archetypes now come from the **loaded level's own patch-folder entitylibrary**, 
 
 **`setup.py`:** `entities` removed from `directories_to_include`; `archetype_library.py` added to `root_files`.
 
+### Object Library — `object_library.py` (June 2026)
+
+Places a **brand-new entity** into the loaded level by referencing an archetype that already lives in the level's entitylibrary (loaded via `archetype_library`). **No files are imported/copied** — the game merges the full archetype at runtime — so placing just writes the **minimal instance entity** into a worldsector `MissionLayer`. Unlike the AM3D object library (which imports models/textures), this is pure XML insertion.
+
+**Minimal placed entity** (the smallest real shape found in the game's worldsectors — e.g. `STP_archetypes.Duty.Surveilance`): `tplCreatureType` (the archetype LINK), `hidName`, `disEntityId`, `hidPos`, `hidAngles`, `hidPos_precise`, and a `Components` → `CEventComponent` → empty `hidLinks`. **No `hidResourceCount`, no `CMissionComponent`** — the layer is structural (which `<MissionLayer>` the entity is nested under). Hashes are hardcoded verbatim from a real entity (`_H_*` constants in `object_library.py`).
+
+**The "correct thing" to call:** `tplCreatureType` = the archetype's **inner `Entity/hidName`** (e.g. `vehicle.Avatar.Valkyrie_Scripted`), read from `get_prototype_element(proto_name)` via `_archetype_tpl`. The placed `hidName` = the EntityPrototype `Name` + `_<N>` (deduped against loaded entity names).
+
+**`place_archetype(editor, proto_name, world_pos=None)`:** builds the minimal entity (`build_minimal_entity`, BinHex via `entity_editor.string_to_binhex/int64_to_binhex/vector3_to_binhex`; new id via `mp_spawn_creator._generate_id`), finds the target worldsector by position (`sid = int(y//64)*16 + int(x//64)`, else first loaded sector), picks the `main` layer (else first), **in-memory** appends the entity XML to that `<MissionLayer>` (no disk write — the unified save's `rebuild_sector_xml` rewrites the sector from `self.entities` by `source_sector_id`/`source_layer`), creates a `data_models.Entity` (with `source_file='worldsectors'`, `source_sector_id`, `source_layer`, `source_file_path`), appends to `editor.entities`, marks `canvas.dirty_sectors`, pushes `AddEntityCommand` (undo), refreshes caches + entity tree, and selects it.
+
+**`AddEntityCommand` (`canvas/undo_redo.py`):** undo removes the entity from `editor.entities` (via `canvas.main_window`) + from its `MissionLayer` element + re-marks the sector dirty; redo re-adds. Shared `_refresh_after_add` rebuilds position caches + entity tree.
+
+**UI:** `ObjectLibraryDialog` (non-modal, Tools → "📦 Object Library...") — filter + `QListWidget` of `get_library().all_names()`; double-click / "Place at View Center" → `place_archetype` at `canvas.screen_to_world(center)`. **v1 = view-center drop; drag with the gizmo to position.** A cursor-ghost / click-to-place mode (AM3D-style) is a possible phase 2. `open_object_library(editor)` opens/refocuses it; `editor.open_object_library` is the menu handler.
+
+**Verified headless:** `build_minimal_entity` round-trips; the `disEntityId` BinHex matches the real game value (`520020DC96A3A01C`). **Needs in-app test:** place an object, confirm it appears/saves and the game spawns it (the minimal-field assumption is from one observed minimal entity — if something doesn't spawn in-game, compare against more real placed instances of that type).
+
 ### entity_editor.py — InitialUsers panel (April 2026)
 
 The `InitialUsers` XML block inside `CArmedVehicle` or `CVehicle` is rendered by `_render_initial_users(parent_layout, vehicle_elem)`.

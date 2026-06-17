@@ -155,6 +155,71 @@ class Rotate3DCommand:
 # Manager
 # ---------------------------------------------------------------------------
 
+def _refresh_after_add(canvas):
+    """Shared refresh for add/remove of a placed entity: rebuild position caches,
+    refresh the editor's entity browser, repaint."""
+    if hasattr(canvas, 'invalidate_position_cache'):
+        canvas.invalidate_position_cache()
+    ed = getattr(canvas, 'main_window', None)
+    if ed is not None and hasattr(ed, 'update_entity_tree'):
+        try:
+            ed.update_entity_tree()
+        except Exception:
+            pass
+    canvas.update()
+
+
+class AddEntityCommand:
+    """Records placing a brand-new entity from the Object Library.
+
+    The placement itself is done by the caller; this just records enough to
+    reverse/redo it. `undo` removes the entity from the editor's entity list and
+    from its MissionLayer element; `redo` re-adds both. The sector is re-marked
+    dirty either way so the unified save rewrites it.
+    """
+
+    def __init__(self, entity, sector_id, layer_elem):
+        self.entity = entity
+        self.sector_id = sector_id
+        self.layer_elem = layer_elem      # the <object name="MissionLayer"> it lives under
+
+    def _mark_dirty(self, canvas):
+        if self.sector_id is not None and self.sector_id >= 0 \
+                and hasattr(canvas, 'dirty_sectors'):
+            canvas.dirty_sectors.add(self.sector_id)
+
+    def redo(self, canvas):
+        ed = getattr(canvas, 'main_window', None)
+        if ed is not None and hasattr(ed, 'entities') \
+                and self.entity not in ed.entities:
+            ed.entities.append(self.entity)
+        if self.layer_elem is not None and self.entity.xml_element is not None \
+                and self.entity.xml_element not in list(self.layer_elem):
+            self.layer_elem.append(self.entity.xml_element)
+        self._mark_dirty(canvas)
+        _refresh_after_add(canvas)
+
+    def undo(self, canvas):
+        ed = getattr(canvas, 'main_window', None)
+        if ed is not None and hasattr(ed, 'entities'):
+            try:
+                ed.entities.remove(self.entity)
+            except ValueError:
+                pass
+        if self.layer_elem is not None and self.entity.xml_element is not None:
+            try:
+                self.layer_elem.remove(self.entity.xml_element)
+            except ValueError:
+                pass
+        if getattr(canvas, 'selected_entity', None) is self.entity:
+            canvas.selected_entity = None
+        if hasattr(canvas, 'selected') and isinstance(canvas.selected, list) \
+                and self.entity in canvas.selected:
+            canvas.selected.remove(self.entity)
+        self._mark_dirty(canvas)
+        _refresh_after_add(canvas)
+
+
 class UndoRedoManager:
     """Manages a 100-edit undo/redo history for entity operations."""
 

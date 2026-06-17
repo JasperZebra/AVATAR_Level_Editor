@@ -1939,6 +1939,13 @@ class SimplifiedMapEditor(QMainWindow):
         create_sector_action.setToolTip("Create a new empty worldsector entity file")
         tools_menu.addAction(create_sector_action)
 
+        # Object Library — place new entities by referencing the level's archetypes
+        object_library_action = QAction("📦 Object Library...", self)
+        object_library_action.triggered.connect(self.open_object_library)
+        object_library_action.setToolTip(
+            "Place a new entity by referencing an archetype in this level's entitylibrary")
+        tools_menu.addAction(object_library_action)
+
         # Convert Entity Library FCB action
         convert_entitylib_action = QAction("Convert Entity Library FCB...", self)
         convert_entitylib_action.triggered.connect(self.open_convert_entitylibrary)
@@ -3150,6 +3157,17 @@ class SimplifiedMapEditor(QMainWindow):
         # Refresh canvas after editing
         if canvas:
             canvas.update()
+
+    def open_object_library(self):
+        """Open the Object Library palette — place new entities by referencing an
+        archetype from this level's loaded entitylibrary (no file import)."""
+        try:
+            from object_library import open_object_library
+            open_object_library(self)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.statusBar().showMessage(f"Object Library failed to open: {e}", 8000)
 
     def open_convert_entitylibrary(self):
         """Convert entitylibrary_full.fcb files to .fcb.converted.xml (per-file, not batch).

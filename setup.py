@@ -59,6 +59,7 @@ root_files = [
     'loading_logo2.png',
     'loading_logo3.png',
     'main.py',
+    'object_library.py',
     'set_patch_folder.py',
     'simplified_map_editor.py',
     'theme_settings.py',
