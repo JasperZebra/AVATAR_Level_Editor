@@ -319,23 +319,25 @@ def _descriptor_resource_path(arch_root):
 
 
 def _resolve_model_for_archetype(editor, proto_name):
-    """Return a loaded GLTFModel for an archetype's prototype, or None.
+    """Return (model, evict_key) for an archetype, or (None, None).
 
-    Path A (reliable, 1863/2733 archetypes): the single-model descriptor —
+    evict_key = the ``models_cache`` key to drop after the thumbnail is captured —
+    set ONLY when we loaded the model just for the thumbnail (so generating hundreds
+    of thumbnails doesn't pin hundreds of models in memory). None = the model was
+    already cached (used by the live scene) — leave it.
+
+    Path A (most archetypes): the single-model descriptor —
     CFileDescriptorComponent.text_fileName → ``_extract_gltf_path_from_resource``
     (finds the real .xbg) → ``load_static_xbg``.
-    Path B (kit/character models): assemble via the normal entity model path
-    (proxy entity → ``assign_models_to_entities`` → ``get_model_for_entity``).
-
-    Requires the live model_loader with ``models_directory`` set (after level load)."""
+    Path B (kit/character): the normal entity path (proxy → get_model_for_entity)."""
     from archetype_library import get_library
     arch = get_library().get_prototype_element(proto_name)
     if arch is None:
-        return None
+        return None, None
     canvas = getattr(editor, 'canvas', None)
     ml = getattr(canvas, 'model_loader', None)
     if ml is None:
-        return None
+        return None, None
     game_mode = getattr(editor, 'game_mode', 'avatar')
 
     # Path A — descriptor → .xbg → load_static_xbg (renders REAL geometry).
@@ -348,9 +350,10 @@ def _resolve_model_for_archetype(editor, proto_name):
             xbg_path = None
         if xbg_path:
             try:
+                was_cached = bool(getattr(ml, 'models_cache', {}).get(xbg_path))
                 model = ml.load_static_xbg(xbg_path)
                 if model is not None:
-                    return model
+                    return model, (None if was_cached else xbg_path)
             except Exception as exc:
                 print(f"[ObjectLibrary] load_static_xbg failed for {xbg_path}: {exc}")
 
@@ -366,10 +369,10 @@ def _resolve_model_for_archetype(editor, proto_name):
         proxy.id = '0'
         try:
             ml.assign_models_to_entities([proxy])
-            return ml.get_model_for_entity(proxy)
+            return ml.get_model_for_entity(proxy), None
         except Exception:
-            return None
-    return None
+            return None, None
+    return None, None
 
 
 # A dedicated offscreen mini-previewer instance used ONLY to render thumbnails.
@@ -391,38 +394,55 @@ def _get_thumb_previewer():
         except Exception:
             pass
         w.setFixedSize(_THUMB_RENDER_SIZE, _THUMB_RENDER_SIZE)
-        w.resize(_THUMB_RENDER_SIZE, _THUMB_RENDER_SIZE)
+        # Render OFFSCREEN: WA_DontShowOnScreen + show() creates the GL context and
+        # framebuffer WITHOUT the widget appearing — grabFramebuffer() on a
+        # never-shown QOpenGLWidget otherwise returns a blank/black image.
+        w.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        w.show()
         _thumb_previewer = w
     return _thumb_previewer
 
 
 def render_archetype_thumb(editor, proto_name, size=84):
-    """Render an archetype's model to a QImage thumbnail (PNG-ready), or None.
+    """Render ONE archetype's model to a QImage thumbnail via the mini previewer.
 
-    Uses the **mini model previewer** (ModelPreviewWidget) — the same widget the
-    entity-preview dock uses — driven offscreen: set_model() uploads the model's
-    textures into the previewer's context, then grabFramebuffer() renders it to a
-    QImage. The descriptor→.xbg resolution gives the actual mesh."""
-    model = _resolve_model_for_archetype(editor, proto_name)
+    Load the model → set_model() in the offscreen previewer → grabFramebuffer() →
+    QImage. Evicts a thumbnail-only model afterwards so a full sweep doesn't pile
+    hundreds of models into memory."""
+    canvas = getattr(editor, 'canvas', None)
+    if canvas is None:
+        return None
+    try:
+        canvas.makeCurrent()          # load_static_xbg builds GL resources in the main ctx
+    except Exception:
+        pass
+    model, evict_key = _resolve_model_for_archetype(editor, proto_name)
     if model is None:
         return None
+    img = None
     try:
         w = _get_thumb_previewer()
         w.set_model(model, proto_name)
         w.auto_rotate = False
         w.rotation_x = 20.0
-        w.rotation_y = 35.0           # a fixed 3/4 angle, consistent across thumbnails
+        w.rotation_y = 35.0           # fixed 3/4 angle, consistent across thumbnails
         img = w.grabFramebuffer()     # renders the widget offscreen → QImage
-        if img is None or img.isNull():
-            return None
-        if size and size != img.width():
+        if img is not None and not img.isNull() and size and size != img.width():
             img = img.scaled(size, size,
                              Qt.AspectRatioMode.KeepAspectRatio,
                              Qt.TransformationMode.SmoothTransformation)
-        return img
     except Exception as exc:
         print(f"[ObjectLibrary] previewer thumb failed for {proto_name}: {exc}")
+        img = None
+    finally:
+        if evict_key:
+            try:
+                getattr(canvas.model_loader, 'models_cache', {}).pop(evict_key, None)
+            except Exception:
+                pass
+    if img is None or img.isNull():
         return None
+    return img
 
 
 # --------------------------------------------------------------------------- #
@@ -430,9 +450,6 @@ def render_archetype_thumb(editor, proto_name, size=84):
 # --------------------------------------------------------------------------- #
 
 _THUMB = 84
-# Above this many filtered items we don't auto-render thumbnails (each one loads a
-# full model — rendering hundreds at once would balloon memory). Filter to narrow.
-_THUMB_AUTO_LIMIT = 80
 
 
 class ObjectLibraryWidget(QWidget):
@@ -493,8 +510,9 @@ class ObjectLibraryWidget(QWidget):
         self._populate()
 
     def _cache_dir(self):
+        # 'objlib_v2': v1 cached broken texture-only thumbnails; v2 = real models.
         p = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         '_thumb_cache', 'objlib')
+                         '_thumb_cache', 'objlib_v2')
         os.makedirs(p, exist_ok=True)
         return p
 
@@ -526,7 +544,6 @@ class ObjectLibraryWidget(QWidget):
 
         text = (self._filter.text() or '').lower()
         names = [n for n in self._all if text in n.lower()]
-        auto_thumbs = len(names) <= _THUMB_AUTO_LIMIT
 
         COLS = 3
         for i, name in enumerate(names):
@@ -551,22 +568,31 @@ class ObjectLibraryWidget(QWidget):
             cache = os.path.join(self._cache_dir(), self._safe(name) + '.png')
             if os.path.isfile(cache):
                 b.setIcon(QIcon(cache))
-            elif auto_thumbs:
+            else:
+                # Queue EVERY uncached thumbnail — generated one-per-tick below,
+                # then saved to disk so later opens are instant.
                 self._queue.append((b, name, cache))
 
-        if not auto_thumbs:
-            self._info.setText(f"{len(names)} objects — filter to ≤ {_THUMB_AUTO_LIMIT} "
-                               f"to load thumbnails. Click any to place it.")
-        else:
-            self._info.setText("Click an object to place it at the view centre.")
-
+        self._total_to_gen = len(self._queue)
+        self._update_info()
         if self._queue:
             self._timer.start()
+
+    def _update_info(self):
+        remaining = len(self._queue)
+        if remaining:
+            done = getattr(self, '_total_to_gen', remaining) - remaining
+            self._info.setText(f"Generating thumbnails… {done}/{self._total_to_gen}  "
+                               f"(click any object to place it)")
+        else:
+            self._info.setText(f"{len(self._btns)} objects. "
+                               f"Click one to place it at the view centre.")
 
     def _render_some(self):
         # One per tick — each render loads a full model; keep the UI responsive.
         if not self._queue:
             self._timer.stop()
+            self._update_info()
             return
         b, name, cache = self._queue.pop(0)
         img = render_archetype_thumb(self.editor, name, _THUMB)
@@ -578,6 +604,7 @@ class ObjectLibraryWidget(QWidget):
                 pass        # button removed (re-populated)
             except Exception:
                 pass
+        self._update_info()
 
     def _on_click(self, b):
         name = b.property('arch_name')
