@@ -382,7 +382,7 @@ _thumb_previewer = None
 _THUMB_RENDER_SIZE = 160      # render larger than the button, then scale down crisp
 # Fixed 3/4 view angle for every thumbnail (tune here to re-aim all thumbnails).
 THUMB_ROT_X = 20.0
-THUMB_ROT_Y = -35.0
+THUMB_ROT_Y = 145.0
 
 
 def _get_thumb_previewer():
