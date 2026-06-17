@@ -123,6 +123,9 @@ class ArchetypeLibrary:
         self._index = {}
         # ordered prototype names as they appear in the file (for all_names())
         self._names = []
+        # name(lower) -> model descriptor path (CFileDescriptorComponent.text_fileName),
+        # used to dedupe the Object Library to one entry per unique model.
+        self._model_paths = {}
         self._cache = OrderedDict()     # name(lower) -> ET.Element  (LRU)
         self._cache_size = cache_size
 
@@ -135,6 +138,7 @@ class ArchetypeLibrary:
         self._xml_path = None
         self._index = {}
         self._names = []
+        self._model_paths = {}
         self._cache.clear()
 
     # ------------------------------------------------------------------ index
@@ -153,6 +157,7 @@ class ArchetypeLibrary:
 
             index = {}
             names = []
+            model_paths = {}
             with open(xml_path, 'rb') as fh:
                 data = fh.read()
 
@@ -184,7 +189,8 @@ class ArchetypeLibrary:
                     block_end = c + len(CLOSE)
                     if proto_stack and proto_stack[-1][0] == depth:
                         _d, start = proto_stack.pop()
-                        self._record(data[start:block_end], start, block_end, index, names)
+                        self._record(data[start:block_end], start, block_end,
+                                     index, names, model_paths)
                     depth -= 1
                     pos = block_end
 
@@ -195,6 +201,7 @@ class ArchetypeLibrary:
             self._xml_path = xml_path
             self._index = index
             self._names = names
+            self._model_paths = model_paths
             self._cache.clear()
             return True
         except Exception as exc:    # pragma: no cover - defensive
@@ -202,8 +209,9 @@ class ArchetypeLibrary:
             self.clear()
             return False
 
-    def _record(self, block_bytes, start, end, index, names):
-        """Register the prototype Name (+ inner hidName alias) as keys for a block."""
+    def _record(self, block_bytes, start, end, index, names, model_paths):
+        """Register the prototype Name (+ inner hidName alias) as keys for a block,
+        and capture its model descriptor path (first `text_fileName`) for dedup."""
         try:
             text = block_bytes.decode('utf-8', errors='replace')
         except Exception:
@@ -215,6 +223,13 @@ class ArchetypeLibrary:
             if key not in index:
                 index[key] = (start, end)
                 names.append(proto_name)
+                # First text_fileName = CFileDescriptorComponent model descriptor
+                # (e.g. graphics\...\valkyrie.xml). Absent for markerless entities.
+                dm = re.search(r'name="text_fileName"\s+value-String="([^"]*)"', text)
+                if dm:
+                    mp = dm.group(1).strip()
+                    if mp:
+                        model_paths[key] = mp
         h = re.search(r'name="hidName"\s+value-String="([^"]*)"', text)
         if h:
             hid = h.group(1).strip()
@@ -297,6 +312,28 @@ class ArchetypeLibrary:
         """All prototype Names from the loaded library (for autocomplete). Empty
         when no library is loaded."""
         return list(self._names)
+
+    def model_path_for(self, name):
+        """The model descriptor path for a prototype Name, or None (no model)."""
+        return self._model_paths.get((name or '').strip().lower())
+
+    def unique_model_names(self):
+        """One representative prototype Name per **unique model** — so the Object
+        Library shows one Banshee / one Direhorse / one Buggy instead of every
+        archetype variant that reuses the same mesh. Only names that HAVE a model
+        (a `text_fileName` descriptor) are included; markerless logic entities are
+        dropped. The representative is the shortest (cleanest, e.g. 'Avatar.Banshee'
+        over 'Avatar.Banshee_HunterPet_X') name in each model group. Sorted."""
+        groups = {}    # model_key(lower) -> representative name
+        for name in self._names:
+            mp = self._model_paths.get(name.lower())
+            if not mp:
+                continue
+            key = mp.strip().lower()
+            cur = groups.get(key)
+            if cur is None or (len(name), name) < (len(cur), cur):
+                groups[key] = name
+        return sorted(groups.values())
 
 
 # --------------------------------------------------------------------------- #

@@ -380,6 +380,9 @@ def _resolve_model_for_archetype(editor, proto_name):
 # context (same as the entity preview dock), so it textures models correctly.
 _thumb_previewer = None
 _THUMB_RENDER_SIZE = 160      # render larger than the button, then scale down crisp
+# Fixed 3/4 view angle for every thumbnail (tune here to re-aim all thumbnails).
+THUMB_ROT_X = 20.0
+THUMB_ROT_Y = -35.0
 
 
 def _get_thumb_previewer():
@@ -424,8 +427,8 @@ def render_archetype_thumb(editor, proto_name, size=84):
         w = _get_thumb_previewer()
         w.set_model(model, proto_name)
         w.auto_rotate = False
-        w.rotation_x = 20.0
-        w.rotation_y = 35.0           # fixed 3/4 angle, consistent across thumbnails
+        w.rotation_x = THUMB_ROT_X
+        w.rotation_y = THUMB_ROT_Y    # fixed 3/4 angle, consistent across thumbnails
         img = w.grabFramebuffer()     # renders the widget offscreen → QImage
         if img is not None and not img.isNull() and size and size != img.width():
             img = img.scaled(size, size,
@@ -504,9 +507,10 @@ class ObjectLibraryWidget(QWidget):
 
     # -- data -----------------------------------------------------------------
     def refresh(self):
-        """Reload the archetype list from the current level's library."""
+        """Reload the list from the current level's library — ONE entry per unique
+        model (deduped), models only (no markerless logic entities)."""
         from archetype_library import get_library
-        self._all = sorted(get_library().all_names())
+        self._all = get_library().unique_model_names()
         self._populate()
 
     def _cache_dir(self):
@@ -543,10 +547,15 @@ class ObjectLibraryWidget(QWidget):
             return
 
         text = (self._filter.text() or '').lower()
-        names = [n for n in self._all if text in n.lower()]
+        # Skip entries already known to have no renderable model (FX/lights/etc.) —
+        # so the library only ever shows actual placeable models, and we don't
+        # retry loading them on every refresh.
+        failed = self._load_failed_set()
+        names = [n for n in self._all if text in n.lower() and n not in failed]
 
         COLS = 3
-        for i, name in enumerate(names):
+        shown = 0
+        for name in names:
             b = QToolButton()
             b.setText(self._short(name))
             b.setToolTip(name)
@@ -562,21 +571,48 @@ class ObjectLibraryWidget(QWidget):
             b.setProperty('arch_name', name)
             b.clicked.connect(lambda _c, bb=b: self._on_click(bb))
             self._grp.addButton(b)
-            grid.addWidget(b, i // COLS, i % COLS)
+            grid.addWidget(b, shown // COLS, shown % COLS)
             self._btns.append(b)
+            shown += 1
 
             cache = os.path.join(self._cache_dir(), self._safe(name) + '.png')
             if os.path.isfile(cache):
                 b.setIcon(QIcon(cache))
             else:
                 # Queue EVERY uncached thumbnail — generated one-per-tick below,
-                # then saved to disk so later opens are instant.
+                # saved to disk so later opens are instant. A model that fails to
+                # render is recorded as "no model" and the button is hidden.
                 self._queue.append((b, name, cache))
 
         self._total_to_gen = len(self._queue)
         self._update_info()
         if self._queue:
             self._timer.start()
+
+    # -- "no renderable model" set (persisted so we don't retry every refresh) --
+    def _failed_path(self):
+        return os.path.join(self._cache_dir(), '_no_model.txt')
+
+    def _load_failed_set(self):
+        if getattr(self, '_failed_set', None) is None:
+            s = set()
+            try:
+                with open(self._failed_path(), 'r', encoding='utf-8') as f:
+                    s = {ln.strip() for ln in f if ln.strip()}
+            except Exception:
+                pass
+            self._failed_set = s
+        return self._failed_set
+
+    def _mark_failed(self, name):
+        s = self._load_failed_set()
+        if name not in s:
+            s.add(name)
+            try:
+                with open(self._failed_path(), 'a', encoding='utf-8') as f:
+                    f.write(name + '\n')
+            except Exception:
+                pass
 
     def _update_info(self):
         remaining = len(self._queue)
@@ -596,13 +632,20 @@ class ObjectLibraryWidget(QWidget):
             return
         b, name, cache = self._queue.pop(0)
         img = render_archetype_thumb(self.editor, name, _THUMB)
-        if img is not None:
+        if img is not None and not img.isNull():
             try:
                 img.save(cache)
                 b.setIcon(QIcon(cache))
             except RuntimeError:
                 pass        # button removed (re-populated)
             except Exception:
+                pass
+        else:
+            # No renderable model — drop it from the library and remember it.
+            self._mark_failed(name)
+            try:
+                b.setVisible(False)
+            except RuntimeError:
                 pass
         self._update_info()
 
