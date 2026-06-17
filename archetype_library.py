@@ -209,7 +209,7 @@ class ArchetypeLibrary:
         except Exception:
             return
         m = re.search(r'name="Name"\s+value-String="([^"]*)"', text)
-        proto_name = m.group(1) if m else None
+        proto_name = m.group(1).strip() if m else None
         if proto_name:
             key = proto_name.lower()
             if key not in index:

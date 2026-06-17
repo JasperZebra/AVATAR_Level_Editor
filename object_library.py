@@ -305,55 +305,84 @@ def place_archetype(editor, proto_name, world_pos=None):
 # Thumbnail rendering — resolve an archetype to a model and render it offscreen
 # --------------------------------------------------------------------------- #
 
-def _resolve_model_for_archetype(editor, proto_name):
-    """Return a loaded model object for an archetype's prototype, or None.
+def _descriptor_resource_path(arch_root):
+    """Return the archetype's model descriptor path (CFileDescriptorComponent →
+    text_fileName, e.g. 'graphics\\...\\valkyrie.xml'), or None."""
+    desc = arch_root.find(".//object[@name='CFileDescriptorComponent']")
+    if desc is None:
+        return None
+    tf = desc.find("field[@name='text_fileName']")
+    if tf is None:
+        return None
+    v = (tf.get('value-String') or '').strip()
+    return v or None
 
-    Builds a throwaway proxy entity carrying the archetype's <Entity> XML and runs
-    the normal model-assignment + load path (the archetype's CFileDescriptorComponent
-    resolves its model). Requires the live model_loader (GL context)."""
+
+def _resolve_model_for_archetype(editor, proto_name):
+    """Return a loaded GLTFModel for an archetype's prototype, or None.
+
+    Path A (reliable, 1863/2733 archetypes): the single-model descriptor —
+    CFileDescriptorComponent.text_fileName → ``_extract_gltf_path_from_resource``
+    (finds the real .xbg) → ``load_static_xbg``.
+    Path B (kit/character models): assemble via the normal entity model path
+    (proxy entity → ``assign_models_to_entities`` → ``get_model_for_entity``).
+
+    Requires the live model_loader with ``models_directory`` set (after level load)."""
     from archetype_library import get_library
     arch = get_library().get_prototype_element(proto_name)
     if arch is None:
         return None
+    canvas = getattr(editor, 'canvas', None)
+    ml = getattr(canvas, 'model_loader', None)
+    if ml is None:
+        return None
+    game_mode = getattr(editor, 'game_mode', 'avatar')
+
+    # Path A — descriptor → .xbg → load_static_xbg (renders REAL geometry).
+    res_path = _descriptor_resource_path(arch)
+    if res_path:
+        try:
+            xbg_path, _ = ml._extract_gltf_path_from_resource(res_path, game_mode)
+        except Exception as exc:
+            print(f"[ObjectLibrary] resolve failed for {proto_name}: {exc}")
+            xbg_path = None
+        if xbg_path:
+            try:
+                model = ml.load_static_xbg(xbg_path)
+                if model is not None:
+                    return model
+            except Exception as exc:
+                print(f"[ObjectLibrary] load_static_xbg failed for {xbg_path}: {exc}")
+
+    # Path B — kit/character: go through the normal entity assembly.
     ent = arch.find("object[@name='Entity']")
     if ent is None:
         ent = arch.find(".//object[@name='Entity']")
-    if ent is None:
-        return None
-    ml = getattr(getattr(editor, 'canvas', None), 'model_loader', None)
-    if ml is None:
-        return None
-
-    proxy = type('_ArchProxy', (), {})()
-    proxy.xml_element = ent
-    proxy.name = proto_name
-    proxy.hid_name = proto_name
-    proxy.id = '0'
-    try:
-        ml.assign_models_to_entities([proxy])
-    except Exception:
-        pass
-    model_file = getattr(proxy, 'model_file', None)
-    if not model_file:
-        return None
-    model = None
-    try:
-        model = ml.models_cache.get(model_file)
-    except Exception:
-        model = None
-    if model is None:
+    if ent is not None:
+        proxy = type('_ArchProxy', (), {})()
+        proxy.xml_element = ent
+        proxy.name = proto_name
+        proxy.hid_name = proto_name
+        proxy.id = '0'
         try:
-            model = ml.get_model_for_entity(proxy)
+            ml.assign_models_to_entities([proxy])
+            return ml.get_model_for_entity(proxy)
         except Exception:
-            model = None
-    return model
+            return None
+    return None
 
 
 def render_archetype_thumb(editor, proto_name, size=84):
-    """Render an archetype's model to a QImage thumbnail, or None."""
+    """Render an archetype's model to a QImage thumbnail, or None. Loads the model
+    on the main thread with the GL context current (load_static_xbg creates GL
+    resources), then reuses the canvas's offscreen render_model_thumbnail."""
     canvas = getattr(editor, 'canvas', None)
     if canvas is None or not hasattr(canvas, 'render_model_thumbnail'):
         return None
+    try:
+        canvas.makeCurrent()
+    except Exception:
+        pass
     model = _resolve_model_for_archetype(editor, proto_name)
     if model is None:
         return None
