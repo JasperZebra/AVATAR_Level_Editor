@@ -372,24 +372,56 @@ def _resolve_model_for_archetype(editor, proto_name):
     return None
 
 
+# A dedicated offscreen mini-previewer instance used ONLY to render thumbnails.
+# It draws from each model's raw mesh arrays + texture_raw_data in its OWN GL
+# context (same as the entity preview dock), so it textures models correctly.
+_thumb_previewer = None
+_THUMB_RENDER_SIZE = 160      # render larger than the button, then scale down crisp
+
+
+def _get_thumb_previewer():
+    """Lazily create the offscreen ModelPreviewWidget used for thumbnails."""
+    global _thumb_previewer
+    if _thumb_previewer is None:
+        from simplified_map_editor import ModelPreviewWidget   # lazy: avoids circular import
+        w = ModelPreviewWidget()
+        w.auto_rotate = False
+        try:
+            w._timer.stop()           # no turntable animation for a still thumbnail
+        except Exception:
+            pass
+        w.setFixedSize(_THUMB_RENDER_SIZE, _THUMB_RENDER_SIZE)
+        w.resize(_THUMB_RENDER_SIZE, _THUMB_RENDER_SIZE)
+        _thumb_previewer = w
+    return _thumb_previewer
+
+
 def render_archetype_thumb(editor, proto_name, size=84):
-    """Render an archetype's model to a QImage thumbnail, or None. Loads the model
-    on the main thread with the GL context current (load_static_xbg creates GL
-    resources), then reuses the canvas's offscreen render_model_thumbnail."""
-    canvas = getattr(editor, 'canvas', None)
-    if canvas is None or not hasattr(canvas, 'render_model_thumbnail'):
-        return None
-    try:
-        canvas.makeCurrent()
-    except Exception:
-        pass
+    """Render an archetype's model to a QImage thumbnail (PNG-ready), or None.
+
+    Uses the **mini model previewer** (ModelPreviewWidget) — the same widget the
+    entity-preview dock uses — driven offscreen: set_model() uploads the model's
+    textures into the previewer's context, then grabFramebuffer() renders it to a
+    QImage. The descriptor→.xbg resolution gives the actual mesh."""
     model = _resolve_model_for_archetype(editor, proto_name)
     if model is None:
         return None
     try:
-        return canvas.render_model_thumbnail(model, size=size)
+        w = _get_thumb_previewer()
+        w.set_model(model, proto_name)
+        w.auto_rotate = False
+        w.rotation_x = 20.0
+        w.rotation_y = 35.0           # a fixed 3/4 angle, consistent across thumbnails
+        img = w.grabFramebuffer()     # renders the widget offscreen → QImage
+        if img is None or img.isNull():
+            return None
+        if size and size != img.width():
+            img = img.scaled(size, size,
+                             Qt.AspectRatioMode.KeepAspectRatio,
+                             Qt.TransformationMode.SmoothTransformation)
+        return img
     except Exception as exc:
-        print(f"[ObjectLibrary] thumb render failed for {proto_name}: {exc}")
+        print(f"[ObjectLibrary] previewer thumb failed for {proto_name}: {exc}")
         return None
 
 
