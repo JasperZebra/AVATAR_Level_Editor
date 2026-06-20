@@ -2881,6 +2881,16 @@ Goal: rebuild the opaque prefix purely from the node tree so structural edits (a
   [records...]                       # each: crc32(path)(4) + len(4) + path string + trailer[A(4) B(4) C(4)]
   ```
   - Each record's `(B,C)` = `(offset,size)` into the blob; the `(B,C)` slices **tile the entire blob with no gaps** (verified) — so it's fully deterministic. `crc32(path)` = `avatar_crc32` of the object's full `Name` path.
-  - The blob slice per object encodes that object's **outgoing connection graph** (its Anchor/Exit/Add → target-anchor connections). Objects with zero `<Connection>`s get a 3-byte `04 XX 00`; objects with connections get longer packed records. This packed connection encoding is the LAST piece not yet byte-exact (decode in progress). `A` looks like a near-monotonic object index; record order is likely hash-bucket order. Both still to confirm.
-  - Everything here is derivable from the node tree (paths, hashes, connection targets, positions) — no engine data — so byte-exact regen is achievable once the slice encoding is decoded.
+  - The blob slice per object encodes that object's **outgoing connection graph**. Decoded format (verified on proximityminebrain):
+    ```
+    slice = [u8 b0][u8 b1][u8 0x00]                       # b0 = 0x04 normal, 0x00 for the root Brain
+            then, per source Anchor/Exit that has >=1 <Connection>:
+              [u8 srcType: 1=Anchor, 2=Exit][u16 srcAnchorCode][u16 connCount]
+              connCount × [u16 targetRecIdx][u16 targetAnchorCode][u8 srcType(repeat)]
+    ```
+    - `targetRecIdx` = the index of the target object in the path-RECORD order (NOT the root-child order).
+    - anchor codes are a small fixed enum harvested from the data: `OnStart=1, Start=2, Success=3, Stop=4, …` (full map TODO — `Start`/`Stop` are the control-input anchors distinct from the `OnStart`/`OnStop` event anchors). `srcAnchorCode`/`targetAnchorCode` use it.
+    - the per-source group's `connCount` is the trailing u16 of its 5-byte header; the leading byte is the source type (matches the per-connection trailing byte).
+  - **STILL TODO for byte-exact:** the slice header `b1` byte (varies 03/05/0a — not ports/adds/conns by any simple formula tried); the complete anchor-name→code map; the record `A` field (near-monotonic object index); the record ORDER (likely hash-bucket order, not node order); and `header.poolSize`. The `B`/`C` (offset/size into blob) come for free once the slice bytes are produced.
+  - Everything here is derivable from the node tree (paths, hashes, connection targets+anchors, positions) — no engine data — so byte-exact regen is achievable; it's "just" finishing these last encoding details and validating an encoder against all 29 files.
 - `header.poolSize` (offset 4) still needs its formula derived (it's a combined-allocation size over the whole prefix). `tailSize` (offset 8) == `len(region)` is known.
