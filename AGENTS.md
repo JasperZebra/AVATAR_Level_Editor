@@ -2839,3 +2839,27 @@ The MDI draw collapsed GL submission, but the frame data feeding it was still bu
 **Tests:** `tests/test_gdr_frame_assembly.py` — assembly verified against naive reference loops; loads `gpu_driven_renderer.py` by file path because `canvas/__init__.py` imports the GL-heavy modules.
 
 **Runtime-validated on AMD (June 2026):** smooth 60 FPS reported on a 5,642-entity Avatar level — build log: `795 meshes, 3.09M verts` consolidated, `699 materials, 1668 bindless textures resident`, render groups `572 opaque / 195 two-sided / 28 blend`. Confirms the GPU-driven v2-v4 material path (previously marked runtime-untested) works on AMD via **bindless** — the F3 "texture-array" tier label is cosmetic; `_build_material_table` ran the bindless path (AMD Adrenalin exposes `GL_ARB_bindless_texture`). Notes for log readers: `[gpu-driven] MDI program compiled + linked OK` prints **3×** (main + shadow-cast depth + camera depth-prepass programs — normal); `3D Rendering: … 0 models` is also normal in GDR mode (the MDI path returns 0 from `render_batched_models`; models ARE drawn).
+
+## Binary-XML / `.ai.rml` converter — format crack (June 2026)
+
+`tools/convert_avatar_xml.py` (gitignored, drag-and-drop) is a byte-exact bidirectional converter for **two** Dunia-1 formats. Validated byte-exact on **403/403** binary `.xml`/`.rml` game files and **29/29** BlackBox.AI `.ai.rml` brains (incl. the 6.5 MB `mercbrain` with 1668 class templates).
+
+### Dunia binary-XML (`.xml`/`.rml`/`.game.xml`)
+- Layout: `00 00` + VARINT(poolSize) + VARINT(nodeCount) + VARINT(attrCount) + node tree; the **string pool sits at the END** of the file (last `poolSize` bytes). Strings are UTF-8, NUL-terminated, deduplicated, in DFS-first-seen order (tag, node-type, then each attr name/value, then children).
+- Node = `name_ref, type_ref, attr_count, child_count, [0x00, attr_name_ref, attr_val_ref, (0x00 between attrs)…], children…`. Every `_ref` is a byte offset into the pool. The per-node **type** string is almost always empty; when non-empty (rare) it's carried on the element as `avx_type="…"` (don't hand-edit).
+- **VARINT escape threshold is `>= 0xFE`, NOT `>= 0xFF`** (the single most important gotcha). The game's **writer** reserves both `0xFE` and `0xFF`: any value ≥ 254 is written as `FF` + uint32-LE, so a one-byte field never exceeds `0xFD`. The **reader** only treats a leading `0xFF` as the escape marker (asymmetric but self-consistent). Concretely a pool offset of exactly **254** is stored as `FF FE 00 00 00`, not the single byte `FE`. Using a `0xFF` write-threshold silently corrupts any file that references offset 254 — it passed a 14-file sample by luck but broke 6/120 real files and 2/29 brains. Both `_vcnt()` and the encoder's `ref()` use `< 0xFE`.
+
+### BlackBox.AI `.ai.rml` (29 AI "brain" behavior trees under `scripts/game/newbrains/`)
+Detected by magic `04 00 00 00` (ver=4 LE) vs Dunia's `00 00`. Layout:
+```
+[0:16]   header  = uint32-LE  ver(=4), poolSize, tailSize, classCount
+[16:S]   class-template table  (classCount entries: CRC32 + uint32 size + `size` inline bytes)
+[..:S]   path/hash table       (node-path CRC32 lookups; inline path strings)
+[S:end]  ── self-contained Dunia object ──  node tree (`00 00`+varint…) + shared string pool
+```
+- **`header.tailSize` (offset 8) == `len(file) - S` == size of the trailing Dunia object** (node tree + shared pool). So the editable brain is exactly `data[len-tailSize:]` — a standalone Dunia object the generic `decode()`/`encode()` already round-trips byte-exact. No need to parse the class/path tables to locate it.
+- The decoded XML root is `<BlackBox.AI>` containing `<Brain>`/`<Task>` nodes with `<Selectable>/<Anchor>/<Exit>/<Parameter>/<Add>` children — fully human-readable & editable.
+- The class/path **prefix `[0:S]` uses INLINE strings** (independent of the shared pool), so it's preserved **verbatim** as base64 on the root in the `avx_ai_prefix` attribute (synthesized — filtered by `_real_attrs`, never pooled). On repack: `encode_ai_rml` = `b64decode(prefix)` + `encode(brain)`, patching only `header.tailSize` (offset 8) to `len(region)`.
+- **`header.poolSize` (offset 4) is a separate combined-allocation size tied to the prefix** — NOT equal to the brain object's own pool size (coincidentally equal only for `emptybrain`). It is **left untouched**. Consequence: pure round-trips & attribute-VALUE edits are byte-exact, but **structural brain edits are experimental** (the class/path prefix and `header.poolSize` are not regenerated — the game may reject a brain whose node set changed).
+
+**Tests:** `tests/test_convert_avatar_xml.py` — pool-escape threshold (the 0xFE invariant), Dunia round-trip, `.ai.rml` detect + full round-trip + prefix preservation. (gitignored, like the tool.)
