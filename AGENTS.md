@@ -2872,5 +2872,15 @@ Goal: rebuild the opaque prefix purely from the node tree so structural edits (a
   - **plus one CHILD element per parameter that has NESTED `<Parameter>` children.** The node tree nests them, e.g. `<Parameter Name="factValue" Value="integer"><Parameter Name="integer" Value="0"/></Parameter>` → child `<factValue integer="0"/>`; ref params nest `RefType`/`RefName` → `<startPos RefType="1" RefName=""/>`. This nested data is the ONLY reason it first looked like "engine knowledge" was needed — it's all in the tree; just traverse nested `<Parameter>`s. (~99% of `(param,value)→child` keys are deterministic; the nested params make it 100%.)
   - entries are **deduplicated by `(crc32(Class), templateBytes)`** keeping first-occurrence order over objects (two objects with identical compiled params but different Class stay distinct — e.g. Brain vs Plan both `Name=" " Looping="1" Independent="0"`). `classCount` == count of unique entries.
   - each entry = `crc32(Class)` (4) + `size` (4) + the `<Parameters>` Dunia object (its own mini string-pool; `C.encode` reproduces it byte-exact).
-- **Path/hash table = still being cracked.** It's a serialized hashmap: a count/capacity header (e.g. `127` for chalice, `8` for empty), a packed-byte per-object metadata array, then per-path records of `crc32(path)` + length + path string. Hashes are confirmed standard `avatar_crc32` of the object's full `Name` path (and of referenced values like the `DefaultSelectable` filter). It's deterministic (positions + hashes) but the small interleaved integers (indices/child-counts/offsets into the node tree) and the packed-byte array aren't fully mapped yet. This is the remaining blocker for byte-exact structural-edit repack.
+- **Path/hash table — full layout now mapped (June 2026); only the connection-slice byte-encoding remains.** Structure:
+  ```
+  [u32 blobSize]                     # size of the metadata blob that follows
+  [blobSize bytes: metadata blob]    # each object owns a slice [B : B+C] (B,C from its path record below)
+  [u32 valHashCount][N × crc32]      # hashes of referenced VALUES (e.g. the DefaultSelectable filter)
+  [u32 recordCount]                  # == number of addressable objects
+  [records...]                       # each: crc32(path)(4) + len(4) + path string + trailer[A(4) B(4) C(4)]
+  ```
+  - Each record's `(B,C)` = `(offset,size)` into the blob; the `(B,C)` slices **tile the entire blob with no gaps** (verified) — so it's fully deterministic. `crc32(path)` = `avatar_crc32` of the object's full `Name` path.
+  - The blob slice per object encodes that object's **outgoing connection graph** (its Anchor/Exit/Add → target-anchor connections). Objects with zero `<Connection>`s get a 3-byte `04 XX 00`; objects with connections get longer packed records. This packed connection encoding is the LAST piece not yet byte-exact (decode in progress). `A` looks like a near-monotonic object index; record order is likely hash-bucket order. Both still to confirm.
+  - Everything here is derivable from the node tree (paths, hashes, connection targets, positions) — no engine data — so byte-exact regen is achievable once the slice encoding is decoded.
 - `header.poolSize` (offset 4) still needs its formula derived (it's a combined-allocation size over the whole prefix). `tailSize` (offset 8) == `len(region)` is known.
