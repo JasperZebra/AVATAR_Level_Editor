@@ -379,7 +379,41 @@ class TerrainExporter:
                           f"global[{min_s}..{sorted_nums[-1]}] → local[0..{max(remapped_s)}], "
                           f"row_stride={row_stride}, secs_per_row={secs_per_row}")
 
+        # Avatar multi-part: each part is a separate 16×16 tile whose sector files
+        # may start above 0 (e.g. Tantalus part 2 has sd256-sd511). Remap to 0-based
+        # so calculate_grid_dimensions returns the correct grid AND the 0-based atlas
+        # mapping (build_atlas_mapping) lines up with the sector keys — without this,
+        # load_sector_texture() misses for every sector and the tile renders untextured
+        # (white). Mirrors terrain_renderer.load_sdat_folder's Avatar remap.
+        if loaded_count > 0 and self.game_mode != "farcry2":
+            self._remap_avatar_sectors_to_zero_based()
+
         return loaded_count > 0
+
+    def _remap_avatar_sectors_to_zero_based(self):
+        """Shift Avatar multi-part sector keys so the lowest becomes 0.
+
+        Part 2 of a stacked level has files sd256-sd511; left as global indices they
+        miss the 0-based atlas mapping (untextured tile) and inflate the computed grid.
+        Remaps both sectors_data and _sector_file_paths in place. No-op when the lowest
+        key is already 0 (single-part levels / part 1)."""
+        if not self.sectors_data:
+            return
+        sorted_nums = sorted(self.sectors_data.keys())
+        min_s = sorted_nums[0]
+        if min_s <= 0:
+            return
+        remapped_s = {}
+        remapped_files = {}  # local_idx → file_path (parallel to remapped_s)
+        for sn in sorted_nums:
+            local_idx = sn - min_s
+            remapped_s[local_idx] = self.sectors_data[sn]
+            if sn in self._sector_file_paths:
+                remapped_files[local_idx] = self._sector_file_paths[sn]
+        self.sectors_data = remapped_s
+        self._sector_file_paths = remapped_files
+        print(f"Avatar remap: {len(remapped_s)} sectors, "
+              f"global[{min_s}..{sorted_nums[-1]}] → local[0..{max(remapped_s)}]")
     
     def load_all_textures(self):
         """Load all texture data"""

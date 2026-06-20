@@ -135,6 +135,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/gpu_driven_renderer.py` | `tests/test_gdr_frame_assembly.py` | — | Pure-numpy frame assembly (`assemble_frame` / `build_group_templates` / `build_group_commands`) verified against naive reference loops; module loaded by **file path** (canvas/__init__.py is GL-heavy) — excluded from `--cov` |
 | `canvas/sky_shader_sources.py` + `canvas/sky_atmosphere.py` | `tests/test_sky_shader_sources.py` | — | Embedded atmosphere GLSL present + `_adapt_common`/`_wrap_buffer` adaptation works with no files on disk; modules loaded by **file path** — excluded from `--cov` |
 | `canvas/water_plane_renderer.py` | `tests/test_strip_baked_water.py` | — | `strip_baked_water` removes the 'Water'-node mesh from terrain models, no-ops without one; loaded by **file path** — excluded from `--cov` |
+| `canvas/terrain_to_gltf.py` | `tests/test_terrain_avatar_remap.py` | — | `_remap_avatar_sectors_to_zero_based` shifts Avatar multi-part sector keys (e.g. Tantalus part 2 sd256-sd511) to 0-based so 3D textures match 2D; no-op for part 1 / empty; instances built via `object.__new__` (skip disk-touching `__init__`), module loaded by **file path** — excluded from `--cov` |
 | `theme_settings.py` | `tests/test_theme_settings_merge.py` | — | `_save_settings` merge-write preserves foreign keys (e.g. `render_tier`); handles missing/corrupt file — excluded from `--cov` |
 | `simplified_map_editor.py` | `tests/test_first_run_flow.py` | — | First-run dialog sequencing: `_prompt_first_run_setup` chains into the welcome screen, never schedules `select_level`; uses stub editor + fake QTimer/QMessageBox — excluded from `--cov` |
 
@@ -699,6 +700,17 @@ Affected files (all changed together to stay consistent):
 **World extent formula:** `w_px - 1` where `w_px = 1025`. Replaces the old `w_px * 0.985` band-aid. Exact match to in-game 1024×1024 cell size.
 
 **Do NOT reintroduce 0.985.** It was a workaround for the double-sampling bug, not a real coordinate correction.
+
+### Avatar multi-part terrain — 3D needs the same 0-based sector remap as 2D (June 2026)
+
+Stacked Avatar levels (e.g. **Tantalus** = `sp_drifting_sierra_fm_01_l1` + `_l2`) load as two separate 16×16 terrain tiles via the `use_avatar_multicell` branch in `load_complete_level` (2D → `terrain_renderer.load_sdat_cell`; 3D → `map_canvas_gpu.load_terrain_cell_3d`, each appended to `terrain_models` at its own world offset, e.g. part 2 at y=1024).
+
+**Part 2's sector files are globally numbered** (`sd256.csdat`–`sd511.csdat`), and its atlas files start at `atlas256`. `build_atlas_mapping` ALWAYS produces **0-based** sector keys (`atlas_index*4` → 0..255) regardless of the atlas number. So sector keys MUST be 0-based for textures to resolve.
+
+- **2D** (`terrain_renderer.load_sdat_folder`, the `else` branch ~line 194) already remaps `sd256-511` → local `0-255` for Avatar. That's why 2D textured both halves.
+- **3D** (`terrain_to_gltf.load_all_sectors`) only had the **FC2** remap — Avatar part 2 kept keys 256-511, so every `load_sector_texture(256..511)` missed (`256 not in atlas_mapping`) → the whole tile rendered **untextured/white**, and `calculate_grid_dimensions` saw `max+1=512` → wrong (23×23) grid.
+
+**Fix:** `load_all_sectors` now calls `_remap_avatar_sectors_to_zero_based()` (mirrors the 2D logic) when `game_mode != "farcry2"` and the lowest key > 0 — shifts both `sectors_data` and `_sector_file_paths` so the lowest key becomes 0. The atlas *number* (256+) is preserved in `atlas_mapping` **values**, so `load_sector_texture` still opens the correct `atlas256_*` files. No-op for single-part levels (part 1 already starts at 0). Regression: `tests/test_terrain_avatar_remap.py`.
 
 ### canvas/mp_spawn_creator.py — MP Spawn Point Creator (May 2026)
 
