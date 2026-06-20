@@ -3531,6 +3531,27 @@ class MapCanvas(QOpenGLWidget):
             import traceback
             traceback.print_exc()
 
+        # ── Vsync-locked continuous repaint WHILE the camera is moving ──────────
+        # paintGL is otherwise driven by the 16ms movement_timer. On a 60Hz display
+        # that 16ms cadence beats against the 16.67ms refresh, so the (vsync-blocked)
+        # buffer swap lands ~1.5 vblanks apart and averages 40 FPS — even though a
+        # frame only costs ~2ms (profiler confirmed). Requesting the next frame here
+        # keeps a repaint always pending the instant the swap returns, so the swap
+        # itself paces presentation at the true refresh rate (60). The loop ends the
+        # moment the movement keys are released (needs_update() → False), so idle cost
+        # is unchanged. Movement speed is unaffected (still stepped by the timer).
+        # NB: relies on vsync being on (it is — 40 FPS == 1.5×16.67ms is its signature);
+        # with vsync off this would still be capped only by frame cost.
+        try:
+            if self.mode == MODE_3D:
+                if self.camera_3d.needs_update():
+                    self.update()
+            elif self.mode == MODE_TOPDOWN:
+                if self.camera_controller.needs_update():
+                    self.update()
+        except Exception:
+            pass
+
     def _render_selection_box(self, painter):
         """Render the selection box during drag"""
         if not hasattr(self, 'input_handler'):
