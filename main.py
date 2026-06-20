@@ -116,9 +116,21 @@ def main():
 
     # 👉 Move GUI imports here so workers NEVER import them
     from PyQt6.QtWidgets import QApplication
-    from PyQt6.QtGui import QIcon
+    from PyQt6.QtGui import QIcon, QSurfaceFormat
     from game_selector import GameSelectorDialog
     from simplified_map_editor import SimplifiedMapEditor
+
+    # ── Force vsync (swap interval = 1) ─────────────────────────────────────────
+    # Without this the AMD driver left the swap interval unset, so the 3D viewport
+    # was paced by the repaint timer + event loop instead of the buffer swap. That
+    # cadence beats against the monitor refresh and capped the viewport at a wobbly
+    # ~40-50 FPS even though a frame only costs ~2ms (profiler-confirmed). Requesting
+    # swapInterval(1) makes the (vsync-blocked) swap the pacer → a clean, steady
+    # refresh-rate cap. Must be set on the default format BEFORE QApplication is
+    # constructed so every GL context (incl. the canvas QOpenGLWidget) inherits it.
+    _fmt = QSurfaceFormat.defaultFormat()
+    _fmt.setSwapInterval(1)
+    QSurfaceFormat.setDefaultFormat(_fmt)
 
     app = QApplication(sys.argv)
 
