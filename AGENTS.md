@@ -2881,16 +2881,16 @@ Goal: rebuild the opaque prefix purely from the node tree so structural edits (a
   [records...]                       # each: crc32(path)(4) + len(4) + path string + trailer[A(4) B(4) C(4)]
   ```
   - Each record's `(B,C)` = `(offset,size)` into the blob; the `(B,C)` slices **tile the entire blob with no gaps** (verified) — so it's fully deterministic. `crc32(path)` = `avatar_crc32` of the object's full `Name` path.
-  - The blob slice per object encodes that object's **outgoing connection graph**. Decoded format (verified on proximityminebrain):
+  - The blob slice per object encodes that object's **outgoing connection graph**. PARTIAL model (only validates on ~12% of objects — the simple ones — so it is INCOMPLETE; do not trust it as-is):
     ```
     slice = [u8 b0][u8 b1][u8 0x00]                       # b0 = 0x04 normal, 0x00 for the root Brain
             then, per source Anchor/Exit that has >=1 <Connection>:
               [u8 srcType: 1=Anchor, 2=Exit][u16 srcAnchorCode][u16 connCount]
               connCount × [u16 targetRecIdx][u16 targetAnchorCode][u8 srcType(repeat)]
     ```
-    - `targetRecIdx` = the index of the target object in the path-RECORD order (NOT the root-child order).
-    - anchor codes are a small fixed enum harvested from the data: `OnStart=1, Start=2, Success=3, Stop=4, …` (full map TODO — `Start`/`Stop` are the control-input anchors distinct from the `OnStart`/`OnStop` event anchors). `srcAnchorCode`/`targetAnchorCode` use it.
-    - the per-source group's `connCount` is the trailing u16 of its 5-byte header; the leading byte is the source type (matches the per-connection trailing byte).
-  - **STILL TODO for byte-exact:** the slice header `b1` byte (varies 03/05/0a — not ports/adds/conns by any simple formula tried); the complete anchor-name→code map; the record `A` field (near-monotonic object index); the record ORDER (likely hash-bucket order, not node order); and `header.poolSize`. The `B`/`C` (offset/size into blob) come for free once the slice bytes are produced.
-  - Everything here is derivable from the node tree (paths, hashes, connection targets+anchors, positions) — no engine data — so byte-exact regen is achievable; it's "just" finishing these last encoding details and validating an encoder against all 29 files.
+    - `targetRecIdx` = the index of the target object in the path-RECORD order (NOT root-child order) — this part is solid.
+    - **Anchor codes are POSITIONAL, not a name enum.** Harvesting `(anchorName → code)` over all files is ambiguous (`Success` → {3,4,5,…}, `OnStart` → {1,2,4,…}), so the code is the anchor/port's INDEX within its target object's port list (+ implicit control ports like `Start`/`Stop`/`Restart` that aren't in the node's `<Anchor>` children). Resolving the exact per-object port numbering is open.
+    - The simple `[srcType][srcAnchorCode][connCount]` group grammar only covers leaf-ish objects; objects with many ports / Adds / nested structure use a richer layout not yet decoded (6629/7539 objects fail this parse).
+  - **STILL OPEN (substantial):** the full slice grammar for complex objects; the positional anchor/port numbering; the slice header `b1` byte; the record `A` field; record ORDER (likely hash-bucket); and `header.poolSize`. All derivable from the node tree in principle (no engine data), but this is a multi-session reverse-engineering effort, not a quick finish.
+  - **Net status:** class-template table = DONE (29/29 from scratch). Path/hash table = overall layout + record framing solid, but the per-object connection-graph byte encoding is only partially cracked. Until it's complete, structural edits can't repack byte-exact; VALUE edits work today via prefix preservation.
 - `header.poolSize` (offset 4) still needs its formula derived (it's a combined-allocation size over the whole prefix). `tailSize` (offset 8) == `len(region)` is known.
