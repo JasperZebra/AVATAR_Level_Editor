@@ -137,11 +137,27 @@ class AtmosphereSky:
         self._built = False
         self._failed = False
         self._trans_done = False
+        self._sky_sun_key = None          # sun-elevation key the cached sky-view LUT was built for
         self.prog_trans = self.prog_sky = self.prog_comp = 0
         self.fbo_trans = self.tex_trans = 0
         self.fbo_sky = self.tex_sky = 0
         self.vao = 0
         self.exposure = -4.0
+
+    def _sky_lut_needs_rebuild(self, sun_elev_sin):
+        """True if the sky-view LUT (Buffer B) must be re-rendered for this sun.
+
+        Buffer B is the expensive atmospheric-scattering pass and its output depends
+        ONLY on the sun's elevation (it places the sun at a fixed azimuth; the camera
+        azimuth is handled later in the composite). So when the sun is static — the
+        default, since day/night is paused at noon — we reuse the cached FBO instead
+        of re-running the scattering every frame. Recomputes only when the sun moves.
+        Updates the cached key as a side effect when a rebuild is needed."""
+        key = round(float(sun_elev_sin), 5)
+        if key == self._sky_sun_key:
+            return False
+        self._sky_sun_key = key
+        return True
 
     # ---- build ----
     def _build(self):
@@ -234,9 +250,11 @@ class AtmosphereSky:
                 self._render_to(self.fbo_trans, self.TRANS_W, self.TRANS_H, self.prog_trans)
                 self._trans_done = True
 
-            # 1) sky-view LUT for this sun position
-            self._render_to(self.fbo_sky, self.SKY_W, self.SKY_H, self.prog_sky,
-                            sun_dir=sun_model, bind_trans=True)
+            # 1) sky-view LUT for this sun position — only when the sun actually
+            #    moved (static sun → reuse the cached LUT; big save when paused).
+            if self._sky_lut_needs_rebuild(sun_elev_sin):
+                self._render_to(self.fbo_sky, self.SKY_W, self.SKY_H, self.prog_sky,
+                                sun_dir=sun_model, bind_trans=True)
 
             # 2) composite to the widget's default framebuffer (background; depth off)
             glBindFramebuffer(GL_FRAMEBUFFER, int(default_fbo))
