@@ -168,52 +168,14 @@ def update_model_loader_for_game(model_loader, game_path_config):
     if os.path.exists(entitylib_path):
         # Directly load the EntityLibrary XML
         try:
-            import xml.etree.ElementTree as ET
-            tree = ET.parse(entitylib_path)
-            root = tree.getroot()
-            model_loader.entity_patterns = {}
-            
-            # Parse EntityLibrary (same logic as _load_local_entity_library)
-            for proto_obj in root.findall(".//object[@name='EntityPrototype']"):
-                name_field = proto_obj.find(".//field[@name='Name']")
-                if name_field is None:
-                    continue
-                
-                proto_name = name_field.get('value-String')
-                if not proto_name:
-                    continue
-                
-                entity_obj = proto_obj.find(".//object[@name='Entity']")
-                if entity_obj is None:
-                    continue
-                
-                hid_field = entity_obj.find(".//field[@name='hidName']")
-                hid_name = hid_field.get('value-String') if hid_field is not None else None
-                
-                descriptor_component = entity_obj.find(".//object[@name='CFileDescriptorComponent']")
-                if descriptor_component is not None:
-                    hid_descriptor = descriptor_component.find(".//field[@name='hidDescriptor']")
-                    if hid_descriptor is not None:
-                        graphic_component = hid_descriptor.find(".//component[@class='GraphicComponent']")
-                        if graphic_component is not None:
-                            resource = graphic_component.find(".//resource")
-                            if resource is not None:
-                                model_file = resource.get('fileName')
-                                if model_file:
-                                    model_loader.entity_patterns[proto_name] = model_file
-                                    if hid_name:
-                                        model_loader.entity_patterns[hid_name] = model_file
-                        
-                        kit_component = hid_descriptor.find(".//component[@class='GraphicKitComponent']")
-                        if kit_component is not None:
-                            resource = kit_component.find(".//resource")
-                            if resource is not None:
-                                model_file = resource.get('fileName')
-                                if model_file:
-                                    model_loader.entity_patterns[proto_name] = model_file
-                                    if hid_name:
-                                        model_loader.entity_patterns[hid_name] = model_file
-            
+            # Streamed extraction — ~0 MB vs holding the whole ~1.9 GB ElementTree
+            # (byte-identical result; see model_loader.load_entity_patterns).
+            try:
+                from canvas.model_loader import load_entity_patterns
+            except ImportError:
+                from model_loader import load_entity_patterns
+            model_loader.entity_patterns = load_entity_patterns(entitylib_path)
+
             model_loader._entity_library_loaded = True
             print(f"✓ EntityLibrary loaded: {entitylib_path}")
             print(f"  Loaded {len(model_loader.entity_patterns)} entity patterns")

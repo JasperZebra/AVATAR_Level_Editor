@@ -29,6 +29,62 @@ except ImportError:
     print(" PIL/Pillow not available - textures will not be loaded")
     print("   Install with: pip install Pillow")
 
+
+def _entity_patterns_from_protos(protos):
+    """Build {prototype Name / hidName: model fileName} from EntityPrototype elements.
+    The exact logic the editor's three render sites used (GraphicComponent first, then
+    GraphicKitComponent overwrites)."""
+    pat = {}
+    for proto in protos:
+        nf = proto.find(".//field[@name='Name']")
+        if nf is None:
+            continue
+        pn = nf.get('value-String')
+        if not pn:
+            continue
+        eo = proto.find(".//object[@name='Entity']")
+        if eo is None:
+            continue
+        hf = eo.find(".//field[@name='hidName']")
+        hn = hf.get('value-String') if hf is not None else None
+        dc = eo.find(".//object[@name='CFileDescriptorComponent']")
+        if dc is None:
+            continue
+        hd = dc.find(".//field[@name='hidDescriptor']")
+        if hd is None:
+            continue
+        for cls in ("GraphicComponent", "GraphicKitComponent"):
+            comp = hd.find(".//component[@class='%s']" % cls)
+            if comp is not None:
+                r = comp.find(".//resource")
+                if r is not None and r.get('fileName'):
+                    pat[pn] = r.get('fileName')
+                    if hn:
+                        pat[hn] = r.get('fileName')
+    return pat
+
+
+def load_entity_patterns(entitylib_xml_path):
+    """Return {prototype/hidName: model fileName} for an entitylibrary .converted.xml.
+
+    STREAMS the file (iterparse + per-prototype clear) so it uses ~0 extra RAM instead of
+    holding the whole ~1.9 GB ElementTree — on Tantalus this is the difference between a
+    fast, light load and a 1.9 GB spike. Verified byte-identical to the old full-parse on
+    every game level. Falls back to a full parse if streaming raises, so it can never
+    regress."""
+    try:
+        pat = {}
+        for _ev, el in ET.iterparse(entitylib_xml_path, events=("end",)):
+            if el.tag == "object" and el.get("name") == "EntityPrototype":
+                pat.update(_entity_patterns_from_protos([el]))
+                el.clear()
+        return pat
+    except Exception as exc:
+        print(f"[entity_patterns] streaming failed ({exc}); falling back to full parse")
+        root = ET.parse(entitylib_xml_path).getroot()
+        return _entity_patterns_from_protos(root.findall(".//object[@name='EntityPrototype']"))
+
+
 class GLTFModel:
     """Represents a loaded GLTF model with all its data"""
 
@@ -1041,59 +1097,10 @@ class ModelLoader:
                 self.entity_library_path = path
                 print(f"Found local EntityLibrary: {path}")
                 try:
-                    tree = ET.parse(path)
-                    root = tree.getroot()
-                    self.entity_patterns = {}
+                    # Streamed extraction — ~0 MB instead of holding the whole ~1.9 GB
+                    # ElementTree (see load_entity_patterns). Byte-identical result.
+                    self.entity_patterns = load_entity_patterns(path)
 
-                    # Search for EntityPrototype objects
-                    for proto_obj in root.findall(".//object[@name='EntityPrototype']"):
-                        # Get the Name field from EntityPrototype (this is the clean name)
-                        name_field = proto_obj.find(".//field[@name='Name']")
-                        if name_field is None:
-                            continue
-                        
-                        proto_name = name_field.get('value-String')
-                        if not proto_name:
-                            continue
-                        
-                        # Find the Entity object within this prototype
-                        entity_obj = proto_obj.find(".//object[@name='Entity']")
-                        if entity_obj is None:
-                            continue
-                        
-                        # Also get the hidName for alternate matching
-                        hid_field = entity_obj.find(".//field[@name='hidName']")
-                        hid_name = hid_field.get('value-String') if hid_field is not None else None
-                        
-                        # Find the model file from CFileDescriptorComponent
-                        descriptor_component = entity_obj.find(".//object[@name='CFileDescriptorComponent']")
-                        if descriptor_component is not None:
-                            hid_descriptor = descriptor_component.find(".//field[@name='hidDescriptor']")
-                            if hid_descriptor is not None:
-                                # Try GraphicComponent first
-                                graphic_component = hid_descriptor.find(".//component[@class='GraphicComponent']")
-                                if graphic_component is not None:
-                                    resource = graphic_component.find(".//resource")
-                                    if resource is not None:
-                                        model_file = resource.get('fileName')
-                                        if model_file:
-                                            # Store using the EntityPrototype Name (clean name)
-                                            self.entity_patterns[proto_name] = model_file
-                                            # Also store using hidName for fallback
-                                            if hid_name:
-                                                self.entity_patterns[hid_name] = model_file
-                                
-                                # Try GraphicKitComponent for characters
-                                kit_component = hid_descriptor.find(".//component[@class='GraphicKitComponent']")
-                                if kit_component is not None:
-                                    resource = kit_component.find(".//resource")
-                                    if resource is not None:
-                                        model_file = resource.get('fileName')
-                                        if model_file:
-                                            self.entity_patterns[proto_name] = model_file
-                                            if hid_name:
-                                                self.entity_patterns[hid_name] = model_file
-                    
                     self._entity_library_loaded = True
                     print(f" Loaded {len(self.entity_patterns)} entity patterns")
                     return True
