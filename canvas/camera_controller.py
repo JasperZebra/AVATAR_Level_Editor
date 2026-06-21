@@ -171,8 +171,10 @@ class CameraController:
         """Handle wheel zoom in 2D mode with cursor-centered zooming"""
         from .opengl_utils import OpenGLUtils
         
-        # Get the current cursor position
-        cursor_x, cursor_y = event.localPos().x(), event.localPos().y()
+        # Get the current cursor position.
+        # NOTE: this is a QWheelEvent, not a QMouseEvent. In PyQt5 QWheelEvent
+        # has position() (QPointF) but NOT localPos() — the reverse of QMouseEvent.
+        cursor_x, cursor_y = event.position().x(), event.position().y()
         
         # Convert cursor position to world coordinates BEFORE zooming
         world_x, world_y = OpenGLUtils.screen_to_world(cursor_x, cursor_y, canvas)
