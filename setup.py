@@ -99,37 +99,44 @@ else:
     print(f"⚠ WARNING: Icon file not found at: {icon_file_path}")
 
 # ============================================================================
-# CRITICAL FIX #1: PyQt6 OpenGL Platform Plugins
+# CRITICAL FIX #1: PyQt5 OpenGL Platform Plugins
 # ============================================================================
 print("\n" + "="*70)
-print("ADDING PYQT6 OPENGL SUPPORT")
+print("ADDING PYQT5 OPENGL SUPPORT")
 print("="*70)
 
 try:
-    import PyQt6
-    pyqt6_path = os.path.dirname(PyQt6.__file__)
-    
+    import PyQt5
+    pyqt5_path = os.path.dirname(PyQt5.__file__)
+
+    # PyQt5 wheels place the Qt runtime under either 'Qt5' (recent) or 'Qt'
+    # (older). Detect whichever exists so the plugin paths resolve correctly.
+    qt_root = os.path.join(pyqt5_path, 'Qt5')
+    if not os.path.exists(qt_root):
+        qt_root = os.path.join(pyqt5_path, 'Qt')
+
     # Add platform plugins (REQUIRED for OpenGL rendering)
-    platforms_src = os.path.join(pyqt6_path, 'Qt6', 'plugins', 'platforms')
+    platforms_src = os.path.join(qt_root, 'plugins', 'platforms')
     if os.path.exists(platforms_src):
         include_files.append((platforms_src, 'platforms'))
-        print(f"✓ Added PyQt6 platform plugins from: {platforms_src}")
+        print(f"✓ Added PyQt5 platform plugins from: {platforms_src}")
     else:
-        print(f"⚠ Warning: PyQt6 platform plugins not found at: {platforms_src}")
-    
+        print(f"⚠ Warning: PyQt5 platform plugins not found at: {platforms_src}")
+
     # Add imageformats plugins (for texture loading)
-    imageformats_src = os.path.join(pyqt6_path, 'Qt6', 'plugins', 'imageformats')
+    imageformats_src = os.path.join(qt_root, 'plugins', 'imageformats')
     if os.path.exists(imageformats_src):
         include_files.append((imageformats_src, 'imageformats'))
-        print(f"✓ Added PyQt6 imageformats plugins from: {imageformats_src}")
-    
-    # Qt6OpenGL.dll / Qt6OpenGLWidgets.dll are bundled automatically by
-    # cx_Freeze via PyQt6.QtOpenGL / PyQt6.QtOpenGLWidgets in packages.
-    # Do NOT copy them to the root — that causes version-mismatch crashes
-    # when the user has a different Qt version on their system PATH.
-    
+        print(f"✓ Added PyQt5 imageformats plugins from: {imageformats_src}")
+
+    # Qt5Core.dll / Qt5Gui.dll / Qt5Widgets.dll / Qt5OpenGL.dll are bundled
+    # automatically by cx_Freeze via PyQt5.QtCore/QtGui/QtWidgets/QtOpenGL in
+    # packages. In PyQt5 QOpenGLWidget lives in QtWidgets (there is no
+    # QtOpenGLWidgets module). Do NOT copy the DLLs to the root — that causes
+    # version-mismatch crashes when the user has a different Qt on their PATH.
+
 except Exception as e:
-    print(f"⚠ Warning: Could not locate PyQt6 plugins: {e}")
+    print(f"⚠ Warning: Could not locate PyQt5 plugins: {e}")
 
 # ============================================================================
 # CRITICAL FIX #2: PIL/Pillow DDS Support and Binary Files
@@ -304,15 +311,14 @@ build_options = {
         'threading', 'queue', 'weakref', 'gc', 'ctypes', 'ctypes.util',
         
         # ===================================================================
-        # PYQT6 PACKAGES
+        # PYQT5 PACKAGES
         # ===================================================================
-        'PyQt6',
-        'PyQt6.QtWidgets',
-        'PyQt6.QtCore',
-        'PyQt6.QtGui',
-        'PyQt6.QtOpenGL',
-        'PyQt6.QtOpenGLWidgets',
-        'PyQt6.sip',
+        'PyQt5',
+        'PyQt5.QtWidgets',
+        'PyQt5.QtCore',
+        'PyQt5.QtGui',
+        'PyQt5.QtOpenGL',
+        'PyQt5.sip',
         
         # ===================================================================
         # OPENGL PACKAGES - COMPLETE WITH ALL CRITICAL MODULES
@@ -495,40 +501,43 @@ build_options = {
         'pandas',
         'setuptools',
         'distutils',
-        # Unused PyQt6 modules (QML, multimedia, network, designer, etc.)
-        'PyQt6.QtQml',
-        'PyQt6.QtQuick',
-        'PyQt6.QtQuick3D',
-        'PyQt6.QtMultimedia',
-        'PyQt6.QtMultimediaWidgets',
-        'PyQt6.QtNetwork',
-        'PyQt6.QtPrintSupport',
-        'PyQt6.QtDesigner',
-        'PyQt6.QtSvg',
-        'PyQt6.QtSvgWidgets',
-        'PyQt6.QtHelp',
-        'PyQt6.QtPositioning',
-        'PyQt6.QtRemoteObjects',
-        'PyQt6.QtBluetooth',
-        'PyQt6.QtSensors',
-        'PyQt6.QtSql',
-        'PyQt6.QtDBus',
-        'PyQt6.QtWebEngineCore',
-        'PyQt6.QtWebEngineWidgets',
-        'PyQt6.QtWebChannel',
-        'PyQt6.QtPdf',
-        'PyQt6.QtPdfWidgets',
-        'PyQt6.QtShaderTools',
-        'PyQt6.QtSpatialAudio',
-        'PyQt6.QtTextToSpeech',
-        'PyQt6.QtCharts',
-        'PyQt6.QtDataVisualization',
-        'PyQt6.Qt3DCore',
-        'PyQt6.Qt3DRender',
-        'PyQt6.Qt3DInput',
-        'PyQt6.Qt3DLogic',
-        'PyQt6.Qt3DAnimation',
-        'PyQt6.Qt3DExtras',
+        # Unused PyQt5 modules (QML, multimedia, network, designer, etc.)
+        'PyQt5.QtQml',
+        'PyQt5.QtQuick',
+        'PyQt5.QtQuick3D',
+        'PyQt5.QtMultimedia',
+        'PyQt5.QtMultimediaWidgets',
+        'PyQt5.QtNetwork',
+        'PyQt5.QtPrintSupport',
+        'PyQt5.QtDesigner',
+        'PyQt5.QtSvg',
+        'PyQt5.QtHelp',
+        'PyQt5.QtPositioning',
+        'PyQt5.QtRemoteObjects',
+        'PyQt5.QtBluetooth',
+        'PyQt5.QtSensors',
+        'PyQt5.QtSql',
+        'PyQt5.QtDBus',
+        'PyQt5.QtWebEngine',
+        'PyQt5.QtWebEngineCore',
+        'PyQt5.QtWebEngineWidgets',
+        'PyQt5.QtWebChannel',
+        'PyQt5.QtWebKit',
+        'PyQt5.QtWebKitWidgets',
+        'PyQt5.QtXml',
+        'PyQt5.QtXmlPatterns',
+        'PyQt5.QtTextToSpeech',
+        'PyQt5.QtCharts',
+        'PyQt5.QtDataVisualization',
+        'PyQt5.QtSerialPort',
+        'PyQt5.QtNfc',
+        'PyQt5.QtQuickWidgets',
+        'PyQt5.Qt3DCore',
+        'PyQt5.Qt3DRender',
+        'PyQt5.Qt3DInput',
+        'PyQt5.Qt3DLogic',
+        'PyQt5.Qt3DAnimation',
+        'PyQt5.Qt3DExtras',
     ],
     
     'include_msvcr': True,
@@ -582,7 +591,7 @@ if __name__ == '__main__':
     print("  ✓ OpenGL platform loaders (ctypesloader, baseplatform)")
     print("  ✓ PIL/Pillow DDS plugin with binaries")
     print("  ✓ NumPy binary extensions")
-    print("  ✓ PyQt6 OpenGL platform plugins")
+    print("  ✓ PyQt5 OpenGL platform plugins")
     print("  ✓ All texture format plugins")
     print("="*70 + "\n")
     
@@ -598,30 +607,33 @@ if __name__ == '__main__':
     import shutil
 
     # ============================================================================
-    # POST-BUILD: Strip unneeded PyQt6 / Qt6 components (~2+ GB savings)
+    # POST-BUILD: Strip unneeded PyQt5 / Qt5 components (~2+ GB savings)
     # ============================================================================
     print("\n" + "="*70)
-    print("POST-BUILD: STRIPPING UNNEEDED PyQt6/Qt6 COMPONENTS")
+    print("POST-BUILD: STRIPPING UNNEEDED PyQt5/Qt5 COMPONENTS")
     print("="*70)
 
-    pyqt6_build = os.path.join(base_dir, 'build', 'Avatar_Level_Editor', 'lib', 'PyQt6')
-    qt6_build   = os.path.join(pyqt6_build, 'Qt6')
+    pyqt5_build = os.path.join(base_dir, 'build', 'Avatar_Level_Editor', 'lib', 'PyQt5')
+    # PyQt5 wheels nest the Qt runtime under either 'Qt5' (recent) or 'Qt' (older).
+    qt5_build = os.path.join(pyqt5_build, 'Qt5')
+    if not os.path.exists(qt5_build):
+        qt5_build = os.path.join(pyqt5_build, 'Qt')
 
-    # 1. QML runtime — 2.0 GB, not used
-    _del_dir = os.path.join(qt6_build, 'qml')
+    # 1. QML runtime — large, not used
+    _del_dir = os.path.join(qt5_build, 'qml')
     if os.path.exists(_del_dir):
         shutil.rmtree(_del_dir)
-        print(f"✓ Removed Qt6/qml (~2 GB)")
+        print(f"✓ Removed Qt5/qml")
 
-    # 2. Translations — ~7 MB, not required for a game-editor tool
-    _del_dir = os.path.join(qt6_build, 'translations')
+    # 2. Translations — not required for a game-editor tool
+    _del_dir = os.path.join(qt5_build, 'translations')
     if os.path.exists(_del_dir):
         shutil.rmtree(_del_dir)
-        print(f"✓ Removed Qt6/translations")
+        print(f"✓ Removed Qt5/translations")
 
     # 3. Plugin folders — keep only what the app uses
     _keep_plugins = {'platforms', 'imageformats', 'styles', 'iconengines'}
-    _plugins_dir  = os.path.join(qt6_build, 'plugins')
+    _plugins_dir  = os.path.join(qt5_build, 'plugins')
     if os.path.exists(_plugins_dir):
         for _name in os.listdir(_plugins_dir):
             if _name not in _keep_plugins:
@@ -630,37 +642,48 @@ if __name__ == '__main__':
                     shutil.rmtree(_path)
                     print(f"✓ Removed plugin folder: {_name}")
 
-    # 4. Unneeded Qt6 DLLs sitting in lib/PyQt6/
+    # 4. Unneeded Qt5 DLLs sitting in lib/PyQt5/ (and lib/PyQt5/Qt5/bin/).
+    #    Note: KEEP Qt5OpenGL.dll — the 3D viewport (QOpenGLWidget) needs it.
     _unneeded_dlls = [
-        'Qt6Quick.dll', 'Qt6Qml.dll', 'Qt6QmlModels.dll', 'Qt6QmlWorkerScript.dll',
-        'Qt6Designer.dll', 'Qt6Pdf.dll', 'Qt6ShaderTools.dll',
-        'Qt6Quick3D.dll', 'Qt6Quick3DRuntimeRender.dll', 'Qt6Quick3DUtils.dll',
-        'Qt6Multimedia.dll', 'Qt6MultimediaQuick.dll',
-        'Qt6Bluetooth.dll', 'Qt6DBus.dll', 'Qt6SpatialAudio.dll',
-        'Qt6RemoteObjects.dll', 'Qt6Svg.dll', 'Qt6Help.dll',
-        'Qt6Positioning.dll', 'Qt6Network.dll', 'Qt6PrintSupport.dll',
-        'Qt6WebEngineCore.dll', 'Qt6Charts.dll', 'Qt6DataVisualization.dll',
+        'Qt5Quick.dll', 'Qt5Qml.dll', 'Qt5QmlModels.dll', 'Qt5QmlWorkerScript.dll',
+        'Qt5Designer.dll', 'Qt5DesignerComponents.dll',
+        'Qt5Quick3D.dll', 'Qt5Quick3DRuntimeRender.dll', 'Qt5Quick3DUtils.dll',
+        'Qt5QuickWidgets.dll', 'Qt5QuickControls2.dll', 'Qt5QuickTemplates2.dll',
+        'Qt5Multimedia.dll', 'Qt5MultimediaQuick.dll', 'Qt5MultimediaWidgets.dll',
+        'Qt5Bluetooth.dll', 'Qt5DBus.dll', 'Qt5Nfc.dll',
+        'Qt5RemoteObjects.dll', 'Qt5Svg.dll', 'Qt5Help.dll',
+        'Qt5Positioning.dll', 'Qt5Network.dll', 'Qt5PrintSupport.dll',
+        'Qt5WebEngineCore.dll', 'Qt5WebEngine.dll', 'Qt5WebEngineWidgets.dll',
+        'Qt5WebChannel.dll', 'Qt5WebKit.dll', 'Qt5WebKitWidgets.dll',
+        'Qt5Xml.dll', 'Qt5XmlPatterns.dll', 'Qt5SerialPort.dll',
+        'Qt5Charts.dll', 'Qt5DataVisualization.dll', 'Qt5TextToSpeech.dll',
+        'Qt53DCore.dll', 'Qt53DRender.dll', 'Qt53DInput.dll',
+        'Qt53DLogic.dll', 'Qt53DAnimation.dll', 'Qt53DExtras.dll',
     ]
-    for _dll in _unneeded_dlls:
-        _p = os.path.join(pyqt6_build, _dll)
-        if os.path.exists(_p):
-            os.remove(_p)
-            print(f"✓ Removed {_dll}")
+    _dll_dirs = [pyqt5_build, os.path.join(qt5_build, 'bin')]
+    for _dir in _dll_dirs:
+        for _dll in _unneeded_dlls:
+            _p = os.path.join(_dir, _dll)
+            if os.path.exists(_p):
+                os.remove(_p)
+                print(f"✓ Removed {_dll}")
 
-    # 5. Unneeded PyQt6 .pyd bindings
+    # 5. Unneeded PyQt5 .pyd bindings
     _unneeded_pyds = [
         'QtQuick.pyd', 'QtQml.pyd', 'QtNetwork.pyd', 'QtPrintSupport.pyd',
         'QtDesigner.pyd', 'QtMultimedia.pyd', 'QtMultimediaWidgets.pyd',
-        'QtBluetooth.pyd', 'QtSvg.pyd', 'QtSvgWidgets.pyd',
+        'QtBluetooth.pyd', 'QtSvg.pyd', 'QtQuickWidgets.pyd',
         'QtHelp.pyd', 'QtPositioning.pyd', 'QtRemoteObjects.pyd',
-        'QtSensors.pyd', 'QtSql.pyd', 'QtDBus.pyd', 'QtPdf.pyd',
-        'QtPdfWidgets.pyd', 'QtShaderTools.pyd', 'QtSpatialAudio.pyd',
+        'QtSensors.pyd', 'QtSql.pyd', 'QtDBus.pyd', 'QtNfc.pyd',
+        'QtSerialPort.pyd', 'QtXml.pyd', 'QtXmlPatterns.pyd',
+        'QtWebChannel.pyd', 'QtWebEngine.pyd', 'QtWebEngineCore.pyd',
+        'QtWebEngineWidgets.pyd', 'QtWebKit.pyd', 'QtWebKitWidgets.pyd',
         'QtTextToSpeech.pyd', 'QtCharts.pyd', 'QtDataVisualization.pyd',
         'Qt3DCore.pyd', 'Qt3DRender.pyd', 'Qt3DInput.pyd',
         'Qt3DLogic.pyd', 'Qt3DAnimation.pyd', 'Qt3DExtras.pyd',
     ]
     for _pyd in _unneeded_pyds:
-        _p = os.path.join(pyqt6_build, _pyd)
+        _p = os.path.join(pyqt5_build, _pyd)
         if os.path.exists(_p):
             os.remove(_p)
             print(f"✓ Removed {_pyd}")

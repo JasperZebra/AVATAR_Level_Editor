@@ -5,8 +5,8 @@ Updated with FC2 5×5 world grid support
 from time import time
 import math
 import numpy as np
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QVector3D
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QVector3D
 
 # Import from parent package
 import sys
@@ -36,8 +36,8 @@ except ImportError:
 
 # Try to import OpenGL - graceful fallback if not available
 try:
-    from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-    from PyQt6.QtOpenGL import QOpenGLBuffer, QOpenGLShaderProgram, QOpenGLVertexArrayObject, QOpenGLShader
+    from PyQt5.QtWidgets import QOpenGLWidget
+    from PyQt5.QtGui import QOpenGLBuffer, QOpenGLShaderProgram, QOpenGLVertexArrayObject, QOpenGLShader
     import OpenGL.GL as gl
     OPENGL_AVAILABLE = True
 except ImportError:
@@ -112,7 +112,7 @@ class GridRenderer:
                 print("Failed to create 2D VAO")
                 return False
             
-            self.grid_2d_vbo = QOpenGLBuffer(QOpenGLBuffer.Type.VertexBuffer)
+            self.grid_2d_vbo = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
             if not self.grid_2d_vbo.create():
                 print("Failed to create 2D VBO")
                 return False
@@ -134,12 +134,12 @@ class GridRenderer:
             program = QOpenGLShaderProgram()
             
             # Add vertex shader
-            if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, vertex_source):
+            if not program.addShaderFromSourceCode(QOpenGLShader.Vertex, vertex_source):
                 print(f"Vertex shader compilation failed: {program.log()}")
                 return None
             
             # Add fragment shader
-            if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, fragment_source):
+            if not program.addShaderFromSourceCode(QOpenGLShader.Fragment, fragment_source):
                 print(f"Fragment shader compilation failed: {program.log()}")
                 return None
             
@@ -186,7 +186,7 @@ class GridRenderer:
             minor_data, major_data, axis_data = self._generate_2d_grid_data_separated(canvas)
             
             # Create projection matrix that matches Qt's coordinate system
-            from PyQt6.QtGui import QMatrix4x4
+            from PyQt5.QtGui import QMatrix4x4
             projection = QMatrix4x4()
             
             # Convert current view bounds to world coordinates
@@ -516,7 +516,7 @@ class GridRenderer:
                     painter.drawLine(int(start_x), int(start_y), int(end_x), int(end_y))
                 
                 # Grid info
-                painter.setPen(QPen(Qt.GlobalColor.black, 1))
+                painter.setPen(QPen(Qt.black, 1))
                 painter.setFont(QFont("Arial", 9))
                 grid_info = f"FC2 Grid: 5×5 worlds (1024u), 16×16 sectors (64u) | Zoom: {canvas.scale_factor:.2f}x"
                 painter.drawText(10, canvas.height() - 20, grid_info)
@@ -575,7 +575,7 @@ class GridRenderer:
                     painter.drawLine(int(start_x), int(start_y), int(end_x), int(end_y))
                 
                 # Grid info
-                painter.setPen(QPen(Qt.GlobalColor.black, 1))
+                painter.setPen(QPen(Qt.black, 1))
                 painter.setFont(QFont("Arial", 9))
                 grid_info = f"Grid: {grid_world_size} units per square (zoom: {canvas.scale_factor:.2f}x)"
                 painter.drawText(10, canvas.height() - 20, grid_info)
@@ -587,8 +587,8 @@ class GridRenderer:
             painter.drawEllipse(int(origin_x - 3), int(origin_y - 3), 6, 6)
             
             # Draw origin label
-            painter.setPen(QPen(Qt.GlobalColor.black, 1))
-            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            painter.setPen(QPen(Qt.black, 1))
+            painter.setFont(QFont("Arial", 10, QFont.Bold))
             painter.drawText(int(origin_x + 5), int(origin_y - 5), "Origin (0,0)")
             
         except Exception as e:

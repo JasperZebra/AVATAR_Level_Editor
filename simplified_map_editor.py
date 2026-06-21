@@ -9,7 +9,7 @@ if multiprocessing.current_process().name != "MainProcess":
     # Do not import anything else
 else:
     # Safe to import GUI + OpenGL:
-    from PyQt6.QtWidgets import (
+    from PyQt5.QtWidgets import (
         QMainWindow, QWidget, QApplication, QFileDialog,
         QVBoxLayout, QHBoxLayout, QFormLayout,
         QPushButton, QLabel, QGroupBox, QDockWidget,
@@ -20,12 +20,10 @@ else:
         QTextEdit, QMenu, QSlider, QTabBar, QDoubleSpinBox,
         QWidgetAction, QSpinBox
     )
-    from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-    from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QPropertyAnimation
-    from PyQt6.QtGui import (
-        QAction, QColor, QVector3D, QShortcut,
-        QActionGroup, QFont, QPixmap, QPainter, QTransform
-    )
+    from PyQt5.QtWidgets import QOpenGLWidget
+    from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QPropertyAnimation
+    from PyQt5.QtGui import QColor, QVector3D, QFont, QPixmap, QPainter, QTransform
+    from PyQt5.QtWidgets import QAction, QShortcut, QActionGroup
 
     from data_models import (
         Entity, GridConfig, MapInfo, ObjectEntity,
@@ -210,7 +208,7 @@ class ModelPreviewWidget(QOpenGLWidget):
         self._render_plan = None      # (global_scale, [(model, tex, dx,dy,dz, rx,ry,rz, esc, center)])
         self.setMinimumHeight(180)
         self.setMinimumWidth(180)
-        self.setFocusPolicy(Qt.FocusPolicy.WheelFocus)
+        self.setFocusPolicy(Qt.WheelFocus)
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
@@ -784,15 +782,15 @@ class ModelPreviewWidget(QOpenGLWidget):
     # ── Mouse interaction ─────────────────────────────────────────────────
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.LeftButton:
             self._mouse_anchor_global = self.mapToGlobal(event.position().toPoint())
-            self.setCursor(Qt.CursorShape.BlankCursor)
+            self.setCursor(Qt.BlankCursor)
             self.auto_rotate = False
 
     def mouseMoveEvent(self, event):
         if not hasattr(self, '_mouse_anchor_global') or self._mouse_anchor_global is None:
             return
-        if not (event.buttons() & Qt.MouseButton.LeftButton):
+        if not (event.buttons() & Qt.LeftButton):
             return
 
         current_global = self.mapToGlobal(event.position().toPoint())
@@ -805,12 +803,12 @@ class ModelPreviewWidget(QOpenGLWidget):
         self.rotation_y = (self.rotation_y + dx * 0.5) % 360.0
         self.rotation_x = max(-89.0, min(89.0, self.rotation_x + dy * 0.5))
 
-        from PyQt6.QtGui import QCursor
+        from PyQt5.QtGui import QCursor
         QCursor.setPos(self._mouse_anchor_global)
         self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.LeftButton:
             self._mouse_anchor_global = None
             self.unsetCursor()
 
@@ -1197,10 +1195,10 @@ class SimplifiedMapEditor(QMainWindow):
                 "The patch folder is your game directory containing the "
                 "'levels' and/or 'worlds' subdirectories.\n\n"
                 "Would you like to set it now?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes,
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
             )
-            if reply == QMessageBox.StandardButton.Yes:
+            if reply == QMessageBox.Yes:
                 if hasattr(self, 'patch_manager') and self.patch_manager.set_patch_folder():
                     update_worlds_folder(self.patch_manager, self)
                     self.status_bar.showMessage("Patch folder set.", 3000)
@@ -1220,10 +1218,10 @@ class SimplifiedMapEditor(QMainWindow):
                 f"No resource folder has been configured for {game_label}.\n\n"
                 "The resource folder (e.g. Data_Win32) is used to load 3D models in the editor.\n\n"
                 "Would you like to set it now?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes,
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
             )
-            if res_reply == QMessageBox.StandardButton.Yes:
+            if res_reply == QMessageBox.Yes:
                 set_resource_folder(self)
             else:
                 self.status_bar.showMessage(
@@ -1323,16 +1321,16 @@ class SimplifiedMapEditor(QMainWindow):
             self.canvas.showContextMenu(event)
         else:
             # Fallback: create a basic context menu
-            from PyQt6.QtWidgets import QMenu
+            from PyQt5.QtWidgets import QMenu
             menu = QMenu(self.canvas)
             menu.addAction("No enhanced menu available")
             menu.exec(event.globalPosition().toPoint())
 
     def show_welcome_message_updated(self):
         """Show welcome message and open visual level selector when Start Modding is pressed"""
-        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QPushButton,
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QLabel, QPushButton,
                                      QHBoxLayout, QCheckBox, QScrollArea, QFrame)
-        from PyQt6.QtGui import QIcon
+        from PyQt5.QtGui import QIcon
 
         # Create custom dialog
         dialog = QDialog(self)
@@ -1467,12 +1465,12 @@ class SimplifiedMapEditor(QMainWindow):
         content_label = QLabel(content_text)
         content_label.setWordWrap(True)
         content_label.setStyleSheet("font-size: 13px; line-height: 1.4;")
-        content_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        content_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
         scroll_area = QScrollArea()
         scroll_area.setWidget(content_label)
         scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setFrameShape(QFrame.NoFrame)
         layout.addWidget(scroll_area, stretch=1)
 
         dont_show_checkbox = QCheckBox("Don't show this welcome screen again")
@@ -1525,7 +1523,7 @@ class SimplifiedMapEditor(QMainWindow):
                 
                 # Auto-open level selector if patch folder is configured
                 if hasattr(self, 'patch_manager') and self.patch_manager.is_configured():
-                    from PyQt6.QtCore import QTimer
+                    from PyQt5.QtCore import QTimer
                     QTimer.singleShot(500, lambda: self.select_level())
                 return
             
@@ -1537,7 +1535,7 @@ class SimplifiedMapEditor(QMainWindow):
 
     def show_about(self):
         """Show about dialog with custom size"""
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
         
         # Create custom dialog
         dialog = QDialog(self)
@@ -1753,8 +1751,8 @@ class SimplifiedMapEditor(QMainWindow):
         view_menu.addSeparator()
 
         # Lighting controls
-        from PyQt6.QtWidgets import QSlider
-        from PyQt6.QtCore import Qt as _Qt
+        from PyQt5.QtWidgets import QSlider
+        from PyQt5.QtCore import Qt as _Qt
         _light_row = QWidget()
         _light_row.setMinimumWidth(300)
         _light_vbox = QVBoxLayout(_light_row)
@@ -1784,7 +1782,7 @@ class SimplifiedMapEditor(QMainWindow):
         _az_row.addWidget(_up_btn)
         _light_vbox.addLayout(_az_row)
 
-        self._light_angle_slider = QSlider(_Qt.Orientation.Horizontal)
+        self._light_angle_slider = QSlider(_Qt.Horizontal)
         self._light_angle_slider.setRange(0, 360)
         self._light_angle_slider.setValue(0)
         self._light_angle_slider.setToolTip("Drag to rotate the sun horizontally")
@@ -1805,14 +1803,14 @@ class SimplifiedMapEditor(QMainWindow):
         _el_row.addWidget(self._light_pitch_spin)
         _light_vbox.addLayout(_el_row)
 
-        self._light_pitch_slider = QSlider(_Qt.Orientation.Horizontal)
+        self._light_pitch_slider = QSlider(_Qt.Horizontal)
         self._light_pitch_slider.setRange(0, 360)
         self._light_pitch_slider.setValue(270)
         self._light_pitch_slider.setToolTip("Drag to change sun height")
         _light_vbox.addWidget(self._light_pitch_slider)
 
         # ── Day / night cycle ────────────────────────────────────────────────
-        from PyQt6.QtWidgets import QCheckBox
+        from PyQt5.QtWidgets import QCheckBox
         _dn_hdr = QLabel("— Day / Night cycle —")
         _dn_hdr.setStyleSheet("color:#888; margin-top:6px;")
         _light_vbox.addWidget(_dn_hdr)
@@ -1837,7 +1835,7 @@ class SimplifiedMapEditor(QMainWindow):
         _t_row.addWidget(self._daynight_time_label)
         _light_vbox.addLayout(_t_row)
 
-        self._daynight_time_slider = QSlider(_Qt.Orientation.Horizontal)
+        self._daynight_time_slider = QSlider(_Qt.Horizontal)
         self._daynight_time_slider.setRange(0, 1439)   # minutes in a day
         self._daynight_time_slider.setValue(720)        # noon
         self._daynight_time_slider.setToolTip("Time of day (00:00–23:59)")
@@ -1848,7 +1846,7 @@ class SimplifiedMapEditor(QMainWindow):
 
         def _on_dn_enable(state):
             if hasattr(self, 'canvas'):
-                self.canvas.set_day_night_enabled(state == _Qt.CheckState.Checked.value
+                self.canvas.set_day_night_enabled(state == _Qt.Checked.value
                                                   if isinstance(state, int) else bool(state))
 
         def _on_dn_play(checked):
@@ -1874,7 +1872,7 @@ class SimplifiedMapEditor(QMainWindow):
 
         # While playing, the canvas advances time itself; poll it so the slider +
         # clock follow along (block signals to avoid a feedback loop).
-        from PyQt6.QtCore import QTimer as _QTimer
+        from PyQt5.QtCore import QTimer as _QTimer
         self._daynight_ui_timer = _QTimer(self)
         self._daynight_ui_timer.setInterval(200)
 
@@ -2025,9 +2023,9 @@ class SimplifiedMapEditor(QMainWindow):
 
     def create_side_panel(self):
         """Create a dock widget for the side panel controls - 2D Editor"""
-        from PyQt6.QtWidgets import QTabWidget, QScrollArea
+        from PyQt5.QtWidgets import QTabWidget, QScrollArea
         dock = QDockWidget("Level Information", self)
-        dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea)
+        dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
 
         dock_widget = QWidget()
         dock_layout = QVBoxLayout(dock_widget)
@@ -2081,7 +2079,7 @@ class SimplifiedMapEditor(QMainWindow):
         ent_lay.setContentsMargins(4, 6, 4, 4)
         ent_lay.setSpacing(2)
         header_label = QLabel("Entity type color coding:")
-        header_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        header_label.setFont(QFont("Arial", 10, QFont.Bold))
         header_label.setStyleSheet("margin-bottom:4px;")
         ent_lay.addWidget(header_label)
         self.entity_colors_header = header_label
@@ -2267,7 +2265,7 @@ class SimplifiedMapEditor(QMainWindow):
             lbl_w.setFixedWidth(72)
             row_l.addWidget(lbl_w)
             dec_btn = QPushButton("−"); dec_btn.setFixedWidth(24)
-            slider  = QSlider(Qt.Orientation.Horizontal)
+            slider  = QSlider(Qt.Horizontal)
             slider.setRange(1, 200)
             slider.setValue(default)
             inc_btn = QPushButton("+"); inc_btn.setFixedWidth(24)
@@ -2320,7 +2318,7 @@ class SimplifiedMapEditor(QMainWindow):
         self._te_panel_size_lbl.setFixedWidth(68)
         size_row.addWidget(self._te_panel_size_lbl)
         sz_dec = QPushButton("−"); sz_dec.setFixedWidth(24)
-        self._te_panel_size_slider = QSlider(Qt.Orientation.Horizontal)
+        self._te_panel_size_slider = QSlider(Qt.Horizontal)
         self._te_panel_size_slider.setRange(1, 150)
         self._te_panel_size_slider.setValue(20)
         sz_inc = QPushButton("+"); sz_inc.setFixedWidth(24)
@@ -2344,7 +2342,7 @@ class SimplifiedMapEditor(QMainWindow):
         self._te_panel_str_lbl.setFixedWidth(68)
         str_row.addWidget(self._te_panel_str_lbl)
         str_dec = QPushButton("−"); str_dec.setFixedWidth(24)
-        self._te_panel_str_slider = QSlider(Qt.Orientation.Horizontal)
+        self._te_panel_str_slider = QSlider(Qt.Horizontal)
         self._te_panel_str_slider.setRange(1, 100)
         self._te_panel_str_slider.setValue(30)
         str_inc = QPushButton("+"); str_inc.setFixedWidth(24)
@@ -2427,9 +2425,9 @@ class SimplifiedMapEditor(QMainWindow):
         paint_lay.setContentsMargins(4, 6, 4, 4)
         paint_lay.setSpacing(4)
 
-        from PyQt6.QtWidgets import QButtonGroup, QSizePolicy, QScrollArea, QGridLayout
-        from PyQt6.QtGui import QImage, QPixmap, QIcon
-        from PyQt6.QtCore import QSize
+        from PyQt5.QtWidgets import QButtonGroup, QSizePolicy, QScrollArea, QGridLayout
+        from PyQt5.QtGui import QImage, QPixmap, QIcon
+        from PyQt5.QtCore import QSize
         import numpy as _np_tp
         import os as _os_tp
 
@@ -2572,7 +2570,7 @@ class SimplifiedMapEditor(QMainWindow):
                 img = img.convert('RGBA').resize((_THUMB_SZ, _THUMB_SZ), _PIL.Resampling.NEAREST)
                 arr = _np_tp.ascontiguousarray(_np_tp.array(img))
                 qi  = QImage(arr.data, _THUMB_SZ, _THUMB_SZ,
-                             _THUMB_SZ * 4, QImage.Format.Format_RGBA8888)
+                             _THUMB_SZ * 4, QImage.Format_RGBA8888)
                 return QPixmap.fromImage(qi.copy())
             except Exception:
                 return None
@@ -2644,7 +2642,7 @@ class SimplifiedMapEditor(QMainWindow):
 
         cat_scroll = QScrollArea()
         cat_scroll.setWidgetResizable(True)
-        cat_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        cat_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         cat_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         cat_grid_w  = QWidget()
         cat_grid    = QGridLayout(cat_grid_w)
@@ -2699,7 +2697,7 @@ class SimplifiedMapEditor(QMainWindow):
         self._tp_tile_lbl = QLabel("Tile: 2.0m"); self._tp_tile_lbl.setFixedWidth(68)
         tile_row.addWidget(self._tp_tile_lbl)
         _tile_dec = QPushButton("−"); _tile_dec.setFixedWidth(24)
-        self._tp_tile_slider = QSlider(Qt.Orientation.Horizontal)
+        self._tp_tile_slider = QSlider(Qt.Horizontal)
         self._tp_tile_slider.setRange(1, 32); self._tp_tile_slider.setValue(4)
         _tile_inc = QPushButton("+"); _tile_inc.setFixedWidth(24)
         tile_row.addWidget(_tile_dec)
@@ -2740,7 +2738,7 @@ class SimplifiedMapEditor(QMainWindow):
 
         _gray_val_lbl = QLabel("Value: 128")
         _gray_val_lbl.setStyleSheet("font-size:10px; color:#aaa;")
-        _gray_slider = QSlider(Qt.Orientation.Horizontal)
+        _gray_slider = QSlider(Qt.Horizontal)
         _gray_slider.setRange(0, 255)
         _gray_slider.setValue(128)
 
@@ -2779,7 +2777,7 @@ class SimplifiedMapEditor(QMainWindow):
         self._tp_size_lbl = QLabel("Size: 20"); self._tp_size_lbl.setFixedWidth(68)
         tp_size_row.addWidget(self._tp_size_lbl)
         tp_sz_dec = QPushButton("−"); tp_sz_dec.setFixedWidth(24)
-        self._tp_size_slider = QSlider(Qt.Orientation.Horizontal)
+        self._tp_size_slider = QSlider(Qt.Horizontal)
         self._tp_size_slider.setRange(1, 150); self._tp_size_slider.setValue(20)
         tp_sz_inc = QPushButton("+"); tp_sz_inc.setFixedWidth(24)
         tp_size_row.addWidget(tp_sz_dec)
@@ -2791,7 +2789,7 @@ class SimplifiedMapEditor(QMainWindow):
         self._tp_str_lbl = QLabel("Str: 30%"); self._tp_str_lbl.setFixedWidth(68)
         tp_str_row.addWidget(self._tp_str_lbl)
         tp_str_dec = QPushButton("−"); tp_str_dec.setFixedWidth(24)
-        self._tp_str_slider = QSlider(Qt.Orientation.Horizontal)
+        self._tp_str_slider = QSlider(Qt.Horizontal)
         self._tp_str_slider.setRange(1, 100); self._tp_str_slider.setValue(30)
         tp_str_inc = QPushButton("+"); tp_str_inc.setFixedWidth(24)
         tp_str_row.addWidget(tp_str_dec)
@@ -2803,7 +2801,7 @@ class SimplifiedMapEditor(QMainWindow):
         self._tp_fth_lbl = QLabel("Feather: 50%"); self._tp_fth_lbl.setFixedWidth(68)
         tp_fth_row.addWidget(self._tp_fth_lbl)
         tp_fth_dec = QPushButton("−"); tp_fth_dec.setFixedWidth(24)
-        self._tp_fth_slider = QSlider(Qt.Orientation.Horizontal)
+        self._tp_fth_slider = QSlider(Qt.Horizontal)
         self._tp_fth_slider.setRange(0, 100); self._tp_fth_slider.setValue(50)
         tp_fth_inc = QPushButton("+"); tp_fth_inc.setFixedWidth(24)
         tp_fth_row.addWidget(tp_fth_dec)
@@ -2895,7 +2893,7 @@ class SimplifiedMapEditor(QMainWindow):
         self.right_tabs = right_tabs
 
         dock.setWidget(right_tabs)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        self.addDockWidget(Qt.RightDockWidgetArea, dock)
         self.controls_dock = dock
         dock.setVisible(True)
         dock.show()
@@ -2937,8 +2935,8 @@ class SimplifiedMapEditor(QMainWindow):
 
     # def setup_cache_menu(self):
     #     """Setup cache management menu"""
-    #     from PyQt6.QtWidgets import QMessageBox
-    #     from PyQt6.QtGui import QAction
+    #     from PyQt5.QtWidgets import QMessageBox
+    #     from PyQt5.QtGui import QAction
         
     #     cache_menu = self.menuBar().addMenu("Cache")
         
@@ -3026,10 +3024,10 @@ class SimplifiedMapEditor(QMainWindow):
             self,
             "Clear All Caches",
             "This will clear all cached data. Cache will be rebuilt on next load.\n\nContinue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
         
-        if reply == QMessageBox.StandardButton.Yes:
+        if reply == QMessageBox.Yes:
             self.cache.clear_all_caches()
             QMessageBox.information(self, "Success", "All caches cleared!")
 
@@ -3039,10 +3037,10 @@ class SimplifiedMapEditor(QMainWindow):
             self,
             "Clear Disk Cache",
             "This will clear all cached terrain images and temp files.\n\nContinue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
         
-        if reply == QMessageBox.StandardButton.Yes:
+        if reply == QMessageBox.Yes:
             self.cache.clear_disk_cache()
             QMessageBox.information(self, "Success", "Disk cache cleared!")
 
@@ -3204,11 +3202,11 @@ class SimplifiedMapEditor(QMainWindow):
         User chooses a specific .fcb file or a folder to scan."""
         print("[EntityLib] open_convert_entitylibrary called")
         import os
-        from PyQt6.QtWidgets import (
+        from PyQt5.QtWidgets import (
             QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPlainTextEdit,
             QPushButton, QProgressBar, QFileDialog, QMessageBox
         )
-        from PyQt6.QtCore import QThread, pyqtSignal
+        from PyQt5.QtCore import QThread, pyqtSignal
 
         print(f"[EntityLib] can_convert_fcb = {self.file_converter.can_convert_fcb}")
         if not self.file_converter.can_convert_fcb:
@@ -3225,9 +3223,9 @@ class SimplifiedMapEditor(QMainWindow):
         msg = QMessageBox(self)
         msg.setWindowTitle("Convert Entity Library FCB")
         msg.setText("Select an entitylibrary.fcb or entitylibrary_full.fcb file,\nor a folder to scan for one:")
-        btn_file   = msg.addButton("Select File...",   QMessageBox.ButtonRole.ActionRole)
-        btn_folder = msg.addButton("Select Folder...", QMessageBox.ButtonRole.ActionRole)
-        msg.addButton(QMessageBox.StandardButton.Cancel)
+        btn_file   = msg.addButton("Select File...",   QMessageBox.ActionRole)
+        btn_folder = msg.addButton("Select Folder...", QMessageBox.ActionRole)
+        msg.addButton(QMessageBox.Cancel)
         msg.exec()
 
         clicked = msg.clickedButton()
@@ -3242,7 +3240,7 @@ class SimplifiedMapEditor(QMainWindow):
         elif clicked == btn_folder:
             path = QFileDialog.getExistingDirectory(
                 self, "Select Folder Containing Entity Library FCB", start_dir,
-                QFileDialog.Option.ShowDirsOnly)
+                QFileDialog.ShowDirsOnly)
             if not path:
                 print("[EntityLib] No folder selected, returning")
                 return
@@ -3299,8 +3297,8 @@ class SimplifiedMapEditor(QMainWindow):
         info_lines.append(f"\nConvert {len(needs_convert)} file(s) now?")
         reply = QMessageBox.question(self, "Convert Entity Library",
                                      "\n".join(info_lines),
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply != QMessageBox.StandardButton.Yes:
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply != QMessageBox.Yes:
             print("[EntityLib] User said No")
             return
 
@@ -3413,11 +3411,11 @@ class SimplifiedMapEditor(QMainWindow):
         """Convert entitylibrary .fcb.converted.xml files back to .fcb."""
         print("[EntityLib XML→FCB] open_convert_entitylibrary_xml_to_fcb called")
         import os
-        from PyQt6.QtWidgets import (
+        from PyQt5.QtWidgets import (
             QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPlainTextEdit,
             QPushButton, QProgressBar, QFileDialog, QMessageBox
         )
-        from PyQt6.QtCore import QThread, pyqtSignal
+        from PyQt5.QtCore import QThread, pyqtSignal
 
         if not self.file_converter.can_convert_fcb:
             QMessageBox.warning(self, "Convert Entity Library XML to FCB",
@@ -3431,9 +3429,9 @@ class SimplifiedMapEditor(QMainWindow):
         msg = QMessageBox(self)
         msg.setWindowTitle("Convert Entity Library XML to FCB")
         msg.setText("Select an entitylibrary .fcb.converted.xml file,\nor a folder to scan for one:")
-        btn_file   = msg.addButton("Select File...",   QMessageBox.ButtonRole.ActionRole)
-        btn_folder = msg.addButton("Select Folder...", QMessageBox.ButtonRole.ActionRole)
-        msg.addButton(QMessageBox.StandardButton.Cancel)
+        btn_file   = msg.addButton("Select File...",   QMessageBox.ActionRole)
+        btn_folder = msg.addButton("Select Folder...", QMessageBox.ActionRole)
+        msg.addButton(QMessageBox.Cancel)
         msg.exec()
 
         _allowed_xml = {'entitylibrary.fcb.converted.xml', 'entitylibrary_full.fcb.converted.xml'}
@@ -3453,7 +3451,7 @@ class SimplifiedMapEditor(QMainWindow):
         elif clicked == btn_folder:
             path = QFileDialog.getExistingDirectory(
                 self, "Select Folder Containing Entity Library XML", start_dir,
-                QFileDialog.Option.ShowDirsOnly)
+                QFileDialog.ShowDirsOnly)
             if not path:
                 return
             mode, selected_path = 'folder', path
@@ -3489,8 +3487,8 @@ class SimplifiedMapEditor(QMainWindow):
         info_lines.append(f"\nConvert {len(xml_files)} file(s) to FCB now?")
         reply = QMessageBox.question(self, "Convert Entity Library XML to FCB",
                                      "\n".join(info_lines),
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply != QMessageBox.StandardButton.Yes:
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply != QMessageBox.Yes:
             return
 
         class _Worker(QThread):
@@ -3608,7 +3606,7 @@ class SimplifiedMapEditor(QMainWindow):
         """Open the Entity Library Browser dialog."""
         from entity_library_browser import EntityLibraryBrowserDialog
         dlg = EntityLibraryBrowserDialog(self, file_path=file_path)
-        dlg.setWindowModality(Qt.WindowModality.NonModal)
+        dlg.setWindowModality(Qt.NonModal)
         dlg.show()
 
     def open_terrain_editor(self):
@@ -4067,7 +4065,7 @@ class SimplifiedMapEditor(QMainWindow):
 
     def show_level_selection_dialog(self, level_data, prefer_complete=True):
         """Show dialog for user to select which level to load - ENHANCED"""
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QPushButton, QLabel
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QPushButton, QLabel
         
         dialog = QDialog(self)
         dialog.setWindowTitle(f"Select Level to Load ({len(level_data)} found)")
@@ -4118,7 +4116,7 @@ class SimplifiedMapEditor(QMainWindow):
             item_text += f"\n    {' | '.join(status_parts)}"
             
             item = QListWidgetItem(item_text)
-            item.setData(Qt.ItemDataRole.UserRole, level_info)
+            item.setData(Qt.UserRole, level_info)
             
             # Color coding
             if level_info['complete']:
@@ -4722,10 +4720,10 @@ class SimplifiedMapEditor(QMainWindow):
                     "Patch Folder Not Set",
                     "No patch folder is configured. Would you like to set one now?\n\n"
                     "The patch folder should contain 'worlds' and 'levels' subdirectories.",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                    QMessageBox.Yes | QMessageBox.No
                 )
                 
-                if reply == QMessageBox.StandardButton.Yes:
+                if reply == QMessageBox.Yes:
                     if not self.patch_manager.set_patch_folder():
                         print("User cancelled patch folder selection")
                         return
@@ -4849,7 +4847,7 @@ class SimplifiedMapEditor(QMainWindow):
             result = dialog.exec()
             print(f"Level selector result: {result}")
             
-            if result == QDialog.DialogCode.Accepted and hasattr(dialog, 'selected_level') and dialog.selected_level:
+            if result == QDialog.Accepted and hasattr(dialog, 'selected_level') and dialog.selected_level:
                 level_dict = dialog.selected_level
                 print(f"Loading selected level: {level_dict.get('name')}")
                 
@@ -4930,7 +4928,7 @@ class SimplifiedMapEditor(QMainWindow):
         the MAIN load progress dialog so it stays responsive. No separate window —
         the progress shows inside the main 'Loading Complete Level' dialog. Returns
         the produced .converted.xml path (or None)."""
-        from PyQt6.QtCore import QThread
+        from PyQt5.QtCore import QThread
         import time
         import archetype_library
 
@@ -6653,10 +6651,10 @@ class SimplifiedMapEditor(QMainWindow):
             self,
             "Load Level Objects",
             message,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
         
-        if reply != QMessageBox.StandardButton.Yes:
+        if reply != QMessageBox.Yes:
             return
         
         # Store worldsectors path
@@ -7034,10 +7032,10 @@ class SimplifiedMapEditor(QMainWindow):
             "4. Clean up temporary files\n\n"
             "Make sure the game is completely closed before proceeding!\n\n"
             "Continue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
 
-        if reply == QMessageBox.StandardButton.No:
+        if reply == QMessageBox.No:
             return
 
         progress_dialog = EnhancedProgressDialog("Saving Level", self, game_mode=self.game_mode)
@@ -7812,10 +7810,10 @@ class SimplifiedMapEditor(QMainWindow):
             f"Found {len(backup_files)} backup files.\n\n"
             f"This will restore the original FCB files and may overwrite any changes.\n\n"
             f"Continue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
         
-        if reply == QMessageBox.StandardButton.Yes:
+        if reply == QMessageBox.Yes:
             restored_count = self.file_converter.restore_from_backups(backup_files)
             QMessageBox.information(
                 self,
@@ -8029,7 +8027,7 @@ class SimplifiedMapEditor(QMainWindow):
             # Step 2: Convert .converted.xml back to .data.fcb
             progress_dialog = QProgressDialog("Converting XML to FCB, Please Wait.", "Cancel", 0, 100, self)
             progress_dialog.setWindowTitle("Saving WorldSectors")
-            progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            progress_dialog.setWindowModality(Qt.WindowModal)
             progress_dialog.setMinimumDuration(0)
             progress_dialog.setValue(0)
             
@@ -8427,7 +8425,7 @@ class SimplifiedMapEditor(QMainWindow):
         if not violations:
             return
         
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QTextEdit
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QTextEdit
         
         dialog = QDialog(self)
         dialog.setWindowTitle(f"Sector Boundary Violations ({len(violations)} found)")
@@ -8457,7 +8455,7 @@ class SimplifiedMapEditor(QMainWindow):
                         f"Distance outside: {distance:.1f} units")
             
             item = QListWidgetItem(item_text)
-            item.setData(Qt.ItemDataRole.UserRole, entity)  # Store entity reference
+            item.setData(Qt.UserRole, entity)  # Store entity reference
             
             # Color code by severity
             if distance > 50:
@@ -8496,7 +8494,7 @@ class SimplifiedMapEditor(QMainWindow):
         """Zoom to the selected entity in the violations list"""
         current_item = violation_list.currentItem()
         if current_item:
-            entity = current_item.data(Qt.ItemDataRole.UserRole)
+            entity = current_item.data(Qt.UserRole)
             if entity:
                 # Use existing zoom to entity method
                 if hasattr(self, 'zoom_to_entity'):
@@ -8516,7 +8514,7 @@ class SimplifiedMapEditor(QMainWindow):
         if not current_item:
             return
         
-        entity = current_item.data(Qt.ItemDataRole.UserRole)
+        entity = current_item.data(Qt.UserRole)
         if not entity:
             return
         
@@ -8540,10 +8538,10 @@ class SimplifiedMapEditor(QMainWindow):
             self,
             "Move Entity",
             f"Move {entity.name} from ({entity.x:.1f}, {entity.y:.1f}) to sector center ({center_x:.1f}, {center_y:.1f})?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
         
-        if reply == QMessageBox.StandardButton.Yes:
+        if reply == QMessageBox.Yes:
             # Move entity
             entity.x = center_x
             entity.y = center_y
@@ -8644,9 +8642,9 @@ class SimplifiedMapEditor(QMainWindow):
                 reply = QMessageBox.question(
                     self, "Folder Already Exists",
                     f"Mass export folder for '{level_name}' already exists.\n\nOverwrite?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
+                    QMessageBox.Yes | QMessageBox.Cancel
                 )
-                if reply != QMessageBox.StandardButton.Yes:
+                if reply != QMessageBox.Yes:
                     return
                 shutil.rmtree(output_root)
 
@@ -8654,7 +8652,7 @@ class SimplifiedMapEditor(QMainWindow):
                 f"Mass exporting '{level_name}'...", "Cancel", 0, len(self.entities), self
             )
             progress.setWindowTitle("Mass Export")
-            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.setWindowModality(Qt.WindowModal)
             progress.setMinimumDuration(0)
             progress.setValue(0)
             QApplication.processEvents()
@@ -9701,7 +9699,7 @@ class SimplifiedMapEditor(QMainWindow):
 
     def move_entity_to_sector_manually(self, entity):
         """Move entity to a different sector chosen by user"""
-        from PyQt6.QtWidgets import QInputDialog, QMessageBox
+        from PyQt5.QtWidgets import QInputDialog, QMessageBox
         
         if not entity:
             QMessageBox.warning(self, "No Entity", "No entity selected to move.")
@@ -9909,10 +9907,10 @@ class SimplifiedMapEditor(QMainWindow):
             f"Target: MissionLayer {target_layer_index + 1} of {len(mission_layers)}\n\n"
             f"From:\n{current_file}\n\n"
             f"To:\n{target_file}",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
         
-        if reply != QMessageBox.StandardButton.Yes:
+        if reply != QMessageBox.Yes:
             return False
         
         # Perform the move with chosen layer
@@ -10279,8 +10277,8 @@ class SimplifiedMapEditor(QMainWindow):
         
         def enhanced_showContextMenu(event):
             """Enhanced context menu with sector move option"""
-            from PyQt6.QtWidgets import QMenu
-            from PyQt6.QtCore import Qt
+            from PyQt5.QtWidgets import QMenu
+            from PyQt5.QtCore import Qt
             
             menu = QMenu(self.canvas)
             
@@ -10471,9 +10469,9 @@ class SimplifiedMapEditor(QMainWindow):
     def create_entity_browser(self):
         """Create a dock widget for browsing and organizing entities"""
         entity_dock = QDockWidget("Entity Browser", self)
-        entity_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
-        entity_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable |
-                                QDockWidget.DockWidgetFeature.DockWidgetFloatable)
+        entity_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        entity_dock.setFeatures(QDockWidget.DockWidgetMovable |
+                                QDockWidget.DockWidgetFloatable)
 
         dock_widget = QWidget()
         dock_layout = QVBoxLayout(dock_widget)
@@ -10490,7 +10488,7 @@ class SimplifiedMapEditor(QMainWindow):
         dock_layout.addLayout(filter_layout)
 
         # Tab widget
-        from PyQt6.QtWidgets import QTabWidget
+        from PyQt5.QtWidgets import QTabWidget
         self.browser_tabs = QTabWidget()
         self.browser_tabs.setDocumentMode(True)
         dock_layout.addWidget(self.browser_tabs)
@@ -10508,11 +10506,11 @@ class SimplifiedMapEditor(QMainWindow):
         self.entity_tree.setColumnWidth(2, 130)
         self.entity_tree.setColumnWidth(3, 110)
         self.entity_tree.setAlternatingRowColors(False)
-        self.entity_tree.setSelectionMode(QTreeWidget.SelectionMode.ExtendedSelection)
+        self.entity_tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         self.entity_tree.itemSelectionChanged.connect(self.on_entity_tree_selection_changed)
         self.entity_tree.itemDoubleClicked.connect(self.on_entity_tree_double_clicked)
         self.entity_tree.itemClicked.connect(self.on_entity_tree_item_clicked)
-        self.entity_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.entity_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.entity_tree.customContextMenuRequested.connect(self.on_entity_tree_context_menu)
         entity_tab_layout.addWidget(self.entity_tree)
 
@@ -10547,7 +10545,7 @@ class SimplifiedMapEditor(QMainWindow):
         self.mission_layer_tree.setColumnWidth(1, 80)
         self.mission_layer_tree.setColumnWidth(2, 120)
         self.mission_layer_tree.setAlternatingRowColors(False)
-        self.mission_layer_tree.setSelectionMode(QTreeWidget.SelectionMode.ExtendedSelection)
+        self.mission_layer_tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         self.mission_layer_tree.itemSelectionChanged.connect(self.on_mission_layer_tree_selection_changed)
         self.mission_layer_tree.itemDoubleClicked.connect(self.on_entity_tree_double_clicked)
         mission_tab_layout.addWidget(self.mission_layer_tree)
@@ -10565,7 +10563,7 @@ class SimplifiedMapEditor(QMainWindow):
         self.sequences_tree.setColumnWidth(0, 220)
         self.sequences_tree.setColumnWidth(1, 60)
         self.sequences_tree.setAlternatingRowColors(False)
-        self.sequences_tree.setSelectionMode(QTreeWidget.SelectionMode.SingleSelection)
+        self.sequences_tree.setSelectionMode(QTreeWidget.SingleSelection)
         self.sequences_tree.itemSelectionChanged.connect(self._on_sequence_selected)
         seq_tab_layout.addWidget(self.sequences_tree)
 
@@ -10584,7 +10582,7 @@ class SimplifiedMapEditor(QMainWindow):
         self._seq_reset_btn.setEnabled(False)
         self._seq_reset_btn.clicked.connect(self._movie_preview_reset)
         self._seq_time_label = QLabel("")
-        self._seq_time_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._seq_time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         seq_ctrl_layout.addWidget(self._seq_play_btn)
         seq_ctrl_layout.addWidget(self._seq_stop_btn)
         seq_ctrl_layout.addWidget(self._seq_reset_btn)
@@ -10604,7 +10602,7 @@ class SimplifiedMapEditor(QMainWindow):
         collapse_btn.clicked.connect(self._browser_collapse_all)
         corner_layout.addWidget(expand_btn)
         corner_layout.addWidget(collapse_btn)
-        self.browser_tabs.setCornerWidget(corner_widget, Qt.Corner.TopRightCorner)
+        self.browser_tabs.setCornerWidget(corner_widget, Qt.TopRightCorner)
 
         # Populate mission layer tree when that tab is made active
         self.browser_tabs.currentChanged.connect(self._on_browser_tab_changed)
@@ -10612,7 +10610,7 @@ class SimplifiedMapEditor(QMainWindow):
         entity_dock.setWidget(dock_widget)
         entity_dock.setMinimumWidth(400)
         entity_dock.setMaximumWidth(500)
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, entity_dock)
+        self.addDockWidget(Qt.LeftDockWidgetArea, entity_dock)
         self.entity_browser_dock = entity_dock
 
         self.update_entity_tree()
@@ -10717,7 +10715,7 @@ class SimplifiedMapEditor(QMainWindow):
                     item.setText(0, display_name)
                     item.setText(1, entity_type)
                     item.setText(2, f"({entity.x:.0f}, {entity.y:.0f}, {entity.z:.0f})")
-                    item.setData(0, Qt.ItemDataRole.UserRole, entity)
+                    item.setData(0, Qt.UserRole, entity)
                     self._set_item_theme_color(item)
                     entity_count += 1
 
@@ -10733,7 +10731,7 @@ class SimplifiedMapEditor(QMainWindow):
         """Mirror entity-tree selection logic for the mission layer tree."""
         selected_entities = []
         for item in self.mission_layer_tree.selectedItems():
-            entity = item.data(0, Qt.ItemDataRole.UserRole)
+            entity = item.data(0, Qt.UserRole)
             if entity:
                 selected_entities.append(entity)
 
@@ -10776,7 +10774,7 @@ class SimplifiedMapEditor(QMainWindow):
         for seq in self.movie_data.sequences:
             dur_str = f"{seq.duration():.1f}s"
             top = QTreeWidgetItem([seq.name, dur_str])
-            top.setData(0, Qt.ItemDataRole.UserRole, seq.name)
+            top.setData(0, Qt.UserRole, seq.name)
             # Child rows show participating entity names
             for seq_node in seq.nodes:
                 nd = self.movie_data.node_defs.get(seq_node.node_id)
@@ -10786,7 +10784,7 @@ class SimplifiedMapEditor(QMainWindow):
                 child = QTreeWidgetItem([f"  {node_name}", f"tracks:{track_str}"])
                 child.setForeground(0, QColor(180, 180, 180))
                 # Store node_id so _on_sequence_selected can filter to this node
-                child.setData(0, Qt.ItemDataRole.UserRole + 1, seq_node.node_id)
+                child.setData(0, Qt.UserRole + 1, seq_node.node_id)
                 top.addChild(child)
             self.sequences_tree.addTopLevelItem(top)
 
@@ -10806,13 +10804,13 @@ class SimplifiedMapEditor(QMainWindow):
 
         if parent is not None:
             # Child item — a specific node inside a sequence
-            seq_name = parent.data(0, Qt.ItemDataRole.UserRole)
-            node_id  = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            seq_name = parent.data(0, Qt.UserRole)
+            node_id  = item.data(0, Qt.UserRole + 1)
             self.selected_movie_sequence = seq_name
             self.selected_movie_node_id  = node_id
         else:
             # Top-level sequence item — show all nodes
-            seq_name = item.data(0, Qt.ItemDataRole.UserRole)
+            seq_name = item.data(0, Qt.UserRole)
             self.selected_movie_sequence = seq_name
             self.selected_movie_node_id  = None
 
@@ -10920,9 +10918,9 @@ class SimplifiedMapEditor(QMainWindow):
     def create_model_preview_dock(self):
         """Create a dock widget with a 3D model preview below the entity browser."""
         preview_dock = QDockWidget("Model Preview", self)
-        preview_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
-        preview_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable |
-                                 QDockWidget.DockWidgetFeature.DockWidgetFloatable)
+        preview_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        preview_dock.setFeatures(QDockWidget.DockWidgetMovable |
+                                 QDockWidget.DockWidgetFloatable)
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -10935,7 +10933,7 @@ class SimplifiedMapEditor(QMainWindow):
 
         # Label showing entity name / model status
         self.model_preview_label = QLabel("No entity selected")
-        self.model_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.model_preview_label.setAlignment(Qt.AlignCenter)
         self.model_preview_label.setWordWrap(True)
         self.model_preview_label.setMaximumHeight(36)
         layout.addWidget(self.model_preview_label)
@@ -10944,8 +10942,8 @@ class SimplifiedMapEditor(QMainWindow):
         preview_dock.setMinimumWidth(400)
         preview_dock.setMaximumWidth(500)
 
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, preview_dock)
-        self.splitDockWidget(self.entity_browser_dock, preview_dock, Qt.Orientation.Vertical)
+        self.addDockWidget(Qt.LeftDockWidgetArea, preview_dock)
+        self.splitDockWidget(self.entity_browser_dock, preview_dock, Qt.Vertical)
 
         self.model_preview_dock = preview_dock
         return preview_dock
@@ -11095,7 +11093,7 @@ class SimplifiedMapEditor(QMainWindow):
         # Filter out group items (which don't have entity data)
         selected_entities = []
         for item in selected_items:
-            entity = item.data(0, Qt.ItemDataRole.UserRole)
+            entity = item.data(0, Qt.UserRole)
             if entity:
                 selected_entities.append(entity)
         
@@ -11167,7 +11165,7 @@ class SimplifiedMapEditor(QMainWindow):
         if not item:
             return
         col = self.entity_tree.columnAt(pos.x())
-        from PyQt6.QtWidgets import QMenu as _QMenu
+        from PyQt5.QtWidgets import QMenu as _QMenu
         menu = _QMenu(self)
         if col == 1:
             id_text = item.text(1)
@@ -11187,7 +11185,7 @@ class SimplifiedMapEditor(QMainWindow):
     def on_entity_tree_double_clicked(self, item, column):
         """Enhanced double-click handler that shows gizmo and centers view"""
         # Get the entity
-        entity = item.data(0, Qt.ItemDataRole.UserRole)
+        entity = item.data(0, Qt.UserRole)
         if not entity:
             return
         
@@ -11592,7 +11590,7 @@ class SimplifiedMapEditor(QMainWindow):
             item.setText(1, entity.id)
             item.setText(2, f"({entity.x:.1f}, {entity.y:.1f}, {entity.z:.1f})")
             item.setText(3, self._get_entity_angles_text(entity))
-            item.setData(0, Qt.ItemDataRole.UserRole, entity)
+            item.setData(0, Qt.UserRole, entity)
 
             # Theme-aware text color
             self._set_item_theme_color(item)
@@ -11634,7 +11632,7 @@ class SimplifiedMapEditor(QMainWindow):
         
         # Add header
         header_label = QLabel("Colors match entity browser and canvas:")
-        header_label.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+        header_label.setFont(QFont("Arial", 9, QFont.Bold))
         legend_layout.addWidget(header_label)
         
         # Create color samples with labels (matching your existing legend)
@@ -11660,7 +11658,7 @@ class SimplifiedMapEditor(QMainWindow):
             item.setText(0, display_name)
             item.setText(1, entity.id)
             item.setText(2, f"({entity.x:.1f}, {entity.y:.1f}, {entity.z:.1f})")
-            item.setData(0, Qt.ItemDataRole.UserRole, entity)
+            item.setData(0, Qt.UserRole, entity)
             
             # Set theme-aware text color
             self._set_item_theme_color(item)
@@ -11695,7 +11693,7 @@ class SimplifiedMapEditor(QMainWindow):
             item.setText(0, display_name)
             item.setText(1, entity.id)
             item.setText(2, f"({entity.x:.1f}, {entity.y:.1f}, {entity.z:.1f})")
-            item.setData(0, Qt.ItemDataRole.UserRole, entity)
+            item.setData(0, Qt.UserRole, entity)
             self._set_item_theme_color(item)
         
         if no_map_group.childCount() == 0:
@@ -11756,7 +11754,7 @@ class SimplifiedMapEditor(QMainWindow):
             item.setText(0, display_name)
             item.setText(1, entity.id)
             item.setText(2, f"({entity.x:.1f}, {entity.y:.1f}, {entity.z:.1f})")
-            item.setData(0, Qt.ItemDataRole.UserRole, entity)
+            item.setData(0, Qt.UserRole, entity)
             self._set_item_theme_color(item)
 
     def _populate_tree_by_source(self, filter_text=""):
@@ -11789,7 +11787,7 @@ class SimplifiedMapEditor(QMainWindow):
             item.setText(1, entity.id)
             item.setText(2, f"({entity.x:.1f}, {entity.y:.1f}, {entity.z:.1f})")
             item.setText(3, self._get_entity_angles_text(entity))
-            item.setData(0, Qt.ItemDataRole.UserRole, entity)
+            item.setData(0, Qt.UserRole, entity)
             self._set_item_theme_color(item)
             source_groups[source]['count'] += 1
 
@@ -11814,11 +11812,11 @@ class SimplifiedMapEditor(QMainWindow):
                 if top_item.childCount() > 0:
                     for j in range(top_item.childCount()):
                         child = top_item.child(j)
-                        entity = child.data(0, Qt.ItemDataRole.UserRole)
+                        entity = child.data(0, Qt.UserRole)
                         if entity in selected_entities:
                             child.setSelected(True)
                 else:
-                    entity = top_item.data(0, Qt.ItemDataRole.UserRole)
+                    entity = top_item.data(0, Qt.UserRole)
                     if entity in selected_entities:
                         top_item.setSelected(True)
         finally:
@@ -12198,7 +12196,7 @@ class SimplifiedMapEditor(QMainWindow):
             # Create progress dialog
             progress_dialog = QProgressDialog("Saving XML files, Please Wait.", "Cancel", 0, 100, self)
             progress_dialog.setWindowTitle("Saving XML Files")
-            progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            progress_dialog.setWindowModality(Qt.WindowModal)
             progress_dialog.setMinimumDuration(0)
             progress_dialog.setValue(0)
             
@@ -12372,10 +12370,10 @@ class SimplifiedMapEditor(QMainWindow):
             f"Convert XML files back to FCB format\n"
             f"Remove temporary XML files\n\n"
             f"Continue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
         
-        if reply != QMessageBox.StandardButton.Yes:
+        if reply != QMessageBox.Yes:
             return
         
         try:
@@ -12385,7 +12383,7 @@ class SimplifiedMapEditor(QMainWindow):
             # Create progress dialog
             progress_dialog = QProgressDialog("Saving objects, Please Wait.", "Cancel", 0, 100, self)
             progress_dialog.setWindowTitle("Saving Objects")
-            progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            progress_dialog.setWindowModality(Qt.WindowModal)
             progress_dialog.setMinimumDuration(0)
             progress_dialog.setValue(0)
             
@@ -12842,19 +12840,19 @@ class SimplifiedMapEditor(QMainWindow):
                             else:
                                 error_msg = f"Entity editor file not found!\n\nCurrent directory: {current_dir}\nExpected file: {entity_editor_path}\n\nPlease create entity_editor.py in the same directory as your main application."
                         
-                        from PyQt6.QtWidgets import QMessageBox
+                        from PyQt5.QtWidgets import QMessageBox
                         QMessageBox.critical(self, "Entity Editor Import Error", error_msg)
                         return
                         
                     except Exception as e3:
-                        from PyQt6.QtWidgets import QMessageBox
+                        from PyQt5.QtWidgets import QMessageBox
                         QMessageBox.critical(self, "Entity Editor Error", 
                                         f"Could not import Entity Editor:\n{e1}\n\nAlso failed to diagnose the problem:\n{e3}")
                         return
             
             # If we get here, import was successful
             if EntityEditorWindow is None:
-                from PyQt6.QtWidgets import QMessageBox
+                from PyQt5.QtWidgets import QMessageBox
                 QMessageBox.critical(self, "Error", "EntityEditorWindow class not found after import!")
                 return
             
@@ -12878,7 +12876,7 @@ class SimplifiedMapEditor(QMainWindow):
                         print("Entity Editor: No entity currently selected")
                         
                 except Exception as e:
-                    from PyQt6.QtWidgets import QMessageBox
+                    from PyQt5.QtWidgets import QMessageBox
                     import traceback
                     error_details = traceback.format_exc()
                     QMessageBox.critical(self, "Entity Editor Creation Error", 
@@ -12911,7 +12909,7 @@ class SimplifiedMapEditor(QMainWindow):
                 else:
                     print("Entity Editor window opened successfully (no entity loaded)")
             except Exception as e:
-                from PyQt6.QtWidgets import QMessageBox
+                from PyQt5.QtWidgets import QMessageBox
                 QMessageBox.critical(self, "Error", f"Failed to show Entity Editor window:\n{str(e)}")
                 print(f"Failed to show Entity Editor: {e}")
 
@@ -13632,7 +13630,7 @@ class SimplifiedMapEditor(QMainWindow):
         def search(parent_item):
             for i in range(parent_item.childCount()):
                 child = parent_item.child(i)
-                if child.data(0, Qt.ItemDataRole.UserRole) is entity:
+                if child.data(0, Qt.UserRole) is entity:
                     child.setText(3, ang_text)
                     return True
                 if search(child):
@@ -13686,7 +13684,7 @@ class SimplifiedMapEditor(QMainWindow):
         def search_children(parent_item):
             for i in range(parent_item.childCount()):
                 child = parent_item.child(i)
-                if child.data(0, Qt.ItemDataRole.UserRole) is entity:
+                if child.data(0, Qt.UserRole) is entity:
                     child.setText(2, pos_text)
                     return True
                 if search_children(child):
@@ -13695,7 +13693,7 @@ class SimplifiedMapEditor(QMainWindow):
 
         for i in range(self.entity_tree.topLevelItemCount()):
             item = self.entity_tree.topLevelItem(i)
-            if item.data(0, Qt.ItemDataRole.UserRole) is entity:
+            if item.data(0, Qt.UserRole) is entity:
                 item.setText(2, pos_text)
                 return
             if search_children(item):
@@ -13825,7 +13823,7 @@ class SimplifiedMapEditor(QMainWindow):
         """Handle key press events - WITH 2D/3D MODE SUPPORT AND 3D TOGGLES"""
         
         # TAB KEY - Toggle between 2D and 3D
-        if event.key() == Qt.Key.Key_Tab:
+        if event.key() == Qt.Key_Tab:
             if hasattr(self.canvas, 'toggle_view_mode'):
                 old_mode = self.canvas.mode
                 self.canvas.toggle_view_mode()
@@ -13853,13 +13851,13 @@ class SimplifiedMapEditor(QMainWindow):
             return
         
         # F1 - Help (mode-aware)
-        if event.key() == Qt.Key.Key_F1:
+        if event.key() == Qt.Key_F1:
             self.show_help_dialog_with_3d()
             event.accept()
             return
         
         # G - Toggle grid (mode-aware: 2D grid in 2D mode, 3D grid in 3D mode)
-        if event.key() == Qt.Key.Key_G:
+        if event.key() == Qt.Key_G:
             if hasattr(self.canvas, 'mode') and self.canvas.mode == 1:  # 3D mode
                 if hasattr(self.canvas, 'toggle_3d_grid'):
                     self.canvas.toggle_3d_grid()
@@ -13875,7 +13873,7 @@ class SimplifiedMapEditor(QMainWindow):
             return
         
         # H - Toggle 3D HUD (only in 3D mode)
-        if event.key() == Qt.Key.Key_H:
+        if event.key() == Qt.Key_H:
             if hasattr(self.canvas, 'mode') and self.canvas.mode == 1:  # 3D mode
                 if hasattr(self.canvas, 'toggle_3d_hud'):
                     self.canvas.toggle_3d_hud()
@@ -13885,7 +13883,7 @@ class SimplifiedMapEditor(QMainWindow):
                     return
         
         # B - Toggle 3D Cubes (only in 3D mode)
-        if event.key() == Qt.Key.Key_B:
+        if event.key() == Qt.Key_B:
             if hasattr(self.canvas, 'mode') and self.canvas.mode == 1:  # 3D mode
                 if hasattr(self.canvas, 'toggle_3d_cubes'):
                     self.canvas.toggle_3d_cubes()
@@ -13895,47 +13893,47 @@ class SimplifiedMapEditor(QMainWindow):
                     return
         
         # ` - Toggle entities (works in both modes)
-        if event.key() == Qt.Key.Key_QuoteLeft:  # Backtick/tilde key
+        if event.key() == Qt.Key_QuoteLeft:  # Backtick/tilde key
             self.toggle_entities()
             event.accept()
             return
         
         # Ctrl+R - Reset view (mode-aware)
-        if event.key() == Qt.Key.Key_R and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        if event.key() == Qt.Key_R and event.modifiers() & Qt.ControlModifier:
             self.reset_view()
             event.accept()
             return
         
         # Delete - Delete selected entities (works in both modes)
-        if event.key() == Qt.Key.Key_Delete:
+        if event.key() == Qt.Key_Delete:
             if hasattr(self, 'delete_selected_entities'):
                 self.delete_selected_entities()
                 event.accept()
                 return
         
         # Ctrl+C - Copy (works in both modes)
-        if event.key() == Qt.Key.Key_C and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        if event.key() == Qt.Key_C and event.modifiers() & Qt.ControlModifier:
             if hasattr(self, 'copy_selected_entities'):
                 self.copy_selected_entities()
                 event.accept()
                 return
         
         # Ctrl+V - Paste (works in both modes)
-        if event.key() == Qt.Key.Key_V and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        if event.key() == Qt.Key_V and event.modifiers() & Qt.ControlModifier:
             if hasattr(self, 'paste_entities'):
                 self.paste_entities()
                 event.accept()
                 return
         
         # Ctrl+D - Duplicate (works in both modes)
-        if event.key() == Qt.Key.Key_D and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        if event.key() == Qt.Key_D and event.modifiers() & Qt.ControlModifier:
             if hasattr(self, 'duplicate_selected_entities'):
                 self.duplicate_selected_entities()
                 event.accept()
                 return
         
         # Ctrl+E - Entity Editor (works in both modes)
-        if event.key() == Qt.Key.Key_E and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        if event.key() == Qt.Key_E and event.modifiers() & Qt.ControlModifier:
             if hasattr(self, 'open_entity_editor'):
                 self.open_entity_editor()
                 event.accept()
@@ -14013,11 +14011,11 @@ class SimplifiedMapEditor(QMainWindow):
         )
         
         # Create and show help dialog
-        from PyQt6.QtWidgets import QMessageBox
+        from PyQt5.QtWidgets import QMessageBox
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("Level Editor Controls - 2D & 3D Modes")
         msg_box.setText(help_text)
-        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setIcon(QMessageBox.Information)
         msg_box.exec()
     
     def reset_view(self):
@@ -14816,12 +14814,12 @@ class RotatingLoadingIcon(QLabel):
         if self.background.isNull():
             print(f"Failed to load background: {background_path}")
             self.background = QPixmap(64, 64)
-            self.background.fill(Qt.GlobalColor.lightGray)
+            self.background.fill(Qt.lightGray)
         
         if self.rotating.isNull():
             print(f"Failed to load rotating image: {rotating_path}")
             self.rotating = QPixmap(64, 64)
-            self.rotating.fill(Qt.GlobalColor.blue)
+            self.rotating.fill(Qt.blue)
         
         # Set widget size to match images
         size = max(self.background.width(), self.background.height())
@@ -14843,8 +14841,8 @@ class RotatingLoadingIcon(QLabel):
     def paintEvent(self, event):
         """Paint the rotating loading icon - works in both 2D and 3D modes"""
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
         # Draw background centered
         if hasattr(self, 'background') and self.background is not None:
@@ -14908,7 +14906,7 @@ class EnhancedProgressDialog(QDialog):
         
         # Status label
         self.status_label = QLabel("Initializing, please wait...")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
         
         # Progress bar

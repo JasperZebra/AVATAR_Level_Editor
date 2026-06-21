@@ -10,15 +10,16 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QLabel, QScrollArea, QWidget,
     QMessageBox, QFileDialog, QGroupBox,
     QLineEdit, QProgressDialog, QFrame, QComboBox,
     QApplication
 )
-from PyQt6.QtCore import Qt, QSize, pyqtSignal, QThread, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty
-from PyQt6.QtGui import QPixmap, QIcon, QPainter, QFont, QColor, QAction
+from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty
+from PyQt5.QtGui import QPixmap, QIcon, QPainter, QFont, QColor
+from PyQt5.QtWidgets import QAction
 
 # Configuration file for storing patch folder path
 PATCH_CONFIG_FILE = "patch_config.json"
@@ -823,7 +824,7 @@ class FadingLabel(QLabel):
         else:
             # If no pixmap, draw text
             painter.setPen(QColor(136, 136, 136))  # #888
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())
+            painter.drawText(self.rect(), Qt.AlignCenter, self.text())
         
         painter.end()
 
@@ -849,7 +850,7 @@ class LevelButton(QPushButton):
         self.is_transitioning = False  # Flag to prevent overlapping transitions
 
         self.setFixedSize(self.thumbnail_width + 20, self.thumbnail_height + 110)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setCursor(Qt.PointingHandCursor)
 
         self.setup_ui()
 
@@ -908,7 +909,7 @@ class LevelButton(QPushButton):
             self.fade_out_animation.setDuration(800)  # 1 second fade out
             self.fade_out_animation.setStartValue(1.0)
             self.fade_out_animation.setEndValue(0.0)
-            self.fade_out_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            self.fade_out_animation.setEasingCurve(QEasingCurve.InOutQuad)
 
             # When fade out completes, load next image and fade in
             self.fade_out_animation.finished.connect(self.on_fade_out_complete)
@@ -925,8 +926,8 @@ class LevelButton(QPushButton):
             if pixmap and not pixmap.isNull():
                 scaled_pixmap = pixmap.scaled(
                     self.thumbnail_width, self.thumbnail_height,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
                 )
                 self.thumbnail_label.setPixmap(scaled_pixmap)
 
@@ -935,7 +936,7 @@ class LevelButton(QPushButton):
         self.fade_in_animation.setDuration(800)  # 1 second fade in
         self.fade_in_animation.setStartValue(0.0)
         self.fade_in_animation.setEndValue(1.0)
-        self.fade_in_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.fade_in_animation.setEasingCurve(QEasingCurve.InOutQuad)
         self.fade_in_animation.finished.connect(self.on_fade_in_complete)
         self.fade_in_animation.start()
 
@@ -952,8 +953,8 @@ class LevelButton(QPushButton):
         if pixmap and not pixmap.isNull():
             scaled_pixmap = pixmap.scaled(
                 self.thumbnail_width, self.thumbnail_height,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
             )
             self.thumbnail_label.setPixmap(scaled_pixmap)
 
@@ -964,7 +965,7 @@ class LevelButton(QPushButton):
         # --- Thumbnail ---
         self.thumbnail_label = FadingLabel()  # Use FadingLabel instead of QLabel
         self.thumbnail_label.setFixedSize(self.thumbnail_width, self.thumbnail_height)
-        self.thumbnail_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.thumbnail_label.setAlignment(Qt.AlignCenter)
         self.thumbnail_label.setStyleSheet("""
             QLabel {
                 border: 1px solid #555;
@@ -983,8 +984,8 @@ class LevelButton(QPushButton):
         if pixmap and not pixmap.isNull():
             scaled_pixmap = pixmap.scaled(
                 self.thumbnail_width - 10, self.thumbnail_height - 10,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
             )
             self.thumbnail_label.setPixmap(scaled_pixmap)
         else:
@@ -1004,7 +1005,7 @@ class LevelButton(QPushButton):
         # --- Level Name ---
         name_label = QLabel(self.level_info.display_name or self.level_info.name)
         name_label.setWordWrap(True)
-        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        name_label.setAlignment(Qt.AlignCenter)
         name_label.setStyleSheet("""
             QLabel {
                 color: #ffffff;
@@ -1030,7 +1031,7 @@ class LevelButton(QPushButton):
         if info_text:
             info_label = QLabel(" | ".join(info_text))
             info_label.setWordWrap(True)
-            info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            info_label.setAlignment(Qt.AlignCenter)
             info_label.setStyleSheet("""
                 QLabel {
                     color: #888;
@@ -1133,7 +1134,7 @@ class LevelSelectorDialog(QDialog):
         # Header with patch folder info
         header_layout = QVBoxLayout()
         header_label = QLabel("Select a Level to Load")
-        header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_label.setAlignment(Qt.AlignCenter)
         header_label.setStyleSheet(f"""
             QLabel {{
                 font-size: 16px; 
@@ -1231,8 +1232,8 @@ class LevelSelectorDialog(QDialog):
 
         # Separator line
         separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
         separator.setStyleSheet(f"background-color: {colors['border']};")
         layout.addWidget(separator)
 
@@ -1313,7 +1314,7 @@ class LevelSelectorDialog(QDialog):
 
         # Level count label
         self.count_label = QLabel()
-        self.count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.count_label.setAlignment(Qt.AlignCenter)
         self.count_label.setStyleSheet(f"color: {colors['text_secondary']}; font-size: 11px; padding: 5px;")
         layout.addWidget(self.count_label)
 
@@ -1665,7 +1666,7 @@ class LevelSelectorDialog(QDialog):
         if not filtered_levels:
             # Show "no results" message
             no_results = QLabel("No levels match your search criteria")
-            no_results.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            no_results.setAlignment(Qt.AlignCenter)
             no_results.setStyleSheet("""
                 QLabel {
                     color: #888;
@@ -1846,9 +1847,9 @@ class PatchFolderManager:
                 f"The selected folder doesn't contain 'worlds' or 'levels' subdirectories.\n\n"
                 f"Selected: {folder}\n\n"
                 "Please select a valid patch folder or create the required structure.",
-                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+                QMessageBox.Ok | QMessageBox.Cancel
             )
-            if reply == QMessageBox.StandardButton.Cancel:
+            if reply == QMessageBox.Cancel:
                 return False
         
         self.patch_folder = folder
@@ -2058,9 +2059,9 @@ def set_resource_folder(main_window):
             f"The selected folder doesn't contain a 'graphics' subdirectory.\n\n"
             f"Selected: {folder}\n\n"
             "Please select your unpacked game data folder (e.g., Data_Win32).",
-            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+            QMessageBox.Ok | QMessageBox.Cancel
         )
-        if reply == QMessageBox.StandardButton.Cancel:
+        if reply == QMessageBox.Cancel:
             return False
 
     main_window.resource_folder = folder
@@ -2211,9 +2212,9 @@ def integrate_patch_manager(main_window):
                     main_window,
                     "Patch Folder Not Set",
                     "No patch folder is configured. Would you like to set one now?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                    QMessageBox.Yes | QMessageBox.No
                 )
-                if reply == QMessageBox.StandardButton.Yes:
+                if reply == QMessageBox.Yes:
                     if not patch_manager.set_patch_folder():
                         print("[DEBUG] User cancelled folder selection")
                         return
@@ -2412,7 +2413,7 @@ def integrate_patch_manager(main_window):
                 QTimer.singleShot(100, lambda: main_window.select_level())
                 return
 
-            if result == QDialog.DialogCode.Accepted and hasattr(dialog, 'selected_level') and dialog.selected_level:
+            if result == QDialog.Accepted and hasattr(dialog, 'selected_level') and dialog.selected_level:
                 level_dict = dialog.selected_level
                 print("[DEBUG] level_dict returned:")
                 for k, v in level_dict.items():
@@ -2448,7 +2449,7 @@ def integrate_patch_manager(main_window):
             _msg = _tb.format_exc()
             _log_to_crash_file(f"EXCEPTION in select_level:\n{_msg}")
             try:
-                from PyQt6.QtWidgets import QMessageBox as _QMB
+                from PyQt5.QtWidgets import QMessageBox as _QMB
                 _QMB.critical(
                     main_window,
                     "Level Selector Error",

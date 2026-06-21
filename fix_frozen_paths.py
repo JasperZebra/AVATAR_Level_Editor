@@ -208,12 +208,12 @@ def run_frozen_diagnostics():
     except ImportError:
         print(f"  NumPy: ✗ FAILED")
     
-    # Check PyQt6 OpenGL
+    # Check PyQt5 OpenGL
     try:
-        from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-        print(f"  PyQt6 OpenGL: ✓ OK")
+        from PyQt5.QtWidgets import QOpenGLWidget
+        print(f"  PyQt5 OpenGL: ✓ OK")
     except ImportError:
-        print(f"  PyQt6 OpenGL: ✗ FAILED")
+        print(f"  PyQt5 OpenGL: ✗ FAILED")
     
     print("\n" + "="*70)
     

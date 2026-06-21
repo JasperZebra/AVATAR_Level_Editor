@@ -11,8 +11,8 @@ Only renders the currently selected sequence (canvas.main_window.selected_movie_
 """
 
 import OpenGL.GL as gl
-from PyQt6.QtCore import Qt, QRectF, QPointF
-from PyQt6.QtGui import QPen, QBrush, QColor, QPolygonF, QFont
+from PyQt5.QtCore import Qt, QRectF, QPointF
+from PyQt5.QtGui import QPen, QBrush, QColor, QPolygonF, QFont
 
 # Purple path colour
 _PATH_COLOR   = QColor(160, 80, 255, 220)
@@ -64,8 +64,8 @@ def draw_movie_paths_2d(painter, canvas):
         ]
 
         # Dashed purple path line
-        painter.setPen(QPen(_PATH_COLOR, 1.5, Qt.PenStyle.DashLine))
-        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(_PATH_COLOR, 1.5, Qt.DashLine))
+        painter.setBrush(Qt.NoBrush)
         if len(screen_pts) >= 2:
             for i in range(len(screen_pts) - 1):
                 painter.drawLine(screen_pts[i], screen_pts[i + 1])
@@ -98,7 +98,7 @@ def _draw_diamond_2d(painter, cx, cy, r, color):
         QPointF(cx,     cy + r),
         QPointF(cx - r, cy),
     ])
-    painter.setPen(QPen(Qt.GlobalColor.white, 0.5))
+    painter.setPen(QPen(Qt.white, 0.5))
     painter.setBrush(QBrush(color))
     painter.drawPolygon(pts)
 
@@ -116,7 +116,7 @@ def _draw_ghost_nodes_2d(painter, canvas, movie_data, seq, selected_node_id=None
         sx, sy = canvas.world_to_screen(nd.pos[0], nd.pos[1])
         r = 5
         ghost = QColor(140, 140, 140, 180)
-        painter.setPen(QPen(Qt.GlobalColor.white, 0.5))
+        painter.setPen(QPen(Qt.white, 0.5))
         painter.setBrush(QBrush(ghost))
         painter.drawRect(QRectF(sx - r, sy - r, r * 2, r * 2))
 

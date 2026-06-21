@@ -4,7 +4,7 @@
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 import xml.etree.ElementTree as ET
-from PyQt6.QtGui import QImage
+from PyQt5.QtGui import QImage
 import os
 
 @dataclass

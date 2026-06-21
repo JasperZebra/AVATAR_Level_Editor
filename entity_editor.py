@@ -7,16 +7,17 @@ import sys
 import os
 import math
 import struct
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
                              QLabel, QLineEdit, QPushButton, QCheckBox, QScrollArea,
                              QWidget, QFrame, QGroupBox, QMessageBox, QApplication,
                              QSizePolicy, QComboBox, QTabWidget, QPlainTextEdit, QTextEdit,
                              QDoubleSpinBox)
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from PyQt6.QtGui import (QFont, QDoubleValidator, QIntValidator,
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from PyQt5.QtGui import (QFont, QDoubleValidator, QIntValidator,
                          QRegularExpressionValidator, QTextCharFormat, QColor,
-                         QKeySequence, QShortcut, QTextDocument)
-from PyQt6.QtCore import QRegularExpression
+                         QKeySequence, QTextDocument)
+from PyQt5.QtWidgets import QShortcut
+from PyQt5.QtCore import QRegularExpression
 from ui_style_utils import apply_checkbox_style
 
 # ---------------------------------------------------------------------------
@@ -272,7 +273,7 @@ class DecimalInput(QLineEdit):
         self.scaling_factor = 1.0
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.LeftButton:
             self.drag_start_x = event.position().x()
             try:
                 self.drag_start_value = self.get_value()
@@ -281,9 +282,9 @@ class DecimalInput(QLineEdit):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self.drag_start_x is not None and event.buttons() & Qt.MouseButton.LeftButton:
+        if self.drag_start_x is not None and event.buttons() & Qt.LeftButton:
             delta = event.position().x() - self.drag_start_x
-            scale = 0.01 if QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier else 1.0
+            scale = 0.01 if QApplication.keyboardModifiers() & Qt.ShiftModifier else 1.0
             new_value = self.drag_start_value + delta * self.scaling_factor * scale
             new_value = max(self.min_val, min(self.max_val, new_value))
             self.setText(f"{new_value:.6f}")
@@ -417,7 +418,7 @@ class EntityEditorWindow(QDialog):
         self.setWindowTitle("Entity Editor")
         self.setMinimumSize(700, 500)
         self.resize(950, 800)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(6, 6, 6, 6)
@@ -436,11 +437,11 @@ class EntityEditorWindow(QDialog):
 
         self.scroll_area = QScrollArea(self)
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         self.content_widget = QWidget()
         self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.content_layout.setAlignment(Qt.AlignTop)
         self.content_layout.setSpacing(3)
         self.content_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -532,7 +533,7 @@ class EntityEditorWindow(QDialog):
             "QPlainTextEdit { background: #1a1a1a; color: #d4d4d4;"
             " border: 1px solid #333; font-family: Consolas, monospace; }"
         )
-        self.xml_editor.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self.xml_editor.setLineWrapMode(QPlainTextEdit.NoWrap)
         # Debounce timer — parse XML 1.5 s after the user stops typing
         self._xml_debounce = QTimer()
         self._xml_debounce.setSingleShot(True)
@@ -549,7 +550,7 @@ class EntityEditorWindow(QDialog):
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
         # Ctrl+F — activate the appropriate search bar for the current tab
-        _find_sc = QShortcut(QKeySequence.StandardKey.Find, self)
+        _find_sc = QShortcut(QKeySequence.Find, self)
         _find_sc.activated.connect(self._activate_search)
 
         root.addWidget(self.tab_widget)
@@ -642,7 +643,7 @@ class EntityEditorWindow(QDialog):
         text = self._xml_find_input.text()
         if not text:
             return
-        flag = QTextDocument.FindFlag(0) if forward else QTextDocument.FindFlag.FindBackward
+        flag = QTextDocument.FindFlag(0) if forward else QTextDocument.FindBackward
         found = self.xml_editor.find(text, flag)
         if not found:
             # Wrap around
@@ -655,7 +656,7 @@ class EntityEditorWindow(QDialog):
 
     def _build_header(self, parent_layout):
         frame = QFrame(self)
-        frame.setFrameStyle(QFrame.Shape.StyledPanel)
+        frame.setFrameStyle(QFrame.StyledPanel)
         fl = QVBoxLayout(frame)
         fl.setContentsMargins(8, 6, 8, 6)
         fl.setSpacing(3)
@@ -758,13 +759,13 @@ class EntityEditorWindow(QDialog):
         key = event.key()
         mods = event.modifiers()
         # Esc: clear the XML find bar
-        if key == Qt.Key.Key_Escape:
+        if key == Qt.Key_Escape:
             if hasattr(self, '_xml_find_input') and self._xml_find_input.text():
                 self._hide_xml_find()
                 return
         # Shift+Enter inside the XML find bar: navigate backward
-        if (key in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
-                and mods & Qt.KeyboardModifier.ShiftModifier
+        if (key in (Qt.Key_Return, Qt.Key_Enter)
+                and mods & Qt.ShiftModifier
                 and hasattr(self, '_xml_find_bar') and self._xml_find_bar.isVisible()):
             self._xml_find_navigate(forward=False)
             return
@@ -1261,7 +1262,7 @@ class EntityEditorWindow(QDialog):
                 vl.addWidget(size_row)
 
                 sep = QFrame(self)
-                sep.setFrameShape(QFrame.Shape.HLine)
+                sep.setFrameShape(QFrame.HLine)
                 sep.setStyleSheet("color: #444;")
                 vl.addWidget(sep)
 
@@ -1557,7 +1558,7 @@ class EntityEditorWindow(QDialog):
                 f_over_hash = mat.find("field[@hash='28679535']")
 
                 slot_frame = QFrame(self)
-                slot_frame.setFrameShape(QFrame.Shape.StyledPanel)
+                slot_frame.setFrameShape(QFrame.StyledPanel)
                 slot_frame.setStyleSheet("QFrame { border: 1px solid #3a4a5a; border-radius: 3px; }")
                 sf_vl = QVBoxLayout(slot_frame)
                 sf_vl.setContentsMargins(6, 4, 6, 4)
@@ -1701,7 +1702,7 @@ class EntityEditorWindow(QDialog):
         gl.setColumnStretch(1, 1)
 
         lbl = QLabel("X / Y / Z:", self)
-        lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         gl.addWidget(lbl, 0, 0)
         gl.addWidget(self._make_position_widget(entity), 0, 1)
 
@@ -1773,12 +1774,12 @@ class EntityEditorWindow(QDialog):
                 continue
 
             lbl = QLabel(self._fmt_name(field_name) + ":", self)
-            lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             lbl.setToolTip(field_name)
 
             if self._has_point_children(field):
                 lbl.setAlignment(
-                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop
+                    Qt.AlignRight | Qt.AlignTop
                 )
                 widget = self._make_shape_points_widget(field)
                 gl.addWidget(lbl, row, 0)
@@ -1918,7 +1919,7 @@ class EntityEditorWindow(QDialog):
             self.schedule_auto_save()
 
         add_btn.clicked.connect(_add_point)
-        vbox.addWidget(add_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        vbox.addWidget(add_btn, alignment=Qt.AlignLeft)
         return container
 
     def _make_readonly_label(self, field_elem) -> QLabel:
@@ -1927,7 +1928,7 @@ class EntityEditorWindow(QDialog):
         value = field_elem.get(value_attr, field_elem.text or "")
         lbl = QLabel(str(value), self)
         lbl.setStyleSheet("color: #888; font-family: monospace; font-size: 10px;")
-        lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
         return lbl
 
     def _make_text_with_hash_widget(self, text_field, hash_field) -> QWidget:
@@ -2155,8 +2156,8 @@ class EntityEditorWindow(QDialog):
         """Packed ARGB color stored as uint32.
         Shows: editable '#AARRGGBB' hex string + a color swatch.
         """
-        from PyQt6.QtGui import QColor
-        from PyQt6.QtWidgets import QFrame
+        from PyQt5.QtGui import QColor
+        from PyQt5.QtWidgets import QFrame
 
         def _raw_to_argb(raw_uint: int):
             a = (raw_uint >> 24) & 0xFF
@@ -2195,7 +2196,7 @@ class EntityEditorWindow(QDialog):
         # Color swatch
         swatch = QFrame(container)
         swatch.setFixedSize(20, 20)
-        swatch.setFrameShape(QFrame.Shape.Box)
+        swatch.setFrameShape(QFrame.Box)
 
         def _refresh_swatch(uint_val: int):
             a, r, g, b = _raw_to_argb(uint_val)
@@ -2937,7 +2938,7 @@ class EntityEditorWindow(QDialog):
             if hasattr(self.canvas, 'mark_entity_modified'):
                 self.canvas.mark_entity_modified(self.current_entity)
                 self.canvas.update()
-            from PyQt6.QtCore import QTime
+            from PyQt5.QtCore import QTime
             self.status_label.setText(f"Saved at {QTime.currentTime().toString('hh:mm:ss')}")
             # _auto_save_entity_changes may update entity.xml_element (position sync in
             # _update_worldsector_xml_fcb_format).  Refresh the XML tab so the display

@@ -10,14 +10,14 @@ import math
 import struct
 import numpy as np
 
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSplitter, QPushButton, QLabel,
     QSlider, QGroupBox, QSizePolicy, QFileDialog, QMessageBox,
     QFrame, QWidget, QLineEdit, QButtonGroup, QToolButton
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QTimer
-from PyQt6.QtGui import QPainter, QColor, QPen, QImage, QPixmap, QFont, QCursor
-from PyQt6.QtOpenGLWidgets import QOpenGLWidget
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
+from PyQt5.QtGui import QPainter, QColor, QPen, QImage, QPixmap, QFont, QCursor
+from PyQt5.QtWidgets import QOpenGLWidget
 
 try:
     from OpenGL.GL import (
@@ -74,7 +74,7 @@ def _make_elevation_image(combined: np.ndarray) -> QImage:
     rgb[hm, 1] = (norm[hm] * 200 + 55).astype(np.uint8)
     rgb[hm, 2] = (norm[hm] * 200 + 55).astype(np.uint8)
 
-    img = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888)
+    img = QImage(rgb.data, w, h, w * 3, QImage.Format_RGB888)
     return img.copy()   # deep-copy so numpy buffer can be freed
 
 
@@ -284,8 +284,8 @@ class HeightmapEditor2D(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMouseTracking(True)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMinimumSize(300, 300)
 
         self._pixmap: QPixmap = None
@@ -362,7 +362,7 @@ class HeightmapEditor2D(QWidget):
 
         if self._pixmap is None:
             painter.setPen(QColor(120, 120, 120))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No terrain loaded")
+            painter.drawText(self.rect(), Qt.AlignCenter, "No terrain loaded")
             return
 
         s = self._display_scale()
@@ -391,7 +391,7 @@ class HeightmapEditor2D(QWidget):
             cy = int(oy + my * s)
             r_px = int(self._brush_radius * s)
             painter.setPen(QPen(QColor(255, 255, 0, 200), 1.5))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setBrush(Qt.NoBrush)
             painter.drawEllipse(cx - r_px, cy - r_px, r_px * 2, r_px * 2)
             painter.setPen(QPen(QColor(255, 255, 0, 200), 1))
             painter.drawLine(cx - 4, cy, cx + 4, cy)
@@ -400,11 +400,11 @@ class HeightmapEditor2D(QWidget):
     # -- Mouse ---------------------------------------------------------------
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.MiddleButton:
+        if event.button() == Qt.MiddleButton:
             self._mid_drag = True
             self._last_mid = event.position().toPoint()
             return
-        if event.button() == Qt.MouseButton.LeftButton and self._pixmap is not None:
+        if event.button() == Qt.LeftButton and self._pixmap is not None:
             self._pressing = True
             mx, my = self._to_map(event.position().x(), event.position().y())
             self._mouse_map = (mx, my)
@@ -427,10 +427,10 @@ class HeightmapEditor2D(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.MiddleButton:
+        if event.button() == Qt.MiddleButton:
             self._mid_drag = False
             return
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.LeftButton:
             self._pressing = False
             self.stroke_end.emit()
 
@@ -469,13 +469,13 @@ class HeightmapEditor2D(QWidget):
     def _tick_movement(self):
         speed = 15.0
         moved = False
-        if Qt.Key.Key_W in self._keys_held:
+        if Qt.Key_W in self._keys_held:
             self._pan_y += speed;  moved = True
-        if Qt.Key.Key_S in self._keys_held:
+        if Qt.Key_S in self._keys_held:
             self._pan_y -= speed;  moved = True
-        if Qt.Key.Key_A in self._keys_held:
+        if Qt.Key_A in self._keys_held:
             self._pan_x += speed;  moved = True
-        if Qt.Key.Key_D in self._keys_held:
+        if Qt.Key_D in self._keys_held:
             self._pan_x -= speed;  moved = True
         if moved:
             self.update()
@@ -492,9 +492,9 @@ class TerrainPreview3D(QOpenGLWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMinimumSize(300, 300)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
 
         self._td: TerrainData = None
@@ -777,11 +777,11 @@ class TerrainPreview3D(QOpenGLWidget):
     # -- Mouse ----------------------------------------------------------------
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.RightButton:
+        if event.button() == Qt.RightButton:
             self._mouse_captured = True
-            self.setCursor(Qt.CursorShape.BlankCursor)
+            self.setCursor(Qt.BlankCursor)
             self._mouse_anchor = self.mapToGlobal(event.position().toPoint())
-        elif event.button() == Qt.MouseButton.LeftButton:
+        elif event.button() == Qt.LeftButton:
             self._pressing = True
             if self._hit_map is not None:
                 self.stroke_at.emit(self._hit_map[0], self._hit_map[1])
@@ -817,10 +817,10 @@ class TerrainPreview3D(QOpenGLWidget):
         self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.RightButton:
+        if event.button() == Qt.RightButton:
             self._mouse_captured = False
             self.unsetCursor()
-        elif event.button() == Qt.MouseButton.LeftButton:
+        elif event.button() == Qt.LeftButton:
             self._pressing = False
             self.stroke_end.emit()
 
@@ -834,7 +834,7 @@ class TerrainPreview3D(QOpenGLWidget):
     def keyPressEvent(self, event):
         from canvas.opengl_utils import movement_action
         k = event.key()
-        if k == Qt.Key.Key_Shift:
+        if k == Qt.Key_Shift:
             self._shift_held = True
         action = movement_action(event)
         if action:
@@ -846,7 +846,7 @@ class TerrainPreview3D(QOpenGLWidget):
     def keyReleaseEvent(self, event):
         from canvas.opengl_utils import movement_action
         k = event.key()
-        if k == Qt.Key.Key_Shift:
+        if k == Qt.Key_Shift:
             self._shift_held = False
         action = movement_action(event)
         if action:
@@ -866,7 +866,7 @@ class TerrainEditorDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Terrain Editor — Avatar: The Game")
         self.setMinimumSize(1100, 700)
-        self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
 
         self._terrain_renderer = terrain_renderer
         self._canvas = canvas
@@ -909,7 +909,7 @@ class TerrainEditorDialog(QDialog):
 
     def _build_toolbar(self) -> QWidget:
         bar = QFrame()
-        bar.setFrameStyle(QFrame.Shape.StyledPanel)
+        bar.setFrameStyle(QFrame.StyledPanel)
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(4, 4, 4, 4)
         lay.setSpacing(6)
@@ -959,7 +959,7 @@ class TerrainEditorDialog(QDialog):
         sz_dec = QPushButton("−")
         sz_dec.setFixedWidth(24)
         top.addWidget(sz_dec)
-        self._size_slider = QSlider(Qt.Orientation.Horizontal)
+        self._size_slider = QSlider(Qt.Horizontal)
         self._size_slider.setRange(1, 150)
         self._size_slider.setValue(20)
         self._size_slider.setFixedWidth(110)
@@ -981,7 +981,7 @@ class TerrainEditorDialog(QDialog):
         str_dec = QPushButton("−")
         str_dec.setFixedWidth(24)
         top.addWidget(str_dec)
-        self._str_slider = QSlider(Qt.Orientation.Horizontal)
+        self._str_slider = QSlider(Qt.Horizontal)
         self._str_slider.setRange(1, 100)
         self._str_slider.setValue(30)
         self._str_slider.setFixedWidth(110)
@@ -1187,7 +1187,7 @@ class TerrainEditorDialog(QDialog):
     def _browse_folder(self):
         folder = QFileDialog.getExistingDirectory(
             self, "Select CSDAT Folder", self._td.sdat_path or "",
-            QFileDialog.Option.ShowDirsOnly
+            QFileDialog.ShowDirsOnly
         )
         if folder:
             self.load_terrain(folder)
@@ -1225,9 +1225,9 @@ class TerrainEditorDialog(QDialog):
         reply = QMessageBox.question(
             self, "Save Terrain",
             f"Write {n} modified sector(s) to disk?\n\nThis overwrites the .csdat files.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
-        if reply != QMessageBox.StandardButton.Yes:
+        if reply != QMessageBox.Yes:
             return
         written, failed = self._td.save_dirty_sectors()
         self._update_dirty_label()

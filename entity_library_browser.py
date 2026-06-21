@@ -13,13 +13,13 @@ Performance notes:
 import os
 import xml.etree.ElementTree as ET
 
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSplitter, QTreeWidget, QTreeWidgetItem,
     QTabWidget, QWidget, QLabel, QLineEdit, QPushButton, QPlainTextEdit,
     QMessageBox, QFileDialog, QApplication, QProgressBar, QHeaderView,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QFont, QColor, QTextCharFormat, QSyntaxHighlighter
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QSyntaxHighlighter
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +180,7 @@ class EntityLibraryBrowserDialog(QDialog):
         root.addLayout(top)
 
         # ── Splitter ─────────────────────────────────────────────────────
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter = QSplitter(Qt.Horizontal)
 
         # Left: entity tree + search
         left = QWidget()
@@ -220,7 +220,7 @@ class EntityLibraryBrowserDialog(QDialog):
         self._match_label = QLabel("")
         self._match_label.setStyleSheet("color: #888; font-size: 9px;")
         self._match_label.setFixedWidth(52)
-        self._match_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._match_label.setAlignment(Qt.AlignCenter)
 
         search_row.addWidget(self._search, 1)
         search_row.addWidget(self._prev_btn)
@@ -323,7 +323,7 @@ class EntityLibraryBrowserDialog(QDialog):
         self._simple_match_label = QLabel("")
         self._simple_match_label.setStyleSheet("color: #888; font-size: 9px;")
         self._simple_match_label.setFixedWidth(52)
-        self._simple_match_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._simple_match_label.setAlignment(Qt.AlignCenter)
 
         sep = QLabel("|")
         sep.setStyleSheet("color: #444; font-size: 10px;")
@@ -357,8 +357,8 @@ class EntityLibraryBrowserDialog(QDialog):
         self._simple_tree.setRootIsDecorated(True)
         self._simple_tree.setWordWrap(False)
         header = self._simple_tree.header()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
         self._simple_tree.setColumnWidth(0, 240)
         layout.addWidget(self._simple_tree, 1)
 
@@ -416,7 +416,7 @@ class EntityLibraryBrowserDialog(QDialog):
         self._xml_match_label = QLabel("")
         self._xml_match_label.setStyleSheet("color: #888; font-size: 9px;")
         self._xml_match_label.setFixedWidth(52)
-        self._xml_match_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._xml_match_label.setAlignment(Qt.AlignCenter)
 
         copy_btn = QPushButton("Copy XML")
         copy_btn.setFixedWidth(75)
@@ -439,7 +439,7 @@ class EntityLibraryBrowserDialog(QDialog):
         self._xml_view.setStyleSheet(
             "QPlainTextEdit { background: #1a1a1a; color: #d4d4d4;"
             " border: 1px solid #333; font-family: Consolas, monospace; }")
-        self._xml_view.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self._xml_view.setLineWrapMode(QPlainTextEdit.NoWrap)
         _XmlHighlighter(self._xml_view.document())
         layout.addWidget(self._xml_view, 1)
 
@@ -516,7 +516,7 @@ class EntityLibraryBrowserDialog(QDialog):
 
             lib_item = QTreeWidgetItem(self._entity_tree, [lib_name])
             lib_item.setExpanded(True)
-            lib_item.setFlags(lib_item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            lib_item.setFlags(lib_item.flags() & ~Qt.ItemIsSelectable)
             f = lib_item.font(0); f.setBold(True); lib_item.setFont(0, f)
             lib_item.setForeground(0, QColor("#4EC9B0"))
 
@@ -528,7 +528,7 @@ class EntityLibraryBrowserDialog(QDialog):
                 proto_item = QTreeWidgetItem(lib_item, [proto_name])
                 key = id(proto_item)
                 self._proto_items[key] = (proto_elem, entity_elem, proto_name, lib_name)
-                proto_item.setData(0, Qt.ItemDataRole.UserRole, key)
+                proto_item.setData(0, Qt.UserRole, key)
                 total += 1
 
         self._count_label.setText(f"{total} prototypes")
@@ -538,7 +538,7 @@ class EntityLibraryBrowserDialog(QDialog):
     # ------------------------------------------------------------------
 
     def _on_item_clicked(self, item, _col):
-        key = item.data(0, Qt.ItemDataRole.UserRole)
+        key = item.data(0, Qt.UserRole)
         if key is None or key not in self._proto_items:
             return
         proto_elem, entity_elem, proto_name, lib_name = self._proto_items[key]
@@ -713,7 +713,7 @@ class EntityLibraryBrowserDialog(QDialog):
 
     def _on_xml_find_changed(self, text):
         """Rebuild the list of all match cursors and jump to the first one."""
-        from PyQt6.QtGui import QTextDocument
+        from PyQt5.QtGui import QTextDocument
         self._xml_cursors = []
         self._xml_find_index = -1
 

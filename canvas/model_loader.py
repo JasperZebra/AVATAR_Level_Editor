@@ -14,8 +14,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 import OpenGL.GL as gl
 from OpenGL.GL import *
-from PyQt6.QtGui import QVector3D, QMatrix4x4, QImage
-from PyQt6.QtWidgets import QApplication
+from PyQt5.QtGui import QVector3D, QMatrix4x4, QImage
+from PyQt5.QtWidgets import QApplication
 from io import BytesIO
 
 import time

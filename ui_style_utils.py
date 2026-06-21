@@ -9,13 +9,13 @@ def _ensure_x_icon():
     if _x_icon_ready:
         return
     try:
-        from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor
-        from PyQt6.QtCore import Qt
+        from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor
+        from PyQt5.QtCore import Qt
         pix = QPixmap(18, 18)
-        pix.fill(Qt.GlobalColor.transparent)
+        pix.fill(Qt.transparent)
         p = QPainter(pix)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(QPen(QColor(255, 255, 255), 3, Qt.PenStyle.SolidLine))
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(QPen(QColor(255, 255, 255), 3, Qt.SolidLine))
         p.drawLine(4, 4, 14, 14)
         p.drawLine(14, 4, 4, 14)
         p.end()

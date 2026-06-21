@@ -13,15 +13,15 @@ import struct
 import copy
 import xml.etree.ElementTree as ET
 
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QLabel, QDoubleSpinBox, QSpinBox, QCheckBox, QComboBox,
     QPushButton, QScrollArea, QWidget, QMessageBox, QLineEdit,
     QFrame, QSizePolicy, QListWidget, QListWidgetItem, QDialogButtonBox,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QCompleter
-from PyQt6.QtGui import QFont
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import QCompleter
+from PyQt5.QtGui import QFont
 
 from entity_editor import (
     string_to_binhex, int32_to_binhex, int64_to_binhex,
@@ -367,7 +367,7 @@ class SpawnPointPickerDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # Mode tabs
-        from PyQt6.QtWidgets import QTabWidget
+        from PyQt5.QtWidgets import QTabWidget
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
 
@@ -400,7 +400,7 @@ class SpawnPointPickerDialog(QDialog):
         self.tabs.addTab(pick_tab, 'Pick Existing')
 
         # Buttons
-        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self._on_ok)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
@@ -409,7 +409,7 @@ class SpawnPointPickerDialog(QDialog):
         for entity in getattr(self.editor, 'entities', []):
             if 'NPCSpawnPoint' in entity.name:
                 item = QListWidgetItem(f'{entity.name}  (ID: {entity.id})')
-                item.setData(Qt.ItemDataRole.UserRole, entity)
+                item.setData(Qt.UserRole, entity)
                 self.sp_list.addItem(item)
 
     def _on_ok(self):
@@ -429,7 +429,7 @@ class SpawnPointPickerDialog(QDialog):
             if not item:
                 QMessageBox.warning(self, 'No Selection', 'Select an existing spawn point.')
                 return
-            entity = item.data(Qt.ItemDataRole.UserRole)
+            entity = item.data(Qt.UserRole)
             self.result_mode = 'existing'
             self.result_name = entity.name
             self.result_entity_id = int(entity.id)
@@ -477,11 +477,11 @@ class WaveRowWidget(QWidget):
 
         self.arch_combo = QComboBox()
         self.arch_combo.setEditable(True)
-        self.arch_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.arch_combo.setInsertPolicy(QComboBox.NoInsert)
         self.arch_combo.addItems(archetypes)
         completer = QCompleter(archetypes)
-        completer.setFilterMode(Qt.MatchFlag.MatchContains)
-        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
         self.arch_combo.setCompleter(completer)
         self.arch_combo.setCurrentText('')
         self.arch_combo.setMinimumWidth(260)
@@ -508,7 +508,7 @@ class WaveRowWidget(QWidget):
             self.default_x, self.default_y, self.default_z,
             parent=self
         )
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if dlg.exec() == QDialog.Accepted:
             self._spawn_mode = dlg.result_mode
             self._spawn_name = dlg.result_name
             if dlg.result_mode == 'existing':
@@ -582,12 +582,12 @@ class MPSpawnCreatorDialog(QDialog):
 
         add_btn = QPushButton('+ Add Wave')
         add_btn.clicked.connect(self._add_wave)
-        waves_vbox.addWidget(add_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        waves_vbox.addWidget(add_btn, alignment=Qt.AlignLeft)
 
         root_layout.addWidget(waves_group)
 
-        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        btns.button(QDialogButtonBox.StandardButton.Ok).setText('Create')
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.button(QDialogButtonBox.Ok).setText('Create')
         btns.accepted.connect(self._on_create)
         btns.rejected.connect(self.reject)
         root_layout.addWidget(btns)

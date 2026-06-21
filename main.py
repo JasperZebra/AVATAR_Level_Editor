@@ -72,12 +72,12 @@ def _excepthook(exc_type, exc_value, exc_tb):
     _write_crash_log(''.join(lines))
     # Try to show a Qt message box so the user knows to check the log
     try:
-        from PyQt6.QtWidgets import QApplication, QMessageBox
+        from PyQt5.QtWidgets import QApplication, QMessageBox
         app = QApplication.instance()
         if app:
             msg = QMessageBox()
             msg.setWindowTitle("Avatar Level Editor — Crash")
-            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.setIcon(QMessageBox.Critical)
             msg.setText(
                 f"The editor crashed with an unhandled error.\n\n"
                 f"Details have been written to:\n{CRASH_LOG_PATH}\n\n"
@@ -115,8 +115,8 @@ def main():
         return
 
     # 👉 Move GUI imports here so workers NEVER import them
-    from PyQt6.QtWidgets import QApplication
-    from PyQt6.QtGui import QIcon, QSurfaceFormat
+    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtGui import QIcon, QSurfaceFormat
     from game_selector import GameSelectorDialog
     from simplified_map_editor import SimplifiedMapEditor
 
@@ -149,7 +149,7 @@ def main():
     selector = GameSelectorDialog()
     result = selector.exec()
 
-    if result == GameSelectorDialog.DialogCode.Accepted:
+    if result == GameSelectorDialog.Accepted:
         selected_game = selector.get_selected_game()
 
         if selected_game:

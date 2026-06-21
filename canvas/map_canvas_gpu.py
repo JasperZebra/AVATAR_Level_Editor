@@ -7,10 +7,10 @@ from time import time
 import math
 import numpy as np
 import OpenGL.GL as gl
-from PyQt6.QtGui import QMatrix4x4, QVector3D
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from PyQt6.QtGui import QPainter, QColor, QPixmap, QTransform, QFont, QPen, QVector4D, QCursor
-from PyQt6.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, QPushButton, QApplication
+from PyQt5.QtGui import QMatrix4x4, QVector3D
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from PyQt5.QtGui import QPainter, QColor, QPixmap, QTransform, QFont, QPen, QVector4D, QCursor
+from PyQt5.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, QPushButton, QApplication
 
 # View mode constants
 MODE_TOPDOWN = 0
@@ -18,14 +18,14 @@ MODE_3D = 1
 
 # Import GPU components
 try:
-    from PyQt6.QtOpenGLWidgets import QOpenGLWidget
+    from PyQt5.QtWidgets import QOpenGLWidget
     from OpenGL.GL import *
     from OpenGL.GLU import *
     import OpenGL.GL as gl
     OPENGL_AVAILABLE = True
     print("OpenGL libraries loaded successfully")
 except ImportError as e:
-    from PyQt6.QtWidgets import QWidget as QOpenGLWidget
+    from PyQt5.QtWidgets import QWidget as QOpenGLWidget
     OPENGL_AVAILABLE = False
     print(f"OpenGL not available ({e}) - falling back to CPU rendering")
 
@@ -2052,7 +2052,7 @@ class MapCanvas(QOpenGLWidget):
         else:
             print("Switching to 2D mode")
             self.mouse_captured_3d = False
-            self.setCursor(Qt.CursorShape.ArrowCursor)
+            self.setCursor(Qt.ArrowCursor)
         
         self.update()
 
@@ -2511,7 +2511,7 @@ class MapCanvas(QOpenGLWidget):
         if errors:
             msg += f"; {len(errors)} error(s): {', '.join(os.path.basename(p) for p in errors)}"
         print(msg)
-        from PyQt6.QtWidgets import QMessageBox
+        from PyQt5.QtWidgets import QMessageBox
         QMessageBox.information(self, "Save Textures",
                                 f"Saved {saved} atlas file(s)." +
                                 (f"\nErrors: {len(errors)}" if errors else ""))
@@ -3137,8 +3137,8 @@ class MapCanvas(QOpenGLWidget):
         self._glow_timer.start()
         
         self.setMouseTracking(True)
-        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setFocus()
         
         print("Canvas event handling setup complete - 2D AND 3D")
@@ -3564,7 +3564,7 @@ class MapCanvas(QOpenGLWidget):
         start_x, start_y, end_x, end_y = box_coords
         
         # Draw selection box rectangle
-        from PyQt6.QtGui import QPen, QBrush, QColor
+        from PyQt5.QtGui import QPen, QBrush, QColor
         
         # Semi-transparent blue fill
         painter.setBrush(QBrush(QColor(100, 150, 255, 50)))
@@ -3614,7 +3614,7 @@ class MapCanvas(QOpenGLWidget):
             self.grid_renderer.render_2d_grid(self)
         
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.Antialiasing)
         
         try:
             if hasattr(self, 'terrain_renderer'):
@@ -3985,7 +3985,7 @@ class MapCanvas(QOpenGLWidget):
             if getattr(self, 'show_3d_hud', True):
                 # Draw 2D UI overlays on top
                 painter = QPainter(self)
-                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.setRenderHint(QPainter.Antialiasing)
 
                 try:
                     self._draw_3d_ui_overlays(painter)
@@ -4005,7 +4005,7 @@ class MapCanvas(QOpenGLWidget):
         # ── FPS counter (top-right) ──
         fps = getattr(self, '_fps', None)
         if fps is not None:
-            painter.setFont(QFont("Consolas", 11, QFont.Weight.Bold))
+            painter.setFont(QFont("Consolas", 11, QFont.Bold))
             fm = painter.fontMetrics()
             fps_text = f"{fps:5.1f} FPS"
             if fps >= 50.0:
@@ -4022,7 +4022,7 @@ class MapCanvas(QOpenGLWidget):
             painter.drawText(fx, fy + 2, fps_text)
 
         # View/Edit mode badge (bottom-left) — mirrors 2D badge style
-        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 10, QFont.Bold))
         metrics = painter.fontMetrics()
 
         mode_label = "EDIT MODE" if edit_mode else "VIEW MODE"
@@ -4049,7 +4049,7 @@ class MapCanvas(QOpenGLWidget):
         painter.drawText(badge_x, badge_y - 3, hint_label)
 
         # Terrain snap badge (immediately right of the View/Edit badge)
-        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 10, QFont.Bold))
         metrics = painter.fontMetrics()
         snap_label = "TERRAIN SNAP"
         snap_w = metrics.horizontalAdvance(snap_label) + 14
@@ -4110,7 +4110,7 @@ class MapCanvas(QOpenGLWidget):
 
         # Warning badge — shown when terrain edit is on but no heightmap is loaded
         if self.terrain_edit_mode and not self._has_terrain_heightmap():
-            painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+            painter.setFont(QFont("Arial", 9, QFont.Bold))
             warn_m = painter.fontMetrics()
             warn_text = "⚠ Load terrain in panel to edit"
             warn_w = warn_m.horizontalAdvance(warn_text) + 14
@@ -4122,7 +4122,7 @@ class MapCanvas(QOpenGLWidget):
             painter.drawText(warn_x + 7, warn_y + warn_m.ascent() + 3, warn_text)
 
         # Camera info (top-left)
-        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 10, QFont.Bold))
         painter.setPen(QPen(QColor(255, 255, 255), 1))
         metrics = painter.fontMetrics()
         cam = self.camera_3d
@@ -4149,7 +4149,7 @@ class MapCanvas(QOpenGLWidget):
             badge_color  = QColor(30, 100, 30, 200)   # green — view / safe
             text_color   = QColor(140, 220, 140)
 
-        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 10, QFont.Bold))
         metrics = painter.fontMetrics()
         margin  = 8
 
@@ -4628,9 +4628,9 @@ class MapCanvas(QOpenGLWidget):
         k = event.key()
 
         # Undo / Redo
-        ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
-        shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
-        if ctrl and k == Qt.Key.Key_Z:
+        ctrl = bool(event.modifiers() & Qt.ControlModifier)
+        shift = bool(event.modifiers() & Qt.ShiftModifier)
+        if ctrl and k == Qt.Key_Z:
             if self.terrain_edit_mode and getattr(self, '_terrain_data', None) is not None:
                 if shift:
                     self._terrain_redo()
@@ -4642,7 +4642,7 @@ class MapCanvas(QOpenGLWidget):
                 else:
                     self.undo_redo.undo(self)
             return
-        if ctrl and k == Qt.Key.Key_Y:
+        if ctrl and k == Qt.Key_Y:
             if self.terrain_edit_mode and getattr(self, '_terrain_data', None) is not None:
                 self._terrain_redo()
             elif hasattr(self, 'undo_redo'):
@@ -4650,39 +4650,39 @@ class MapCanvas(QOpenGLWidget):
             return
 
         # F1 — cycle the render debug profiler (Off → Profile → per-feature A/B)
-        if k == Qt.Key.Key_F1:
+        if k == Qt.Key_F1:
             self._cycle_debug_mode()
             return
         # F2 / F3 — force the GPU-driven render tier (NVIDIA/bindless, AMD/texarray)
-        if k == Qt.Key.Key_F2:
+        if k == Qt.Key_F2:
             self._set_render_tier('bindless')
             return
-        if k == Qt.Key.Key_F3:
+        if k == Qt.Key_F3:
             self._set_render_tier('texarray')
             return
         # F4 — day/night cycle (off → playing → paused → off)
-        if k == Qt.Key.Key_F4:
+        if k == Qt.Key_F4:
             self._toggle_day_night()
             return
         # F5 / F6 — normal-map debug: flip green (Y) channel / flip base normal
-        if k == Qt.Key.Key_F5:
+        if k == Qt.Key_F5:
             self._toggle_flip_green()
             return
-        if k == Qt.Key.Key_F6:
+        if k == Qt.Key_F6:
             self._toggle_flip_normal()
             return
         # F7 — sun shadow mapping (only visible with day/night on + sun up)
-        if k == Qt.Key.Key_F7:
+        if k == Qt.Key_F7:
             self._toggle_shadows()
             return
         # F8 — depth prepass (early-Z occlusion) on the GPU-driven path
-        if k == Qt.Key.Key_F8:
+        if k == Qt.Key_F8:
             self._toggle_depth_prepass()
             return
         # F9 — contribution cull threshold (GPU-driven path): skip model
         # instances smaller than N px on screen. The vertex-load lever for
         # integrated/weak GPUs. Cycles OFF → 3 → 6 → 10 px.
-        if k == Qt.Key.Key_F9:
+        if k == Qt.Key_F9:
             ml = getattr(self, 'model_loader', None)
             if ml is not None:
                 steps = [0.0, 3.0, 6.0, 10.0]
@@ -4695,12 +4695,12 @@ class MapCanvas(QOpenGLWidget):
             return
 
         # Toggle 2D/3D view mode
-        if k == Qt.Key.Key_T:
+        if k == Qt.Key_T:
             self.toggle_view_mode()
             return
 
         # Space — toggle View/Edit mode (2D or 3D)
-        if k == Qt.Key.Key_Space:
+        if k == Qt.Key_Space:
             if self.mode == MODE_3D:
                 self.input_handler.toggle_edit_mode_3d()
             else:
@@ -4708,7 +4708,7 @@ class MapCanvas(QOpenGLWidget):
             return
 
         # Update SHIFT modifier state for both 2D and 3D
-        if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+        if event.modifiers() & Qt.ShiftModifier:
             if self.mode == MODE_3D:
                 self.camera_3d.set_shift_modifier(True)
             else:
@@ -4717,27 +4717,27 @@ class MapCanvas(QOpenGLWidget):
         # ========== 3D VIEW TOGGLES (only work in 3D mode) ==========
         if self.mode == MODE_3D:
             # H - Toggle 3D HUD
-            if k == Qt.Key.Key_H:
+            if k == Qt.Key_H:
                 self.toggle_3d_hud()
                 return
             
             # G - Toggle 3D Grid
-            if k == Qt.Key.Key_G:
+            if k == Qt.Key_G:
                 self.toggle_3d_grid()
                 return
             
             # B - Toggle 3D Cubes
-            if k == Qt.Key.Key_B:
+            if k == Qt.Key_B:
                 self.toggle_3d_cubes()
                 return
 
         # Rotation controls for selected entity/entities (K = rotate left, L = rotate right)
-        if k in (Qt.Key.Key_K, Qt.Key.Key_L) and self.selected_entity is not None:
+        if k in (Qt.Key_K, Qt.Key_L) and self.selected_entity is not None:
             # Calculate rotation amount
-            rotation_delta = -1.0 if k == Qt.Key.Key_K else 1.0  # K rotates left (CCW), L rotates right (CW)
+            rotation_delta = -1.0 if k == Qt.Key_K else 1.0  # K rotates left (CCW), L rotates right (CW)
 
             # Fine control with SHIFT (0.1 degree increments)
-            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            if event.modifiers() & Qt.ShiftModifier:
                 rotation_delta = rotation_delta * 0.1  # 0.1 degree for fine control
 
             # Get all selected entities (supports group selection and Structure children)
@@ -4800,12 +4800,12 @@ class MapCanvas(QOpenGLWidget):
         _edit_mode_2d = getattr(self.input_handler, 'edit_mode_2d', True)
         _movement_blocked = (not _edit_mode_2d) and (self.mode != MODE_3D)
 
-        if k in (Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right) and self.selected_entity is not None:
+        if k in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right) and self.selected_entity is not None:
             if _movement_blocked:
                 return
             # Calculate movement delta
             move_amount = 1.0
-            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            if event.modifiers() & Qt.ShiftModifier:
                 move_amount = 0.01  # Fine control
 
             # Determine direction
@@ -4813,13 +4813,13 @@ class MapCanvas(QOpenGLWidget):
             delta_y = 0.0
             delta_z = 0.0
 
-            if k == Qt.Key.Key_Up:
+            if k == Qt.Key_Up:
                 delta_z = move_amount  # Height up
-            elif k == Qt.Key.Key_Down:
+            elif k == Qt.Key_Down:
                 delta_z = -move_amount  # Height down
-            elif k == Qt.Key.Key_Left:
+            elif k == Qt.Key_Left:
                 delta_x = -move_amount  # Move left
-            elif k == Qt.Key.Key_Right:
+            elif k == Qt.Key_Right:
                 delta_x = move_amount  # Move right
 
             # Get all selected entities (supports group selection)
@@ -4880,17 +4880,17 @@ class MapCanvas(QOpenGLWidget):
             return
 
         # Comma and Period keys for forward/backward movement (Y-axis)
-        if k in (Qt.Key.Key_Comma, Qt.Key.Key_Period, Qt.Key.Key_Less, Qt.Key.Key_Greater) and self.selected_entity is not None:
+        if k in (Qt.Key_Comma, Qt.Key_Period, Qt.Key_Less, Qt.Key_Greater) and self.selected_entity is not None:
             if _movement_blocked:
                 return
             # Calculate movement delta
             move_amount = 1.0
-            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            if event.modifiers() & Qt.ShiftModifier:
                 move_amount = 0.01  # Fine control
 
             # Determine direction (Y-axis in game coordinates)
             # Handle both , and < (shift+comma), . and > (shift+period)
-            delta_y = -move_amount if k in (Qt.Key.Key_Comma, Qt.Key.Key_Less) else move_amount
+            delta_y = -move_amount if k in (Qt.Key_Comma, Qt.Key_Less) else move_amount
 
             # Get all selected entities (supports group selection)
             entities_to_move = self.selected if hasattr(self, 'selected') and self.selected else [self.selected_entity]
@@ -4952,7 +4952,7 @@ class MapCanvas(QOpenGLWidget):
         k = event.key()
         
         # Update SHIFT modifier state for both 2D and 3D
-        if not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+        if not (event.modifiers() & Qt.ShiftModifier):
             if self.mode == MODE_3D:
                 self.camera_3d.set_shift_modifier(False)
             else:
@@ -5204,7 +5204,7 @@ class MapCanvas(QOpenGLWidget):
     def mousePressEvent(self, event):
         """Handle mouse press - mode aware with Structure group selection"""
         if self.mode == MODE_3D:
-            if event.button() == Qt.MouseButton.LeftButton:
+            if event.button() == Qt.LeftButton:
                 mouse_x = event.position().x()
                 mouse_y = event.position().y()
 
@@ -5343,9 +5343,9 @@ class MapCanvas(QOpenGLWidget):
                 self.update()
                 return
                 
-            elif event.button() == Qt.MouseButton.RightButton:
+            elif event.button() == Qt.RightButton:
                 self.mouse_captured_3d = True
-                self.setCursor(Qt.CursorShape.BlankCursor)
+                self.setCursor(Qt.BlankCursor)
                 self._mouse_anchor_global = self.mapToGlobal(event.position().toPoint())
                 return
         else:
@@ -5355,7 +5355,7 @@ class MapCanvas(QOpenGLWidget):
     def mouseReleaseEvent(self, event):
         """Handle mouse release - mode aware"""
         if self.mode == MODE_3D:
-            if event.button() == Qt.MouseButton.LeftButton:
+            if event.button() == Qt.LeftButton:
                 # End terrain edit stroke
                 if self.terrain_edit_mode and self._terrain_edit_pressing:
                     self._terrain_edit_pressing = False
@@ -5382,7 +5382,7 @@ class MapCanvas(QOpenGLWidget):
                         if hasattr(self, '_flush_managers_xml'):
                             self._flush_managers_xml()
                     self.update()
-            elif event.button() == Qt.MouseButton.RightButton:
+            elif event.button() == Qt.RightButton:
                 self.mouse_captured_3d = False
                 self.unsetCursor()
         else:
@@ -6109,13 +6109,13 @@ class MapCanvas(QOpenGLWidget):
     def render_models_thumbnail(self, models, size=128, azimuth=45.0, elevation=-17.0, distance_mult=1.8):
         """Render a list of GLTFModels into one FBO (for kit-assembled NPCs)."""
         try:
-            from PyQt6.QtOpenGL import QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
+            from PyQt5.QtGui import QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
             from OpenGL.GLU import gluPerspective, gluLookAt
 
             self.makeCurrent()
 
             fmt = QOpenGLFramebufferObjectFormat()
-            fmt.setAttachment(QOpenGLFramebufferObject.Attachment.CombinedDepthStencil)
+            fmt.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
             fbo = QOpenGLFramebufferObject(size, size, fmt)
             if not fbo.isValid() or not fbo.bind():
                 self.doneCurrent()
@@ -6194,7 +6194,7 @@ class MapCanvas(QOpenGLWidget):
             fbo.release()
             self.doneCurrent()
 
-            from PyQt6.QtGui import QTransform as _QT
+            from PyQt5.QtGui import QTransform as _QT
             raw = raw.transformed(_QT().rotate(90))
             raw = raw.mirrored(True, False)
             return raw
@@ -6214,13 +6214,13 @@ class MapCanvas(QOpenGLWidget):
         Returns None on any failure.
         """
         try:
-            from PyQt6.QtOpenGL import QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
+            from PyQt5.QtGui import QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
             from OpenGL.GLU import gluPerspective, gluLookAt
 
             self.makeCurrent()
 
             fmt = QOpenGLFramebufferObjectFormat()
-            fmt.setAttachment(QOpenGLFramebufferObject.Attachment.CombinedDepthStencil)
+            fmt.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
             fbo = QOpenGLFramebufferObject(size, size, fmt)
             if not fbo.isValid() or not fbo.bind():
                 self.doneCurrent()
@@ -6293,7 +6293,7 @@ class MapCanvas(QOpenGLWidget):
             self.doneCurrent()
 
             # Rotate 90° clockwise then mirror vertically
-            from PyQt6.QtGui import QTransform as _QT
+            from PyQt5.QtGui import QTransform as _QT
             raw = raw.transformed(_QT().rotate(90))
             raw = raw.mirrored(True, False)
             return raw
@@ -6661,8 +6661,8 @@ class MapCanvas(QOpenGLWidget):
                 return
 
         try:
-            from PyQt6.QtGui import QPen, QBrush, QColor, QFont
-            from PyQt6.QtCore import Qt
+            from PyQt5.QtGui import QPen, QBrush, QColor, QFont
+            from PyQt5.QtCore import Qt
             from collections import defaultdict
 
             original_pen = painter.pen()
@@ -6687,7 +6687,7 @@ class MapCanvas(QOpenGLWidget):
             _font_px = max(4, min(16, round(6 * self.scale_factor)))
             _lbl_font = QFont("Arial")
             _lbl_font.setPixelSize(_font_px)
-            _lbl_font.setWeight(QFont.Weight.Bold)
+            _lbl_font.setWeight(QFont.Bold)
             painter.setFont(_lbl_font)
             bg_padding = 2
             boundaries_drawn = 0
@@ -6737,9 +6737,9 @@ class MapCanvas(QOpenGLWidget):
                     # ── Draw worldsector box (green) ───────────────────────────
                     if sector_info:
                         painter.setBrush(QBrush(QColor(0, 200, 0, 10)))
-                        painter.setPen(Qt.PenStyle.NoPen)
+                        painter.setPen(Qt.NoPen)
                         painter.drawRect(rx, ry, rw, rh)
-                        painter.setBrush(Qt.BrushStyle.NoBrush)
+                        painter.setBrush(Qt.NoBrush)
                         painter.setPen(QPen(QColor(0, 200, 0, 220), 2))
                         painter.drawRect(rx, ry, rw, rh)
 
@@ -6759,9 +6759,9 @@ class MapCanvas(QOpenGLWidget):
                     # ── Draw landmark box (purple) ─────────────────────────────
                     if landmark_ref:
                         painter.setBrush(QBrush(QColor(150, 0, 255, 8)))
-                        painter.setPen(Qt.PenStyle.NoPen)
+                        painter.setPen(Qt.NoPen)
                         painter.drawRect(rx, ry, rw, rh)
-                        painter.setBrush(Qt.BrushStyle.NoBrush)
+                        painter.setBrush(Qt.NoBrush)
                         painter.setPen(QPen(QColor(150, 0, 255, 220), 2))
                         painter.drawRect(rx, ry, rw, rh)
 
@@ -6832,9 +6832,9 @@ class MapCanvas(QOpenGLWidget):
                         continue
 
                     painter.setBrush(QBrush(QColor(255, 140, 0, 8)))
-                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setPen(Qt.NoPen)
                     painter.drawRect(rx, ry, rw, rh)
-                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.setBrush(Qt.NoBrush)
                     painter.setPen(QPen(QColor(255, 140, 0, 220), 2))
                     painter.drawRect(rx, ry, rw, rh)
 

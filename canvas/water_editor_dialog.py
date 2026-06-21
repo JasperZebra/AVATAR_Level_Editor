@@ -1,16 +1,16 @@
 """
 Water Editor Dialog for Avatar: The Game Level Editor
-PyQt6 implementation that integrates with the existing map editor
+PyQt5 implementation that integrates with the existing map editor
 """
 
 import os
 import struct
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QSlider, QLineEdit, QComboBox, QFrame, QMessageBox, QGroupBox, QCheckBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QBrush
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QFont, QPainter, QColor, QPen, QBrush
 from ui_style_utils import apply_checkbox_style
 
 
@@ -47,7 +47,7 @@ class SectorGridWidget(QFrame):
         super().__init__(parent)
         self.setMinimumSize(480, 480)
         self.setMaximumSize(480, 480)
-        self.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Sunken)
+        self.setFrameStyle(QFrame.Box | QFrame.Sunken)
         self.setLineWidth(2)
         
         self.sdat_folder = None
@@ -112,7 +112,7 @@ class SectorGridWidget(QFrame):
         super().paintEvent(event)
         
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.Antialiasing)
         
         cell_size = 30
         
@@ -173,7 +173,7 @@ class SectorGridWidget(QFrame):
             # Check if file exists
             file_path = os.path.join(self.sdat_folder, f'sd{sector_index}.csdat')
             if os.path.isfile(file_path):
-                if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                if event.modifiers() & Qt.ControlModifier:
                     # Ctrl+click: toggle in multi-selection without changing primary sector
                     if sector_index in self.selected_sectors:
                         self.selected_sectors.discard(sector_index)
@@ -213,8 +213,8 @@ class WaterEditorDialog(QDialog):
         
         # Header
         header = QLabel("🌊 Water Editor")
-        header.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header.setFont(QFont("Arial", 16, QFont.Bold))
+        header.setAlignment(Qt.AlignCenter)
         layout.addWidget(header)
         
         # Main content area
@@ -232,7 +232,7 @@ class WaterEditorDialog(QDialog):
         
         # Status bar at bottom
         self.status_label = QLabel("No folder loaded")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
         
         self.setLayout(layout)
@@ -272,11 +272,11 @@ class WaterEditorDialog(QDialog):
 
         # Water height control
         height_label = QLabel("Water Height")
-        height_label.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        height_label.setFont(QFont("Arial", 11, QFont.Bold))
         layout.addWidget(height_label)
 
         # Slider  (0–2000 maps to 0.0–200.0 world units)
-        self.height_slider = QSlider(Qt.Orientation.Horizontal)
+        self.height_slider = QSlider(Qt.Horizontal)
         self.height_slider.setMinimum(0)
         self.height_slider.setMaximum(2000)
         self.height_slider.setValue(0)
@@ -294,7 +294,7 @@ class WaterEditorDialog(QDialog):
 
         self.height_entry = QLineEdit("0.00")
         self.height_entry.setMaximumWidth(100)
-        self.height_entry.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.height_entry.setAlignment(Qt.AlignCenter)
         self.height_entry.textChanged.connect(self.on_height_entry_changed)
         entry_layout.addWidget(self.height_entry)
 
@@ -310,7 +310,7 @@ class WaterEditorDialog(QDialog):
 
         # Water material dropdown — short display names, full path as tooltip
         material_label = QLabel("Water Material")
-        material_label.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        material_label.setFont(QFont("Arial", 11, QFont.Bold))
         layout.addWidget(material_label)
 
         self.path_dropdown = QComboBox()
@@ -320,7 +320,7 @@ class WaterEditorDialog(QDialog):
             self.path_dropdown.setItemData(
                 self.path_dropdown.count() - 1,
                 path_bytes.decode('ascii'),
-                Qt.ItemDataRole.ToolTipRole
+                Qt.ToolTipRole
             )
         layout.addWidget(self.path_dropdown)
 
@@ -347,7 +347,7 @@ class WaterEditorDialog(QDialog):
 
         # Sector info display
         self.sector_info = QLabel("Select a sector to edit")
-        self.sector_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.sector_info.setAlignment(Qt.AlignCenter)
         self.sector_info.setWordWrap(True)
         layout.addWidget(self.sector_info)
 
@@ -416,13 +416,13 @@ class WaterEditorDialog(QDialog):
         
     def browse_sdat_folder(self):
         """Browse for SDAT folder"""
-        from PyQt6.QtWidgets import QFileDialog
+        from PyQt5.QtWidgets import QFileDialog
         
         folder = QFileDialog.getExistingDirectory(
             self,
             "Select SDAT Folder",
             "",
-            QFileDialog.Option.ShowDirsOnly
+            QFileDialog.ShowDirsOnly
         )
         
         if folder:
@@ -835,10 +835,10 @@ class WaterEditorDialog(QDialog):
             self,
             "Confirm Reset",
             f"Are you sure you want to clear water from sector {self.current_sector}?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
         
-        if reply != QMessageBox.StandardButton.Yes:
+        if reply != QMessageBox.Yes:
             return
             
         target_path = os.path.join(self.sdat_folder, f'sd{self.current_sector}.csdat')

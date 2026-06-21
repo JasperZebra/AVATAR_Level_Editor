@@ -2,8 +2,8 @@
 
 import math
 import time
-from PyQt6.QtCore import QPoint
-from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QVector3D
+from PyQt5.QtCore import QPoint
+from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QVector3D
 from .opengl_utils import OpenGLUtils
 
 class RotationGizmo:
@@ -358,7 +358,7 @@ class RotationGizmo:
         
         # Draw angle text with better positioning to avoid overlap
         game_rotation = (360 - self.current_rotation) % 360
-        painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+        painter.setFont(QFont("Arial", 8, QFont.Bold))
         
         # Position text below the gizmo to avoid entity label overlap
         text_x = int(screen_x - 30)

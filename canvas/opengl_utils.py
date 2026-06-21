@@ -2,7 +2,7 @@
 
 import math
 from time import time
-from PyQt6.QtGui import QVector3D
+from PyQt5.QtGui import QVector3D
 
 
 # ---------------------------------------------------------------------------
@@ -49,17 +49,17 @@ class OpenGLUtils:
     def create_shader_program(vertex_source, fragment_source):
         """Create and compile a shader program (for future OpenGL expansion)"""
         try:
-            from PyQt6.QtOpenGL import QOpenGLShaderProgram, QOpenGLShader
+            from PyQt5.QtGui import QOpenGLShaderProgram, QOpenGLShader
             
             program = QOpenGLShaderProgram()
             
             # Add vertex shader
-            if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, vertex_source):
+            if not program.addShaderFromSourceCode(QOpenGLShader.Vertex, vertex_source):
                 print(f"Vertex shader failed: {program.log()}")
                 return None
             
             # Add fragment shader
-            if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, fragment_source):
+            if not program.addShaderFromSourceCode(QOpenGLShader.Fragment, fragment_source):
                 print(f"Fragment shader failed: {program.log()}")
                 return None
             
@@ -81,7 +81,7 @@ class OpenGLUtils:
     def create_opengl_buffer(data, buffer_type):
         """Create an OpenGL buffer with data (for future expansion)"""
         try:
-            from PyQt6.QtOpenGL import QOpenGLBuffer
+            from PyQt5.QtGui import QOpenGLBuffer
             import numpy as np
             
             buffer = QOpenGLBuffer(buffer_type)

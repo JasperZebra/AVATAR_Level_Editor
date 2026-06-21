@@ -1,8 +1,8 @@
 """2D camera controller for navigation and view management - 2D ONLY VERSION"""
 
 import math
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QVector3D
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QVector3D
 from .opengl_utils import OpenGLUtils
 
 class CameraController:

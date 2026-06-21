@@ -9,8 +9,8 @@ Key fixes:
 """
 
 import numpy as np
-from PyQt6.QtGui import QPainter, QImage, QPixmap, QTransform
-from PyQt6.QtCore import Qt
+from PyQt5.QtGui import QPainter, QImage, QPixmap, QTransform
+from PyQt5.QtCore import Qt
 import io
 import os
 import glob
@@ -567,7 +567,7 @@ class TerrainRenderer:
             total_width,
             total_height,
             total_width * 3,
-            QImage.Format.Format_RGB888
+            QImage.Format_RGB888
         )
         self.terrain_pixmap = QPixmap.fromImage(self.terrain_image)
         step = self.grid_size - 1
@@ -582,8 +582,8 @@ class TerrainRenderer:
 
         total_width = self.sectors_x * self.grid_size
         total_height = self.sectors_y * self.grid_size
-        combined_image = QImage(total_width, total_height, QImage.Format.Format_RGB888)
-        combined_image.fill(Qt.GlobalColor.black)
+        combined_image = QImage(total_width, total_height, QImage.Format_RGB888)
+        combined_image.fill(Qt.black)
 
         if not self.atlas_mapping:
             self.build_atlas_mapping()
@@ -634,7 +634,7 @@ class TerrainRenderer:
                     norm = (heights - heights.min()) / (heights.max() - heights.min() + 1e-5)
                     rgb_array = np.stack([norm * 255] * 3, axis=-1).astype(np.uint8)
                     sector_texture = QImage(rgb_array.data, self.grid_size, self.grid_size, 
-                                           self.grid_size * 3, QImage.Format.Format_RGB888)
+                                           self.grid_size * 3, QImage.Format_RGB888)
 
                 start_x = col * self.grid_size
                 start_y = display_row * self.grid_size
@@ -792,7 +792,7 @@ class TerrainRenderer:
             pil_img.width,
             pil_img.height,
             3 * pil_img.width,
-            QImage.Format.Format_RGB888
+            QImage.Format_RGB888
         )
 
     def render_terrain_2d(self, painter: QPainter, canvas):
@@ -879,9 +879,9 @@ class TerrainRenderer:
         rgb[hm, 1] = (norm[hm] * 200 + 55).astype(np.uint8)
         rgb[hm, 2] = (norm[hm] * 200 + 55).astype(np.uint8)
 
-        from PyQt6.QtGui import QImage, QPixmap
+        from PyQt5.QtGui import QImage, QPixmap
         img = QImage(rgb.data, total_width, total_height,
-                     total_width * 3, QImage.Format.Format_RGB888)
+                     total_width * 3, QImage.Format_RGB888)
         self.terrain_pixmap = QPixmap.fromImage(img)
 
     def set_world_bounds(self, grid_config):

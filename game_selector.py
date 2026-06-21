@@ -1,9 +1,9 @@
 """Game selection dialog for choosing between Avatar and Far Cry 2"""
 
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, 
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, 
                               QLabel, QWidget, QFrame)
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QPixmap
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont, QPixmap
 
 class GameSelectorDialog(QDialog):
     """Dialog for selecting which game to edit"""
@@ -24,14 +24,14 @@ class GameSelectorDialog(QDialog):
         
         # Title
         title_label = QLabel("Select Game to Edit")
-        title_label.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setFont(QFont("Arial", 24, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
         
         # Subtitle
         subtitle_label = QLabel("Choose which game's levels you want to edit")
         subtitle_label.setFont(QFont("Arial", 12))
-        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle_label.setAlignment(Qt.AlignCenter)
         subtitle_label.setStyleSheet("color: #666;")
         layout.addWidget(subtitle_label)
         
@@ -68,7 +68,7 @@ class GameSelectorDialog(QDialog):
         # Info label
         info_label = QLabel("Both games use 64-unit sectors")
         info_label.setFont(QFont("Arial", 9))
-        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        info_label.setAlignment(Qt.AlignCenter)
         info_label.setStyleSheet("color: #999; font-style: italic;")
         layout.addWidget(info_label)
     
@@ -76,7 +76,7 @@ class GameSelectorDialog(QDialog):
         """Create a styled game selection button with optional icon, supports zooming small icons."""
         button = QPushButton()
         button.setMinimumSize(280, 200)
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setCursor(Qt.PointingHandCursor)
         
         # Layout for button content
         button_layout = QVBoxLayout(button)
@@ -85,8 +85,8 @@ class GameSelectorDialog(QDialog):
         
         # Title
         title_label = QLabel(title)
-        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setFont(QFont("Arial", 16, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("color: white;")
         button_layout.addWidget(title_label)
         
@@ -104,21 +104,21 @@ class GameSelectorDialog(QDialog):
                 if pixmap.width() < target_size and pixmap.height() < target_size:
                     pixmap = pixmap.scaled(
                         target_size, target_size,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.FastTransformation  # nearest-neighbor, keeps it sharp
+                        Qt.KeepAspectRatio,
+                        Qt.FastTransformation  # nearest-neighbor, keeps it sharp
                     )
                 else:
                     # Large icons scale down smoothly
                     pixmap = pixmap.scaled(
                         target_size, target_size,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation
+                        Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation
                     )
 
                 # Center the icon on a 120x120 canvas
                 canvas = QPixmap(target_size, target_size)
-                canvas.fill(Qt.GlobalColor.transparent)
-                from PyQt6.QtGui import QPainter
+                canvas.fill(Qt.transparent)
+                from PyQt5.QtGui import QPainter
                 painter = QPainter(canvas)
                 x = (target_size - pixmap.width()) // 2
                 y = (target_size - pixmap.height()) // 2
@@ -126,13 +126,13 @@ class GameSelectorDialog(QDialog):
                 painter.end()
 
                 icon_label.setPixmap(canvas)
-                icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                icon_label.setAlignment(Qt.AlignCenter)
                 button_layout.addWidget(icon_label)
         
         # Description
         desc_label = QLabel(description)
         desc_label.setFont(QFont("Arial", 11))
-        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc_label.setAlignment(Qt.AlignCenter)
         desc_label.setWordWrap(True)
         desc_label.setStyleSheet("color: white;")
         button_layout.addWidget(desc_label)

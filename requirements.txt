@@ -1,5 +1,5 @@
 # Application dependencies
-PyQt6
+PyQt5
 PyOpenGL
 numpy
 Pillow

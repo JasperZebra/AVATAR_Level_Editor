@@ -9,9 +9,10 @@ import time
 import random
 import struct
 import types
-from PyQt6.QtWidgets import QApplication, QMessageBox, QMenu
-from PyQt6.QtCore import QMimeData
-from PyQt6.QtGui import QAction, QKeySequence, QShortcut
+from PyQt5.QtWidgets import QApplication, QMessageBox, QMenu
+from PyQt5.QtCore import QMimeData
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import QAction, QShortcut
 from data_models import Entity
 
 class EntityClipboard:
@@ -259,8 +260,8 @@ class EntityClipboard:
             
             json_string = json.dumps(clipboard_data, indent=2)
             
-            from PyQt6.QtWidgets import QApplication
-            from PyQt6.QtCore import QMimeData
+            from PyQt5.QtWidgets import QApplication
+            from PyQt5.QtCore import QMimeData
             
             clipboard = QApplication.clipboard()
             mime_data = QMimeData()
@@ -313,7 +314,7 @@ class EntityClipboard:
     def paste_entities(self, target_position=None, id_generator=None, name_generator=None):
         """Paste entities with ALL relationships (Structure children + seated NPCs) - FIXED offset with safety checks"""
         try:
-            from PyQt6.QtWidgets import QApplication
+            from PyQt5.QtWidgets import QApplication
             
             clipboard = QApplication.clipboard()
             mime_data = clipboard.mimeData()
@@ -1135,7 +1136,7 @@ def setup_complete_smart_system(editor):
             # Get clipboard data to calculate offset from first entity
             clipboard_data = None
             try:
-                from PyQt6.QtWidgets import QApplication
+                from PyQt5.QtWidgets import QApplication
                 clipboard = QApplication.clipboard()
                 mime_data = clipboard.mimeData()
                 
@@ -1827,11 +1828,11 @@ def setup_complete_smart_system(editor):
             self,
             "Delete Entities",
             message,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
         )
         
-        if reply != QMessageBox.StandardButton.Yes:
+        if reply != QMessageBox.Yes:
             return False
         
         print(f"\n🗑️ DELETING {total_count} entities...")
@@ -2339,12 +2340,12 @@ def setup_ui_integration(editor):
     # editor.edit_menu.addSeparator()
     
     # copy_action = QAction("Copy Entities", editor)
-    # copy_action.setShortcut(QKeySequence.StandardKey.Copy)
+    # copy_action.setShortcut(QKeySequence.Copy)
     # copy_action.triggered.connect(editor.copy_selected_entities)
     # editor.edit_menu.addAction(copy_action)
     
     # paste_action = QAction("Paste Entities", editor)
-    # paste_action.setShortcut(QKeySequence.StandardKey.Paste)
+    # paste_action.setShortcut(QKeySequence.Paste)
     # paste_action.triggered.connect(lambda: editor.paste_entities(at_cursor=True))
     # editor.edit_menu.addAction(paste_action)
     
@@ -2356,7 +2357,7 @@ def setup_ui_integration(editor):
     # editor.edit_menu.addSeparator()
     
     # select_all_action = QAction("Select All Entities", editor)
-    # select_all_action.setShortcut(QKeySequence.StandardKey.SelectAll)
+    # select_all_action.setShortcut(QKeySequence.SelectAll)
     # select_all_action.triggered.connect(editor.select_all_entities)
     # editor.edit_menu.addAction(select_all_action)
     
@@ -2376,7 +2377,7 @@ def setup_context_menu(self):
         self.canvas._original_showContextMenu = self.canvas.showContextMenu
     
     def enhanced_showContextMenu(event):
-        from PyQt6.QtWidgets import QMenu
+        from PyQt5.QtWidgets import QMenu
         
         menu = QMenu(self.canvas)
         
@@ -2460,14 +2461,15 @@ def center_view_at(editor, world_x, world_y):
 
 def setup_keyboard_shortcuts(self):
     """Setup comprehensive keyboard shortcuts"""
-    from PyQt6.QtGui import QShortcut, QKeySequence
+    from PyQt5.QtGui import QKeySequence
+    from PyQt5.QtWidgets import QShortcut
     
     # Copy (Ctrl+C)
-    copy_shortcut = QShortcut(QKeySequence.StandardKey.Copy, self)
+    copy_shortcut = QShortcut(QKeySequence.Copy, self)
     copy_shortcut.activated.connect(self.copy_selected_entities)
     
     # Paste (Ctrl+V)  
-    paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, self)
+    paste_shortcut = QShortcut(QKeySequence.Paste, self)
     paste_shortcut.activated.connect(lambda: self.paste_entities(at_cursor=True))
     
     # Duplicate (Ctrl+D)
@@ -2475,11 +2477,11 @@ def setup_keyboard_shortcuts(self):
     duplicate_shortcut.activated.connect(self.duplicate_selected_entities)
     
     # CRITICAL FIX: Delete (Delete key) - make sure this is connected
-    delete_shortcut = QShortcut(QKeySequence.StandardKey.Delete, self)
+    delete_shortcut = QShortcut(QKeySequence.Delete, self)
     delete_shortcut.activated.connect(self.delete_selected_entities)
     
     # Select All (Ctrl+A)
-    select_all_shortcut = QShortcut(QKeySequence.StandardKey.SelectAll, self)
+    select_all_shortcut = QShortcut(QKeySequence.SelectAll, self)
     select_all_shortcut.activated.connect(self.select_all_entities)
     
     # Show clipboard info (Ctrl+I)

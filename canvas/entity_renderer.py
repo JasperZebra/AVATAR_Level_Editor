@@ -2,8 +2,8 @@
 
 import math
 from time import time
-from PyQt6.QtCore import Qt, QPoint, QPointF, QRectF
-from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QVector3D, QPolygon, QPolygonF, QPixmap
+from PyQt5.QtCore import Qt, QPoint, QPointF, QRectF
+from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QVector3D, QPolygon, QPolygonF, QPixmap
 from .opengl_utils import OpenGLUtils
 import os
 
@@ -671,7 +671,7 @@ class EntityRenderer:
             print(f"Rendering {len(entities)} entities in 2D mode (GPU-style batch)")
             self._last_2d_log_time = current_time
 
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.Antialiasing, True)
 
         SQUARE_SIZE = 6
         SELECTED_SIZE = 8
@@ -686,7 +686,7 @@ class EntityRenderer:
         oy    = canvas.offset_y
         h     = canvas.height()
 
-        from PyQt6.QtCore import QRectF
+        from PyQt5.QtCore import QRectF
 
         # style_key -> {'color': QColor, 'out_w': int,
         #               'rects': [QRectF],            <- rotation == 0 fast path
@@ -751,7 +751,7 @@ class EntityRenderer:
 
         # --- Draw all style groups: one setPen/setBrush per group ---
         for group in style_groups.values():
-            painter.setPen(QPen(Qt.GlobalColor.black, group['out_w']))
+            painter.setPen(QPen(Qt.black, group['out_w']))
             painter.setBrush(QBrush(group['color']))
             # Fast path: no save/restore per entity
             for rect in group['rects']:
@@ -797,7 +797,7 @@ class EntityRenderer:
             outline_width = square['outline_width']
             
             # Set pen and brush
-            painter.setPen(QPen(Qt.GlobalColor.black, outline_width))
+            painter.setPen(QPen(Qt.black, outline_width))
             painter.setBrush(QBrush(color))
             
             # Save painter state
@@ -808,7 +808,7 @@ class EntityRenderer:
             painter.rotate(rotation)
             
             # Draw square centered at origin (after translation)
-            from PyQt6.QtCore import QRectF
+            from PyQt5.QtCore import QRectF
             rect = QRectF(-size, -size, size * 2, size * 2)
             painter.drawRect(rect)
             
@@ -841,8 +841,8 @@ class EntityRenderer:
             # Scale pixmap to desired size
             scaled_pixmap = pixmap.scaled(
                 size, size,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
             )
             
             # Calculate position (center the icon)
@@ -858,7 +858,7 @@ class EntityRenderer:
 
     def draw_square(self, painter, x, y, size):
         """Draw a square centered at (x, y) with side length = size * 2"""
-        from PyQt6.QtCore import QRectF
+        from PyQt5.QtCore import QRectF
 
         half = size
         rect = QRectF(x - half, y - half, size * 2, size * 2)
@@ -886,7 +886,7 @@ class EntityRenderer:
             color = QColor()
             color.setRgb(color_rgb)
             
-            painter.setPen(QPen(Qt.GlobalColor.black, outline_width))
+            painter.setPen(QPen(Qt.black, outline_width))
             painter.setBrush(QBrush(color))
             
             for circle in circle_group:
@@ -929,7 +929,7 @@ class EntityRenderer:
 
         # Draw static-size endpoint circles (same size as squares)
         painter.setBrush(QBrush(QColor(255, 0, 0)))
-        painter.setPen(QPen(Qt.GlobalColor.black, 1))
+        painter.setPen(QPen(Qt.black, 1))
         radius = 8  # static pixel radius
         painter.drawEllipse(start_x - radius, start_y - radius, radius * 2, radius * 2)
         painter.drawEllipse(end_x - radius, end_y - radius, radius * 2, radius * 2)
@@ -993,7 +993,7 @@ class EntityRenderer:
             outline_color = QColor(0, 200, 200, 255)  # Darker cyan for outline
             pen_width = 1
         
-        painter.setPen(QPen(outline_color, pen_width, Qt.PenStyle.DashLine))
+        painter.setPen(QPen(outline_color, pen_width, Qt.DashLine))
         painter.setBrush(QBrush(color))
         
         half_w = width_screen / 2
@@ -1280,7 +1280,7 @@ class EntityRenderer:
             fill_color    = QColor(0, 160, 60, 12)
             pen_width = 1
 
-        painter.setPen(QPen(outline_color, pen_width, Qt.PenStyle.DashLine))
+        painter.setPen(QPen(outline_color, pen_width, Qt.DashLine))
         painter.setBrush(QBrush(fill_color))
         painter.drawPolygon(QPolygonF(screen_pts))
 
@@ -1329,14 +1329,14 @@ class EntityRenderer:
             painter.setBrush(QBrush(QColor(0, 150, 70, 210)))
             painter.drawRoundedRect(QRectF(add_x, add_y, btn_w, btn_h), 3, 3)
             painter.setPen(QPen(QColor(255, 255, 255, 255), 1))
-            painter.drawText(QRectF(add_x, add_y, btn_w, btn_h), Qt.AlignmentFlag.AlignCenter, "+")
+            painter.drawText(QRectF(add_x, add_y, btn_w, btn_h), Qt.AlignCenter, "+")
 
             if len(screen_pts) >= 2:
                 painter.setPen(QPen(QColor(255, 255, 255, 220), 1))
                 painter.setBrush(QBrush(QColor(170, 35, 35, 210)))
                 painter.drawRoundedRect(QRectF(rem_x, rem_y, btn_w, btn_h), 3, 3)
                 painter.setPen(QPen(QColor(255, 255, 255, 255), 1))
-                painter.drawText(QRectF(rem_x, rem_y, btn_w, btn_h), Qt.AlignmentFlag.AlignCenter, "−")
+                painter.drawText(QRectF(rem_x, rem_y, btn_w, btn_h), Qt.AlignCenter, "−")
 
             font.setBold(False)
             painter.setFont(font)
@@ -1465,7 +1465,7 @@ class EntityRenderer:
         painter.translate(screen_x, screen_y)
         if rotation != 0.0:
             painter.rotate(rotation)
-        painter.setPen(QPen(outline_color, pen_width, Qt.PenStyle.DashLine))
+        painter.setPen(QPen(outline_color, pen_width, Qt.DashLine))
         painter.setBrush(QBrush(fill_color))
         painter.drawRect(int(-half_w), int(-half_h), int(width_screen), int(height_screen))
         painter.restore()

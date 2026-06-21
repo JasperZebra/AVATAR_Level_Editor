@@ -4,14 +4,14 @@ import os
 import json
 import xml.etree.ElementTree as ET
 import shutil
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, 
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, 
                              QLabel, QLineEdit, QFileDialog, QMessageBox, 
                              QComboBox, QTextEdit, QGroupBox, QCheckBox,
                              QListWidget, QListWidgetItem, QSplitter,
                              QProgressDialog, QApplication, QWidget,
                              QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QFont, QPixmap, QIcon, QColor
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QFont, QPixmap, QIcon, QColor
 from data_models import Entity
 from ui_style_utils import apply_checkbox_style
 import time
@@ -186,7 +186,7 @@ class EntityExportDialog(QDialog):
         
         # Title
         title_label = QLabel("Export Entities to Collection")
-        title_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        title_label.setFont(QFont("Arial", 12, QFont.Bold))
         layout.addWidget(title_label)
         
         # Entity count info
@@ -938,7 +938,7 @@ class EntityImportDialog(QDialog):
         
         # Title
         title_label = QLabel("Import Entities from Collection")
-        title_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        title_label.setFont(QFont("Arial", 12, QFont.Bold))
         layout.addWidget(title_label)
         
         # Collections list
@@ -966,7 +966,7 @@ class EntityImportDialog(QDialog):
         # Add entity tree widget for better organization
         self.entities_tree = QTreeWidget()
         self.entities_tree.setHeaderLabels(["Entity", "Type", "Target", "Sector", "Layer"])
-        self.entities_tree.setSelectionMode(QTreeWidget.SelectionMode.ExtendedSelection)
+        self.entities_tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         self.entities_tree.setColumnWidth(0, 200)
         self.entities_tree.setColumnWidth(1, 100)
         self.entities_tree.setColumnWidth(2, 100)
@@ -1160,7 +1160,7 @@ class EntityImportDialog(QDialog):
         dialog_layout.addLayout(button_layout)
         
         # Show dialog
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        if dialog.exec() != QDialog.Accepted:
             return
         
         # Get selected values
@@ -1185,9 +1185,9 @@ class EntityImportDialog(QDialog):
             item.setText(2, "WorldSector")
             item.setText(3, f"Sector {sector_num}")
             item.setText(4, layer_name)
-            item.setData(0, Qt.ItemDataRole.UserRole + 1, "worldsector")
-            item.setData(0, Qt.ItemDataRole.UserRole + 2, layer_index)
-            item.setData(0, Qt.ItemDataRole.UserRole + 3, sector_path)
+            item.setData(0, Qt.UserRole + 1, "worldsector")
+            item.setData(0, Qt.UserRole + 2, layer_index)
+            item.setData(0, Qt.UserRole + 3, sector_path)
         
         print(f"✅ Assigned {len(selected_items)} entities to WorldSector {sector_num} → {layer_name}")
 
@@ -1203,9 +1203,9 @@ class EntityImportDialog(QDialog):
             item.setText(2, "Mapsdata")
             item.setText(3, "-")
             item.setText(4, "-")
-            item.setData(0, Qt.ItemDataRole.UserRole + 1, "mapsdata")
-            item.setData(0, Qt.ItemDataRole.UserRole + 2, None)
-            item.setData(0, Qt.ItemDataRole.UserRole + 3, None)
+            item.setData(0, Qt.UserRole + 1, "mapsdata")
+            item.setData(0, Qt.UserRole + 2, None)
+            item.setData(0, Qt.UserRole + 3, None)
         
         print(f"✅ Assigned {len(selected_items)} entities to Mapsdata")
 
@@ -1244,7 +1244,7 @@ class EntityImportDialog(QDialog):
         btn_row.addWidget(cancel_btn)
         dlayout.addLayout(btn_row)
 
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        if dialog.exec() != QDialog.Accepted:
             return
 
         file_path = file_combo.currentData()
@@ -1265,9 +1265,9 @@ class EntityImportDialog(QDialog):
             item.setText(2, label)
             item.setText(3, f"Sector {sector_num}")
             item.setText(4, "main")
-            item.setData(0, Qt.ItemDataRole.UserRole + 1, target_type)
-            item.setData(0, Qt.ItemDataRole.UserRole + 2, 0)
-            item.setData(0, Qt.ItemDataRole.UserRole + 3, file_path)
+            item.setData(0, Qt.UserRole + 1, target_type)
+            item.setData(0, Qt.UserRole + 2, 0)
+            item.setData(0, Qt.UserRole + 3, file_path)
 
         print(f"✅ Assigned {len(selected_items)} entities to {label} Sector {sector_num}")
 
@@ -1287,9 +1287,9 @@ class EntityImportDialog(QDialog):
             item.setText(2, "Omnis")
             item.setText(3, "-")
             item.setText(4, "-")
-            item.setData(0, Qt.ItemDataRole.UserRole + 1, "omnis")
-            item.setData(0, Qt.ItemDataRole.UserRole + 2, None)
-            item.setData(0, Qt.ItemDataRole.UserRole + 3, None)
+            item.setData(0, Qt.UserRole + 1, "omnis")
+            item.setData(0, Qt.UserRole + 2, None)
+            item.setData(0, Qt.UserRole + 3, None)
 
         print(f"✅ Assigned {len(selected_items)} entities to Omnis")
 
@@ -1422,7 +1422,7 @@ class EntityImportDialog(QDialog):
     def on_entity_double_clicked(self, item, column):
         """Handle double-click on entity - toggle between Mapsdata and WorldSector"""
         if column == 2:  # Target column
-            current_target = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            current_target = item.data(0, Qt.UserRole + 1)
             
             if current_target == "mapsdata":
                 # Switch to WorldSector
@@ -1432,18 +1432,18 @@ class EntityImportDialog(QDialog):
                 if sector_data and layer_index is not None:
                     layer_name = self.available_layers[layer_index]['name'] if layer_index < len(self.available_layers) else f"Layer {layer_index + 1}"
                     item.setText(2, "WorldSector")
-                    item.setData(0, Qt.ItemDataRole.UserRole + 1, "worldsector")
+                    item.setData(0, Qt.UserRole + 1, "worldsector")
                     item.setText(3, layer_name)
-                    item.setData(0, Qt.ItemDataRole.UserRole + 2, layer_index)
-                    item.setData(0, Qt.ItemDataRole.UserRole + 3, sector_data)
+                    item.setData(0, Qt.UserRole + 2, layer_index)
+                    item.setData(0, Qt.UserRole + 3, sector_data)
                 else:
                     QMessageBox.warning(self, "No Target", "Please select a WorldSector and Layer first.")
             else:
                 # Switch to Mapsdata
                 item.setText(2, "Mapsdata")
-                item.setData(0, Qt.ItemDataRole.UserRole + 1, "mapsdata")
+                item.setData(0, Qt.UserRole + 1, "mapsdata")
                 item.setText(3, "-")
-                item.setData(0, Qt.ItemDataRole.UserRole + 2, None)
+                item.setData(0, Qt.UserRole + 2, None)
 
     def load_entities_from_collection(self, collection_path):
         """Load entities from the collection folder - WITH RELATIONSHIP TRACKING"""
@@ -1596,10 +1596,10 @@ class EntityImportDialog(QDialog):
             item.setText(4, default_layer)
 
             # Store all data
-            item.setData(0, Qt.ItemDataRole.UserRole, entity_data)
-            item.setData(0, Qt.ItemDataRole.UserRole + 1, default_target.lower())  # target type
-            item.setData(0, Qt.ItemDataRole.UserRole + 2, None)  # layer index
-            item.setData(0, Qt.ItemDataRole.UserRole + 3, None)  # sector path
+            item.setData(0, Qt.UserRole, entity_data)
+            item.setData(0, Qt.UserRole + 1, default_target.lower())  # target type
+            item.setData(0, Qt.UserRole + 2, None)  # layer index
+            item.setData(0, Qt.UserRole + 3, None)  # sector path
 
             item.setSelected(True)
 
@@ -1619,10 +1619,10 @@ class EntityImportDialog(QDialog):
                 child_item.setText(3, default_sector)
                 child_item.setText(4, default_layer)
 
-                child_item.setData(0, Qt.ItemDataRole.UserRole, child_data)
-                child_item.setData(0, Qt.ItemDataRole.UserRole + 1, default_target.lower())
-                child_item.setData(0, Qt.ItemDataRole.UserRole + 2, None)
-                child_item.setData(0, Qt.ItemDataRole.UserRole + 3, None)
+                child_item.setData(0, Qt.UserRole, child_data)
+                child_item.setData(0, Qt.UserRole + 1, default_target.lower())
+                child_item.setData(0, Qt.UserRole + 2, None)
+                child_item.setData(0, Qt.UserRole + 3, None)
 
                 child_item.setSelected(True)
                 parent_item.setExpanded(True)
@@ -1639,10 +1639,10 @@ class EntityImportDialog(QDialog):
                 npc_item.setText(3, default_sector)
                 npc_item.setText(4, default_layer)
 
-                npc_item.setData(0, Qt.ItemDataRole.UserRole, npc_data)
-                npc_item.setData(0, Qt.ItemDataRole.UserRole + 1, default_target.lower())
-                npc_item.setData(0, Qt.ItemDataRole.UserRole + 2, None)
-                npc_item.setData(0, Qt.ItemDataRole.UserRole + 3, None)
+                npc_item.setData(0, Qt.UserRole, npc_data)
+                npc_item.setData(0, Qt.UserRole + 1, default_target.lower())
+                npc_item.setData(0, Qt.UserRole + 2, None)
+                npc_item.setData(0, Qt.UserRole + 3, None)
 
                 npc_item.setSelected(True)
                 vehicle_item.setExpanded(True)
@@ -1659,10 +1659,10 @@ class EntityImportDialog(QDialog):
                 user_item.setText(3, default_sector)
                 user_item.setText(4, default_layer)
 
-                user_item.setData(0, Qt.ItemDataRole.UserRole, user_data)
-                user_item.setData(0, Qt.ItemDataRole.UserRole + 1, default_target.lower())
-                user_item.setData(0, Qt.ItemDataRole.UserRole + 2, None)
-                user_item.setData(0, Qt.ItemDataRole.UserRole + 3, None)
+                user_item.setData(0, Qt.UserRole, user_data)
+                user_item.setData(0, Qt.UserRole + 1, default_target.lower())
+                user_item.setData(0, Qt.UserRole + 2, None)
+                user_item.setData(0, Qt.UserRole + 3, None)
 
                 user_item.setSelected(True)
                 vehicle_item.setExpanded(True)
@@ -1679,7 +1679,7 @@ class EntityImportDialog(QDialog):
         """Import entities based on their assigned targets"""
         # Collect all items (including children)
         all_items = []
-        iterator = QTreeWidgetItemIterator(self.entities_tree, QTreeWidgetItemIterator.IteratorFlag.Selected)
+        iterator = QTreeWidgetItemIterator(self.entities_tree, QTreeWidgetItemIterator.Selected)
         while iterator.value():
             all_items.append(iterator.value())
             iterator += 1
@@ -1695,19 +1695,19 @@ class EntityImportDialog(QDialog):
         omnis_items = []
 
         for item in all_items:
-            target_type = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            target_type = item.data(0, Qt.UserRole + 1)
 
             if target_type == "mapsdata":
                 mapsdata_items.append(item)
             elif target_type == "worldsector":
-                layer_index = item.data(0, Qt.ItemDataRole.UserRole + 2)
-                sector_path = item.data(0, Qt.ItemDataRole.UserRole + 3)
+                layer_index = item.data(0, Qt.UserRole + 2)
+                sector_path = item.data(0, Qt.UserRole + 3)
                 if sector_path and layer_index is not None:
                     key = (sector_path, layer_index)
                     worldsector_items.setdefault(key, []).append(item)
             elif target_type in ("landmark_far", "landmark_near"):
-                layer_index = item.data(0, Qt.ItemDataRole.UserRole + 2)
-                file_path = item.data(0, Qt.ItemDataRole.UserRole + 3)
+                layer_index = item.data(0, Qt.UserRole + 2)
+                file_path = item.data(0, Qt.UserRole + 3)
                 if file_path and layer_index is not None:
                     key = (file_path, layer_index)
                     landmark_items.setdefault(key, []).append(item)
@@ -1734,10 +1734,10 @@ class EntityImportDialog(QDialog):
             self,
             "Confirm Import",
             confirm_msg,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
         
-        if reply != QMessageBox.StandardButton.Yes:
+        if reply != QMessageBox.Yes:
             return
         
         try:
@@ -1757,7 +1757,7 @@ class EntityImportDialog(QDialog):
 
             # Import to Landmark files
             for (file_path, layer_index), items in landmark_items.items():
-                target_type = items[0].data(0, Qt.ItemDataRole.UserRole + 1)
+                target_type = items[0].data(0, Qt.UserRole + 1)
                 kind = "far" if target_type == "landmark_far" else "near"
                 print(f"\n🌿 IMPORTING TO LANDMARK ({kind.upper()})...")
                 lm_entities = self._import_to_landmark_internal(items, file_path, layer_index, kind)
@@ -1821,7 +1821,7 @@ class EntityImportDialog(QDialog):
         """
         id_map = {}
         for item in selected_items:
-            entity_data = item.data(0, Qt.ItemDataRole.UserRole)
+            entity_data = item.data(0, Qt.UserRole)
             old_id = entity_data.get('id')
             if old_id and old_id not in id_map:
                 new_id = self.generate_unique_entity_id()
@@ -1839,12 +1839,12 @@ class EntityImportDialog(QDialog):
             return 0.0, 0.0, 0.0
 
         for item in selected_items:
-            ed = item.data(0, Qt.ItemDataRole.UserRole)
+            ed = item.data(0, Qt.UserRole)
             if ed.get('is_parent'):
                 return _pos(ed)
         xs, ys, zs = [], [], []
         for item in selected_items:
-            px, py, pz = _pos(item.data(0, Qt.ItemDataRole.UserRole))
+            px, py, pz = _pos(item.data(0, Qt.UserRole))
             xs.append(px); ys.append(py); zs.append(pz)
         if xs:
             return sum(xs) / len(xs), sum(ys) / len(ys), sum(zs) / len(zs)
@@ -1875,14 +1875,14 @@ class EntityImportDialog(QDialog):
         print(f"   📐 Import delta (mapsdata): ({position_delta[0]:.2f}, {position_delta[1]:.2f}, {position_delta[2]:.2f})")
 
         progress = QProgressDialog("Importing to mapsdata...", "Cancel", 0, len(selected_items), self)
-        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
 
         imported_entities = []
 
         for i, item in enumerate(selected_items):
             progress.setValue(i)
-            entity_data = item.data(0, Qt.ItemDataRole.UserRole)
+            entity_data = item.data(0, Qt.UserRole)
             entity_name = entity_data['name']
             progress.setLabelText(f"Importing {entity_name} to mapsdata...")
             QApplication.processEvents()
@@ -1909,14 +1909,14 @@ class EntityImportDialog(QDialog):
         print(f"   📐 Import delta (worldsector): ({position_delta[0]:.2f}, {position_delta[1]:.2f}, {position_delta[2]:.2f})")
 
         progress = QProgressDialog("Importing to WorldSector...", "Cancel", 0, len(selected_items), self)
-        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
 
         imported_entities = []
 
         for i, item in enumerate(selected_items):
             progress.setValue(i)
-            entity_data = item.data(0, Qt.ItemDataRole.UserRole)
+            entity_data = item.data(0, Qt.UserRole)
             entity_name = entity_data['name']
             progress.setLabelText(f"Importing {entity_name} to WorldSector...")
             QApplication.processEvents()
@@ -1973,14 +1973,14 @@ class EntityImportDialog(QDialog):
         print(f"   📐 Import delta ({label}): ({position_delta[0]:.2f}, {position_delta[1]:.2f}, {position_delta[2]:.2f})")
 
         progress = QProgressDialog(f"Importing to {label}...", "Cancel", 0, len(selected_items), self)
-        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
 
         imported_entities = []
 
         for i, item in enumerate(selected_items):
             progress.setValue(i)
-            entity_data = item.data(0, Qt.ItemDataRole.UserRole)
+            entity_data = item.data(0, Qt.UserRole)
             progress.setLabelText(f"Importing {entity_data['name']} to {label}...")
             QApplication.processEvents()
             if progress.wasCanceled():
@@ -2075,14 +2075,14 @@ class EntityImportDialog(QDialog):
                 pass
 
         progress = QProgressDialog("Importing to Omnis...", "Cancel", 0, len(selected_items), self)
-        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
 
         imported_entities = []
 
         for i, item in enumerate(selected_items):
             progress.setValue(i)
-            entity_data = item.data(0, Qt.ItemDataRole.UserRole)
+            entity_data = item.data(0, Qt.UserRole)
             progress.setLabelText(f"Importing {entity_data['name']} to Omnis...")
             QApplication.processEvents()
             if progress.wasCanceled():
@@ -2379,7 +2379,7 @@ class EntityImportDialog(QDialog):
     def import_single_entity_to_mapsdata(self, item, id_map=None, position_delta=None):
         """Import a single entity to mapsdata.xml (FCBConverter format)"""
         try:
-            entity_data = item.data(0, Qt.ItemDataRole.UserRole)
+            entity_data = item.data(0, Qt.UserRole)
             xml_path = entity_data['xml_path']
 
             print(f"\n📄 Importing {entity_data['name']} to mapsdata.xml")
@@ -2610,7 +2610,7 @@ class EntityImportDialog(QDialog):
     def import_single_entity(self, item, sector_file_path, target_layer_index=0, id_map=None, position_delta=None):
         """Import a single entity - WITH MISSIONLAYER SUPPORT AND CMissionComponent"""
         try:
-            entity_data = item.data(0, Qt.ItemDataRole.UserRole)  # FIX: ADD COLUMN 0
+            entity_data = item.data(0, Qt.UserRole)  # FIX: ADD COLUMN 0
             xml_path = entity_data['xml_path']
 
             # Read the exported XML file directly
@@ -3102,7 +3102,7 @@ class EntityImportDialog(QDialog):
             else:
                 item_text = f"{label}  [{len(xml_files)} file(s)]"
             list_item = QListWidgetItem(item_text)
-            list_item.setData(Qt.ItemDataRole.UserRole, item_path)
+            list_item.setData(Qt.UserRole, item_path)
             self.collections_list.addItem(list_item)
 
         # ── objects/ — flat, one level deep (existing behaviour) ──────────
@@ -3151,7 +3151,7 @@ class EntityImportDialog(QDialog):
     def on_collection_selected(self, current, previous):
         """Handle collection selection"""
         if current:
-            collection_path = current.data(Qt.ItemDataRole.UserRole)
+            collection_path = current.data(Qt.UserRole)
             self.load_collection_from_path(collection_path)
     
     def load_collection_from_path(self, collection_path):
@@ -3249,10 +3249,10 @@ def show_entity_import_dialog(editor):
             "Available options:\n"
             "• Load Level Objects (recommended)\n"
             "• Load individual worldsector files",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.Yes | QMessageBox.No
         )
         
-        if reply == QMessageBox.StandardButton.Yes:
+        if reply == QMessageBox.Yes:
             # Trigger load worldsectors
             if hasattr(editor, 'load_level_objects'):
                 editor.load_level_objects()

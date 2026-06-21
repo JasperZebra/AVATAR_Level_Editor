@@ -23,11 +23,11 @@ from typing import Any, Optional, Dict, List, Tuple
 from datetime import datetime
 
 try:
-    from PyQt6.QtGui import QPixmap, QImage
+    from PyQt5.QtGui import QPixmap, QImage
     PYQT_AVAILABLE = True
 except ImportError:
     PYQT_AVAILABLE = False
-    print("Warning: PyQt6 not available, image caching will be disabled")
+    print("Warning: PyQt5 not available, image caching will be disabled")
 
 
 class CacheManager:

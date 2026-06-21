@@ -27,12 +27,12 @@ A cursor-ghost / click-to-place mode can layer on top later.
 import os
 import xml.etree.ElementTree as ET
 
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QLabel,
     QScrollArea, QGridLayout, QToolButton, QButtonGroup,
 )
-from PyQt6.QtCore import Qt, QSize, QTimer
-from PyQt6.QtGui import QIcon
+from PyQt5.QtCore import Qt, QSize, QTimer
+from PyQt5.QtGui import QIcon
 
 from entity_editor import string_to_binhex, int64_to_binhex, vector3_to_binhex
 from canvas.mp_spawn_creator import _generate_id, _collect_existing_ids
@@ -408,7 +408,7 @@ def _get_thumb_previewer():
         # Render OFFSCREEN: WA_DontShowOnScreen + show() creates the GL context and
         # framebuffer WITHOUT the widget appearing — grabFramebuffer() on a
         # never-shown QOpenGLWidget otherwise returns a blank/black image.
-        w.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        w.setAttribute(Qt.WA_DontShowOnScreen, True)
         w.show()
         _thumb_previewer = w
     return _thumb_previewer
@@ -440,8 +440,8 @@ def render_archetype_thumb(editor, proto_name, size=84):
         img = w.grabFramebuffer()     # renders the widget offscreen → QImage
         if img is not None and not img.isNull() and size and size != img.width():
             img = img.scaled(size, size,
-                             Qt.AspectRatioMode.KeepAspectRatio,
-                             Qt.TransformationMode.SmoothTransformation)
+                             Qt.KeepAspectRatio,
+                             Qt.SmoothTransformation)
     except Exception as exc:
         print(f"[ObjectLibrary] previewer thumb failed for {proto_name}: {exc}")
         img = None
@@ -486,7 +486,7 @@ class ObjectLibraryWidget(QWidget):
 
         sc = QScrollArea()
         sc.setWidgetResizable(True)
-        sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        sc.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         sc.setStyleSheet("QScrollArea { border: none; }")
         gw = QWidget()
         self._grid = QGridLayout(gw)
@@ -568,7 +568,7 @@ class ObjectLibraryWidget(QWidget):
             b.setText(self._short(name))
             b.setToolTip(name)
             b.setCheckable(True)
-            b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+            b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
             b.setIconSize(QSize(_THUMB, _THUMB))
             b.setFixedSize(_THUMB + 18, _THUMB + 40)
             b.setStyleSheet(

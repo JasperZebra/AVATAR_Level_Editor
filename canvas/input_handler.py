@@ -1,10 +1,10 @@
 """Input handler for mouse and keyboard interactions - 2D ONLY VERSION"""
 
 import math
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QMenu
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication, QMenu
 from .opengl_utils import OpenGLUtils
-from PyQt6.QtGui import QVector3D
+from PyQt5.QtGui import QVector3D
 
 class InputHandler:
     """Handles mouse and keyboard input for the canvas - 2D ONLY"""
@@ -49,7 +49,7 @@ class InputHandler:
         try:
             # Shape point handles have absolute priority — check BEFORE the gizmo so that
             # pt 0 (which sits at the entity/gizmo-center position) can be grabbed.
-            if event.button() == Qt.MouseButton.LeftButton and self.edit_mode_2d:
+            if event.button() == Qt.LeftButton and self.edit_mode_2d:
                 mouse_x = event.position().x()
                 mouse_y = event.position().y()
                 if self._check_shape_btn_click(mouse_x, mouse_y):
@@ -145,7 +145,7 @@ class InputHandler:
 
     def handle_mouse_press_2d(self, event):
         """Handle mouse press in 2D mode with gizmo integration"""
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.LeftButton:
             # CRITICAL: Check if we're clicking on a gizmo FIRST (before anything else)
             if hasattr(self.canvas, 'gizmo_renderer'):
                 if self.canvas.gizmo_renderer.handle_gizmo_mouse_press(event, self.canvas):
@@ -190,7 +190,7 @@ class InputHandler:
             # Check if an entity was clicked
             entity = self.get_entity_at_position(mouse_x, mouse_y)
 
-            ctrl_held = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+            ctrl_held = bool(event.modifiers() & Qt.ControlModifier)
 
             if entity:
                 # Resolve entity + its linked children as a group
@@ -274,12 +274,12 @@ class InputHandler:
             self.drag_start_y = mouse_y
             self.canvas.update()
 
-        elif event.button() == Qt.MouseButton.MiddleButton:
+        elif event.button() == Qt.MiddleButton:
             # Middle-click starts panning
             self.panning = True
             self.drag_start_x = event.position().x()
             self.drag_start_y = event.position().y()
-            self.canvas.setCursor(Qt.CursorShape.ClosedHandCursor)
+            self.canvas.setCursor(Qt.ClosedHandCursor)
 
     def handle_mouse_move_2d(self, event):
         """Handle mouse move in 2D mode with entity dragging and gizmo updates"""
@@ -357,7 +357,7 @@ class InputHandler:
                 if len(entities_to_move) > 1:
                     # Multiple entities - update gizmo to new group center
                     center = self.canvas.calculate_group_center(entities_to_move)
-                    from PyQt6.QtCore import QObject
+                    from PyQt5.QtCore import QObject
                     virtual_entity = type('VirtualEntity', (), {
                         'x': center[0],
                         'y': center[1],
@@ -410,7 +410,7 @@ class InputHandler:
 
     def handle_mouse_release_2d(self, event):
         """Handle mouse release in 2D mode"""
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.LeftButton:
             if self.selection_box_active:
                 # Complete selection box and select entities within it
                 self._complete_selection_box()
@@ -481,15 +481,15 @@ class InputHandler:
             self.dragging_shape_point = False
             self._shape_drag_anchor = None
             self.panning = False
-            self.canvas.setCursor(Qt.CursorShape.ArrowCursor)
+            self.canvas.setCursor(Qt.ArrowCursor)
             
-        elif event.button() == Qt.MouseButton.MiddleButton:
+        elif event.button() == Qt.MiddleButton:
             if self.panning:
                 print("Ended middle-button panning")
             self.panning = False
-            self.canvas.setCursor(Qt.CursorShape.ArrowCursor)
+            self.canvas.setCursor(Qt.ArrowCursor)
 
-        elif event.button() == Qt.MouseButton.RightButton:
+        elif event.button() == Qt.RightButton:
             # Show context menu
             if hasattr(self.canvas, 'showContextMenu'):
                 self.canvas.showContextMenu(event)
@@ -601,7 +601,7 @@ class InputHandler:
             print(f"Selected {len(final_selection)} entities with selection box (including {len(final_selection) - len(selected_entities)} related)")
         else:
             # Empty selection box - clear selection
-            if not (QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier):
+            if not (QApplication.keyboardModifiers() & Qt.ControlModifier):
                 self.canvas.selected_entity = None
                 self.canvas.selected = []
                 self.canvas._managers_vpos_links = {}
@@ -807,9 +807,9 @@ class InputHandler:
         mode_name = "EDIT" if self.edit_mode_2d else "VIEW"
         print(f"2D mode: {mode_name}")
         if self.edit_mode_2d:
-            self.canvas.setCursor(Qt.CursorShape.CrossCursor)
+            self.canvas.setCursor(Qt.CrossCursor)
         else:
-            self.canvas.setCursor(Qt.CursorShape.ArrowCursor)
+            self.canvas.setCursor(Qt.ArrowCursor)
         self.canvas.update()
 
     def toggle_edit_mode_3d(self):
@@ -825,15 +825,15 @@ class InputHandler:
         if (hasattr(self.canvas, 'selected_entity') and self.canvas.selected_entity and 
             hasattr(self.canvas, 'gizmo_renderer') and 
             self.canvas.gizmo_renderer.rotation_gizmo.is_point_on_circle(screen_x, screen_y, self.canvas)):
-            self.canvas.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.canvas.setCursor(Qt.PointingHandCursor)
             return
         
         # Check for entity hover
         hovered_entity = self.get_entity_at_position(screen_x, screen_y)
         if hovered_entity:
-            self.canvas.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.canvas.setCursor(Qt.PointingHandCursor)
         else:
-            self.canvas.setCursor(Qt.CursorShape.ArrowCursor)
+            self.canvas.setCursor(Qt.ArrowCursor)
 
     def handle_wheel(self, event):
         """Handle wheel events - 2D ONLY"""
@@ -845,7 +845,7 @@ class InputHandler:
     def handle_key_press(self, event):
         """Handle key press events - 2D ONLY with SHIFT speed boost"""
         # Set modifier flags
-        if event.key() == Qt.Key.Key_Shift:
+        if event.key() == Qt.Key_Shift:
             self.shift_is_pressed = True
             if hasattr(self.canvas, 'camera_controller'):
                 self.canvas.camera_controller.set_shift_modifier(True)
@@ -859,7 +859,7 @@ class InputHandler:
     def handle_key_release(self, event):
         """Handle key release events - 2D ONLY with SHIFT speed boost"""
         # Reset modifier flags
-        if event.key() == Qt.Key.Key_Shift:
+        if event.key() == Qt.Key_Shift:
             self.shift_is_pressed = False
             if hasattr(self.canvas, 'camera_controller'):
                 self.canvas.camera_controller.set_shift_modifier(False)
