@@ -568,6 +568,16 @@ class Gizmo3D:
             if hasattr(canvas, '_update_managers_vpos_for_entity'):
                 canvas._update_managers_vpos_for_entity(ent)
 
+        # Refresh the cached position arrays so the RENDERED model follows the
+        # drag, not just the gizmo. The GPU-driven renderer + frustum culler draw
+        # from _positions_3d (baked); position moves are "covered by
+        # invalidate_position_cache" (see map_canvas_gpu.mark_entity_modified).
+        # Without this the model stays at its old baked spot (the "ghost") and
+        # the inconsistent refresh on release makes it disappear. Mirrors the
+        # keyboard-move path.
+        if hasattr(canvas, 'invalidate_position_cache'):
+            canvas.invalidate_position_cache()
+
         # Sync gizmo position to primary entity
         self.position = (entity.x, entity.y, entity.z)
 
@@ -631,6 +641,11 @@ class Gizmo3D:
                 canvas.mark_entity_modified(ent)
             if hasattr(canvas, '_update_managers_vpos_for_entity'):
                 canvas._update_managers_vpos_for_entity(ent)
+
+        # See _drag_translate: refresh cached positions so the rendered model
+        # follows the free XY-plane drag (not just the gizmo ghost).
+        if hasattr(canvas, 'invalidate_position_cache'):
+            canvas.invalidate_position_cache()
 
         self.position = (entity.x, entity.y, entity.z)
 
