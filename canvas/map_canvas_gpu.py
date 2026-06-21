@@ -3608,11 +3608,46 @@ class MapCanvas(QOpenGLWidget):
                 result.append(e)  # managers, sectorsdep etc. always visible
         return result
 
+    def _reset_gl_state_for_qpainter(self):
+        """Reset GL state to defaults before drawing with QPainter on this
+        QOpenGLWidget.
+
+        After our custom GL rendering leaves a shader program / VAO / buffers /
+        FBO / textures bound, PyQt5's QPainter GL paint engine assumes a clean
+        default state. If it isn't clean, drawText() access-violates in 3D and
+        nothing composites in 2D (PyQt6 happened to tolerate the dirty state;
+        PyQt5 does not). Rebinding the default framebuffer + unbinding program/
+        VAO/buffers/textures fixes both.
+        """
+        try:
+            from OpenGL.GL import (
+                glUseProgram, glBindBuffer, glActiveTexture, glBindTexture,
+                glBindFramebuffer, glDisable,
+                GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER, GL_TEXTURE0,
+                GL_TEXTURE_2D, GL_FRAMEBUFFER, GL_DEPTH_TEST, GL_CULL_FACE,
+            )
+            glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
+            glUseProgram(0)
+            try:
+                from OpenGL.GL import glBindVertexArray
+                glBindVertexArray(0)
+            except Exception:
+                pass
+            glBindBuffer(GL_ARRAY_BUFFER, 0)
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
+            glActiveTexture(GL_TEXTURE0)
+            glBindTexture(GL_TEXTURE_2D, 0)
+            glDisable(GL_DEPTH_TEST)
+            glDisable(GL_CULL_FACE)
+        except Exception as _e:
+            print(f"[gl-reset] {_e}")
+
     def _render_2d_opengl(self):
         """Render 2D scene"""
         if self.show_grid:
             self.grid_renderer.render_2d_grid(self)
-        
+
+        self._reset_gl_state_for_qpainter()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
@@ -3984,6 +4019,7 @@ class MapCanvas(QOpenGLWidget):
             # *** MODIFIED: Check show_3d_hud toggle before drawing UI overlays ***
             if getattr(self, 'show_3d_hud', True):
                 # Draw 2D UI overlays on top
+                self._reset_gl_state_for_qpainter()
                 painter = QPainter(self)
                 painter.setRenderHint(QPainter.Antialiasing)
 
