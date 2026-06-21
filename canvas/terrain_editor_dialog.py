@@ -402,17 +402,17 @@ class HeightmapEditor2D(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.MiddleButton:
             self._mid_drag = True
-            self._last_mid = event.position().toPoint()
+            self._last_mid = event.localPos().toPoint()
             return
         if event.button() == Qt.LeftButton and self._pixmap is not None:
             self._pressing = True
-            mx, my = self._to_map(event.position().x(), event.position().y())
+            mx, my = self._to_map(event.localPos().x(), event.localPos().y())
             self._mouse_map = (mx, my)
             self.stroke_at.emit(mx, my)
             self.update()
 
     def mouseMoveEvent(self, event):
-        pos = event.position()
+        pos = event.localPos()
         if self._mid_drag and self._last_mid is not None:
             dp = pos.toPoint() - self._last_mid
             self._pan_x += dp.x()
@@ -780,7 +780,7 @@ class TerrainPreview3D(QOpenGLWidget):
         if event.button() == Qt.RightButton:
             self._mouse_captured = True
             self.setCursor(Qt.BlankCursor)
-            self._mouse_anchor = self.mapToGlobal(event.position().toPoint())
+            self._mouse_anchor = self.mapToGlobal(event.localPos().toPoint())
         elif event.button() == Qt.LeftButton:
             self._pressing = True
             if self._hit_map is not None:
@@ -788,7 +788,7 @@ class TerrainPreview3D(QOpenGLWidget):
         self.setFocus()
 
     def mouseMoveEvent(self, event):
-        pos = event.position()
+        pos = event.localPos()
 
         if self._mouse_captured and self._mouse_anchor is not None:
             cur = self.mapToGlobal(pos.toPoint())

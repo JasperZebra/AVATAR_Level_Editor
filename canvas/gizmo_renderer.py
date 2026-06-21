@@ -704,7 +704,7 @@ class GizmoRenderer:
     def handle_gizmo_mouse_press(self, event, canvas):
         """Handle mouse press for gizmo interactions"""
         if (hasattr(canvas, 'selected_entity') and canvas.selected_entity and 
-            self.rotation_gizmo.start_rotation(event.position().x(), event.position().y(), canvas)):
+            self.rotation_gizmo.start_rotation(event.localPos().x(), event.localPos().y(), canvas)):
             print("Started gizmo rotation interaction")
             return True
         return False
@@ -715,7 +715,7 @@ class GizmoRenderer:
         if ((self.rotation_gizmo.is_dragging or self.rotation_gizmo.is_dragging_center) and 
             hasattr(canvas, 'selected_entity') and canvas.selected_entity):
             self.rotation_gizmo.update_rotation(
-                event.position().x(), event.position().y(), canvas, canvas.selected_entity
+                event.localPos().x(), event.localPos().y(), canvas, canvas.selected_entity
             )
             return True
         return False

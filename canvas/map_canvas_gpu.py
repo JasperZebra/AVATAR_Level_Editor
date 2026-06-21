@@ -5205,8 +5205,8 @@ class MapCanvas(QOpenGLWidget):
         """Handle mouse press - mode aware with Structure group selection"""
         if self.mode == MODE_3D:
             if event.button() == Qt.LeftButton:
-                mouse_x = event.position().x()
-                mouse_y = event.position().y()
+                mouse_x = event.localPos().x()
+                mouse_y = event.localPos().y()
 
                 # Snap badge click
                 if self._snap_badge_rect is not None:
@@ -5346,7 +5346,7 @@ class MapCanvas(QOpenGLWidget):
             elif event.button() == Qt.RightButton:
                 self.mouse_captured_3d = True
                 self.setCursor(Qt.BlankCursor)
-                self._mouse_anchor_global = self.mapToGlobal(event.position().toPoint())
+                self._mouse_anchor_global = self.mapToGlobal(event.localPos().toPoint())
                 return
         else:
             # 2D mode - use input_handler
@@ -5398,13 +5398,13 @@ class MapCanvas(QOpenGLWidget):
                     self.gizmo_3d.active_handle != GIZMO3D_HANDLE_NONE and
                     self.selected_entity):
                 dpr = self.devicePixelRatio()
-                mx = event.position().x() * dpr
-                my = event.position().y() * dpr
+                mx = event.localPos().x() * dpr
+                my = event.localPos().y() * dpr
                 self.gizmo_3d.update_drag(mx, my, self.selected_entity, self)
                 return
 
             if self.mouse_captured_3d and hasattr(self, '_mouse_anchor_global'):
-                current_global = self.mapToGlobal(event.position().toPoint())
+                current_global = self.mapToGlobal(event.localPos().toPoint())
                 dx = current_global.x() - self._mouse_anchor_global.x()
                 dy = current_global.y() - self._mouse_anchor_global.y()
 
@@ -5418,8 +5418,8 @@ class MapCanvas(QOpenGLWidget):
 
             # Terrain edit: hover gizmo and stroke continuation
             if self.terrain_edit_mode and not self.mouse_captured_3d:
-                mx = event.position().x()
-                my = event.position().y()
+                mx = event.localPos().x()
+                my = event.localPos().y()
                 # Skip stroke when cursor is over any UI element (keep last hit so gizmo stays)
                 if self._is_over_te_ui(mx, my):
                     return
@@ -5434,8 +5434,8 @@ class MapCanvas(QOpenGLWidget):
 
             # Terrain paint: stroke continuation
             elif self.terrain_paint_mode and not self.mouse_captured_3d:
-                mx = event.position().x()
-                my = event.position().y()
+                mx = event.localPos().x()
+                my = event.localPos().y()
                 self.makeCurrent()
                 hit = self._terrain_edit_unproject(mx, my)
                 self._terrain_edit_hit = hit

@@ -2426,7 +2426,7 @@ def setup_context_menu(self):
             menu.addSeparator()
         
         # View actions
-        world_x, world_y = self.canvas.screen_to_world(event.position().x(), event.position().y())
+        world_x, world_y = self.canvas.screen_to_world(event.localPos().x(), event.localPos().y())
         
         center_action = menu.addAction("Center View Here")
         center_action.triggered.connect(lambda: center_view_at(self, world_x, world_y))
@@ -2443,7 +2443,7 @@ def setup_context_menu(self):
             reset_view_action = menu.addAction("Reset View")
             reset_view_action.triggered.connect(self.reset_view)
         
-        menu.exec(event.globalPosition().toPoint())
+        menu.exec(event.globalPos())
     
     self.canvas.showContextMenu = enhanced_showContextMenu
 

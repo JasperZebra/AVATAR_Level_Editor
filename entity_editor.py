@@ -274,7 +274,7 @@ class DecimalInput(QLineEdit):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.drag_start_x = event.position().x()
+            self.drag_start_x = event.localPos().x()
             try:
                 self.drag_start_value = self.get_value()
             except Exception:
@@ -283,7 +283,7 @@ class DecimalInput(QLineEdit):
 
     def mouseMoveEvent(self, event):
         if self.drag_start_x is not None and event.buttons() & Qt.LeftButton:
-            delta = event.position().x() - self.drag_start_x
+            delta = event.localPos().x() - self.drag_start_x
             scale = 0.01 if QApplication.keyboardModifiers() & Qt.ShiftModifier else 1.0
             new_value = self.drag_start_value + delta * self.scaling_factor * scale
             new_value = max(self.min_val, min(self.max_val, new_value))

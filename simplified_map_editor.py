@@ -783,7 +783,7 @@ class ModelPreviewWidget(QOpenGLWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self._mouse_anchor_global = self.mapToGlobal(event.position().toPoint())
+            self._mouse_anchor_global = self.mapToGlobal(event.localPos().toPoint())
             self.setCursor(Qt.BlankCursor)
             self.auto_rotate = False
 
@@ -793,7 +793,7 @@ class ModelPreviewWidget(QOpenGLWidget):
         if not (event.buttons() & Qt.LeftButton):
             return
 
-        current_global = self.mapToGlobal(event.position().toPoint())
+        current_global = self.mapToGlobal(event.localPos().toPoint())
         dx = current_global.x() - self._mouse_anchor_global.x()
         dy = current_global.y() - self._mouse_anchor_global.y()
 
@@ -1324,7 +1324,7 @@ class SimplifiedMapEditor(QMainWindow):
             from PyQt5.QtWidgets import QMenu
             menu = QMenu(self.canvas)
             menu.addAction("No enhanced menu available")
-            menu.exec(event.globalPosition().toPoint())
+            menu.exec(event.globalPos())
 
     def show_welcome_message_updated(self):
         """Show welcome message and open visual level selector when Start Modding is pressed"""
@@ -10356,7 +10356,7 @@ class SimplifiedMapEditor(QMainWindow):
                 menu.addSeparator()
                 mp_spawn_action = menu.addAction("Add MP Spawn Point (LeftForDeadTrigger)...")
                 def _open_mp_spawn(checked=False, _event=event):
-                    lpos = _event.position()
+                    lpos = _event.localPos()
                     wx, wy = self.canvas.screen_to_world(lpos.x(), lpos.y())
                     from canvas.mp_spawn_creator import MPSpawnCreatorDialog
                     dlg = MPSpawnCreatorDialog(self, wx, wy, parent=self)
@@ -10396,7 +10396,7 @@ class SimplifiedMapEditor(QMainWindow):
                 toggle_sectors_action.triggered.connect(self.toggle_sector_boundaries)
             
             # Show the menu
-            menu.exec(event.globalPosition().toPoint())
+            menu.exec(event.globalPos())
         
         # Replace the context menu
         self.canvas.showContextMenu = enhanced_showContextMenu
@@ -10406,8 +10406,8 @@ class SimplifiedMapEditor(QMainWindow):
         """Center view at click location"""
         width = self.canvas.width()
         height = self.canvas.height()
-        self.canvas.offset_x += width / 2 - event.position().x()
-        self.canvas.offset_y += height / 2 - event.position().y()
+        self.canvas.offset_x += width / 2 - event.localPos().x()
+        self.canvas.offset_y += height / 2 - event.localPos().y()
         self.canvas.update()
 
     def _find_tree_file_path(self, tree_type):

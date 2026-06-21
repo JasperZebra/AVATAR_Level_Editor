@@ -172,7 +172,7 @@ class CameraController:
         from .opengl_utils import OpenGLUtils
         
         # Get the current cursor position
-        cursor_x, cursor_y = event.position().x(), event.position().y()
+        cursor_x, cursor_y = event.localPos().x(), event.localPos().y()
         
         # Convert cursor position to world coordinates BEFORE zooming
         world_x, world_y = OpenGLUtils.screen_to_world(cursor_x, cursor_y, canvas)

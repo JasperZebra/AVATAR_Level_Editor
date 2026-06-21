@@ -44,14 +44,14 @@ class InputHandler:
 
     def handle_mouse_press(self, event):
         """Handle mouse press events - 2D ONLY"""
-        print(f"Mouse press: button={event.button()}, pos=({event.position().x():.1f}, {event.position().y():.1f})")
+        print(f"Mouse press: button={event.button()}, pos=({event.localPos().x():.1f}, {event.localPos().y():.1f})")
 
         try:
             # Shape point handles have absolute priority — check BEFORE the gizmo so that
             # pt 0 (which sits at the entity/gizmo-center position) can be grabbed.
             if event.button() == Qt.LeftButton and self.edit_mode_2d:
-                mouse_x = event.position().x()
-                mouse_y = event.position().y()
+                mouse_x = event.localPos().x()
+                mouse_y = event.localPos().y()
                 if self._check_shape_btn_click(mouse_x, mouse_y):
                     return
                 hit_entity, hit_idx = self._find_shape_point_at(mouse_x, mouse_y)
@@ -165,8 +165,8 @@ class InputHandler:
                     return  # Gizmo interaction started, don't do other mouse handling
             
             # Get editor/canvas coordinates
-            mouse_x = event.position().x()
-            mouse_y = event.position().y()
+            mouse_x = event.localPos().x()
+            mouse_y = event.localPos().y()
 
             # Convert to level/world coordinates
             if hasattr(self.canvas, 'screen_to_world'):
@@ -277,14 +277,14 @@ class InputHandler:
         elif event.button() == Qt.MiddleButton:
             # Middle-click starts panning
             self.panning = True
-            self.drag_start_x = event.position().x()
-            self.drag_start_y = event.position().y()
+            self.drag_start_x = event.localPos().x()
+            self.drag_start_y = event.localPos().y()
             self.canvas.setCursor(Qt.ClosedHandCursor)
 
     def handle_mouse_move_2d(self, event):
         """Handle mouse move in 2D mode with entity dragging and gizmo updates"""
-        current_x = event.position().x()
-        current_y = event.position().y()
+        current_x = event.localPos().x()
+        current_y = event.localPos().y()
         
         if self.selection_box_active:
             # Update selection box end position
@@ -902,8 +902,8 @@ class InputHandler:
         height = self.canvas.height()
         
         # 2D centering
-        self.canvas.camera_controller.offset_x += width / 2 - event.position().x()
-        self.canvas.camera_controller.offset_y += height / 2 - event.position().y()
+        self.canvas.camera_controller.offset_x += width / 2 - event.localPos().x()
+        self.canvas.camera_controller.offset_y += height / 2 - event.localPos().y()
         
         self.canvas.update()
         print(f"Centered view at click position")
