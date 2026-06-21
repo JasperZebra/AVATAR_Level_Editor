@@ -265,8 +265,15 @@ print("="*70 + "\n")
 # ============================================================================
 # BUILD OPTIONS
 # ============================================================================
+# Per-architecture output dir so a 32-bit build never overwrites the 64-bit one.
+# Run `python setup.py build` (64-bit) and `py -3-32 setup.py build` (32-bit) — or
+# just use build_both_versions.bat which does both.
+_arch = 'x64' if sys.maxsize > 2**32 else 'x86'
+_build_dir = 'build/Avatar_Level_Editor_%s' % _arch
+print("Build architecture: %s  ->  %s" % (_arch, _build_dir))
+
 build_options = {
-    'build_exe': 'build/Avatar_Level_Editor',  # Custom build directory name
+    'build_exe': _build_dir,  # arch-specific build directory name
     'include_files': include_files,
     'packages': [
         # ===================================================================
