@@ -453,7 +453,20 @@ class MapCanvas(QOpenGLWidget):
         """Initialize MapCanvas - 2D AND 3D"""
         super().__init__(parent)
         self.main_window = parent
-        
+
+        # Mark the canvas as fully opaque so Qt does NOT clear/fill the widget
+        # background before each paintGL. Under PyQt5 that background clear shows
+        # as a one-frame flash on every repaint (e.g. on each click) — objects
+        # appear to blink off and back on. We paint every pixel ourselves
+        # (glClear + full redraw), so suppressing the system background fill
+        # removes the flicker. (PyQt6 did not exhibit this.)
+        try:
+            self.setAttribute(Qt.WA_OpaquePaintEvent, True)
+            self.setAttribute(Qt.WA_NoSystemBackground, True)
+            self.setAutoFillBackground(False)
+        except Exception:
+            pass
+
         self.setMinimumSize(600, 400)
 
         # View mode (0 = 2D, 1 = 3D)
