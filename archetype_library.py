@@ -38,9 +38,12 @@ archetype prefixes, and tries dot-separated suffixes longest-first.
 
 import os
 import re
+import sys
 import subprocess
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
+
+_ARCH_NAMES = None   # cached hash→name table for native entitylibrary conversion
 
 
 # Prefixes a tplCreatureType may carry over the bare archetype name.
@@ -92,20 +95,21 @@ def ensure_converted_xml(fcb_path, converter_exe, fc2=True, timeout=600, log=Non
     except OSError:
         pass
 
-    if not (converter_exe and os.path.isfile(converter_exe)):
-        _log(f"FCBConverter not found: {converter_exe}")
-        return xml_path if os.path.isfile(xml_path) else None
-
-    folder = os.path.dirname(fcb_path)
     fname = os.path.basename(fcb_path)
-    cmd = [converter_exe, f"-source={folder}", f"-filter=*{fname}"]
-    if fc2:
-        cmd.append("-fc2")
     try:
-        _log(f"Converting {fname} → XML …")
-        subprocess.run(cmd, stdin=subprocess.DEVNULL,
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                       timeout=timeout, creationflags=_CREATE_NO_WINDOW)
+        _log(f"Converting {fname} → XML (native) …")
+        _tools = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools')
+        if _tools not in sys.path:
+            sys.path.insert(0, _tools)
+        import fcb_convert
+        global _ARCH_NAMES
+        if _ARCH_NAMES is None:
+            _ARCH_NAMES = fcb_convert.load_names()
+        with open(fcb_path, 'rb') as f:
+            data = f.read()
+        xml = fcb_convert.fcb_to_xml(data, names=_ARCH_NAMES)
+        with open(xml_path, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(xml)
     except Exception as exc:
         _log(f"entitylibrary conversion failed: {exc}")
         return xml_path if os.path.isfile(xml_path) else None

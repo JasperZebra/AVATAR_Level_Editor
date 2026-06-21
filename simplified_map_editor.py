@@ -3344,11 +3344,9 @@ class SimplifiedMapEditor(QMainWindow):
                         # and the FindInDictionarySkip crash on short fields.
                         cmd = [self._fcb_path,
                                f"-source={folder}", f"-filter=*{fname}", "-fc2"]
-                        print(f"Batch FCBConverter (entitylib): {' '.join(cmd)}")
-                        result = subprocess.run(
-                            cmd, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            timeout=600, **self._converter._hidden_window_kwargs())
+                        print(f"Native convert (entitylib): -source={folder} -filter=*{fname}")
+                        from file_converter import _native_fcbconvert
+                        result = _native_fcbconvert(cmd)
                         stdout = result.stdout.decode(errors='replace').strip()
                         stderr = result.stderr.decode(errors='replace').strip()
                         print(f"[EntityLib Worker] exit={result.returncode}")
@@ -3539,11 +3537,9 @@ class SimplifiedMapEditor(QMainWindow):
                         # Single-file invocation: FCBConverter <file.fcb.converted.xml> -fc2 -enablecompress
                         # FCBConverter detects the .converted.xml suffix and outputs <base>_new.fcb
                         cmd = [self._fcb_path, xml_path, "-fc2", "-enablecompress"]
-                        print(f"[EntityLib XML→FCB] cmd: {' '.join(cmd)}")
-                        result = subprocess.run(
-                            cmd, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            timeout=600, **self._converter._hidden_window_kwargs())
+                        print(f"[EntityLib XML→FCB] native convert: {xml_path}")
+                        from file_converter import _native_fcbconvert
+                        result = _native_fcbconvert(cmd)
                         stdout = result.stdout.decode(errors='replace').strip()
                         stderr = result.stderr.decode(errors='replace').strip()
                         print(f"[EntityLib XML→FCB] exit={result.returncode}")

@@ -24,8 +24,99 @@ if getattr(sys, 'frozen', False):
     except:
         pass
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Native FCB conversion engine — replaces FCBConverter.exe (tools/fcb_convert.py).
+# Pure Python, byte-exact, faster than the exe, no external process. Each call
+# mirrors an FCBConverter CLI invocation so the surrounding logic is unchanged.
+# ─────────────────────────────────────────────────────────────────────────────
+import fnmatch as _fnmatch
+
+_TOOLS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools")
+if _TOOLS_DIR not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR)
+
+_FCB_NAMES = None  # lazily-loaded hash→name table (shared across calls in a process)
+
+
+def _get_fcb_names():
+    global _FCB_NAMES
+    if _FCB_NAMES is None:
+        import fcb_convert
+        _FCB_NAMES = fcb_convert.load_names()
+    return _FCB_NAMES
+
+
+class _NativeResult:
+    """subprocess.CompletedProcess-compatible result for the native engine."""
+    def __init__(self, returncode=0, stdout=b"", stderr=b""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+def _native_new_fcb_name(xml_path):
+    """FCBConverter names XML→FCB output `<stem>_new.fcb` (e.g.
+    foo.data.fcb.converted.xml → foo.data_new.fcb)."""
+    low = xml_path.lower()
+    if low.endswith(".fcb.converted.xml"):
+        return xml_path[:-len(".fcb.converted.xml")] + "_new.fcb"
+    if low.endswith(".converted.xml"):
+        return xml_path[:-len(".converted.xml")] + "_new.fcb"
+    return xml_path + "_new.fcb"
+
+
+def _native_convert_one(path):
+    """Convert one file: .fcb → .fcb.converted.xml, or .converted.xml → _new.fcb."""
+    import fcb_convert
+    low = path.lower()
+    if low.endswith(".converted.xml"):
+        with open(path, "r", encoding="utf-8", errors="surrogateescape") as f:
+            xml = f.read()
+        out = fcb_convert.xml_to_fcb(xml)
+        with open(_native_new_fcb_name(path), "wb") as f:
+            f.write(out)
+    elif low.endswith(".fcb"):
+        with open(path, "rb") as f:
+            data = f.read()
+        xml = fcb_convert.fcb_to_xml(data, names=_get_fcb_names())
+        with open(path + ".converted.xml", "w", encoding="utf-8", newline="\n") as f:
+            f.write(xml)
+
+
+def _native_fcbconvert(cmd):
+    """Native replacement for an FCBConverter.exe subprocess.run call. `cmd` is the
+    FCBConverter-style arg list (cmd[0] = old exe path, ignored). Handles single
+    files and -source=<folder> -filter=<glob> batch mode. Returns a
+    subprocess-compatible result object (returncode 0 = success)."""
+    src = filt = None
+    files = []
+    for a in cmd[1:]:
+        if isinstance(a, (list, tuple)):       # tolerate accidental nested cmd
+            files.extend(x for x in a if isinstance(x, str) and not x.startswith("-")
+                         and (x.lower().endswith(".fcb") or x.lower().endswith(".xml")))
+            continue
+        if a.startswith("-source="):
+            src = a[len("-source="):]
+        elif a.startswith("-filter="):
+            filt = a[len("-filter="):]
+        elif a.startswith("-"):
+            pass                                # -fc2 / -enablecompress: no-op natively
+        else:
+            files.append(a)
+    try:
+        if src is not None and filt is not None:
+            for fn in sorted(os.listdir(src)):
+                if _fnmatch.fnmatch(fn, filt):
+                    _native_convert_one(os.path.join(src, fn))
+        for p in files:
+            _native_convert_one(p)
+        return _NativeResult(0)
+    except Exception as e:
+        return _NativeResult(1, b"", str(e).encode("utf-8", "replace"))
+
+
 class FileConverter:
-    """Simplified file converter for FCBConverter tool only"""
+    """Native FCB ↔ XML converter (drop-in for the old FCBConverter.exe wrapper)."""
 
     def __init__(self, tools_path="tools", game_mode="avatar"):
         """Initialize the converter with FCBConverter tool"""
@@ -86,7 +177,9 @@ class FileConverter:
                 print(f"Found FCB converter at: {converter_path}")
                 break
         
-        self.conversion_enabled = self.can_convert_fcb
+        # Native engine (tools/fcb_convert.py) is always available — no exe required.
+        self.can_convert_fcb = True
+        self.conversion_enabled = True
         self.game_mode = game_mode
 
     def _fcb_cmd(self, file_path):
@@ -109,13 +202,11 @@ class FileConverter:
             kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
         return kwargs
 
-    def _run_batch_fcbconverter(self, folder: str, filter_pattern: str, timeout: int = 300) -> subprocess.CompletedProcess:
-        """Run FCBConverter in batch folder mode — always uses -fc2 flag."""
+    def _run_batch_fcbconverter(self, folder: str, filter_pattern: str, timeout: int = 300):
+        """Batch folder convert — native engine (no external process)."""
         cmd = [self.fcb_converter_path, f"-source={folder}", f"-filter={filter_pattern}", "-fc2"]
-        print(f"Batch FCBConverter: {' '.join(cmd)}")
-        return subprocess.run(cmd, stdin=subprocess.DEVNULL,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              timeout=timeout, **self._hidden_window_kwargs())
+        print(f"Batch convert (native): -source={folder} -filter={filter_pattern}")
+        return _native_fcbconvert(cmd)
 
     def convert_data_fcb_files(self, worldsectors_path, progress_callback=None):
         """Convert .data.fcb files to .converted.xml format with caching and optional multiprocessing"""
@@ -205,15 +296,12 @@ class FileConverter:
                 cmd = [self.fcb_converter_path, fcb_file, "-fc2"]
                 log(f"  Converting: {os.path.basename(fcb_file)}")
                 try:
-                    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                            timeout=60, **self._hidden_window_kwargs())
+                    result = _native_fcbconvert(cmd)
                     if result.returncode != 0:
                         err = result.stderr.decode(errors='replace').strip()
-                        log(f"  [WARNING] FCBConverter returned code {result.returncode}")
+                        log(f"  [WARNING] convert returned code {result.returncode}")
                         if err:
                             log(err)
-                except subprocess.TimeoutExpired:
-                    log(f"  ERROR: FCBConverter timed out on {os.path.basename(fcb_file)}")
                 except Exception as e:
                     log(f"  ERROR: {e}")
         else:
@@ -467,14 +555,7 @@ class FileConverter:
             
             # Run the FCB converter — use 600s timeout (managers.fcb can be 1.3MB+)
             print(f"Running converter: {self.fcb_converter_path} {fcb_path} -fc2")
-            process = subprocess.run(
-                self._fcb_cmd(fcb_path),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=600,
-                **self._hidden_window_kwargs()
-            )
+            process = _native_fcbconvert(self._fcb_cmd(fcb_path))
             
             print(f"Converter return code: {process.returncode}")
             if process.stdout:
@@ -541,14 +622,7 @@ class FileConverter:
             print(f"Converting FCB to XML: {os.path.basename(fcb_path)} -> {os.path.basename(xml_path)}, Please Wait.")
 
             # FCBConverter produces file.fcb.converted.xml — 600s for large files
-            process = subprocess.run(
-                self._fcb_cmd(fcb_path),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=600,
-                **self._hidden_window_kwargs()
-            )
+            process = _native_fcbconvert(self._fcb_cmd(fcb_path))
 
             if process.returncode == 0 and os.path.exists(converted_xml_path):
                 shutil.copy2(converted_xml_path, xml_path)
@@ -597,14 +671,7 @@ class FileConverter:
                     print(f"Warning: Could not remove existing file: {e}")
             
             # Run the FCB converter
-            process = subprocess.run(
-                self._fcb_cmd(converted_xml_path),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=120,
-                **self._hidden_window_kwargs()
-            )
+            process = _native_fcbconvert(self._fcb_cmd(converted_xml_path))
 
             if os.path.exists(expected_new_fcb_path) and os.path.getsize(expected_new_fcb_path) > 0:
                 fcb_size = os.path.getsize(expected_new_fcb_path)
@@ -1130,14 +1197,7 @@ class FileConverter:
             if os.path.exists(new_fcb_path):
                 os.remove(new_fcb_path)
 
-            process = subprocess.run(
-                self._fcb_cmd(converted_xml_path),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=120,
-                **self._hidden_window_kwargs()
-            )
+            process = _native_fcbconvert(self._fcb_cmd(converted_xml_path))
 
             # Clean up temp file regardless of outcome
             try:
@@ -1191,17 +1251,9 @@ def _convert_fcb_worker(task):
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             startupinfo.wShowWindow = subprocess.SW_HIDE
         
-        # Run the FCB converter with hidden window — always use -fc2
+        # Convert natively (no external process)
         cmd = [converter_path, fcb_path, "-fc2"]
-        process = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=30,
-            startupinfo=startupinfo,
-            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
-        )
+        process = _native_fcbconvert(cmd)
         
         if process.returncode == 0:
             # Check what happened
