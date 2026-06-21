@@ -3315,12 +3315,9 @@ class SimplifiedMapEditor(QMainWindow):
                 self._converter = converter
                 self._files = files
                 self._root = root
-                # Use the rebuilt fixed binary (has ByteLen guard in FindInDictionarySkip)
-                # so the entitylibrary crash is fixed without touching main convert_folder.
-                _fixed = os.path.join(
-                    converter.tools_path, "FCBConverter-master", "bin",
-                    "net7.0-windows", "win-x64", "FCBConverter.exe")
-                self._fcb_path = _fixed if os.path.exists(_fixed) else converter.fcb_converter_path
+                # Native conversion (tools/fcb_convert.py) — no external binary. The
+                # path is a label only; _native_fcbconvert ignores cmd[0].
+                self._fcb_path = "native"
 
             def run(self):
                 print(f"[EntityLib Worker] run() started, {len(self._files)} file(s), binary={self._fcb_path}")
@@ -3505,10 +3502,7 @@ class SimplifiedMapEditor(QMainWindow):
                 self._converter = converter
                 self._files = files
                 self._root = root
-                _fixed = os.path.join(
-                    converter.tools_path, "FCBConverter-master", "bin",
-                    "net7.0-windows", "win-x64", "FCBConverter.exe")
-                self._fcb_path = _fixed if os.path.exists(_fixed) else converter.fcb_converter_path
+                self._fcb_path = "native"   # native conversion; ignored by _native_fcbconvert
 
             def run(self):
                 ok = fail = 0
@@ -4927,15 +4921,9 @@ class SimplifiedMapEditor(QMainWindow):
         return 0, 0
 
     def _entitylib_converter_path(self):
-        """Path to the FCBConverter binary used for entitylibrary conversion —
-        prefers the rebuilt 'fixed' binary that doesn't crash on the library."""
-        try:
-            conv = self.file_converter
-            fixed = os.path.join(conv.tools_path, "FCBConverter-master", "bin",
-                                 "net7.0-windows", "win-x64", "FCBConverter.exe")
-            return fixed if os.path.exists(fixed) else conv.fcb_converter_path
-        except Exception:
-            return None
+        """Converter id for entitylibrary conversion. Conversion is now native
+        (tools/fcb_convert.py); this label is ignored by _native_fcbconvert."""
+        return "native"
 
     def _run_entitylib_conversion(self, fcb_path, converter, progress_dialog=None, log=None):
         """Run the (blocking) FCB→XML conversion on a worker thread while pumping
