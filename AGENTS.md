@@ -139,6 +139,8 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/terrain_to_gltf.py` | `tests/test_terrain_avatar_remap.py` | — | `_remap_avatar_sectors_to_zero_based` shifts Avatar multi-part sector keys (e.g. Tantalus part 2 sd256-sd511) to 0-based so 3D textures match 2D; no-op for part 1 / empty; instances built via `object.__new__` (skip disk-touching `__init__`), module loaded by **file path** — excluded from `--cov` |
 | `theme_settings.py` | `tests/test_theme_settings_merge.py` | — | `_save_settings` merge-write preserves foreign keys (e.g. `render_tier`); handles missing/corrupt file — excluded from `--cov` |
 | `simplified_map_editor.py` | `tests/test_first_run_flow.py` | — | First-run dialog sequencing: `_prompt_first_run_setup` chains into the welcome screen, never schedules `select_level`; uses stub editor + fake QTimer/QMessageBox — excluded from `--cov` |
+| `simplified_map_editor.py` | `tests/test_fc2_sector_math.py` | — | FC2 global sector-grid math (`sector_grid_stride` 16/80, `global_sector_coords` local→global lift + passthrough) and `rebuild_sector_xml` `pos_offset` cell-local write-back; helpers **mirrored** in the test (module needs GL/Qt) — excluded from `--cov` |
+| `canvas/terrain_editor_dialog.py` | `tests/test_terrain_editor_fc2.py` | — | FC2 `TerrainData`: `.sdat` offset-592 read, global-sd-numbering remap (row stride 80), save writes back to the recorded per-index source file preserving header/trailer bytes; Avatar `.csdat`/708 default unchanged; module loaded by **file path** — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -198,6 +200,22 @@ FC2 terrain data lives at `patch\levels\w1_c_3\generated\sdat\` — the same `ge
 
 ### FC2 sdat discovery — search world folder too, not just the sector folder
 In `load_complete_level`, the FC2 sdat discovery must search beyond `lpath` (the grid sector folder, e.g. `w1_a_1`). The `.sdat` files typically live at the world level (`world1/sdat/`) rather than inside individual sector folders. The discovery now checks: `lpath/sdat`, `lpath`, `parent(lpath)/sdat`, `parent(lpath)`, `worlds_path/sdat`, `worlds_path` — in that priority order.
+
+### FC2 parity — unified sectors, global sector grid, cell offsets (July 2026)
+
+FC2 was brought to feature parity with Avatar. The invariants below are load-bearing — breaking any of them corrupts FC2 saves or splits the dirty-tracking ID space.
+
+**Global sector grid.** All sector IDs are `sector_id = gy * stride + gx` with `stride = sector_grid_stride(game_mode)` (module-level in `simplified_map_editor.py`): 16 for Avatar, **80 for FC2** (5×5 cells × 16 sectors). FC2's own `sd` numbering confirms the scheme — cell `w1_c_3`'s sectors start at 2592 = 32·80+32. `global_sector_coords(gx, gy, cell_offset_units)` lifts a WorldSector header X/Y onto the global grid: coords < 16 get the owning cell's offset (in sectors) added; coords ≥ 16 pass through (they can only be global). Never hardcode `gy*16+gx` — game-aware call sites: `load_all_worldsectors`, `_save_unified_worldsectors`, `mark_sector_dirty` (canvas, via `is_fc2_world`), `_find_best_worldsector_for_entity` (paste), `_get_sector_id_from_path` (import), `object_library.place_archetype`, drag/gizmo sector-crossing checks in `input_handler.py`/`gizmo_renderer.py`, and the live sector label in `on_entity_position_updated`.
+
+**Cell offsets and lossless round-trip.** FC2 worldsector files usually store cell-local (0–1024) entity positions. `load_all_worldsectors` (which now accepts a folder **list**) derives each file's cell offset from its path (`_get_fc2_world_offset('', fallback_path=xml_path)`), shifts that file's entities to global world coords ONLY when the header was cell-local AND positions look local (max ≤ 1100), and records whatever it applied in `self.worldsectors_cell_offsets[normcase(xml_path)] = (ox, oy)` — including `(0,0)` when it didn't shift. Save subtracts exactly the recorded offset (`rebuild_sector_xml(..., pos_offset=off)`; per-entity FCB flush in `map_canvas_gpu` prefers this dict over the legacy `fc2_cell_offset_x/y`). Because the subtraction always mirrors the recorded addition, a wrong local/global guess can only mis-display — it can never corrupt a save. The legacy single-offset shift in `load_complete_level` step 9 runs only when the unified loader didn't (`unified_thread is None or _unified_error[0]`).
+
+**FC2 model loading.** The pre-unified `assign_models_to_entities` pass no longer requires the unified background thread — with no thread it is the only assignment pass (this was the bug that left every FC2 entity a colored box). FC2 cell folder paths are appended to `_all_worldsectors_paths` during object loading; the unified thread receives that list for FC2.
+
+**MP Spawn creator is Avatar-only by design** — it writes `LeftForDeadTrigger`/`NPCSpawnPointCollection`, which FC2 doesn't use; the context-menu action is disabled with an explanatory label in FC2 mode. If real FC2 MP spawn support is added, research FC2's actual spawn archetypes first.
+
+**Night sky** resolves `assets/<game_folder>/skybox/Night Sky.glb` and falls back to the Avatar dome; drop an FC2 GLB at `canvas/assets/fc2/skybox/Night Sky.glb` to give FC2 its own stars.
+
+**Known remaining FC2 limitations:** the Terrain Editor edits one sdat cell folder at a time (use Load Terrain to switch cells on multi-cell worlds); moviedata/cinematics work only if a level ships a `moviedata.xml` (FC2 levels generally don't); FC2 3D models require the FC2 resource folder to be configured (File menu).
 
 ### FC2 terrain — always pass `game_mode` when constructing `TerrainRenderer`
 `TerrainRenderer(game_mode=...)` must be passed `"farcry2"` for FC2; the default is `"avatar"`. Without it, the renderer looks for `*.csdat` instead of `*.sdat` and finds nothing. Same applies to `generate_terrain_for_level(game_mode=...)` in `terrain_to_gltf.py`. In `map_canvas_gpu.py` use `getattr(self, 'game_mode', 'avatar')`; in `simplified_map_editor.py` use `self.game_mode`. The `load_terrain_for_level` path search and the water plane detection in `terrain_to_gltf.py` must also use `self._file_ext` rather than hardcoded `".csdat"`.
@@ -745,7 +763,7 @@ New dialog (`MPSpawnCreatorDialog`) accessible via 2D view right-click menu → 
 1. World data (mapsdata / omnis / managers / sectorsdep)
 2. Level objects (worldsectors FCB conversion + entity load)
 3. Model loader setup (configure paths — fast)
-4. **Start unified sectors on a background `threading.Thread`** (Avatar only) — XML parsing of 48 sector files runs concurrently with steps 5-6
+4. **Start unified sectors on a background `threading.Thread`** (both games since July 2026 — Avatar passes `worldsectors_path`, FC2 passes the list of all cell folders in `_all_worldsectors_paths`) — XML parsing of the sector files runs concurrently with steps 5-6
 5. Model assignment for mapsdata/omnis entities (quick lookup, main thread)
 6. **Phase A — `concurrent.futures.ThreadPoolExecutor`** reads GLTF/BIN files and calls `_parse_gltf` in parallel. No OpenGL. Overlaps with the unified sectors thread from step 4.
 7. Wait for unified sectors thread. Re-assign models to new worldsector entities. Run Phase A again for any worldsector-only models not already parsed.
@@ -1678,7 +1696,7 @@ The following bugs were discovered and fixed during testing after the 9-step pla
 - **Fix:** Both drag paths now directly walk the parent chain and call `main_window.on_entity_position_updated(entity, (x, y, z))` on every mouse move frame. `on_entity_position_updated` was extended to also update `stat_map_label` showing `"Sector 33 → 17 (main)"` when the entity crosses a sector boundary. The "By Sector" tree rebuilds on drag-end if the entity landed in a different sector (in both input_handler and gizmo_renderer).
 
 #### Unified mode required manual activation
-- **Fix:** `load_complete_level` now auto-calls `load_all_worldsectors(worldsectors_path)` at step 7 (finalization) for Avatar levels. FC2 is excluded. The FCB conversion pass in `load_all_worldsectors` is effectively free since files were already converted earlier in the same load.
+- **Fix:** `load_complete_level` now auto-calls `load_all_worldsectors(worldsectors_path)` at step 7 (finalization) for Avatar levels. Since July 2026 FC2 is included too (all cell folders passed as a list — see "FC2 parity" section). The FCB conversion pass in `load_all_worldsectors` is effectively free since files were already converted earlier in the same load.
 
 #### "No Sector" catch-all group in entity browser
 - **Fix:** `_populate_tree_by_sector` now groups non-worldsector entities by `source_file` name (`omnis`, `managers`, `mapsdata`, `sectorsdep`, etc.) instead of dumping them all into a single "No Sector" header.
@@ -1743,7 +1761,7 @@ The following bugs were found and fixed after the initial unified save implement
 - `landmarkfar_*` and `landmarknear*` files — streaming sector triggers, unrelated to entity editing
 - `managers.xml` vPos sync logic — already game-mode agnostic; keep as-is
 - `omnis.fcb` / `mapsdata.fcb` loading — separate from worldsectors, not affected
-- FC2 worldsector loading — FC2 uses a different naming scheme (`w{n}_{col}_{row}`) with 1024×1024 sectors; implement Avatar unified mode first, add FC2 later if needed
+- ~~FC2 worldsector loading — deferred~~ **Implemented July 2026** — FC2 unified mode loads all 25 cell folders onto a global 80×80 sector grid; see the "FC2 parity — unified sectors, global sector grid, cell offsets (July 2026)" section for the invariants that must not be broken
 
 ---
 
@@ -2005,7 +2023,7 @@ All use Gaussian falloff (`sigma = radius/3`). Heights clamped to `[0, 511.99]`.
 - **Set**: stamp exact target height within mask.
 
 ### FC2 note
-FC2 `.sdat` uses offset 592; this editor loads only `.csdat` (offset 708). FC2 editing not supported in this version.
+~~FC2 `.sdat` uses offset 592; this editor loads only `.csdat` (offset 708). FC2 editing not supported in this version.~~ **FC2 supported since July 2026:** `TerrainData(game_mode=...)` derives `.sdat`/592 vs `.csdat`/708, remaps FC2's global sd numbering (row stride 80) and Avatar multi-part numbering to local 0-based indices, and records `sector_files[local_idx] = path` at load so `save_dirty_sectors` writes each index back to the exact file it came from. `open_terrain_editor` / `show_terrain_editor` / `TerrainEditorDialog` all take `game_mode`. The live preview (`TerrainRenderer.update_from_heightmap`) applies FC2's extra −90° image rotation to match the canvas orientation. Tests: `tests/test_terrain_editor_fc2.py`.
 
 ### `open_terrain_editor` in `simplified_map_editor.py`
 Keeps a `_terrain_editor_window` reference; re-uses the existing window on subsequent menu clicks instead of spawning a new dialog.

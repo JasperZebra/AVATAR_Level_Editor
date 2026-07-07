@@ -6,15 +6,17 @@
 
 # Avatar: The Game Level Editor
 
-A comprehensive level editor for modifying **Avatar: The Game** level files with full FCB to XML conversion support and real-time visual editing capabilities.
+A comprehensive level editor for modifying **Avatar: The Game** and **Far Cry 2** level files with full FCB to XML conversion support and real-time visual editing capabilities.
 
 ## Features
 
+- **Two games, one editor**: Full support for Avatar: The Game and Far Cry 2 — FC2 worlds load all 25 grid cells (5×5, each 16×16 sectors) as one editable map with real 3D models
 - **Dual-Format Support**: Seamlessly works with both FCB and XML file formats with automatic conversion
 - **Visual Entity Management**: Drag-and-drop positioning, rotation gizmos, and real-time property editing
 - **Smart Entity Operations**: Copy/paste, duplication with auto-generated IDs, and batch operations
 - **Interactive Canvas**: Color-coded entity visualization with adaptive grid system
-- **Sector Management**: Visual boundary display with violation detection
+- **Sector Management**: Visual boundary display with violation detection; entities moved across sector (or FC2 cell) borders are re-homed to the correct sector file on save
+- **Terrain Editor**: In-app heightmap editing with brush tools and live preview — Avatar `.csdat` and Far Cry 2 `.sdat`
 
 ## Quick Start
 
@@ -26,7 +28,7 @@ A comprehensive level editor for modifying **Avatar: The Game** level files with
 | <img width="600" height="500" alt="Screenshot 2025-12-01 161755" src="https://github.com/user-attachments/assets/b5a75f8d-18e9-4a16-b099-4fd6be77b5c2" /> |
 
 ### Loading a Level
-1. Set your `ptach` folder for the game type you're currently modding
+1. Set your `patch` folder for the game type you're currently modding
 2. Level folders and files will be automatically read, loaded and converted as needed.
 3. Select the level you want to load into the editor from the UI screen
 
