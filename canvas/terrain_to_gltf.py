@@ -43,6 +43,12 @@ import numpy as np
 
 
 class TerrainExporter:
+    # FC2 3D texture orientation knob (see create_combined_texture): the
+    # finished combined texture is rotated N x 90° CCW for FC2. 2 = 180°,
+    # replacing the old 180° render-time mesh rotation (geometry stays
+    # unrotated — proven correct against entity heights).
+    _FC2_3D_TEXTURE_TURNS = 2
+
     def __init__(self, input_path, output_path, resolution, meters_per_coordinate=1.0, game_mode="avatar"):
         self.input_path = Path(input_path)
         self.output_path = Path(output_path)
@@ -243,37 +249,16 @@ class TerrainExporter:
         if atlas_numbers:
             print(f"\nFound {len(atlas_numbers)} texture atlas files")
 
-            if self.game_mode == "farcry2":
-                # FC2: atlas{n} is named after its block-origin GLOBAL sector
-                # and covers the 2x2 block {n, n+1, n+stride, n+stride+1}
-                # (mirrors terrain_renderer.build_atlas_mapping). sectors_data
-                # keys are LOCAL row-major after the load remap.
-                base = getattr(self, '_fc2_sector_base', 0)
-                stride = getattr(self, '_fc2_row_stride', 0) or 0
-                if not stride:
-                    # No remap happened (gapless standalone map) — numbering
-                    # is already local with the map's own width as stride.
-                    sx, _ = self.calculate_grid_dimensions()
-                    stride = sx
-                sx, _sy = self.calculate_grid_dimensions()
-                for s in sorted(self.sectors_data.keys()):
-                    r, c = s // sx, s % sx
-                    atlas_num = base + (r - r % 2) * stride + (c - c % 2)
-                    if atlas_num not in atlas_numbers:
-                        continue
-                    sub_sector = (1 - (r % 2)) * 2 + (c % 2)
-                    self.atlas_mapping[s] = (atlas_num, sub_sector)
-                print(f"Mapped {len(self.atlas_mapping)} sectors to FC2 2x2-block "
-                      f"atlases (base={base}, stride={stride})")
-            else:
-                # Avatar: sequential mapping — atlas[i] → sectors i*4 … i*4+3.
-                for atlas_index, atlas_num in enumerate(atlas_numbers):
-                    base_sector = atlas_index * 4
-                    for sub_sector in range(4):
-                        sector_num = base_sector + sub_sector
-                        self.atlas_mapping[sector_num] = (atlas_num, sub_sector)
+            # Sequential mapping for BOTH games — atlas[i] → sectors i*4 … i*4+3.
+            # (This pairing with the shared tile pipeline produces correct tile
+            # pieces for FC2 too; user-verified — do NOT split per game again.)
+            for atlas_index, atlas_num in enumerate(atlas_numbers):
+                base_sector = atlas_index * 4
+                for sub_sector in range(4):
+                    sector_num = base_sector + sub_sector
+                    self.atlas_mapping[sector_num] = (atlas_num, sub_sector)
 
-                print(f"Mapped {len(self.atlas_mapping)} sectors to atlas files")
+            print(f"Mapped {len(self.atlas_mapping)} sectors to atlas files")
         else:
             print("\nNo texture atlas files found")
     
@@ -329,12 +314,6 @@ class TerrainExporter:
                         sub_texture = img_array[half_h:height, 0:half_w]
                     else:  # sub_sector == 3, Bottom-Right
                         sub_texture = img_array[half_h:height, half_w:width]
-
-                    # FC2: atlas tile CONTENT is authored rotated relative to the
-                    # world — same 90° CCW turn as the 2D path (terrain_renderer).
-                    # Keep the two in lockstep; k=-1 if it ever needs the other way.
-                    if self.game_mode == "farcry2":
-                        sub_texture = np.rot90(sub_texture, k=1)
 
                     # Resize to match sector grid size
                     sub_img = Image.fromarray(sub_texture)
@@ -594,14 +573,9 @@ class TerrainExporter:
         
         for display_row in range(sectors_y):
             for col in range(sectors_x):
-                if self.game_mode == "farcry2":
-                    # FC2: row-major with display inversion — the SAME placement
-                    # create_combined_heightmap uses, so texture texels line up
-                    # 1:1 with heightmap samples (identity world mapping).
-                    sector_index = (sectors_y - 1 - display_row) * sectors_x + col
-                else:
-                    # Avatar Game Layout pattern (2x2 blocks, vertical)
-                    sector_index = self.get_sector_index_from_position(display_row, col, sectors_x, sectors_y)
+                # Shared tile pipeline for BOTH games (Avatar Game Layout pattern
+                # — produces correct tile pieces for FC2 too, user-verified).
+                sector_index = self.get_sector_index_from_position(display_row, col, sectors_x, sectors_y)
 
                 if sector_index in self.sectors_textures:
                     start_y = display_row * self.grid_size
@@ -612,7 +586,15 @@ class TerrainExporter:
 
                     # Avatar layout: NO flip (textures match heightmap orientation)
                     combined[start_y:start_y+self.grid_size, start_x:start_x+self.grid_size] = texture_data
-        
+
+        # FC2 3D texture orientation knob: the original 3D look was tuned with
+        # a 180° terrain RENDER rotation. Geometry now stays unrotated (proven
+        # correct against entity heights), so the equivalent appearance comes
+        # from rotating the finished texture instead. N x 90° CCW; 2 = 180°.
+        if self.game_mode == "farcry2" and self._FC2_3D_TEXTURE_TURNS:
+            combined = np.ascontiguousarray(
+                np.rot90(combined, k=self._FC2_3D_TEXTURE_TURNS))
+
         return combined
     
     def downsample_heightmap(self, heightmap, target_resolution):
@@ -722,16 +704,13 @@ class TerrainExporter:
         vert_grid = np.stack([PX, PY, PZ], axis=-1)          # (gh, gw, 3)
         vertices = vert_grid.reshape(-1).tolist()
 
-        # UVs — Avatar: 90° CCW rotation (rotated_u = 1-v, rotated_v = u) to
-        # match its block-pattern texture layout. FC2: DIRECT mapping — the
-        # combined texture is assembled with the exact same row-major placement
-        # as the heightmap, so texel (u, v) = grid sample (x, y) as-is.
+        # UVs — same 90° CCW rotation for BOTH games (rotated_u = 1-v,
+        # rotated_v = u); matches the shared block-pattern texture combine.
+        # FC2's orientation difference is handled by _FC2_3D_TEXTURE_TURNS on
+        # the finished texture, not here.
         U = NX                                               # u = x/(width-1)
         V = NY                                               # v = y/(height-1)
-        if self.game_mode == "farcry2":
-            uv_grid = np.stack([U, V], axis=-1)              # (gh, gw, 2)
-        else:
-            uv_grid = np.stack([1.0 - V, U], axis=-1)        # (gh, gw, 2)
+        uv_grid = np.stack([1.0 - V, U], axis=-1)            # (gh, gw, 2)
         uvs = uv_grid.reshape(-1).tolist()
 
         # Indices over the (gh-1)x(gw-1) quad grid (same winding as before).

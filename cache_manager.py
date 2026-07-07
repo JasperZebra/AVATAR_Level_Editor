@@ -473,10 +473,10 @@ class CacheManager:
         import glob
 
         # Bump when terrain assembly/orientation logic changes — cached images
-        # baked with old logic must not survive a fix (July 2026: FC2 identity
-        # orientation + 2x2-block atlas mapping; tv3 = per-tile 90° CCW atlas
-        # content rotation).
-        RENDER_VERSION = "tv3"
+        # baked with old logic must not survive a fix (tv4, July 2026: shared
+        # Avatar tile pipeline restored for FC2; per-game difference is only
+        # the final whole-image rotation knobs).
+        RENDER_VERSION = "tv4"
 
         try:
             # Both games: Avatar .csdat and FC2 .sdat. (The old .csdat-only

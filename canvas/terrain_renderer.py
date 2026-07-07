@@ -37,6 +37,11 @@ class WaterData:
 class TerrainRenderer:
     """Handles terrain rendering in 2D canvas"""
 
+    # FC2 2D orientation knob: total whole-image rotation = N x -90° CCW.
+    # The tile pipeline is shared with Avatar (correct tile pieces); ONLY this
+    # final rotation differs. 2 = original behaviour (-180 total).
+    _FC2_2D_QUARTER_TURNS = 2
+
     def __init__(self, game_mode: str = "avatar"):
         self.game_mode = game_mode
         self.grid_size = 65
@@ -603,15 +608,11 @@ class TerrainRenderer:
 
         for display_row in range(self.sectors_y):
             for col in range(self.sectors_x):
-                # FC2 sectors are numbered row-major from the world origin
-                # (n = row*stride + col, row = world-south first); with the
-                # image drawn top-down, the top display row is the HIGHEST
-                # sector row. Avatar keeps its 2x2-vertical-block pattern.
-                if self.game_mode == "farcry2":
-                    sector_index = (self.sectors_y - 1 - display_row) * self.sectors_x + col
-                else:
-                    sector_index = self.get_sector_index_from_position(display_row, col,
-                                                                       self.sectors_x, self.sectors_y)
+                # Same tile pipeline for BOTH games (Avatar's pattern produces
+                # correct tile pieces for FC2 too — user-verified; only the
+                # final whole-image rotation differs per game below).
+                sector_index = self.get_sector_index_from_position(display_row, col,
+                                                                   self.sectors_x, self.sectors_y)
 
                 if sector_index not in self.sectors_data:
                     continue
@@ -638,13 +639,6 @@ class TerrainRenderer:
                         else:  # Bottom-right (3)
                             sub_img = img_array[half_h:h, half_w:w]
 
-                        # FC2: atlas tile CONTENT is authored rotated relative to
-                        # the world (placement is correct — only the pixels inside
-                        # each 64m tile need turning). np.rot90 k=1 is a visual
-                        # 90° CCW; if tiles ever look 180° off, change k to -1.
-                        if self.game_mode == "farcry2":
-                            sub_img = np.rot90(sub_img, k=1)
-
                         pil_img = Image.fromarray(sub_img)
                         pil_img = pil_img.resize((self.grid_size, self.grid_size), 
                                                 Image.Resampling.LANCZOS)
@@ -667,19 +661,19 @@ class TerrainRenderer:
 
         painter.end()
 
-        # Avatar: 90° CCW rotation (its sector numbering runs in a different
-        # direction than the assembly order).
-        # FC2: NO rotation (July 2026, proven empirically against entity
-        # heights) — sectors are numbered row-major from the world origin, so
-        # the inverted-row assembly drawn top-down is already world-correct.
-        # The old -90-90 pair rotated every FC2 cell's content 180° out of
-        # place, which is why objects never sat on the right terrain.
+        # The per-tile pipeline above is shared; the games differ ONLY in this
+        # final whole-image rotation. Avatar: one -90. FC2: total rotation is
+        # _FC2_2D_QUARTER_TURNS x -90 — the single tuning knob for FC2 2D
+        # orientation (2 = the original behaviour: -90 shared + one extra -90).
+        transform = QTransform()
+        transform.rotate(-90)
+        final_image = combined_image.transformed(transform)
+
         if self.game_mode == "farcry2":
-            final_image = combined_image
-        else:
-            transform = QTransform()
-            transform.rotate(-90)
-            final_image = combined_image.transformed(transform)
+            for _ in range(self._FC2_2D_QUARTER_TURNS - 1):
+                extra = QTransform()
+                extra.rotate(-90)
+                final_image = final_image.transformed(extra)
 
         self.terrain_image = final_image
         self.terrain_pixmap = QPixmap.fromImage(final_image)
@@ -765,50 +759,20 @@ class TerrainRenderer:
                         return test_path
             return None
 
-        if self.game_mode == "farcry2":
-            # FC2: atlas{n} is named after its block-origin GLOBAL sector number
-            # and covers the 2x2 block {n, n+1, n+stride, n+stride+1} (verified
-            # against real data: fishing village atlases 0,2,..,8,20,22,.. with
-            # stride 10; cell w1_c_3 atlases 2592,2594,..,2752,.. with stride 80).
-            # sectors_data keys here are LOCAL row-major indices; _fc2_sector_base
-            # and _fc2_row_stride were recorded by the load remap (base 0 and
-            # stride == sectors_x when the map's numbering was already local).
-            base = self._fc2_sector_base
-            stride = self._fc2_row_stride if getattr(self, '_fc2_remapped', False) \
-                else self.sectors_x
-            mapped = 0
-            _atlas_path_cache = {}
-            for s in self.sectors_data.keys():
-                r, c = s // self.sectors_x, s % self.sectors_x
-                atlas_num = base + (r - r % 2) * stride + (c - c % 2)
-                if atlas_num not in _atlas_path_cache:
-                    _atlas_path_cache[atlas_num] = _load_atlas(atlas_num)
-                atlas_path = _atlas_path_cache[atlas_num]
-                if not atlas_path:
-                    continue
-                # Quadrants (TL=0, TR=1, BL=2, BR=3 in image space, y-down):
-                # atlas images are authored north-at-top, so the block's HIGHER
-                # sector row (r%2 == 1) is the TOP half of the image. If tiles
-                # ever show the two rows of a 128m block swapped, flip this to
-                # (r % 2) * 2 + (c % 2).
-                sub_sector = (1 - (r % 2)) * 2 + (c % 2)
-                self.atlas_mapping[s] = (atlas_path, sub_sector)
-                mapped += 1
-            print(f"Mapped {mapped} sectors to FC2 2x2-block atlases "
-                  f"(base={base}, stride={stride})")
-        else:
-            # Avatar: sequential counter — each atlas covers 4 consecutive
-            # sector indices: atlas[i] → sectors i*4 … i*4+3.
-            sector_counter = 0
-            for atlas_num in atlas_numbers:
-                atlas_path = _load_atlas(atlas_num)
-                if not atlas_path:
-                    continue
-                for sub_sector in range(4):
-                    self.atlas_mapping[sector_counter] = (atlas_path, sub_sector)
-                    sector_counter += 1
+        # Sequential counter — same layout for both Avatar and FC2 (this pairing
+        # with get_sector_index_from_position produces correct tile pieces for
+        # both games; user-verified — do NOT split per game again).
+        # Each atlas covers 4 consecutive sector indices: atlas[i] → sectors i*4 … i*4+3.
+        sector_counter = 0
+        for atlas_num in atlas_numbers:
+            atlas_path = _load_atlas(atlas_num)
+            if not atlas_path:
+                continue
+            for sub_sector in range(4):
+                self.atlas_mapping[sector_counter] = (atlas_path, sub_sector)
+                sector_counter += 1
 
-            print(f"Mapped {len(self.atlas_mapping)} sectors to atlas textures")
+        print(f"Mapped {len(self.atlas_mapping)} sectors to atlas textures")
 
     def load_xbt_as_dds_tempfile(self, xbt_path, temp_folder=None):
         """Extract DDS from XBT file"""
