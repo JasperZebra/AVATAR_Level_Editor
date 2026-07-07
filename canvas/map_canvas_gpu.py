@@ -3846,17 +3846,22 @@ class MapCanvas(QOpenGLWidget):
                     if tx or ty:
                         glTranslatef(float(tx), 0.0, float(-ty))
 
-                    # FC2 only: rotate 180° around terrain AABB centre to match the
-                    # two -90° rotations applied to the 2D terrain image.
+                    # FC2 only: rotate 180° around the terrain AABB centre to match
+                    # the two -90° rotations applied to the 2D terrain image.
                     # Avatar 3D terrain is already in the correct orientation.
+                    # The pivot must be the AABB centre IN MESH SPACE — terrain
+                    # meshes span z in [-height, 0] (PZ = NY*h - sector_0_world_z),
+                    # so the centre z is negative. Negating it (the old code) put
+                    # the pivot outside the mesh and displaced every cell by a
+                    # full world-cell, scattering FC2 multi-cell terrain.
                     if getattr(self, 'game_mode', 'avatar') == 'farcry2':
-                        _bmin = model.bounds_min if model.bounds_min is not None else [0, 0, 0]
-                        _bmax = model.bounds_max if model.bounds_max is not None else [1024, 0, 1024]
+                        _bmin = model.bounds_min if model.bounds_min is not None else [0, 0, -1024]
+                        _bmax = model.bounds_max if model.bounds_max is not None else [1024, 0, 0]
                         _cx = (_bmin[0] + _bmax[0]) / 2.0
                         _cz = (_bmin[2] + _bmax[2]) / 2.0
-                        glTranslatef(float(_cx), 0.0, float(-_cz))
+                        glTranslatef(float(_cx), 0.0, float(_cz))
                         glRotatef(180.0, 0.0, 1.0, 0.0)
-                        glTranslatef(float(-_cx), 0.0, float(_cz))
+                        glTranslatef(float(-_cx), 0.0, float(-_cz))
 
                     # Terrain uses the same material as entities now that it has
                     # correct per-vertex normals and responds to sun lighting properly.
