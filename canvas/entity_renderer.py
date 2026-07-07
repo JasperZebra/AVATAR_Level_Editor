@@ -749,13 +749,20 @@ class EntityRenderer:
                     print(f"Error processing entity: {e}")
                 continue
 
-        # --- Draw all style groups: one setPen/setBrush per group ---
+        # --- Draw all style groups: one setPen/setBrush + ONE drawRects per group ---
+        # Every entity is the same shared square — only the color differs — so
+        # the whole group goes down in a single batched drawRects call instead
+        # of up to 15K individual drawRect calls. Antialiasing is disabled for
+        # this pass: the squares are axis-aligned, AA adds nothing visually but
+        # costs a slower raster path per rect.
+        _aa_was_on = painter.testRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.Antialiasing, False)
         for group in style_groups.values():
             painter.setPen(QPen(Qt.black, group['out_w']))
             painter.setBrush(QBrush(group['color']))
-            # Fast path: no save/restore per entity
-            for rect in group['rects']:
-                painter.drawRect(rect)
+            # Fast path: one batched call for the whole group
+            if group['rects']:
+                painter.drawRects(group['rects'])
             # Slow path: rotating entities only
             for sx, sy, size, rotation in group['rotated']:
                 painter.save()
@@ -763,6 +770,8 @@ class EntityRenderer:
                 painter.rotate(rotation)
                 painter.drawRect(QRectF(-size, -size, size * 2, size * 2))
                 painter.restore()
+        if _aa_was_on:
+            painter.setRenderHint(QPainter.Antialiasing, True)
 
         # --- Fences, primitives, labels drawn after all squares ---
         for entity, x, y in fence_list:

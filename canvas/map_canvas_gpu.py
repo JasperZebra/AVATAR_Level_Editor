@@ -6421,12 +6421,15 @@ class MapCanvas(QOpenGLWidget):
         self.entity_cache_dirty = True
         self.last_3d_camera_pos = None
         self.last_3d_camera_angles = None
-        
+
         if hasattr(self, 'entity_renderer'):
             self.entity_renderer.invalidate_all_entity_caches()
-        
+
         self.entities_modified = True
         self.selection_modified = True
+        # Sector-boundary overlay caches (rebuilt on next paint)
+        self._sector_groups_cache = None
+        self._omnis_cells_cache = None
         
     
     def update_entity_xml(self, entity):
@@ -6734,26 +6737,36 @@ class MapCanvas(QOpenGLWidget):
 
         try:
             from PyQt5.QtGui import QPen, QBrush, QColor, QFont
-            from PyQt5.QtCore import Qt
+            from PyQt5.QtCore import Qt, QRect
             from collections import defaultdict
 
             original_pen = painter.pen()
             original_brush = painter.brush()
             original_font = painter.font()
 
-            # ── Group entries by grid position ─────────────────────────────────
-            position_groups = defaultdict(lambda: {'sector': None, 'landmark_far': None, 'landmark_near': None})
-            for info in self.sector_data:
-                gx = info.get('x', 0)
-                gy = info.get('y', 0)
-                if info.get('is_landmark', False):
-                    fname = os.path.basename(info.get('file_path', '')).lower()
-                    if 'landmarkfar' in fname:
-                        position_groups[(gx, gy)]['landmark_far'] = info
+            # ── Group entries by grid position — CACHED ────────────────────────
+            # At FC2 full-world scale this is ~5.7K entries (plus a 50K entity
+            # scan for omnis below); rebuilding it every paint made 2D unusable.
+            # Caches are invalidated in invalidate_entity_caches / when the
+            # sector_data list object changes.
+            _groups_key = (id(self.sector_data), len(self.sector_data))
+            _cache = getattr(self, '_sector_groups_cache', None)
+            if _cache is not None and _cache[0] == _groups_key:
+                position_groups = _cache[1]
+            else:
+                position_groups = defaultdict(lambda: {'sector': None, 'landmark_far': None, 'landmark_near': None})
+                for info in self.sector_data:
+                    gx = info.get('x', 0)
+                    gy = info.get('y', 0)
+                    if info.get('is_landmark', False):
+                        fname = os.path.basename(info.get('file_path', '')).lower()
+                        if 'landmarkfar' in fname:
+                            position_groups[(gx, gy)]['landmark_far'] = info
+                        else:
+                            position_groups[(gx, gy)]['landmark_near'] = info
                     else:
-                        position_groups[(gx, gy)]['landmark_near'] = info
-                else:
-                    position_groups[(gx, gy)]['sector'] = info
+                        position_groups[(gx, gy)]['sector'] = info
+                self._sector_groups_cache = (_groups_key, position_groups)
 
             # Scale font with the canvas zoom so labels grow/shrink with the boxes.
             _font_px = max(4, min(16, round(6 * self.scale_factor)))
@@ -6761,83 +6774,68 @@ class MapCanvas(QOpenGLWidget):
             _lbl_font.setPixelSize(_font_px)
             _lbl_font.setWeight(QFont.Bold)
             painter.setFont(_lbl_font)
+            metrics = painter.fontMetrics()
             bg_padding = 2
-            boundaries_drawn = 0
+
+            # All boxes share the same rectangle geometry — collect the visible
+            # ones per category and issue ONE drawRects call per pen/brush
+            # instead of thousands of individual drawRect calls. Labels are
+            # drawn only when a box is big enough on screen to read them
+            # (rw >= 48 px) — zoomed out they were thousands of illegible
+            # fontMetrics+drawText calls per frame.
+            LABEL_MIN_PX = 48
+            margin = 50
+            w_lim = self.width() + margin
+            h_lim = self.height() + margin
+
+            sector_rects, landmark_rects = [], []
+            sector_labels, landmark_labels = [], []   # (x, y, text)
 
             for (grid_x, grid_y), group in position_groups.items():
-                try:
-                    sector_info   = group['sector']
-                    landmark_far  = group['landmark_far']
-                    landmark_near = group['landmark_near']
-                    landmark_ref  = landmark_far if landmark_far is not None else landmark_near
-                    ref_info      = sector_info if sector_info is not None else landmark_ref
+                sector_info   = group['sector']
+                landmark_far  = group['landmark_far']
+                landmark_near = group['landmark_near']
+                landmark_ref  = landmark_far if landmark_far is not None else landmark_near
+                ref_info      = sector_info if sector_info is not None else landmark_ref
 
-                    sector_size = ref_info.get('size', 64)
-                    world_min_x = grid_x * sector_size
-                    world_min_y = grid_y * sector_size
-                    world_max_x = world_min_x + sector_size
-                    world_max_y = world_min_y + sector_size
+                sector_size = ref_info.get('size', 64)
+                world_min_x = grid_x * sector_size
+                world_min_y = grid_y * sector_size
 
-                    screen_tl = self.world_to_screen(world_min_x, world_max_y)
-                    screen_br = self.world_to_screen(world_max_x, world_min_y)
+                screen_tl = self.world_to_screen(world_min_x, world_min_y + sector_size)
+                screen_br = self.world_to_screen(world_min_x + sector_size, world_min_y)
 
-                    rect_x = screen_tl[0]
-                    rect_y = screen_tl[1]
-                    rect_w = screen_br[0] - screen_tl[0]
-                    rect_h = screen_br[1] - screen_tl[1]
+                rect_x = screen_tl[0]
+                rect_y = screen_tl[1]
+                rect_w = screen_br[0] - screen_tl[0]
+                rect_h = screen_br[1] - screen_tl[1]
 
-                    if abs(rect_w) < 2 or abs(rect_h) < 2:
-                        continue
-                    if rect_w < 0:
-                        rect_x += rect_w
-                        rect_w = abs(rect_w)
-                    if rect_h < 0:
-                        rect_y += rect_h
-                        rect_h = abs(rect_h)
+                if abs(rect_w) < 2 or abs(rect_h) < 2:
+                    continue
+                if rect_w < 0:
+                    rect_x += rect_w
+                    rect_w = abs(rect_w)
+                if rect_h < 0:
+                    rect_y += rect_h
+                    rect_h = abs(rect_h)
 
-                    margin = 50
-                    if (rect_x > self.width() + margin or
-                            rect_y > self.height() + margin or
-                            rect_x + rect_w < -margin or
-                            rect_y + rect_h < -margin):
-                        continue
+                if (rect_x > w_lim or rect_y > h_lim or
+                        rect_x + rect_w < -margin or rect_y + rect_h < -margin):
+                    continue
 
-                    metrics = painter.fontMetrics()
-                    rx, ry = int(rect_x), int(rect_y)
-                    rw, rh = int(rect_w), int(rect_h)
+                rx, ry = int(rect_x), int(rect_y)
+                rw, rh = int(rect_w), int(rect_h)
+                rect = QRect(rx, ry, rw, rh)
 
-                    # ── Draw worldsector box (green) ───────────────────────────
-                    if sector_info:
-                        painter.setBrush(QBrush(QColor(0, 200, 0, 10)))
-                        painter.setPen(Qt.NoPen)
-                        painter.drawRect(rx, ry, rw, rh)
-                        painter.setBrush(Qt.NoBrush)
-                        painter.setPen(QPen(QColor(0, 200, 0, 220), 2))
-                        painter.drawRect(rx, ry, rw, rh)
+                if sector_info:
+                    sector_rects.append(rect)
+                    if rw >= LABEL_MIN_PX:
+                        sector_labels.append((rx + 3, ry + 15,
+                                              f"Sector {sector_info.get('id', '?')}"))
 
-                        # Sector label: top-left
-                        s_text = f"Sector {sector_info.get('id', '?')}"
-                        s_tr   = metrics.boundingRect(s_text)
-                        s_lx   = rx + 3
-                        s_ly   = ry + 15
-                        painter.fillRect(s_lx - bg_padding, s_ly - s_tr.height() - bg_padding,
-                                         s_tr.width() + bg_padding * 2, s_tr.height() + bg_padding * 2,
-                                         QColor(0, 0, 0, 200))
-                        painter.setPen(QPen(QColor(100, 255, 100), 2))
-                        painter.drawText(s_lx, s_ly, s_text)
-
-                        boundaries_drawn += 1
-
-                    # ── Draw landmark box (purple) ─────────────────────────────
-                    if landmark_ref:
-                        painter.setBrush(QBrush(QColor(150, 0, 255, 8)))
-                        painter.setPen(Qt.NoPen)
-                        painter.drawRect(rx, ry, rw, rh)
-                        painter.setBrush(Qt.NoBrush)
-                        painter.setPen(QPen(QColor(150, 0, 255, 220), 2))
-                        painter.drawRect(rx, ry, rw, rh)
-
-                        # Compact label: "LMN & LMF [N]", "LMF [N]", or "LMN [N]"
+                if landmark_ref:
+                    landmark_rects.append(rect)
+                    if rw >= LABEL_MIN_PX:
                         sector_n = landmark_ref.get('id', '?')
                         if landmark_far and landmark_near:
                             lm_text = f"LMN & LMF [{sector_n}]"
@@ -6845,89 +6843,74 @@ class MapCanvas(QOpenGLWidget):
                             lm_text = f"LMF [{sector_n}]"
                         else:
                             lm_text = f"LMN [{sector_n}]"
+                        landmark_labels.append((rx + 3, ry + rh - 5, lm_text))
 
-                        lm_tr = metrics.boundingRect(lm_text)
-                        lm_lx = rx + 3
-                        lm_ly = ry + rh - 5
-                        painter.fillRect(lm_lx - bg_padding, lm_ly - lm_tr.height() - bg_padding,
-                                         lm_tr.width() + bg_padding * 2, lm_tr.height() + bg_padding * 2,
-                                         QColor(0, 0, 0, 200))
-                        painter.setPen(QPen(QColor(220, 180, 255), 2))
-                        painter.drawText(lm_lx, lm_ly, lm_text)
+            # ── Omnis boxes — grouping CACHED (was a full 50K entity scan/frame)
+            _omnis_key = (id(getattr(self, 'entities', None)),
+                          len(getattr(self, 'entities', []) or []))
+            _ocache = getattr(self, '_omnis_cells_cache', None)
+            if _ocache is not None and _ocache[0] == _omnis_key:
+                omnis_cells = _ocache[1]
+            else:
+                omnis_cells = set()
+                for ent in getattr(self, 'entities', []):
+                    if getattr(ent, 'source_file', '') == 'omnis':
+                        omnis_cells.add((int(ent.x // 64), int(ent.y // 64)))
+                self._omnis_cells_cache = (_omnis_key, omnis_cells)
 
-                        boundaries_drawn += 1
-
-                except Exception as group_error:
-                    print(f"Error drawing sector group ({grid_x},{grid_y}): {group_error}")
+            omnis_rects, omnis_labels = [], []
+            o_tr = metrics.boundingRect("Omnis") if omnis_cells else None
+            for (gx, gy) in omnis_cells:
+                screen_tl = self.world_to_screen(gx * 64, gy * 64 + 64)
+                screen_br = self.world_to_screen(gx * 64 + 64, gy * 64)
+                rx = int(screen_tl[0]); ry = int(screen_tl[1])
+                rw = int(screen_br[0] - screen_tl[0]); rh = int(screen_br[1] - screen_tl[1])
+                if abs(rw) < 2 or abs(rh) < 2:
                     continue
+                if rw < 0:
+                    rx += rw; rw = abs(rw)
+                if rh < 0:
+                    ry += rh; rh = abs(rh)
+                if (rx > w_lim or ry > h_lim or rx + rw < -margin or ry + rh < -margin):
+                    continue
+                omnis_rects.append(QRect(rx, ry, rw, rh))
+                if rw >= LABEL_MIN_PX:
+                    omnis_labels.append((rx + rw - o_tr.width() - 8, ry + 15, "Omnis"))
 
-            # ── Draw omnis sector boxes (orange, inset 6px) ───────────────
-            omnis_entities = [e for e in getattr(self, 'entities', [])
-                              if getattr(e, 'source_file', '') == 'omnis']
-            if omnis_entities:
-                # Group by grid cell — one box per occupied cell
-                omnis_cells = {}
-                for ent in omnis_entities:
-                    gx = int(ent.x // 64)
-                    gy = int(ent.y // 64)
-                    cell = (gx, gy)
-                    if cell not in omnis_cells:
-                        omnis_cells[cell] = []
-                    omnis_cells[cell].append(ent)
+            # ── Batched draw: one fill + one outline pass per category ─────────
+            def _draw_batch(rects, fill, outline):
+                if not rects:
+                    return
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(QBrush(fill))
+                painter.drawRects(rects)
+                painter.setBrush(Qt.NoBrush)
+                painter.setPen(QPen(outline, 2))
+                painter.drawRects(rects)
 
-                painter.setFont(_lbl_font)
-                metrics = painter.fontMetrics()
+            _draw_batch(sector_rects,   QColor(0, 200, 0, 10),    QColor(0, 200, 0, 220))
+            _draw_batch(landmark_rects, QColor(150, 0, 255, 8),   QColor(150, 0, 255, 220))
+            _draw_batch(omnis_rects,    QColor(255, 140, 0, 8),   QColor(255, 140, 0, 220))
 
-                for (gx, gy), cell_ents in omnis_cells.items():
-                    world_min_x = gx * 64
-                    world_min_y = gy * 64
-                    world_max_x = world_min_x + 64
-                    world_max_y = world_min_y + 64
-
-                    screen_tl = self.world_to_screen(world_min_x, world_max_y)
-                    screen_br = self.world_to_screen(world_max_x, world_min_y)
-                    rx = int(screen_tl[0])
-                    ry = int(screen_tl[1])
-                    rw = int(screen_br[0] - screen_tl[0])
-                    rh = int(screen_br[1] - screen_tl[1])
-
-                    if abs(rw) < 2 or abs(rh) < 2:
-                        continue
-                    if rw < 0:
-                        rx += rw; rw = abs(rw)
-                    if rh < 0:
-                        ry += rh; rh = abs(rh)
-
-                    margin = 50
-                    if (rx > self.width() + margin or ry > self.height() + margin or
-                            rx + rw < -margin or ry + rh < -margin):
-                        continue
-
-                    painter.setBrush(QBrush(QColor(255, 140, 0, 8)))
-                    painter.setPen(Qt.NoPen)
-                    painter.drawRect(rx, ry, rw, rh)
-                    painter.setBrush(Qt.NoBrush)
-                    painter.setPen(QPen(QColor(255, 140, 0, 220), 2))
-                    painter.drawRect(rx, ry, rw, rh)
-
-                    # "Omnis (N)" label at top-right
-                    o_text = "Omnis"
-                    o_tr = metrics.boundingRect(o_text)
-                    o_lx = rx + rw - o_tr.width() - 8
-                    o_ly = ry + 15
-                    painter.fillRect(o_lx - bg_padding, o_ly - o_tr.height() - bg_padding,
-                                     o_tr.width() + bg_padding * 2, o_tr.height() + bg_padding * 2,
+            def _draw_labels(labels, color):
+                if not labels:
+                    return
+                for lx, ly, text in labels:
+                    tr = metrics.boundingRect(text)
+                    painter.fillRect(lx - bg_padding, ly - tr.height() - bg_padding,
+                                     tr.width() + bg_padding * 2, tr.height() + bg_padding * 2,
                                      QColor(0, 0, 0, 200))
-                    painter.setPen(QPen(QColor(255, 180, 80), 2))
-                    painter.drawText(o_lx, o_ly, o_text)
+                painter.setPen(QPen(color, 2))
+                for lx, ly, text in labels:
+                    painter.drawText(lx, ly, text)
 
-                    boundaries_drawn += 1
+            _draw_labels(sector_labels,   QColor(100, 255, 100))
+            _draw_labels(landmark_labels, QColor(220, 180, 255))
+            _draw_labels(omnis_labels,    QColor(255, 180, 80))
 
             painter.setPen(original_pen)
             painter.setBrush(original_brush)
             painter.setFont(original_font)
-
-            print(f"Drew {boundaries_drawn} sector boundary groups")
 
         except Exception as e:
             print(f"Error in draw_sector_boundaries: {e}")

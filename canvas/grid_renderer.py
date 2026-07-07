@@ -182,8 +182,19 @@ class GridRenderer:
     def _render_2d_grid_opengl(self, canvas):
         """Render 2D grid using OpenGL with separate passes for different line thicknesses"""
         try:
-            # Generate grid data with proper separation
-            minor_data, major_data, axis_data = self._generate_2d_grid_data_separated(canvas)
+            # Generate grid data with proper separation — memoized by camera
+            # state. The Python line-generation loops used to re-run on every
+            # paint even when nothing moved; now they only run when the view
+            # actually changes (pan/zoom/resize/game-mode).
+            _key = (round(canvas.offset_x, 2), round(canvas.offset_y, 2),
+                    round(canvas.scale_factor, 5), canvas.width(), canvas.height(),
+                    getattr(canvas, 'is_fc2_world', False))
+            _cached = getattr(self, '_grid_2d_data_cache', None)
+            if _cached is not None and _cached[0] == _key:
+                minor_data, major_data, axis_data = _cached[1]
+            else:
+                minor_data, major_data, axis_data = self._generate_2d_grid_data_separated(canvas)
+                self._grid_2d_data_cache = (_key, (minor_data, major_data, axis_data))
             
             # Create projection matrix that matches Qt's coordinate system
             from PyQt5.QtGui import QMatrix4x4
