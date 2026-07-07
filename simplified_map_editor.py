@@ -3663,6 +3663,7 @@ class SimplifiedMapEditor(QMainWindow):
                 terrain_renderer=terrain_renderer,
                 canvas=canvas,
                 sdat_path=getattr(self, 'sdat_path', None),
+                game_mode=self.game_mode,
             )
         else:
             self._terrain_editor_window.show()

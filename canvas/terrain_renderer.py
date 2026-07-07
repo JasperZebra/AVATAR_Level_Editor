@@ -879,9 +879,14 @@ class TerrainRenderer:
         rgb[hm, 1] = (norm[hm] * 200 + 55).astype(np.uint8)
         rgb[hm, 2] = (norm[hm] * 200 + 55).astype(np.uint8)
 
-        from PyQt5.QtGui import QImage, QPixmap
+        from PyQt5.QtGui import QImage, QPixmap, QTransform
         img = QImage(rgb.data, total_width, total_height,
                      total_width * 3, QImage.Format_RGB888)
+        # FC2's displayed terrain carries one extra 90° CCW rotation relative to
+        # Avatar (see _generate_terrain_image) — apply the same delta here so the
+        # terrain editor's live preview lands in the right orientation.
+        if self.game_mode == "farcry2":
+            img = img.transformed(QTransform().rotate(-90))
         self.terrain_pixmap = QPixmap.fromImage(img)
 
     def set_world_bounds(self, grid_config):

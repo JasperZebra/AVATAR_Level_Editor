@@ -1,7 +1,8 @@
 """
-Terrain Editor for Avatar: The Game Level Editor.
+Terrain Editor for the Level Editor (Avatar + Far Cry 2).
 2D heightmap painting + 3D orbit preview with live canvas updates.
-Avatar .csdat only (terrain at offset 708, 65x65 samples, uint16/128).
+Avatar: .csdat, terrain at offset 708. FC2: .sdat, terrain at offset 592.
+Both: 65x65 uint16/128 samples per sector.
 """
 
 import os
@@ -36,7 +37,7 @@ try:
 except ImportError:
     _GL = False
 
-_TERRAIN_OFFSET = 708
+_TERRAIN_OFFSET = 708          # Avatar .csdat (FC2 .sdat uses 592 — see TerrainData)
 _GRID_SIZE = 65
 _PREVIEW_STRIDE = 2   # downsample combined map for 3D mesh (1040/2 = 520 verts/side)
 
@@ -106,12 +107,22 @@ class TerrainData:
 
     _MAX_UNDO = 20
 
-    def __init__(self):
+    def __init__(self, game_mode: str = "avatar"):
+        self.game_mode = game_mode
+        # Per-game format: Avatar .csdat/708, FC2 .sdat/592 — same 65x65
+        # uint16/128 layout at the offset (matches TerrainRenderer).
+        if game_mode == "farcry2":
+            self.file_ext = ".sdat"
+            self.terrain_offset = 592
+        else:
+            self.file_ext = ".csdat"
+            self.terrain_offset = _TERRAIN_OFFSET
         self.sdat_path: str = ""
         self.sectors_x: int = 16
         self.sectors_y: int = 16
         self.grid_size: int = _GRID_SIZE
-        self.sectors_data: dict = {}        # sector_num → (65,65) float32
+        self.sectors_data: dict = {}        # local sector idx → (65,65) float32
+        self.sector_files: dict = {}        # local sector idx → source file path
         self.combined: np.ndarray = None    # (sy*65, sx*65) float32, display order
         self.dirty_sectors: set = set()
         self._undo: list = []
@@ -119,27 +130,71 @@ class TerrainData:
 
     # -- Loading -------------------------------------------------------------
 
+    @staticmethod
+    def _sector_num_from_name(name: str):
+        """Parse the sector number from a terrain file basename (no extension).
+        Supports 'sd123' (both games), 'foo_123' (some FC2 worlds), and '123'."""
+        if name.startswith('sd'):
+            return int(name[2:])
+        if '_' in name:
+            return int(name.split('_')[-1])
+        return int(name)
+
     def load(self, sdat_path: str) -> bool:
         import glob
-        files = glob.glob(os.path.join(sdat_path, "sd*.csdat"))
+        files = glob.glob(os.path.join(sdat_path, f"*{self.file_ext}"))
         if not files:
             return False
 
         self.sdat_path = sdat_path
         self.sectors_data = {}
+        self.sector_files = {}
 
         for fp in files:
-            name = os.path.basename(fp)
+            name = os.path.basename(fp).rsplit('.', 1)[0]
             try:
-                num = int(name[2:-6])   # strip "sd" prefix and ".csdat"
+                num = self._sector_num_from_name(name)
                 arr = self._read_sector(fp)
                 if arr is not None:
                     self.sectors_data[num] = arr
+                    self.sector_files[num] = fp
             except (ValueError, IndexError):
                 continue
 
         if not self.sectors_data:
             return False
+
+        # Remap non-0-based sector numbering to local 0-based indices so the
+        # combined grid comes out 16x16, keeping each index's source file so
+        # save writes back to the right place.
+        #   FC2:    global world indices with a row stride of 80 (e.g. cell
+        #           w1_c_3 = 2592..3807) — detect the stride from the first gap.
+        #   Avatar: multi-part levels start above 0 (e.g. sd256..sd511).
+        sorted_nums = sorted(self.sectors_data.keys())
+        min_s = sorted_nums[0]
+        if min_s > 0:
+            if self.game_mode == "farcry2":
+                secs_per_row = len(sorted_nums)
+                row_stride = secs_per_row
+                gap_found = False
+                for i in range(1, len(sorted_nums)):
+                    if sorted_nums[i] - sorted_nums[i - 1] > 1:
+                        secs_per_row = i
+                        row_stride = sorted_nums[i] - sorted_nums[0]
+                        gap_found = True
+                        break
+                if gap_found:
+                    def _local(sn):
+                        diff = sn - min_s
+                        return (diff // row_stride) * secs_per_row + (diff % row_stride)
+                else:
+                    def _local(sn):
+                        return sn - min_s
+            else:
+                def _local(sn):
+                    return sn - min_s
+            self.sectors_data = {_local(sn): self.sectors_data[sn] for sn in sorted_nums}
+            self.sector_files = {_local(sn): self.sector_files[sn] for sn in sorted_nums}
 
         max_s = max(self.sectors_data)
         g = int(math.ceil(math.sqrt(max_s + 1)))
@@ -154,7 +209,7 @@ class TerrainData:
     def _read_sector(self, fp: str):
         try:
             with open(fp, 'rb') as f:
-                f.seek(_TERRAIN_OFFSET)
+                f.seek(self.terrain_offset)
                 raw = io.BytesIO(f.read(_GRID_SIZE * _GRID_SIZE * 4))
             arr = np.zeros((_GRID_SIZE, _GRID_SIZE), dtype=np.float32)
             for y in range(_GRID_SIZE):
@@ -223,7 +278,12 @@ class TerrainData:
             r0 = dr * step
             c0 = col * step
             region = np.flipud(self.combined[r0:r0+gs, c0:c0+gs])   # back to file order
-            fp = os.path.join(self.sdat_path, f"sd{sector_idx}.csdat")
+            # Write to the file this local index was loaded from (handles FC2's
+            # global sd numbering and Avatar multi-part remaps); fall back to
+            # the Avatar-style name for pre-remap 0-based folders.
+            fp = self.sector_files.get(sector_idx)
+            if not fp:
+                fp = os.path.join(self.sdat_path, f"sd{sector_idx}{self.file_ext}")
             if not os.path.isfile(fp):
                 continue
             if self._write_sector(fp, region):
@@ -239,14 +299,15 @@ class TerrainData:
                 data = bytearray(f.read())
 
             section_size = _GRID_SIZE * _GRID_SIZE * 4
+            off = self.terrain_offset
             terrain_raw = np.frombuffer(
-                bytes(data[_TERRAIN_OFFSET:_TERRAIN_OFFSET + section_size]),
+                bytes(data[off:off + section_size]),
                 dtype=np.uint8
             ).reshape(_GRID_SIZE * _GRID_SIZE, 4).copy()
 
             new_u16 = np.clip(height_data.flatten() * 128, 0, 65535).astype(np.uint16)
             terrain_raw[:, 0:2] = new_u16.astype('<u2').view(np.uint8).reshape(-1, 2)
-            data[_TERRAIN_OFFSET:_TERRAIN_OFFSET + section_size] = bytes(terrain_raw.flatten())
+            data[off:off + section_size] = bytes(terrain_raw.flatten())
 
             with open(fp, 'wb') as f:
                 f.write(data)
@@ -862,15 +923,18 @@ class TerrainPreview3D(QOpenGLWidget):
 
 class TerrainEditorDialog(QDialog):
 
-    def __init__(self, parent=None, terrain_renderer=None, canvas=None):
+    def __init__(self, parent=None, terrain_renderer=None, canvas=None,
+                 game_mode="avatar"):
         super().__init__(parent)
-        self.setWindowTitle("Terrain Editor — Avatar: The Game")
+        _game_label = "Far Cry 2" if game_mode == "farcry2" else "Avatar: The Game"
+        self.setWindowTitle(f"Terrain Editor — {_game_label}")
         self.setMinimumSize(1100, 700)
         self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
 
         self._terrain_renderer = terrain_renderer
         self._canvas = canvas
-        self._td = TerrainData()
+        self._game_mode = game_mode
+        self._td = TerrainData(game_mode=game_mode)
         self._active_tool = 'raise'
         self._stroking = False
 
@@ -900,7 +964,9 @@ class TerrainEditorDialog(QDialog):
 
         root.addWidget(self._build_tools_panel())
 
-        self._status = QLabel("No terrain loaded — use 'Load Terrain' to open a csdat folder")
+        _ext_label = self._td.file_ext.lstrip('.')
+        self._status = QLabel(
+            f"No terrain loaded — use 'Load Terrain' to open a {_ext_label} folder")
         self._status.setFont(QFont("Consolas", 8))
         root.addWidget(self._status)
 
@@ -915,11 +981,11 @@ class TerrainEditorDialog(QDialog):
         lay.setSpacing(6)
 
         load_btn = QPushButton("Load Terrain")
-        load_btn.setToolTip("Open a folder containing sd*.csdat files")
+        load_btn.setToolTip(f"Open a folder containing *{self._td.file_ext} files")
         load_btn.clicked.connect(self._browse_folder)
         lay.addWidget(load_btn)
 
-        save_btn = QPushButton("Save to CSDAT")
+        save_btn = QPushButton(f"Save to {self._td.file_ext.lstrip('.').upper()}")
         save_btn.setToolTip("Write all modified sectors back to disk")
         save_btn.clicked.connect(self._save_terrain)
         lay.addWidget(save_btn)
@@ -1185,8 +1251,9 @@ class TerrainEditorDialog(QDialog):
     # -- Load / Save ---------------------------------------------------------
 
     def _browse_folder(self):
+        _ext_label = self._td.file_ext.lstrip('.').upper()
         folder = QFileDialog.getExistingDirectory(
-            self, "Select CSDAT Folder", self._td.sdat_path or "",
+            self, f"Select {_ext_label} Folder", self._td.sdat_path or "",
             QFileDialog.ShowDirsOnly
         )
         if folder:
@@ -1198,8 +1265,9 @@ class TerrainEditorDialog(QDialog):
 
         if not self._td.load(sdat_path):
             QMessageBox.warning(self, "Load Failed",
-                                f"No sd*.csdat files found in:\n{sdat_path}")
-            self._status.setText("Load failed — no csdat files found")
+                                f"No *{self._td.file_ext} files found in:\n{sdat_path}")
+            self._status.setText(
+                f"Load failed — no {self._td.file_ext.lstrip('.')} files found")
             return
 
         td = self._td
@@ -1224,7 +1292,8 @@ class TerrainEditorDialog(QDialog):
             return
         reply = QMessageBox.question(
             self, "Save Terrain",
-            f"Write {n} modified sector(s) to disk?\n\nThis overwrites the .csdat files.",
+            f"Write {n} modified sector(s) to disk?\n\n"
+            f"This overwrites the {self._td.file_ext} files.",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply != QMessageBox.Yes:
@@ -1262,8 +1331,10 @@ class TerrainEditorDialog(QDialog):
 # Convenience opener
 # ---------------------------------------------------------------------------
 
-def show_terrain_editor(parent=None, terrain_renderer=None, canvas=None, sdat_path=None):
-    dlg = TerrainEditorDialog(parent, terrain_renderer=terrain_renderer, canvas=canvas)
+def show_terrain_editor(parent=None, terrain_renderer=None, canvas=None, sdat_path=None,
+                        game_mode="avatar"):
+    dlg = TerrainEditorDialog(parent, terrain_renderer=terrain_renderer, canvas=canvas,
+                              game_mode=game_mode)
     dlg.show()
     if sdat_path:
         dlg.load_terrain(sdat_path)
