@@ -3852,25 +3852,15 @@ class MapCanvas(QOpenGLWidget):
                     if tx or ty:
                         glTranslatef(float(tx), 0.0, float(-ty))
 
-                    # FC2 only: rotate each terrain cell in place about its AABB
-                    # centre so its content matches the 2D map orientation.
-                    # Avatar 3D terrain is already in the correct orientation.
-                    # Angle: user-verified against world1 — the old 180° left every
-                    # region needing one more 90° clockwise turn (clockwise from
-                    # above = negative about +Y), so the total is 90°.
-                    # The pivot must be the AABB centre IN MESH SPACE — terrain
-                    # meshes span z in [-height, 0] (PZ = NY*h - sector_0_world_z),
-                    # so the centre z is negative. Negating it (the old code) put
-                    # the pivot outside the mesh and displaced every cell by a
-                    # full world-cell, scattering FC2 multi-cell terrain.
-                    if getattr(self, 'game_mode', 'avatar') == 'farcry2':
-                        _bmin = model.bounds_min if model.bounds_min is not None else [0, 0, -1024]
-                        _bmax = model.bounds_max if model.bounds_max is not None else [1024, 0, 0]
-                        _cx = (_bmin[0] + _bmax[0]) / 2.0
-                        _cz = (_bmin[2] + _bmax[2]) / 2.0
-                        glTranslatef(float(_cx), 0.0, float(_cz))
-                        glRotatef(90.0, 0.0, 1.0, 0.0)
-                        glTranslatef(float(-_cx), 0.0, float(-_cz))
+                    # FC2 terrain needs NO rotation (July 2026, proven empirically):
+                    # scoring entity hidPos.z against the terrain heightmap at each
+                    # entity's (x, y) across all 8 orientations shows the raw
+                    # file mapping IS world space (identity — world x = heightmap
+                    # column, world y = sector-number row). The mesh pipeline
+                    # (flip-v assembly + PZ = row - height, rendered with y → -z)
+                    # already composes to exactly that identity, so the old
+                    # 180°/90° rotations were themselves the misalignment.
+                    # Avatar terrain also needs no rotation. Keep BOTH unrotated.
 
                     # Terrain uses the same material as entities now that it has
                     # correct per-vertex normals and responds to sun lighting properly.

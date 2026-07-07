@@ -471,23 +471,31 @@ class CacheManager:
             MD5 hash string as cache key
         """
         import glob
-        
+
+        # Bump when terrain assembly/orientation logic changes — cached images
+        # baked with old logic must not survive a fix (July 2026: FC2 identity
+        # orientation + 2x2-block atlas mapping).
+        RENDER_VERSION = "tv2"
+
         try:
-            # Get all .csdat files
-            files = sorted(glob.glob(os.path.join(sdat_path, "*.csdat")))
-            
+            # Both games: Avatar .csdat and FC2 .sdat. (The old .csdat-only
+            # glob made FC2 fall through to a path-only key that NEVER
+            # invalidated, pinning stale images forever.)
+            files = sorted(glob.glob(os.path.join(sdat_path, "*.csdat")) +
+                           glob.glob(os.path.join(sdat_path, "*.sdat")))
+
             if not files:
                 # Fallback to folder path hash
-                return hashlib.md5(sdat_path.encode()).hexdigest()
-            
+                return hashlib.md5(f"{RENDER_VERSION}_{sdat_path}".encode()).hexdigest()
+
             # Create key from:
             # 1. Number of files
-            # 2. Total size of all files  
+            # 2. Total size of all files
             # 3. Newest modification time
             total_size = sum(os.path.getsize(f) for f in files)
             newest_mtime = max(os.path.getmtime(f) for f in files)
-            
-            key_data = f"{len(files)}_{total_size}_{newest_mtime:.0f}"
+
+            key_data = f"{RENDER_VERSION}_{len(files)}_{total_size}_{newest_mtime:.0f}"
             return hashlib.md5(key_data.encode()).hexdigest()
             
         except Exception as e:

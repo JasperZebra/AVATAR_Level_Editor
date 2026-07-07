@@ -592,8 +592,15 @@ class TerrainRenderer:
 
         for display_row in range(self.sectors_y):
             for col in range(self.sectors_x):
-                sector_index = self.get_sector_index_from_position(display_row, col,
-                                                                   self.sectors_x, self.sectors_y)
+                # FC2 sectors are numbered row-major from the world origin
+                # (n = row*stride + col, row = world-south first); with the
+                # image drawn top-down, the top display row is the HIGHEST
+                # sector row. Avatar keeps its 2x2-vertical-block pattern.
+                if self.game_mode == "farcry2":
+                    sector_index = (self.sectors_y - 1 - display_row) * self.sectors_x + col
+                else:
+                    sector_index = self.get_sector_index_from_position(display_row, col,
+                                                                       self.sectors_x, self.sectors_y)
 
                 if sector_index not in self.sectors_data:
                     continue
@@ -642,16 +649,19 @@ class TerrainRenderer:
 
         painter.end()
 
-        # Apply 90° CCW rotation — same for Avatar and FC2.
-        transform = QTransform()
-        transform.rotate(-90)
-        final_image = combined_image.transformed(transform)
-
-        # FC2 needs one additional 90° CCW rotation on the whole finished terrain.
+        # Avatar: 90° CCW rotation (its sector numbering runs in a different
+        # direction than the assembly order).
+        # FC2: NO rotation (July 2026, proven empirically against entity
+        # heights) — sectors are numbered row-major from the world origin, so
+        # the inverted-row assembly drawn top-down is already world-correct.
+        # The old -90-90 pair rotated every FC2 cell's content 180° out of
+        # place, which is why objects never sat on the right terrain.
         if self.game_mode == "farcry2":
-            transform2 = QTransform()
-            transform2.rotate(-90)
-            final_image = final_image.transformed(transform2)
+            final_image = combined_image
+        else:
+            transform = QTransform()
+            transform.rotate(-90)
+            final_image = combined_image.transformed(transform)
 
         self.terrain_image = final_image
         self.terrain_pixmap = QPixmap.fromImage(final_image)
@@ -737,18 +747,49 @@ class TerrainRenderer:
                         return test_path
             return None
 
-        # Sequential counter — same layout for both Avatar and FC2.
-        # Each atlas covers 4 consecutive sector indices: atlas[i] → sectors i*4 … i*4+3.
-        sector_counter = 0
-        for atlas_num in atlas_numbers:
-            atlas_path = _load_atlas(atlas_num)
-            if not atlas_path:
-                continue
-            for sub_sector in range(4):
-                self.atlas_mapping[sector_counter] = (atlas_path, sub_sector)
-                sector_counter += 1
+        if self.game_mode == "farcry2":
+            # FC2: atlas{n} is named after its block-origin GLOBAL sector number
+            # and covers the 2x2 block {n, n+1, n+stride, n+stride+1} (verified
+            # against real data: fishing village atlases 0,2,..,8,20,22,.. with
+            # stride 10; cell w1_c_3 atlases 2592,2594,..,2752,.. with stride 80).
+            # sectors_data keys here are LOCAL row-major indices; _fc2_sector_base
+            # and _fc2_row_stride were recorded by the load remap (base 0 and
+            # stride == sectors_x when the map's numbering was already local).
+            base = self._fc2_sector_base
+            stride = self._fc2_row_stride if base > 0 else self.sectors_x
+            mapped = 0
+            _atlas_path_cache = {}
+            for s in self.sectors_data.keys():
+                r, c = s // self.sectors_x, s % self.sectors_x
+                atlas_num = base + (r - r % 2) * stride + (c - c % 2)
+                if atlas_num not in _atlas_path_cache:
+                    _atlas_path_cache[atlas_num] = _load_atlas(atlas_num)
+                atlas_path = _atlas_path_cache[atlas_num]
+                if not atlas_path:
+                    continue
+                # Quadrants (TL=0, TR=1, BL=2, BR=3 in image space, y-down):
+                # atlas images are authored north-at-top, so the block's HIGHER
+                # sector row (r%2 == 1) is the TOP half of the image. If tiles
+                # ever show the two rows of a 128m block swapped, flip this to
+                # (r % 2) * 2 + (c % 2).
+                sub_sector = (1 - (r % 2)) * 2 + (c % 2)
+                self.atlas_mapping[s] = (atlas_path, sub_sector)
+                mapped += 1
+            print(f"Mapped {mapped} sectors to FC2 2x2-block atlases "
+                  f"(base={base}, stride={stride})")
+        else:
+            # Avatar: sequential counter — each atlas covers 4 consecutive
+            # sector indices: atlas[i] → sectors i*4 … i*4+3.
+            sector_counter = 0
+            for atlas_num in atlas_numbers:
+                atlas_path = _load_atlas(atlas_num)
+                if not atlas_path:
+                    continue
+                for sub_sector in range(4):
+                    self.atlas_mapping[sector_counter] = (atlas_path, sub_sector)
+                    sector_counter += 1
 
-        print(f"Mapped {len(self.atlas_mapping)} sectors to atlas textures")
+            print(f"Mapped {len(self.atlas_mapping)} sectors to atlas textures")
 
     def load_xbt_as_dds_tempfile(self, xbt_path, temp_folder=None):
         """Extract DDS from XBT file"""
@@ -879,14 +920,11 @@ class TerrainRenderer:
         rgb[hm, 1] = (norm[hm] * 200 + 55).astype(np.uint8)
         rgb[hm, 2] = (norm[hm] * 200 + 55).astype(np.uint8)
 
-        from PyQt5.QtGui import QImage, QPixmap, QTransform
+        from PyQt5.QtGui import QImage, QPixmap
         img = QImage(rgb.data, total_width, total_height,
                      total_width * 3, QImage.Format_RGB888)
-        # FC2's displayed terrain carries one extra 90° CCW rotation relative to
-        # Avatar (see _generate_terrain_image) — apply the same delta here so the
-        # terrain editor's live preview lands in the right orientation.
-        if self.game_mode == "farcry2":
-            img = img.transformed(QTransform().rotate(-90))
+        # No rotation for either game: FC2's displayed terrain is unrotated
+        # (identity mapping, July 2026), matching this preview's assembly order.
         self.terrain_pixmap = QPixmap.fromImage(img)
 
     def set_world_bounds(self, grid_config):

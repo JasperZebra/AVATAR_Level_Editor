@@ -145,6 +145,8 @@ reference: <reference to this change in the docs if applicable>
 | `simplified_map_editor.py` | `tests/test_unified_thread_safety.py` | — | AST scan of the real `load_all_worldsectors` source: every GUI call (`set_entities`/`update_entity_tree`/`update_entity_statistics`/`processEvents`/`showMessage`) must be guarded by `_on_main_thread` (FC2 world1 background-thread access-violation regression) — excluded from `--cov` |
 | `canvas/texture_loader.py` | `tests/test_xbt_cache_eviction.py` | — | `_xbt_cache` FIFO cap (`_xbt_cache_put`): decode cache no longer pins every texture's raw RGBA for the session (FC2 full-world OOM → glTexImage2D access violation); module loaded by **file path** — excluded from `--cov` |
 | `canvas/model_loader.py` | `tests/test_vbo_build_budget.py` | — | `_ensure_mesh_vbo` per-frame build budget: exhausted budget defers (None + `_vbo_stream_pending`), built meshes bypass, unbuildable meshes fail permanently without consuming budget; module loaded by **file path** — excluded from `--cov` |
+| `canvas/terrain_renderer.py` | `tests/test_fc2_atlas_mapping.py` | — | FC2 2×2-block atlas math + row-major placement (formulas **mirrored**; verified against real fishing-village/w1_c_3 atlas numbering) — excluded from `--cov` |
+| `cache_manager.py` | `tests/test_terrain_cache_key_fc2.py` | — | `generate_terrain_cache_key` includes `*.sdat` (FC2) — old `.csdat`-only glob pinned stale FC2 terrain images with a never-changing path key |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -2329,7 +2331,12 @@ Per-frame: `|proj| <= half_frustum_at_depth + radius`. This prevents large model
 
 ### Terrain rotation in 3D
 
-FC2 only: `_render_terrain_model` rotates each terrain cell **90° about +Y** around its **actual AABB centre** (from `model.bounds_min/max`) so 3D content matches the 2D map. History (July 2026): the original code used 180° with a sign-flipped pivot (`(cx, -cz)`) — terrain meshes span z ∈ [-height, 0], so that pivot sat a full cell outside the mesh and scattered multi-cell worlds; after the pivot fix (`(cx, cz)`, rotation truly in place) the user verified against world1 that each region needed one more 90° clockwise turn (clockwise from above = negative about +Y), giving the final 180−90 = **90°**. Avatar terrain needs **no rotation** — it is already in the correct orientation. Do not add a rotation for Avatar.
+**FC2 terrain orientation — NO rotation anywhere (July 2026, empirically proven).** The definitive test (scratchpad `fc2_terrain_alignment_solver.py` methodology): score entity `hidPos.z` against the terrain heightmap sampled at each entity's (x, y) under all 8 dihedral orientations. On fishing village (633 entities), the **raw file mapping wins decisively** — world x = heightmap column, world y = sector-number row (sector n at row n//stride, col n%stride), identity, no rotation/flip. Consequences:
+- **3D** (`_render_terrain_model`): NO rotation for FC2 (or Avatar). The mesh pipeline (flip-v assembly in `create_combined_heightmap` + `PZ = row − height` + render `y → −z`) already composes to identity. The historical 180°/90° rotations (and the earlier "validated 180°" claim) were themselves the object/terrain misalignment.
+- **2D** (`_generate_terrain_image_textured`): FC2 gets NO image rotation (Avatar keeps its −90°); FC2 sector PLACEMENT is plain row-major with display inversion (`(sy−1−display_row)*sx + col`), NOT Avatar's `get_sector_index_from_position` 2×2-vertical-block pattern.
+- **FC2 atlas textures** (`build_atlas_mapping`): atlas{n} is named by its block-origin GLOBAL sector number and covers `{n, n+1, n+stride, n+stride+1}` (real data: fishing village atlases 0,2,..,8,20,..; w1_c_3 atlases 2592,2594,..,2752,.. with stride 80). Local sector (r,c) → atlas `base + (r−r%2)*stride + (c−c%2)`, quadrant `(1−r%2)*2 + (c%2)` (north-at-top assumption; if 128m blocks show their two rows swapped, flip to `(r%2)*2+(c%2)`). Avatar keeps the sequential counter.
+- **Cache**: `generate_terrain_cache_key` now globs `*.sdat` too and carries a `RENDER_VERSION` salt ("tv2") — the old `.csdat`-only glob gave FC2 a path-only key that never invalidated, which would have pinned stale wrongly-rotated images forever. Bump `RENDER_VERSION` whenever terrain assembly/orientation logic changes.
+Tests: `tests/test_fc2_atlas_mapping.py`, `tests/test_terrain_cache_key_fc2.py`.
 
 ### Known issues / watch out
 
