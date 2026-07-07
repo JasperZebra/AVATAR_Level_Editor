@@ -5679,7 +5679,12 @@ class SimplifiedMapEditor(QMainWindow):
                             self.canvas.model_loader._load_embedded_textures(_m)
                         _b_textures += len(_m.textures)
                         _m.loaded = True
-                        self.canvas.model_loader._create_opengl_resources(_m)
+                        # No display lists for entity models: the shader/GDR
+                        # paths render from mesh VBOs; compiling thousands of
+                        # lists here wasted load time + VRAM. The fixed-function
+                        # fallback builds them lazily (budgeted) if ever used.
+                        self.canvas.model_loader._create_opengl_resources(
+                            _m, build_display_lists=False)
                         self.canvas.model_loader.models_cache[_mp] = _m
                         _b_loaded += 1
                     except Exception as _be:

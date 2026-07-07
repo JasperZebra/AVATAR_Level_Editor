@@ -760,6 +760,26 @@ class MapCanvas(QOpenGLWidget):
             self.terrain_model = None
             print("Terrain will be loaded dynamically per level")
 
+            # Auto-enable the GPU-driven renderer (MultiDrawIndirect + numpy
+            # array-native frame assembly) when the GPU supports it and the
+            # user never chose a tier with F2/F3. This is the fast path for
+            # large worlds — draws all instances in a handful of GL calls
+            # instead of per-model loops. An explicitly saved tier (including
+            # an explicit OFF) always wins; any GDR build failure still falls
+            # back to the universal path at render time.
+            if getattr(self, '_render_tier_auto', False) and \
+                    getattr(self.model_loader, 'force_render_tier', None) is None:
+                try:
+                    from gpu_driven_renderer import detect_support
+                    mode, info = detect_support()
+                    if mode:
+                        self.model_loader.force_render_tier = mode
+                        print(f"🖥️ [GPU-driven] auto-enabled: {mode} ({info})")
+                    else:
+                        print(f"🖥️ [GPU-driven] not supported → universal path ({info})")
+                except Exception as _gde:
+                    print(f"🖥️ [GPU-driven] auto-detect failed → universal path: {_gde}")
+
             self.opengl_initialized = True
             print("OpenGL initialization complete - 2D AND 3D")
 
@@ -1223,7 +1243,11 @@ class MapCanvas(QOpenGLWidget):
                     else:
                         for model_path, instances in self.model_loader.instance_batches.items():
                             model = self.model_loader.models_cache.get(model_path)
-                            if model and model.loaded and (model.display_list or (hasattr(model, 'use_immediate_mode') and model.use_immediate_mode)):
+                            # A model is renderable if it has mesh data (shader
+                            # path draws from VBOs — entity models no longer get
+                            # display lists at load) or legacy list/immediate.
+                            if model and model.loaded and (model.meshes or model.display_list or
+                                                           (hasattr(model, 'use_immediate_mode') and model.use_immediate_mode)):
                                 for instance_data in instances:
                                     entities_with_models.add(id(instance_data[0]))
                 finally:
@@ -3269,20 +3293,29 @@ class MapCanvas(QOpenGLWidget):
         """Apply the GPU-driven render tier saved in editor_config.json
         ('render_tier': 'bindless' | 'texarray' | null). Written by
         _set_render_tier (F2/F3) so the user's GPU choice survives restarts.
-        Missing/invalid value → universal path (None), exactly as before.
+        Key ABSENT → AUTO mode: initializeGL probes the GPU (detect_support)
+        and enables the GPU-driven path when available. A key that is present
+        (including an explicit null = user toggled OFF) always wins over auto.
         Safe even if the saved tier doesn't match the hardware — the GDR
         falls back to the universal renderer on any build failure."""
+        self._render_tier_auto = True
         try:
             import json as _json
             if not os.path.exists(self._CONFIG_FILE):
                 return
             with open(self._CONFIG_FILE, 'r') as f:
-                tier = (_json.load(f) or {}).get('render_tier')
+                cfg = _json.load(f) or {}
+            if 'render_tier' not in cfg:
+                return                      # never chosen → auto-detect in initializeGL
+            self._render_tier_auto = False  # explicit choice (tier or OFF) wins
+            tier = cfg.get('render_tier')
             if tier in ('bindless', 'texarray'):
                 self.model_loader.force_render_tier = tier
                 label = {'bindless': 'NVIDIA / bindless',
                          'texarray': 'AMD / texture-array'}[tier]
                 print(f"🖥️ [GPU-driven] render tier restored from {self._CONFIG_FILE}: {label}")
+            else:
+                print("🖥️ [GPU-driven] explicitly OFF (editor_config.json) → universal path")
         except Exception as e:
             print(f"⚠ Could not restore render tier: {e}")
 

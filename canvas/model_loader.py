@@ -2094,9 +2094,18 @@ class ModelLoader:
                 glEndList()
         return dl
 
-    def _create_opengl_resources(self, model):
-        """Build display lists for this model, split into opaque and blend passes."""
+    def _create_opengl_resources(self, model, build_display_lists=True):
+        """Build display lists for this model, split into opaque and blend passes.
+
+        build_display_lists=False skips the glNewList compile entirely — used
+        by Phase B for entity models: the active shader/GPU-driven paths render
+        from mesh VBOs and never call these lists, so compiling thousands of
+        them at load time was pure wasted time + VRAM. The fixed-function
+        fallback builds them lazily (budgeted) if it ever actually runs.
+        Terrain models keep the default True — the terrain draw uses lists."""
         if not model.meshes:
+            return
+        if not build_display_lists:
             return
 
         opaque_meshes = []
