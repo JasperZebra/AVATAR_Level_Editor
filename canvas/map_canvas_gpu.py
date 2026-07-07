@@ -3852,9 +3852,12 @@ class MapCanvas(QOpenGLWidget):
                     if tx or ty:
                         glTranslatef(float(tx), 0.0, float(-ty))
 
-                    # FC2 only: rotate 180° around the terrain AABB centre to match
-                    # the two -90° rotations applied to the 2D terrain image.
+                    # FC2 only: rotate each terrain cell in place about its AABB
+                    # centre so its content matches the 2D map orientation.
                     # Avatar 3D terrain is already in the correct orientation.
+                    # Angle: user-verified against world1 — the old 180° left every
+                    # region needing one more 90° clockwise turn (clockwise from
+                    # above = negative about +Y), so the total is 90°.
                     # The pivot must be the AABB centre IN MESH SPACE — terrain
                     # meshes span z in [-height, 0] (PZ = NY*h - sector_0_world_z),
                     # so the centre z is negative. Negating it (the old code) put
@@ -3866,7 +3869,7 @@ class MapCanvas(QOpenGLWidget):
                         _cx = (_bmin[0] + _bmax[0]) / 2.0
                         _cz = (_bmin[2] + _bmax[2]) / 2.0
                         glTranslatef(float(_cx), 0.0, float(_cz))
-                        glRotatef(180.0, 0.0, 1.0, 0.0)
+                        glRotatef(90.0, 0.0, 1.0, 0.0)
                         glTranslatef(float(-_cx), 0.0, float(-_cz))
 
                     # Terrain uses the same material as entities now that it has

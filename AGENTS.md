@@ -2329,7 +2329,7 @@ Per-frame: `|proj| <= half_frustum_at_depth + radius`. This prevents large model
 
 ### Terrain rotation in 3D
 
-FC2 only: `_render_terrain_model` rotates the terrain 180° around its **actual AABB centre** (from `model.bounds_min/max`) to match the two −90° rotations applied to the 2D terrain image. Avatar terrain needs **no rotation** — it is already in the correct orientation. Do not add a rotation for Avatar.
+FC2 only: `_render_terrain_model` rotates each terrain cell **90° about +Y** around its **actual AABB centre** (from `model.bounds_min/max`) so 3D content matches the 2D map. History (July 2026): the original code used 180° with a sign-flipped pivot (`(cx, -cz)`) — terrain meshes span z ∈ [-height, 0], so that pivot sat a full cell outside the mesh and scattered multi-cell worlds; after the pivot fix (`(cx, cz)`, rotation truly in place) the user verified against world1 that each region needed one more 90° clockwise turn (clockwise from above = negative about +Y), giving the final 180−90 = **90°**. Avatar terrain needs **no rotation** — it is already in the correct orientation. Do not add a rotation for Avatar.
 
 ### Known issues / watch out
 
