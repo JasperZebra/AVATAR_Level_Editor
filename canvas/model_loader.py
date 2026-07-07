@@ -144,6 +144,18 @@ class ModelLoader:
         self._models_index = {}
         self._texture_cache = {}
         self._entity_library_loaded = False
+
+        # Shared GL textures for XBG materials, keyed by (normcase(xbt path),
+        # is_normal). FC2 worlds reuse the same texture files across thousands
+        # of models — without this every material re-uploaded its own copy,
+        # exhausting memory on full-world loads (access violation in
+        # glTexImage2D once the driver ran out). Entries own their GL ids;
+        # clear_cache deletes them once and per-model deletion skips them.
+        self._xbt_gl_cache = {}   # key -> (tex_id, had_alpha, w, h, raw_or_None)
+        # Raw RGBA bytes pinned for the model-preview dock, bounded so huge
+        # worlds can't pin gigabytes (previews degrade gracefully past this).
+        self._raw_pin_bytes = 0
+        self._RAW_PIN_BUDGET = 768 * 1024 * 1024
         
         # NEW: Batch rendering support
         self.instance_batches = {}  # model_path -> list of (position, rotation, scale, is_selected)
@@ -1309,17 +1321,34 @@ class ModelLoader:
         _AMODE = {'OPAQUE': 0, 'MASK': 1, 'BLEND': 2}
 
         def _upload(rel, is_normal, store_raw=False):
-            """Decode an XBT and upload as a GL texture. Returns (tex_id, had_alpha); (0, False) on miss."""
+            """Decode an XBT and upload as a GL texture, deduped by file path.
+            Returns (tex_id, had_alpha); (0, False) on miss."""
             if not rel:
                 return 0, False
             try:
                 full = tl.resolve_xbt_full_path(rel, mat_name)
                 if not full:
                     return 0, False
+
+                key = (os.path.normcase(full), is_normal)
+                cached = self._xbt_gl_cache.get(key)
+                if cached is not None:
+                    tid, had_alpha, w, h, raw = cached
+                    if store_raw and raw is not None:
+                        model.texture_raw_data[mat_idx] = (w, h, raw)
+                    return tid, had_alpha
+
                 res = tl.decode_xbt_to_rgba(full, is_normal_map=is_normal)
                 if not res:
                     return 0, False
                 w, h, data, had_alpha = res
+                # Never hand GL a buffer shorter than it will read — with
+                # PyOpenGL error checking disabled that is an instant access
+                # violation, not an exception.
+                if len(data) < w * h * 4:
+                    print(f"  XBT decode size mismatch ({rel}): "
+                          f"{len(data)} bytes for {w}x{h} RGBA — skipped")
+                    return 0, False
                 tid = glGenTextures(1)
                 glBindTexture(GL_TEXTURE_2D, tid)
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data)
@@ -1329,8 +1358,17 @@ class ModelLoader:
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
                 glGenerateMipmap(GL_TEXTURE_2D)
                 glBindTexture(GL_TEXTURE_2D, 0)
-                if store_raw:
-                    model.texture_raw_data[mat_idx] = (w, h, data)
+
+                # Pin raw RGBA (preview dock) only for diffuse slots and only
+                # while under budget — bytes are shared with the decode cache,
+                # so this bounds rather than duplicates memory.
+                raw_keep = None
+                if store_raw and self._raw_pin_bytes < self._RAW_PIN_BUDGET:
+                    raw_keep = data
+                    self._raw_pin_bytes += len(data)
+                self._xbt_gl_cache[key] = (tid, had_alpha, w, h, raw_keep)
+                if store_raw and raw_keep is not None:
+                    model.texture_raw_data[mat_idx] = (w, h, raw_keep)
                 return tid, had_alpha
             except Exception as e:
                 print(f"  XBT upload failed ({rel}): {e}")
@@ -3300,6 +3338,19 @@ class ModelLoader:
 
     def clear_cache(self):
         """Clear all cached resources"""
+        # XBG textures shared via _xbt_gl_cache are owned by the cache — they
+        # appear in many models' mat_textures, so per-model deletion would
+        # double-delete (and could kill an id the driver already reassigned).
+        # Delete them once here and skip them in the per-model loops below.
+        shared_ids = {entry[0] for entry in self._xbt_gl_cache.values() if entry[0]}
+        for tid in shared_ids:
+            try:
+                glDeleteTextures([tid])
+            except Exception:
+                pass
+        self._xbt_gl_cache.clear()
+        self._raw_pin_bytes = 0
+
         for model in self.models_cache.values():
             if model.display_list:
                 glDeleteLists(model.display_list, 1)
@@ -3309,7 +3360,7 @@ class ModelLoader:
             # four slots in mat_textures (model.textures only has diffuse), so
             # deleting just model.textures would leak the normal/spec/emission
             # textures. Dedup so the shared diffuse id isn't double-deleted.
-            seen = set()
+            seen = set(shared_ids)
             for slots in getattr(model, 'mat_textures', {}).values():
                 for tid in slots.values():
                     if tid and tid not in seen:

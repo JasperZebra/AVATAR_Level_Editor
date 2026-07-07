@@ -298,7 +298,18 @@ class TextureLoader:
         self.materials_path = materials_path
         self._material_cache: Dict[str, XBMMaterialData] = {}
         self._xbt_cache: Dict[Tuple[str, bool], Tuple[str, int, int]] = {}  # (path, is_normal) → (b64 png, w, h)
+        # Decoded entries hold full raw RGBA (or b64 PNG) — megabytes each.
+        # Unbounded, this cache pinned every texture a full FC2 world touched
+        # and exhausted process memory. Long-lived texture reuse is served by
+        # ModelLoader._xbt_gl_cache (GL ids); this only needs burst locality.
+        self._XBT_CACHE_MAX = 32
         print(f"Texture loader initialized with path: {materials_path}")
+
+    def _xbt_cache_put(self, key, value):
+        """Insert into the decode cache with FIFO eviction (dicts are ordered)."""
+        while len(self._xbt_cache) >= self._XBT_CACHE_MAX:
+            self._xbt_cache.pop(next(iter(self._xbt_cache)))
+        self._xbt_cache[key] = value
 
     # ── New: full material loader ─────────────────────────────────────
 
@@ -573,7 +584,7 @@ class TextureLoader:
                     label = "normal-decoded " if is_normal_map else ""
                     print(f"  Converted {label}texture: {os.path.basename(xbt_path)} ({width}x{height})")
                     result = (base64_string, width, height)
-                    self._xbt_cache[cache_key] = result
+                    self._xbt_cache_put(cache_key, result)
                     return result
             finally:
                 try:
@@ -630,7 +641,7 @@ class TextureLoader:
                 img = img.convert('RGBA')
             w, h = img.size
             result = (w, h, img.tobytes(), had_alpha)
-            self._xbt_cache[cache_key] = result
+            self._xbt_cache_put(cache_key, result)
             return result
         except Exception as e:
             print(f"  decode_xbt_to_rgba failed ({os.path.basename(xbt_path)}): {e}")

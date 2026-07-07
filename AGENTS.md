@@ -143,6 +143,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/terrain_editor_dialog.py` | `tests/test_terrain_editor_fc2.py` | — | FC2 `TerrainData`: `.sdat` offset-592 read, global-sd-numbering remap (row stride 80), save writes back to the recorded per-index source file preserving header/trailer bytes; Avatar `.csdat`/708 default unchanged; module loaded by **file path** — excluded from `--cov` |
 | `set_patch_folder.py` | `tests/test_scan_print_encoding.py` | — | Encoding-safe `print` shim: ✓/✗ scan-log glyphs on a cp1252 stdout no longer raise UnicodeEncodeError (which aborted the whole folder scan with "0 worlds found") — excluded from `--cov` |
 | `simplified_map_editor.py` | `tests/test_unified_thread_safety.py` | — | AST scan of the real `load_all_worldsectors` source: every GUI call (`set_entities`/`update_entity_tree`/`update_entity_statistics`/`processEvents`/`showMessage`) must be guarded by `_on_main_thread` (FC2 world1 background-thread access-violation regression) — excluded from `--cov` |
+| `canvas/texture_loader.py` | `tests/test_xbt_cache_eviction.py` | — | `_xbt_cache` FIFO cap (`_xbt_cache_put`): decode cache no longer pins every texture's raw RGBA for the session (FC2 full-world OOM → glTexImage2D access violation); module loaded by **file path** — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -216,6 +217,8 @@ FC2 was brought to feature parity with Avatar. The invariants below are load-bea
 **MP Spawn creator is Avatar-only by design** — it writes `LeftForDeadTrigger`/`NPCSpawnPointCollection`, which FC2 doesn't use; the context-menu action is disabled with an explanatory label in FC2 mode. If real FC2 MP spawn support is added, research FC2's actual spawn archetypes first.
 
 **Night sky** resolves `assets/<game_folder>/skybox/Night Sky.glb` and falls back to the Avatar dome; drop an FC2 GLB at `canvas/assets/fc2/skybox/Night Sky.glb` to give FC2 its own stars.
+
+**XBG texture memory (July 2026, FC2 world1 crash #2).** `_load_xbg_textures` now dedupes GL textures via `ModelLoader._xbt_gl_cache` keyed `(normcase(xbt path), is_normal)` — FC2 worlds reuse the same texture files across thousands of models, and per-material re-upload exhausted memory (access violation in `glTexImage2D`; PyOpenGL error checking is globally disabled, so driver OOM = hard crash, not an exception). Rules: cache entries OWN their GL ids — `clear_cache` deletes them once and per-model deletion must skip `shared_ids`; raw RGBA for the preview dock is pinned only under `_RAW_PIN_BUDGET` (768 MB — past it previews degrade gracefully to untextured); `TextureLoader._xbt_cache` is FIFO-capped at `_XBT_CACHE_MAX` (32) via `_xbt_cache_put` — never insert into `_xbt_cache` directly; `_upload` skips any decode whose byte length < w*h*4 (a short buffer is an instant AV with error checking off).
 
 **Known remaining FC2 limitations:** the Terrain Editor edits one sdat cell folder at a time (use Load Terrain to switch cells on multi-cell worlds); moviedata/cinematics work only if a level ships a `moviedata.xml`; FC2 3D models require the FC2 resource folder to be configured (File menu).
 
