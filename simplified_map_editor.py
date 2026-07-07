@@ -1454,36 +1454,72 @@ class SimplifiedMapEditor(QMainWindow):
     <b>Ready to get started? Click the green "Start Modding!" button!</b><br>
     """
 
-        # Far Cry 2 content (full original text)
+        # Far Cry 2 content — mirrors the Avatar guide with FC2 specifics
         fc2_text = """
-    <b>Welcome to the Far Cry 2 World Editor Mode!</b><br><br>
+    <b>Welcome to Far Cry 2 mode!</b><br><br>
 
-    <b>Quick Start:</b><br>
+    <b>One-Time Setup:</b><br>
 
-    1. Click the green <b>"Select World"</b> button to load the main world grid<br>
-    2. Choose your <b>"FC2 Worlds"</b> directory containing region XML files<br>
-    3. Select one of the <b>25 world regions</b> (5×5 grid) to begin editing<br>
-    4. Start editing entities, props, and terrain links!<br><br>
+    <b>Patch folder</b> — your FC2 folder containing the <b>levels</b> and/or
+    <b>worlds</b> subfolders. This is where the editor reads and saves levels.<br>
+    <b>Resource folder</b> — your unpacked FC2 data folder (contains
+    <b>graphics/</b>). Optional, but without it 3D mode shows colored boxes
+    instead of real models.<br>
+    Both can be changed any time via the <b>File</b> menu.<br><br>
 
-    <b>Key Features:</b><br>
+    <b>Loading a World:</b><br>
 
-    <b>World Grid System:</b> Edit up to 25 world sectors, each 16×16 regions<br>
-    <b>Smart linking:</b> Automatically manages entities across region borders<br>
-    <b>Entity Editor:</b> Modify positions, rotations, and properties<br>
-    <b>Copy/Paste system:</b> Duplicate entities across world regions<br>
-    <b>Visual Editor:</b> Zoom, pan, and select with gizmo support<br><br>
+    1. Click the green <b>"Start Modding!"</b> button below (or press <b>Ctrl+O</b> later)<br>
+    2. Pick a world or MP map from the visual level selector — full worlds load
+    all <b>25 cells</b> of the <b>5×5 grid</b> (each cell is 16×16 sectors) as
+    one map<br>
+    3. <b>First load takes a while</b> — the game's files are converted to an
+    editable format first<br><br>
 
-    <b>Keyboard Shortcuts:</b><br>
+    <b>Getting Around:</b><br>
 
-    <b>Ctrl+O:</b> Load World Grid<br>
-    <b>Delete:</b> Delete selected entities<br>
-    <b>Ctrl+C / Ctrl+V:</b> Copy and paste between world sectors<br><br>
+    <b>2D (top-down):</b> <b>W/A/S/D</b> pan &nbsp;•&nbsp; <b>mouse wheel</b> zoom
+    &nbsp;•&nbsp; <b>middle-click drag</b> pan<br>
+    <b>3D (free camera):</b> press <b>Tab</b> or <b>T</b> to toggle &nbsp;•&nbsp;
+    <b>W/A/S/D</b> move &nbsp;•&nbsp; <b>Q/E</b> up/down &nbsp;•&nbsp;
+    <b>right-click drag</b> look around<br>
+    Hold <b>Shift</b> to move faster &nbsp;•&nbsp; <b>Ctrl+R</b> resets the camera<br><br>
 
-    <b>Right-click menu:</b><br>
+    <b>View Mode vs Edit Mode (important!):</b><br>
 
-    Move entities between regions<br>
-    Duplicate or edit linked props<br>
-    Access debug and view controls<br><br>
+    Press <b>Space</b> to toggle. In <b>View Mode</b> you can look around without
+    accidentally moving anything. In <b>Edit Mode</b> you can select and move
+    entities. The current mode is shown on the canvas.<br><br>
+
+    <b>Editing Entities:</b><br>
+
+    <b>Left-click</b> an entity (or pick it in the left-hand browser) to select it<br>
+    <b>Ctrl+click</b> to multi-select &nbsp;•&nbsp; <b>drag</b> or use the colored
+    <b>gizmo arrows</b> to move<br>
+    <b>Ctrl+E:</b> Entity Editor — edit names, positions, angles, and properties<br>
+    <b>Ctrl+C / Ctrl+V / Ctrl+D:</b> copy / paste / duplicate (new unique IDs are
+    generated automatically)<br>
+    <b>Delete:</b> remove selected entities &nbsp;•&nbsp; <b>right-click</b> for
+    more actions<br>
+    Entities moved across sector or cell borders are re-homed into the correct
+    sector file automatically when you save<br><br>
+
+    <b>Terrain:</b><br>
+
+    The <b>Tools ▸ Terrain Editor</b> edits FC2 <b>.sdat</b> heightmaps directly
+    (raise/lower/flatten/smooth brushes with live canvas preview)<br><br>
+
+    <b>Saving Your Work:</b><br>
+
+    <b>Ctrl+S</b> saves the world — only changed sector files are rebuilt and
+    converted back to the game's own format.<br><br>
+
+    <b>Handy Extras:</b><br>
+
+    <b>F1:</b> full controls reference &nbsp;•&nbsp; <b>G:</b> toggle grid
+    &nbsp;•&nbsp; <b>`</b> (backtick): hide/show entities<br>
+    The left browser color-codes entities by type and has a <b>Mission Layers</b>
+    tab that groups them by mission script<br><br>
 
     <b>Ready to explore the open world? Click the green "Start Modding!" button!</b><br>
     """
@@ -10484,17 +10520,25 @@ class SimplifiedMapEditor(QMainWindow):
                     
                     menu.addSeparator()
             
-            # MP Spawn Point creator (only when worldsectors are loaded)
+            # MP Spawn Point creator (only when worldsectors are loaded).
+            # Avatar only: it writes Avatar's LeftForDeadTrigger +
+            # NPCSpawnPointCollection pair, which FC2 does not use — injecting
+            # them into FC2 files would corrupt the level.
             if getattr(self, 'worldsectors_trees', None):
                 menu.addSeparator()
                 mp_spawn_action = menu.addAction("Add MP Spawn Point (LeftForDeadTrigger)...")
-                def _open_mp_spawn(checked=False, _event=event):
-                    lpos = _event.localPos()
-                    wx, wy = self.canvas.screen_to_world(lpos.x(), lpos.y())
-                    from canvas.mp_spawn_creator import MPSpawnCreatorDialog
-                    dlg = MPSpawnCreatorDialog(self, wx, wy, parent=self)
-                    dlg.exec()
-                mp_spawn_action.triggered.connect(_open_mp_spawn)
+                if self.game_mode == "farcry2":
+                    mp_spawn_action.setEnabled(False)
+                    mp_spawn_action.setText(
+                        "Add MP Spawn Point (Avatar only — FC2 uses different spawn entities)")
+                else:
+                    def _open_mp_spawn(checked=False, _event=event):
+                        lpos = _event.localPos()
+                        wx, wy = self.canvas.screen_to_world(lpos.x(), lpos.y())
+                        from canvas.mp_spawn_creator import MPSpawnCreatorDialog
+                        dlg = MPSpawnCreatorDialog(self, wx, wy, parent=self)
+                        dlg.exec()
+                    mp_spawn_action.triggered.connect(_open_mp_spawn)
 
             # Selection actions
             if not has_selection:

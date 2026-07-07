@@ -3812,8 +3812,14 @@ class MapCanvas(QOpenGLWidget):
                 try:
                     if self._night_sky is None:
                         from night_sky import NightSky
-                        self._night_sky = NightSky(os.path.join(
-                            os.path.dirname(__file__), 'assets', 'avatar', 'skybox', 'Night Sky.glb'))
+                        # Per-game skybox; fall back to the Avatar dome when the
+                        # current game (e.g. FC2) doesn't ship its own asset.
+                        _assets = os.path.join(os.path.dirname(__file__), 'assets')
+                        _game_folder = 'fc2' if getattr(self, 'game_mode', 'avatar') == 'farcry2' else 'avatar'
+                        _sky_glb = os.path.join(_assets, _game_folder, 'skybox', 'Night Sky.glb')
+                        if not os.path.isfile(_sky_glb):
+                            _sky_glb = os.path.join(_assets, 'avatar', 'skybox', 'Night Sky.glb')
+                        self._night_sky = NightSky(_sky_glb)
                     self._night_sky.render(self.camera_3d.position, self._night_factor)
                 except Exception as _e:
                     print(f"[night-sky] render error: {_e}")
