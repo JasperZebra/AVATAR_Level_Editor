@@ -1208,6 +1208,12 @@ class MapCanvas(QOpenGLWidget):
                     self._pf('models', _ps)
                     models_rendered = instances_rendered
 
+                    # Some meshes hit the per-frame VBO build budget and were
+                    # deferred — keep repainting so they stream in even when
+                    # the camera is idle (each frame builds the next batch).
+                    if getattr(self.model_loader, '_vbo_stream_pending', False):
+                        self.update()
+
                     # Track which entities got models rendered
                     if getattr(_ml, 'gdr_drew_last', False):
                         # Array mode: instance_batches wasn't filled this frame.

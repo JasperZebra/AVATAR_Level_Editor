@@ -145,6 +145,12 @@ class ModelLoader:
         self._texture_cache = {}
         self._entity_library_loaded = False
 
+        # Max lazy mesh-VBO builds per frame (see render_batched_models) — keeps
+        # first-visibility geometry uploads from freezing a single paintGL.
+        self.VBO_BUILDS_PER_FRAME = 48
+        self._vbo_budget_left = None      # set per frame; None = unlimited
+        self._vbo_stream_pending = False  # True → some meshes deferred this frame
+
         # Shared GL textures for XBG materials, keyed by (normcase(xbt path),
         # is_normal). FC2 worlds reuse the same texture files across thousands
         # of models — without this every material re-uploaded its own copy,
@@ -2497,6 +2503,15 @@ class ModelLoader:
                     ents, sel = self._gdr_fallback_args
                     self.prepare_batches(ents, sel)
 
+        # Per-frame budget for lazy mesh-VBO construction. Approaching a dense
+        # area used to reveal hundreds/thousands of not-yet-built meshes in one
+        # frame, and building them all synchronously inside paintGL froze the
+        # UI for minutes on FC2 world1. Meshes over budget are skipped this
+        # frame (they stream in over the next frames); _vbo_stream_pending
+        # tells the canvas to keep scheduling repaints until all are built.
+        self._vbo_budget_left = self.VBO_BUILDS_PER_FRAME
+        self._vbo_stream_pending = False
+
         if self._ensure_shader():
             try:
                 # Clear any pre-existing GL error so our post-render probe is clean.
@@ -2624,8 +2639,10 @@ class ModelLoader:
 
     def _ensure_mesh_vbo(self, mesh):
         """Upload a mesh's geometry to GPU buffers ONCE (pos/nrm/uv/tan + index).
-        Returns the vbo dict, or False if it can't be built. This is the key perf
-        fix: without it, the shader path re-transferred every mesh's vertex arrays
+        Returns the vbo dict, False if it can't be built, or None when the
+        per-frame build budget is spent (deferred — the mesh streams in on a
+        later frame instead of freezing this one). This is the key perf fix:
+        without it, the shader path re-transferred every mesh's vertex arrays
         from CPU to the driver on every draw of every frame."""
         vbo = getattr(mesh, '_vbo', None)
         if vbo is not None:
@@ -2633,6 +2650,12 @@ class ModelLoader:
         if mesh.vertices is None or mesh.indices is None:
             mesh._vbo = False
             return False
+        budget = getattr(self, '_vbo_budget_left', None)
+        if budget is not None:
+            if budget <= 0:
+                self._vbo_stream_pending = True
+                return None            # mesh._vbo stays None → retried next frame
+            self._vbo_budget_left = budget - 1
         try:
             def _buf(target, arr, dtype):
                 a = np.ascontiguousarray(arr, dtype=dtype)
@@ -3099,7 +3122,14 @@ class ModelLoader:
             
             # Display list should already exist (created at level load time).
             # This fallback handles any model that slipped through (e.g. late-loaded).
+            # Budgeted like _ensure_mesh_vbo: building many in one paint froze the UI.
             if model.loaded and model.display_list is None and not getattr(model, 'display_list_blend', None) and not hasattr(model, 'use_immediate_mode'):
+                budget = getattr(self, '_vbo_budget_left', None)
+                if budget is not None and budget <= 0:
+                    self._vbo_stream_pending = True
+                    continue          # streams in on a later frame
+                if budget is not None:
+                    self._vbo_budget_left = budget - 1
                 print(f"⚠️ FREEZE SOURCE — mid-render display list: {os.path.basename(model_path)}")
                 try:
                     self._create_opengl_resources(model)
