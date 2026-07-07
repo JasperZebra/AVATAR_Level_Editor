@@ -76,6 +76,7 @@ class TerrainRenderer:
         self._fc2_sector_base = 0
         self._fc2_row_stride = 80
         self._fc2_secs_per_row = 16
+        self._fc2_remapped = False
 
         # Per-game terrain offsets
         # Avatar: .csdat, terrain at 708, water height at 0xB0
@@ -109,6 +110,13 @@ class TerrainRenderer:
         self.sector_to_path = {}
         self.terrain_pixmap = None   # clear so stale image from previous cell can't leak
         self.terrain_image = None
+        # Per-folder FC2 remap state — MUST reset here: multi-cell loads reuse
+        # this renderer, and a stale base/stride from the previous cell would
+        # poison the next cell's atlas math.
+        self._fc2_sector_base = 0
+        self._fc2_row_stride = 80
+        self._fc2_secs_per_row = 16
+        self._fc2_remapped = False
 
         # Set default texture layer if not set
         if not self.texture_layer:
@@ -160,37 +168,40 @@ class TerrainRenderer:
         if num_sectors > 0:
             # FC2: sector files use global world-level indices (e.g. 2592-3807 for cell w1_c_3).
             # Remap them to local 0-based indices so grid_size comes out correct (16x16 not 62x62).
+            # Gap detection runs even when numbering starts at 0 — cell w1_e_1
+            # starts at sd0 but is still world-strided (0..15, 80..95, …); only
+            # gapless numbering (standalone MP maps) skips the remap.
             if self.game_mode == "farcry2":
                 sorted_nums = sorted(self.sectors_data.keys())
                 min_s = sorted_nums[0]
-                if min_s > 0:
-                    # Find row stride: first gap > 1 in consecutive sector numbers.
-                    gap_found = False
-                    secs_per_row = len(sorted_nums)
-                    row_stride = secs_per_row
-                    for i in range(1, len(sorted_nums)):
-                        if sorted_nums[i] - sorted_nums[i - 1] > 1:
-                            secs_per_row = i
-                            row_stride = sorted_nums[i] - sorted_nums[0]
-                            gap_found = True
-                            break
-                    if gap_found:
-                        remapped_s, remapped_w = {}, {}
-                        for sn in sorted_nums:
-                            diff = sn - min_s
-                            local_idx = (diff // row_stride) * secs_per_row + (diff % row_stride)
-                            if sn in self.sectors_data:
-                                remapped_s[local_idx] = self.sectors_data[sn]
-                            if sn in self.water_data:
-                                remapped_w[local_idx] = self.water_data[sn]
-                        self.sectors_data = remapped_s
-                        self.water_data = remapped_w
-                        self._fc2_sector_base = min_s
-                        self._fc2_row_stride = row_stride
-                        self._fc2_secs_per_row = secs_per_row
-                        print(f"[Terrain] FC2 remap: {len(remapped_s)} sectors, "
-                              f"global[{min_s}..{sorted_nums[-1]}] → local[0..{max(remapped_s)}], "
-                              f"row_stride={row_stride}, secs_per_row={secs_per_row}")
+                # Find row stride: first gap > 1 in consecutive sector numbers.
+                gap_found = False
+                secs_per_row = len(sorted_nums)
+                row_stride = secs_per_row
+                for i in range(1, len(sorted_nums)):
+                    if sorted_nums[i] - sorted_nums[i - 1] > 1:
+                        secs_per_row = i
+                        row_stride = sorted_nums[i] - sorted_nums[0]
+                        gap_found = True
+                        break
+                if gap_found:
+                    remapped_s, remapped_w = {}, {}
+                    for sn in sorted_nums:
+                        diff = sn - min_s
+                        local_idx = (diff // row_stride) * secs_per_row + (diff % row_stride)
+                        if sn in self.sectors_data:
+                            remapped_s[local_idx] = self.sectors_data[sn]
+                        if sn in self.water_data:
+                            remapped_w[local_idx] = self.water_data[sn]
+                    self.sectors_data = remapped_s
+                    self.water_data = remapped_w
+                    self._fc2_sector_base = min_s
+                    self._fc2_row_stride = row_stride
+                    self._fc2_secs_per_row = secs_per_row
+                    self._fc2_remapped = True
+                    print(f"[Terrain] FC2 remap: {len(remapped_s)} sectors, "
+                          f"global[{min_s}..{sorted_nums[-1]}] → local[0..{max(remapped_s)}], "
+                          f"row_stride={row_stride}, secs_per_row={secs_per_row}")
             else:
                 # Avatar multi-part: sectors may start above 0 (e.g. l2 has sd256-sd511).
                 # Remap to 0-based so grid_size is correct and the image renders as a full 16x16 tile.
@@ -756,7 +767,8 @@ class TerrainRenderer:
             # and _fc2_row_stride were recorded by the load remap (base 0 and
             # stride == sectors_x when the map's numbering was already local).
             base = self._fc2_sector_base
-            stride = self._fc2_row_stride if base > 0 else self.sectors_x
+            stride = self._fc2_row_stride if getattr(self, '_fc2_remapped', False) \
+                else self.sectors_x
             mapped = 0
             _atlas_path_cache = {}
             for s in self.sectors_data.keys():

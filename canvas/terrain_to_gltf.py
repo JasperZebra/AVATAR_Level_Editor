@@ -242,15 +242,38 @@ class TerrainExporter:
         
         if atlas_numbers:
             print(f"\nFound {len(atlas_numbers)} texture atlas files")
-            
-            # Map each atlas to its 4 sectors (standard sequential mapping)
-            for atlas_index, atlas_num in enumerate(atlas_numbers):
-                base_sector = atlas_index * 4
-                for sub_sector in range(4):
-                    sector_num = base_sector + sub_sector
-                    self.atlas_mapping[sector_num] = (atlas_num, sub_sector)
-            
-            print(f"Mapped {len(self.atlas_mapping)} sectors to atlas files")
+
+            if self.game_mode == "farcry2":
+                # FC2: atlas{n} is named after its block-origin GLOBAL sector
+                # and covers the 2x2 block {n, n+1, n+stride, n+stride+1}
+                # (mirrors terrain_renderer.build_atlas_mapping). sectors_data
+                # keys are LOCAL row-major after the load remap.
+                base = getattr(self, '_fc2_sector_base', 0)
+                stride = getattr(self, '_fc2_row_stride', 0) or 0
+                if not stride:
+                    # No remap happened (gapless standalone map) — numbering
+                    # is already local with the map's own width as stride.
+                    sx, _ = self.calculate_grid_dimensions()
+                    stride = sx
+                sx, _sy = self.calculate_grid_dimensions()
+                for s in sorted(self.sectors_data.keys()):
+                    r, c = s // sx, s % sx
+                    atlas_num = base + (r - r % 2) * stride + (c - c % 2)
+                    if atlas_num not in atlas_numbers:
+                        continue
+                    sub_sector = (1 - (r % 2)) * 2 + (c % 2)
+                    self.atlas_mapping[s] = (atlas_num, sub_sector)
+                print(f"Mapped {len(self.atlas_mapping)} sectors to FC2 2x2-block "
+                      f"atlases (base={base}, stride={stride})")
+            else:
+                # Avatar: sequential mapping — atlas[i] → sectors i*4 … i*4+3.
+                for atlas_index, atlas_num in enumerate(atlas_numbers):
+                    base_sector = atlas_index * 4
+                    for sub_sector in range(4):
+                        sector_num = base_sector + sub_sector
+                        self.atlas_mapping[sector_num] = (atlas_num, sub_sector)
+
+                print(f"Mapped {len(self.atlas_mapping)} sectors to atlas files")
         else:
             print("\nNo texture atlas files found")
     
@@ -348,36 +371,38 @@ class TerrainExporter:
 
         # FC2: sector files use global world-level indices (e.g. 2592-3807).
         # Remap to local 0-based so calculate_grid_dimensions works correctly.
+        # Gap detection runs even when numbering starts at 0 — cell w1_e_1
+        # starts at sd0 but is still world-strided (0..15, 80..95, …); only
+        # gapless numbering (standalone MP maps) skips the remap.
         if loaded_count > 0 and self.game_mode == "farcry2":
             sorted_nums = sorted(self.sectors_data.keys())
             min_s = sorted_nums[0]
-            if min_s > 0:
-                gap_found = False
-                secs_per_row = len(sorted_nums)
-                row_stride = secs_per_row
-                for i in range(1, len(sorted_nums)):
-                    if sorted_nums[i] - sorted_nums[i - 1] > 1:
-                        secs_per_row = i
-                        row_stride = sorted_nums[i] - sorted_nums[0]
-                        gap_found = True
-                        break
-                if gap_found:
-                    remapped_s = {}
-                    remapped_files = {}  # local_idx → file_path (parallel to remapped_s)
-                    for sn in sorted_nums:
-                        diff = sn - min_s
-                        local_idx = (diff // row_stride) * secs_per_row + (diff % row_stride)
-                        remapped_s[local_idx] = self.sectors_data[sn]
-                        if sn in self._sector_file_paths:
-                            remapped_files[local_idx] = self._sector_file_paths[sn]
-                    self.sectors_data = remapped_s
-                    self._sector_file_paths = remapped_files
-                    self._fc2_sector_base = min_s
-                    self._fc2_row_stride = row_stride
-                    self._fc2_secs_per_row = secs_per_row
-                    print(f"FC2 remap: {loaded_count} sectors, "
-                          f"global[{min_s}..{sorted_nums[-1]}] → local[0..{max(remapped_s)}], "
-                          f"row_stride={row_stride}, secs_per_row={secs_per_row}")
+            gap_found = False
+            secs_per_row = len(sorted_nums)
+            row_stride = secs_per_row
+            for i in range(1, len(sorted_nums)):
+                if sorted_nums[i] - sorted_nums[i - 1] > 1:
+                    secs_per_row = i
+                    row_stride = sorted_nums[i] - sorted_nums[0]
+                    gap_found = True
+                    break
+            if gap_found:
+                remapped_s = {}
+                remapped_files = {}  # local_idx → file_path (parallel to remapped_s)
+                for sn in sorted_nums:
+                    diff = sn - min_s
+                    local_idx = (diff // row_stride) * secs_per_row + (diff % row_stride)
+                    remapped_s[local_idx] = self.sectors_data[sn]
+                    if sn in self._sector_file_paths:
+                        remapped_files[local_idx] = self._sector_file_paths[sn]
+                self.sectors_data = remapped_s
+                self._sector_file_paths = remapped_files
+                self._fc2_sector_base = min_s
+                self._fc2_row_stride = row_stride
+                self._fc2_secs_per_row = secs_per_row
+                print(f"FC2 remap: {loaded_count} sectors, "
+                      f"global[{min_s}..{sorted_nums[-1]}] → local[0..{max(remapped_s)}], "
+                      f"row_stride={row_stride}, secs_per_row={secs_per_row}")
 
         # Avatar multi-part: each part is a separate 16×16 tile whose sector files
         # may start above 0 (e.g. Tantalus part 2 has sd256-sd511). Remap to 0-based
@@ -563,16 +588,22 @@ class TerrainExporter:
         
         for display_row in range(sectors_y):
             for col in range(sectors_x):
-                # Use Avatar Game Layout pattern (matches heightmap)
-                sector_index = self.get_sector_index_from_position(display_row, col, sectors_x, sectors_y)
-                
+                if self.game_mode == "farcry2":
+                    # FC2: row-major with display inversion — the SAME placement
+                    # create_combined_heightmap uses, so texture texels line up
+                    # 1:1 with heightmap samples (identity world mapping).
+                    sector_index = (sectors_y - 1 - display_row) * sectors_x + col
+                else:
+                    # Avatar Game Layout pattern (2x2 blocks, vertical)
+                    sector_index = self.get_sector_index_from_position(display_row, col, sectors_x, sectors_y)
+
                 if sector_index in self.sectors_textures:
                     start_y = display_row * self.grid_size
                     start_x = col * self.grid_size
-                    
+
                     # Get texture for this sector (already 65x65)
                     texture_data = self.sectors_textures[sector_index]
-                    
+
                     # Avatar layout: NO flip (textures match heightmap orientation)
                     combined[start_y:start_y+self.grid_size, start_x:start_x+self.grid_size] = texture_data
         
@@ -685,10 +716,16 @@ class TerrainExporter:
         vert_grid = np.stack([PX, PY, PZ], axis=-1)          # (gh, gw, 3)
         vertices = vert_grid.reshape(-1).tolist()
 
-        # UVs — same 90° CCW rotation as before (rotated_u = 1-v, rotated_v = u).
+        # UVs — Avatar: 90° CCW rotation (rotated_u = 1-v, rotated_v = u) to
+        # match its block-pattern texture layout. FC2: DIRECT mapping — the
+        # combined texture is assembled with the exact same row-major placement
+        # as the heightmap, so texel (u, v) = grid sample (x, y) as-is.
         U = NX                                               # u = x/(width-1)
         V = NY                                               # v = y/(height-1)
-        uv_grid = np.stack([1.0 - V, U], axis=-1)            # (gh, gw, 2)
+        if self.game_mode == "farcry2":
+            uv_grid = np.stack([U, V], axis=-1)              # (gh, gw, 2)
+        else:
+            uv_grid = np.stack([1.0 - V, U], axis=-1)        # (gh, gw, 2)
         uvs = uv_grid.reshape(-1).tolist()
 
         # Indices over the (gh-1)x(gw-1) quad grid (same winding as before).

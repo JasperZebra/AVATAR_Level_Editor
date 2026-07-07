@@ -4951,21 +4951,49 @@ class SimplifiedMapEditor(QMainWindow):
                 print("Level selection cancelled by user")
 
     @staticmethod
+    def _fc2_offset_from_sector_numbers(numbers):
+        """Derive a cell's (world_x, world_y) offset from its GLOBAL sector
+        numbers — ground truth, no naming convention involved.
+
+        FC2 sector numbers directly encode world position on the 80-wide grid
+        (proven empirically July 2026: n = row*stride + col, 64 units/sector).
+        The row stride is detected from the first gap in the sorted numbers
+        (a 16-wide cell yields 16 consecutive numbers then a jump of stride).
+        Returns None when the numbers are ambiguous (no gap = standalone map
+        whose numbering is already local, e.g. an MP map → offset (0, 0)).
+        """
+        nums = sorted(set(int(n) for n in numbers))
+        if not nums:
+            return None
+        stride = None
+        for i in range(1, len(nums)):
+            if nums[i] - nums[i - 1] > 1:
+                stride = nums[i] - nums[0]
+                break
+        if stride is None or stride <= 0:
+            # Contiguous numbering — standalone map, no world offset.
+            return (0.0, 0.0) if nums[0] == 0 else None
+        return float((nums[0] % stride) * 64), float((nums[0] // stride) * 64)
+
+    @staticmethod
     def _get_fc2_world_offset(level_name, fallback_path=None):
         """Return (world_x, world_y) offset in game units for an FC2 world-cell name.
 
-        FC2 world cells follow the naming pattern  w{world}_{col}_{row}  where:
-          col  is a letter a–e  (a=col 0, b=col 1, c=col 2, d=col 3, e=col 4)
-          row  is a digit  1–5  (1→row 0, 2→row 1, … 5→row 4, 0-indexed)
+        FC2 world cells are named  w{world}_{letter}_{digit}  where — verified
+        against the real retail sector numbering (July 2026):
+          digit  1–5  is the world COLUMN  (1→col 0 … 5→col 4)
+          letter a–e  is the world ROW, INVERTED (a→row 4 = top, e→row 0)
+        so   x = (digit−1) × 1024,   y = (4 − letter_index) × 1024.
 
-        The 5×5 world grid starts at world-space (0,0) so each cell's offset is:
-          x = col_index × 1024
-          y = row_index × 1024
+        Corner ground truth from sd numbering (stride 80, 64 units/sector):
+          w1_e_1 → sd0    → (0, 0)        w1_e_5 → sd64   → (4096, 0)
+          w1_a_1 → sd5120 → (0, 4096)     w1_a_5 → sd5184 → (4096, 4096)
+        (The old letter=column / digit=row mapping only agreed on symmetric
+        cells like c_3, which is why the world looked *almost* right.)
 
-        Example:  w1_a_1 → (0, 0)   w1_c_3 → (2048, 2048)   w1_e_5 → (4096, 4096)
-
-        If level_name doesn't match (e.g. 'world1'), fallback_path is searched for a
-        path component that does match (e.g. .../levels/w1_c_3/generated/sdat).
+        Prefer _fc2_offset_from_sector_numbers when sector files are available
+        — it needs no naming convention at all. If level_name doesn't match
+        (e.g. 'world1'), fallback_path is searched for a matching component.
         """
         import re
         pattern = re.compile(r'w\d+_([a-e])_(\d+)', re.IGNORECASE)
@@ -4973,8 +5001,8 @@ class SimplifiedMapEditor(QMainWindow):
         def _parse(s):
             m = pattern.search(s)
             if m:
-                col = ord(m.group(1).lower()) - ord('a')
-                row = int(m.group(2)) - 1
+                row = 4 - (ord(m.group(1).lower()) - ord('a'))
+                col = int(m.group(2)) - 1
                 return col * 1024, row * 1024
             return None
 
@@ -5778,7 +5806,22 @@ class SimplifiedMapEditor(QMainWindow):
                     log(f"Loading FC2 terrain from {len(fc2_cells)} cells…")
                     cells_2d_ok = cells_3d_ok = 0
                     for idx, (cell_sdat, cell_name) in enumerate(fc2_cells):
-                        cell_ox, cell_oy = self._get_fc2_world_offset(cell_name, fallback_path=cell_sdat)
+                        # Ground-truth offset from the cell's own sd numbering
+                        # (global n = row*stride + col); folder-name mapping is
+                        # only the fallback — the old letter/digit convention
+                        # was transposed+inverted and scattered world cells.
+                        _cell_off = None
+                        try:
+                            _sd_nums = [int(os.path.basename(p)[2:-5])
+                                        for p in glob.glob(os.path.join(cell_sdat, 'sd*.sdat'))
+                                        if os.path.basename(p)[2:-5].isdigit()]
+                            _cell_off = self._fc2_offset_from_sector_numbers(_sd_nums)
+                        except Exception:
+                            _cell_off = None
+                        if _cell_off is not None:
+                            cell_ox, cell_oy = _cell_off
+                        else:
+                            cell_ox, cell_oy = self._get_fc2_world_offset(cell_name, fallback_path=cell_sdat)
                         progress_dialog.set_status(
                             f"Loading terrain cell {idx+1}/{len(fc2_cells)}: {cell_name}…")
                         progress_dialog.set_progress(86 + int(8 * idx / len(fc2_cells)))
@@ -5886,8 +5929,21 @@ class SimplifiedMapEditor(QMainWindow):
                     # ── Single-cell terrain (Avatar single-part or single FC2 cell) ──
                     fc2_offset_x, fc2_offset_y = 0, 0
                     if self.game_mode == "farcry2":
-                        fc2_offset_x, fc2_offset_y = self._get_fc2_world_offset(
-                            level_info['name'], fallback_path=self.sdat_path)
+                        # Prefer the ground-truth offset from the sd numbering;
+                        # the folder-name mapping is only a fallback.
+                        _off = None
+                        try:
+                            _sd_nums = [int(os.path.basename(p)[2:-5])
+                                        for p in glob.glob(os.path.join(self.sdat_path, 'sd*.sdat'))
+                                        if os.path.basename(p)[2:-5].isdigit()]
+                            _off = self._fc2_offset_from_sector_numbers(_sd_nums)
+                        except Exception:
+                            _off = None
+                        if _off is not None:
+                            fc2_offset_x, fc2_offset_y = _off
+                        else:
+                            fc2_offset_x, fc2_offset_y = self._get_fc2_world_offset(
+                                level_info['name'], fallback_path=self.sdat_path)
                     print(f"[Terrain] World offset: ({fc2_offset_x}, {fc2_offset_y}) for '{level_info['name']}'")
 
                     self.canvas.terrain_world_offset_x = float(fc2_offset_x)
