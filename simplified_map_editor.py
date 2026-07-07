@@ -5391,10 +5391,12 @@ class SimplifiedMapEditor(QMainWindow):
                 unified_thread.start()
                 log("Started unified sector loading in background...")
 
-            # 5️⃣ Assign model paths to the pre-unified snapshot (mapsdata / omnis only).
+            # 5️⃣ Assign model paths to the pre-unified snapshot.
             #    Uses the snapshot — immune to self.entities being modified by the thread.
-            #    Skipped entirely if there's no background thread (FC2 / no worldsectors).
-            if unified_thread is not None and _pre_unified_entities and hasattr(self, 'canvas') and hasattr(self.canvas, 'model_loader'):
+            #    Runs even without a background thread (FC2 / no worldsectors): in that
+            #    case this is the ONLY assignment pass, so skipping it would leave every
+            #    entity as a colored placeholder box with no 3D model.
+            if _pre_unified_entities and hasattr(self, 'canvas') and hasattr(self.canvas, 'model_loader'):
                 progress_dialog.set_status("Assigning 3D model paths...")
                 progress_dialog.set_progress(55)
                 log(f"Assigning model paths to {len(_pre_unified_entities)} pre-unified entities...")
@@ -6917,7 +6919,8 @@ class SimplifiedMapEditor(QMainWindow):
                             break
 
                 print(f"\nRe-assigning models to {len(self.entities)} entities...")
-                self.canvas.model_loader.assign_models_to_entities(self.entities)
+                self.canvas.model_loader.assign_models_to_entities(
+                    self.entities, game_mode=self.game_mode)
 
             else:
                 print("Canvas or model_loader not available")
