@@ -638,6 +638,13 @@ class TerrainRenderer:
                         else:  # Bottom-right (3)
                             sub_img = img_array[half_h:h, half_w:w]
 
+                        # FC2: atlas tile CONTENT is authored rotated relative to
+                        # the world (placement is correct — only the pixels inside
+                        # each 64m tile need turning). np.rot90 k=1 is a visual
+                        # 90° CCW; if tiles ever look 180° off, change k to -1.
+                        if self.game_mode == "farcry2":
+                            sub_img = np.rot90(sub_img, k=1)
+
                         pil_img = Image.fromarray(sub_img)
                         pil_img = pil_img.resize((self.grid_size, self.grid_size), 
                                                 Image.Resampling.LANCZOS)

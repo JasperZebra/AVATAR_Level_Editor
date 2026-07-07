@@ -329,7 +329,13 @@ class TerrainExporter:
                         sub_texture = img_array[half_h:height, 0:half_w]
                     else:  # sub_sector == 3, Bottom-Right
                         sub_texture = img_array[half_h:height, half_w:width]
-                    
+
+                    # FC2: atlas tile CONTENT is authored rotated relative to the
+                    # world — same 90° CCW turn as the 2D path (terrain_renderer).
+                    # Keep the two in lockstep; k=-1 if it ever needs the other way.
+                    if self.game_mode == "farcry2":
+                        sub_texture = np.rot90(sub_texture, k=1)
+
                     # Resize to match sector grid size
                     sub_img = Image.fromarray(sub_texture)
                     sub_img = sub_img.resize((self.grid_size, self.grid_size), Image.Resampling.LANCZOS)
