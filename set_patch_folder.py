@@ -24,6 +24,19 @@ from PyQt5.QtWidgets import QAction
 # Configuration file for storing patch folder path
 PATCH_CONFIG_FILE = "patch_config.json"
 
+# Encoding-safe print for this module. Scan logs use ✓/✗ glyphs; when stdout
+# can't encode them (cp1252 pipe/redirected output), the UnicodeEncodeError
+# used to bubble into the scanner's except blocks and abort the ENTIRE folder
+# scan with "0 worlds found". Fall back to ASCII-replaced output instead.
+_builtin_print = print
+
+def print(*args, **kwargs):  # noqa: A001 — deliberate module-local shadow
+    try:
+        _builtin_print(*args, **kwargs)
+    except UnicodeEncodeError:
+        _builtin_print(*(str(a).encode('ascii', 'replace').decode('ascii')
+                         for a in args), **kwargs)
+
 def _spf_log(msg):
     """Write a timestamped line to crash_log.txt from anywhere in this module."""
     try:
