@@ -670,7 +670,8 @@ class RotationGizmo:
             if canvas is not None and getattr(canvas, 'unified_mode', False):
                 entity = canvas.selected_entity if hasattr(canvas, 'selected_entity') else None
                 if entity is not None:
-                    cur_sid = int(entity.y // 64) * 16 + int(entity.x // 64)
+                    _stride = 80 if getattr(canvas, 'is_fc2_world', False) else 16
+                    cur_sid = int(entity.y // 64) * _stride + int(entity.x // 64)
                     if cur_sid != getattr(entity, 'source_sector_id', cur_sid):
                         _main = canvas
                         while _main.parent():

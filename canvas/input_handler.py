@@ -439,9 +439,10 @@ class InputHandler:
                 # In unified mode, refresh the By Sector tree if any entity crossed a sector boundary
                 if getattr(self.canvas, 'unified_mode', False):
                     moved_sectors = False
+                    _stride = 80 if getattr(self.canvas, 'is_fc2_world', False) else 16
                     for entity in (self.canvas.selected if self.canvas.selected else
                                    ([self.canvas.selected_entity] if self.canvas.selected_entity else [])):
-                        cur_sid = int(entity.y // 64) * 16 + int(entity.x // 64)
+                        cur_sid = int(entity.y // 64) * _stride + int(entity.x // 64)
                         if cur_sid != getattr(entity, 'source_sector_id', cur_sid):
                             moved_sectors = True
                             break

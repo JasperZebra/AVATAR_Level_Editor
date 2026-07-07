@@ -253,7 +253,11 @@ def place_archetype(editor, proto_name, world_pos=None):
     wx, wy = float(world_pos[0]), float(world_pos[1])
     wz = _terrain_z(canvas, wx, wy)
 
-    sid = int(wy // 64) * 16 + int(wx // 64)
+    # Global sector-grid id: stride 16 (Avatar) or 80 (FC2 5x5 world of 16x16
+    # cells) — must match the WorldSector Id field and unified-save routing.
+    from simplified_map_editor import sector_grid_stride
+    _stride = sector_grid_stride(getattr(editor, 'game_mode', 'avatar'))
+    sid = int(wy // 64) * _stride + int(wx // 64)
     target = _find_sector(editor, sid)
     if target is None:
         target = _any_sector(editor)

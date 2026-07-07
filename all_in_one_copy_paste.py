@@ -1314,7 +1314,8 @@ def setup_complete_smart_system(editor):
         """Find the best worldsector file for an entity.
 
         In unified mode uses position-based lookup with the same formula as save
-        routing: gx = floor(x / 64), gy = floor(y / 64), sector_id = gy*16+gx.
+        routing: gx = floor(x / 64), gy = floor(y / 64), sector_id = gy*stride+gx
+        (stride 16 for Avatar, 80 for FC2's global 5x5-cell grid).
         Falls back to the first available file when no sector matches.
 
         Returns (xml_path, sector_id) tuple, or (None, -1) if no files are loaded.
@@ -1332,7 +1333,12 @@ def setup_complete_smart_system(editor):
             print("❌ No worldsector files loaded")
             return (None, -1)
 
-        # Build known_sectors map (sector_id → (gx, gy, xml_path)) — mirrors save routing
+        # Build known_sectors map (sector_id → (gx, gy, xml_path)) — mirrors save
+        # routing, including the FC2 global 80-wide sector grid (cell-local header
+        # coords are lifted by the owning cell's world offset, same as unified save).
+        from simplified_map_editor import sector_grid_stride, global_sector_coords
+        game_mode = getattr(self, 'game_mode', 'avatar')
+        stride = sector_grid_stride(game_mode)
         known_sectors = {}
         for xml_path, tree in self.worldsectors_trees.items():
             if not xml_path.endswith('.converted.xml'):
@@ -1351,13 +1357,16 @@ def setup_complete_smart_system(editor):
                     gy = int(yf.get('value-Int32', 0))
                 except (ValueError, TypeError):
                     pass
-            known_sectors[gy * 16 + gx] = (gx, gy, xml_path)
+            if game_mode == "farcry2":
+                cox, coy = self._get_fc2_world_offset("", fallback_path=xml_path)
+                gx, gy = global_sector_coords(gx, gy, (cox, coy))
+            known_sectors[gy * stride + gx] = (gx, gy, xml_path)
 
         # Position-based lookup (unified mode primary path)
         if known_sectors:
             target_gx = int(x // 64)
             target_gy = int(y // 64)
-            target_id = target_gy * 16 + target_gx
+            target_id = target_gy * stride + target_gx
             if target_id in known_sectors:
                 _, _, xml_path = known_sectors[target_id]
                 print(f"📁 Position-based match: sector ({target_gx},{target_gy}) → {os.path.basename(xml_path)}")

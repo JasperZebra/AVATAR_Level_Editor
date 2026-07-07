@@ -100,7 +100,33 @@ def _coords_to_binhex(x, y, z):
     return struct.pack('<fff', float(x), float(y), float(z)).hex().upper()
 
 
-def rebuild_sector_xml(sector_id, gx, gy, entities, original_tree=None):
+def sector_grid_stride(game_mode):
+    """Sectors per world row for global sector IDs (sector_id = gy * stride + gx).
+
+    Avatar levels are a single 16x16 sector grid (stride 16). FC2 worlds are a
+    5x5 grid of cells, each 16x16 sectors, so the global grid is 80 sectors
+    wide (stride 80). All 64-unit sectors in both games.
+    """
+    return 80 if game_mode == "farcry2" else 16
+
+
+def global_sector_coords(gx, gy, cell_offset_units):
+    """Convert a WorldSector header X/Y to global sector-grid coordinates.
+
+    cell_offset_units is the owning FC2 cell's world offset in game units
+    (e.g. w1_c_3 -> (2048, 2048)); pass (0, 0) for Avatar. Header coords < 16
+    can be cell-local, so the cell offset (converted to sectors) is added.
+    Coords >= 16 are only possible as global values and pass through unchanged
+    — for column-a / row-1 cells the offset is 0, so both conventions agree.
+    """
+    ox, oy = cell_offset_units
+    gxg = gx + int(ox) // 64 if gx < 16 else gx
+    gyg = gy + int(oy) // 64 if gy < 16 else gy
+    return gxg, gyg
+
+
+def rebuild_sector_xml(sector_id, gx, gy, entities, original_tree=None,
+                       pos_offset=(0.0, 0.0)):
     """
     Rebuild a WorldSector XML tree for *entities* (a list of Entity objects).
 
@@ -113,6 +139,11 @@ def rebuild_sector_xml(sector_id, gx, gy, entities, original_tree=None):
     values) and written directly into each cloned element so the saved XML always
     reflects where the entity actually is, even if the in-memory xml_element hasn't
     been flushed yet.
+
+    pos_offset (ox, oy) is subtracted from entity.x / entity.y before writing —
+    FC2 worldsector files store cell-local coordinates, so the owning cell's
+    world offset (added at load time) must be removed again on save. (0, 0)
+    for Avatar / already-global files.
 
     Returns:
         ET.ElementTree: the rebuilt tree, ready to write to disk.
@@ -174,13 +205,16 @@ def rebuild_sector_xml(sector_id, gx, gy, entities, original_tree=None):
             entity_copy = ET.fromstring(
                 ET.tostring(entity.xml_element, encoding='unicode')
             )
-            # Overwrite position with current entity.x/y/z so moves are always saved
+            # Overwrite position with current entity.x/y/z so moves are always saved.
+            # Subtract the cell offset so FC2 files keep cell-local coordinates.
+            save_x = entity.x - pos_offset[0]
+            save_y = entity.y - pos_offset[1]
             for field_name in ('hidPos', 'hidPos_precise'):
                 pos_field = entity_copy.find(f"./field[@name='{field_name}']")
                 if pos_field is not None:
-                    pos_str = f"{entity.x:.0f},{entity.y:.0f},{entity.z:.0f}"
+                    pos_str = f"{save_x:.0f},{save_y:.0f},{entity.z:.0f}"
                     pos_field.set('value-Vector3', pos_str)
-                    pos_field.text = _coords_to_binhex(entity.x, entity.y, entity.z)
+                    pos_field.text = _coords_to_binhex(save_x, save_y, entity.z)
             layer_elem.append(entity_copy)
 
     return ET.ElementTree(root)
@@ -963,6 +997,9 @@ class SimplifiedMapEditor(QMainWindow):
         self.show_objects = True
         self.worldsectors_trees = {}
         self.worldsectors_modified = {}
+        # normcase(xml_path) → (ox, oy) world-unit offset added to that file's
+        # entities at load (FC2 cell-local → global); subtracted again on save.
+        self.worldsectors_cell_offsets = {}
         self.landmark_trees = {}        # xml_path → ET.ElementTree for landmark FCB files
         self.landmark_clean_hashes = {} # xml_path → hash_str for dirty detection
 
@@ -5054,6 +5091,7 @@ class SimplifiedMapEditor(QMainWindow):
             self.objects = []
             self.selected_entity = None
             self.sector_clean_hashes = {}
+            self.worldsectors_cell_offsets = {}
 
             # Always reset terrain before loading a new level so the previous
             # level's terrain is never shown when the new level has no terrain
@@ -5285,6 +5323,8 @@ class SimplifiedMapEditor(QMainWindow):
                         worldsectors_info = self.find_worldsectors_folder_enhanced(lpath)
                         if worldsectors_info:
                             self.worldsectors_path = worldsectors_info["path"]
+                            if worldsectors_info["path"] not in self._all_worldsectors_paths:
+                                self._all_worldsectors_paths.append(worldsectors_info["path"])
                             objects_success = self.load_level_objects_internal(lpath, progress_dialog, on_progress)
                             if objects_success:
                                 log(f"Loaded objects from {os.path.basename(lpath)}")
@@ -5374,11 +5414,19 @@ class SimplifiedMapEditor(QMainWindow):
             # (they're never replaced), so model assignments on this snapshot stick.
             _pre_unified_entities = list(self.entities)
 
-            if self.game_mode != "farcry2" and getattr(self, 'worldsectors_path', None):
+            # Avatar: unified-load the level's worldsectors folder.
+            # FC2: unified-load EVERY cell folder found during object loading, so
+            # the whole 5x5 world becomes one editable cross-sector entity pool.
+            if self.game_mode == "farcry2":
+                _unified_folders = list(getattr(self, '_all_worldsectors_paths', []) or [])
+            else:
+                _unified_folders = getattr(self, 'worldsectors_path', None)
+
+            if _unified_folders:
                 def _run_unified():
                     try:
                         self.load_all_worldsectors(
-                            self.worldsectors_path,
+                            _unified_folders,
                             log_callback=lambda m: print(f"[sectors] {m}"),
                             progress_callback=lambda pct: None,
                         )
@@ -5615,7 +5663,10 @@ class SimplifiedMapEditor(QMainWindow):
             # Mapsdata / omnis / managers entities are already in global world space.
             # Only detect and shift worldsector entities so global-coord entities are
             # never double-shifted.
-            if self.game_mode == "farcry2":
+            # Skipped when the unified sector loader ran successfully — it already
+            # shifted each file's entities by its own cell offset (per-file, recorded
+            # in worldsectors_cell_offsets), which supersedes this single-offset pass.
+            if self.game_mode == "farcry2" and (unified_thread is None or _unified_error[0]):
                 _cell_ox, _cell_oy = self._get_fc2_world_offset(
                     level_info['name'], fallback_path=getattr(self, 'sdat_path', None))
                 # Use only worldsector entities for the local-vs-global detection
@@ -6068,7 +6119,13 @@ class SimplifiedMapEditor(QMainWindow):
           - canvas.unified_mode = True
           - canvas.current_map = None (disables per-map filter)
 
-        Avatar only. Skips landmarkfar_* and landmarknear* files.
+        worldsectors_folder may be a single folder (Avatar) or a list of folders
+        (FC2 — one per 5x5 world cell). For FC2, sector IDs are computed on the
+        global 80x80 grid (sector_grid_stride) and entity positions are shifted
+        from cell-local to global world coordinates; the applied shift per file
+        is recorded in self.worldsectors_cell_offsets so save can undo it.
+
+        Skips landmarkfar_* and landmarknear* files.
 
         Returns:
             int: number of entities loaded across all sectors, or -1 on fatal error
@@ -6081,39 +6138,60 @@ class SimplifiedMapEditor(QMainWindow):
                 except Exception:
                     pass
 
-        _log(f"\n=== UNIFIED SECTOR LOAD: {worldsectors_folder} ===")
+        if isinstance(worldsectors_folder, (list, tuple)):
+            folders = [f for f in worldsectors_folder if f]
+        else:
+            folders = [worldsectors_folder] if worldsectors_folder else []
+        folders = [f for f in folders if os.path.isdir(f)]
 
-        if not os.path.isdir(worldsectors_folder):
-            _log(f"ERROR: worldsectors folder does not exist: {worldsectors_folder}")
+        _log(f"\n=== UNIFIED SECTOR LOAD: {len(folders)} folder(s) ===")
+        for _f in folders:
+            _log(f"  {_f}")
+
+        if not folders:
+            _log("ERROR: no existing worldsectors folder to load")
             return -1
 
-        # ── 1. Discover and convert FCB files ────────────────────────────────
-        fcb_files = [
-            f for f in glob.glob(os.path.join(worldsectors_folder, "worldsector*.data.fcb"))
-            if not os.path.basename(f).startswith(("landmarkfar_", "landmarknear"))
-        ]
-        _log(f"Found {len(fcb_files)} worldsector FCB files")
-        if not fcb_files:
+        if not hasattr(self, 'worldsectors_cell_offsets'):
+            self.worldsectors_cell_offsets = {}
+
+        # ── 1. Discover and convert FCB files (per folder) ───────────────────
+        xml_files = []
+        total_fcb = 0
+        for folder in folders:
+            fcb_files = [
+                f for f in glob.glob(os.path.join(folder, "worldsector*.data.fcb"))
+                if not os.path.basename(f).startswith(("landmarkfar_", "landmarknear"))
+            ]
+            total_fcb += len(fcb_files)
+            if not fcb_files:
+                _log(f"No worldsector FCB files in {os.path.basename(folder)}")
+                continue
+
+            convert_ok, convert_err, _ = self.file_converter.convert_data_fcb_files(
+                folder
+            )
+            _log(f"FCB conversion [{os.path.basename(folder)}]: "
+                 f"{convert_ok} OK, {convert_err} errors")
+
+            # Build list of converted XML paths (one per FCB file)
+            for fcb in fcb_files:
+                xml_path = fcb + ".converted.xml"
+                if os.path.exists(xml_path):
+                    xml_files.append(xml_path)
+                else:
+                    _log(f"  WARNING: no converted XML for {os.path.basename(fcb)}")
+
+        _log(f"Found {total_fcb} worldsector FCB files total")
+        if total_fcb == 0:
             _log("No worldsector FCB files found — nothing to load")
             return 0
-
-        convert_ok, convert_err, _ = self.file_converter.convert_data_fcb_files(
-            worldsectors_folder
-        )
-        _log(f"FCB conversion: {convert_ok} OK, {convert_err} errors")
-
-        # Build list of converted XML paths (one per FCB file)
-        xml_files = []
-        for fcb in fcb_files:
-            xml_path = fcb + ".converted.xml"
-            if os.path.exists(xml_path):
-                xml_files.append(xml_path)
-            else:
-                _log(f"  WARNING: no converted XML for {os.path.basename(fcb)}")
 
         if not xml_files:
             _log("No converted XML files found — aborting")
             return -1
+
+        _stride = sector_grid_stride(self.game_mode)
 
         # ── 2. Parse each sector XML ──────────────────────────────────────────
         total_entities = 0
@@ -6146,7 +6224,16 @@ class SimplifiedMapEditor(QMainWindow):
                         gy = int(y_field.get('value-Int32', 0))
                     except (ValueError, TypeError):
                         pass
-                sector_id = gy * 16 + gx
+
+                # FC2: resolve the owning cell's world offset from the file path
+                # (…/levels/w1_c_3/worldsectorN.data.fcb → (2048, 2048)) and lift
+                # header coords onto the global 80x80 sector grid. Avatar: (0,0).
+                cell_ox = cell_oy = 0
+                if self.game_mode == "farcry2":
+                    cell_ox, cell_oy = self._get_fc2_world_offset(
+                        "", fallback_path=xml_path)
+                gx_g, gy_g = global_sector_coords(gx, gy, (cell_ox, cell_oy))
+                sector_id = gy_g * _stride + gx_g
 
                 # Store tree and clean hash
                 self.worldsectors_trees[xml_path] = tree
@@ -6154,6 +6241,7 @@ class SimplifiedMapEditor(QMainWindow):
 
                 # Parse entities, grouped by MissionLayer
                 file_entity_count = 0
+                file_entities = []
                 for layer_elem in root.findall("./object[@name='MissionLayer']"):
                     layer_name = "main"
                     path_id_field = layer_elem.find("./field[@name='text_PathId']")
@@ -6204,12 +6292,32 @@ class SimplifiedMapEditor(QMainWindow):
                             if self.grid_config and self.grid_config.maps:
                                 entity.map_name = self.determine_entity_map(entity)
 
-                            new_entities.append(entity)
+                            file_entities.append(entity)
                             file_entity_count += 1
 
                         except Exception as e:
                             _log(f"  Error parsing entity in {basename}: {e}")
 
+                # FC2: shift this file's entities from cell-local to global world
+                # coordinates. Shift only when the header was cell-local (gx/gy < 16
+                # with a non-zero cell offset) AND the positions themselves look
+                # cell-local (nothing beyond one cell + margin) — if either check
+                # says "already global", record (0,0) so save writes back exactly
+                # what was read (lossless round-trip either way).
+                applied_ox = applied_oy = 0.0
+                if self.game_mode == "farcry2" and (cell_ox or cell_oy) and file_entities:
+                    header_was_local = (gx_g, gy_g) != (gx, gy)
+                    max_coord = max(max(abs(e.x) for e in file_entities),
+                                    max(abs(e.y) for e in file_entities))
+                    if header_was_local and max_coord <= 1100.0:
+                        for e in file_entities:
+                            e.x += cell_ox
+                            e.y += cell_oy
+                        applied_ox, applied_oy = float(cell_ox), float(cell_oy)
+                self.worldsectors_cell_offsets[os.path.normcase(xml_path)] = (
+                    applied_ox, applied_oy)
+
+                new_entities.extend(file_entities)
                 total_entities += file_entity_count
 
                 if progress_callback:
@@ -7360,6 +7468,10 @@ class SimplifiedMapEditor(QMainWindow):
         # Only include genuine worldsector files — landmarks share the folder but
         # must NOT be rebuilt by unified save (they have different XML structure and
         # their grid X/Y can collide with worldsector IDs, causing false dirty marks).
+        # Sector IDs live on the game's global grid (Avatar 16-wide, FC2 80-wide) —
+        # the same math load_all_worldsectors used, so IDs and clean-hashes line up.
+        _stride = sector_grid_stride(self.game_mode)
+        _cell_offsets = getattr(self, 'worldsectors_cell_offsets', None) or {}
         known_sectors = {}
         for xml_path, tree in self.worldsectors_trees.items():
             if not xml_path.endswith('.converted.xml'):
@@ -7380,7 +7492,11 @@ class SimplifiedMapEditor(QMainWindow):
                     gy = int(yf.get('value-Int32', 0))
                 except (ValueError, TypeError):
                     pass
-            known_sectors[gy * 16 + gx] = (gx, gy, xml_path)
+            cell_ox = cell_oy = 0
+            if self.game_mode == "farcry2":
+                cell_ox, cell_oy = self._get_fc2_world_offset("", fallback_path=xml_path)
+            gx_g, gy_g = global_sector_coords(gx, gy, (cell_ox, cell_oy))
+            known_sectors[gy_g * _stride + gx_g] = (gx, gy, xml_path)
 
         if not known_sectors:
             _log("   Unified save: no known sectors found, falling back to single-sector path")
@@ -7424,10 +7540,10 @@ class SimplifiedMapEditor(QMainWindow):
             if src >= 0 and src in known_sectors:
                 sector_entities[src].append(entity)
             else:
-                # New entity with no source sector — use position
+                # New entity with no source sector — use position (global coords)
                 gx = int(entity.x // 64)
                 gy = int(entity.y // 64)
-                pos_id = gy * 16 + gx
+                pos_id = gy * _stride + gx
                 if pos_id in known_sectors:
                     sector_entities[pos_id].append(entity)
 
@@ -7451,8 +7567,12 @@ class SimplifiedMapEditor(QMainWindow):
 
             try:
                 original_tree = self.worldsectors_trees.get(xml_path)
+                # FC2: write positions back in the target file's cell-local space
+                # (undo the shift recorded at load; (0,0) for Avatar/global files).
+                _pos_off = _cell_offsets.get(os.path.normcase(xml_path), (0.0, 0.0))
                 new_tree = rebuild_sector_xml(sector_id, gx, gy, entities_for_sector,
-                                              original_tree=original_tree)
+                                              original_tree=original_tree,
+                                              pos_offset=_pos_off)
 
                 # Serialize to a string to compare hashes
                 import io
@@ -9008,7 +9128,16 @@ class SimplifiedMapEditor(QMainWindow):
                     if sector_id is None or sector_x is None or sector_y is None:
                         print(f"  Skipping {os.path.basename(xml_file_path)}: missing sector info")
                         continue
-                    
+
+                    # FC2: lift cell-local header coords onto the global 80x80
+                    # sector grid so boundary boxes draw at the cell's true world
+                    # position instead of stacking in the 0-15 range.
+                    if self.game_mode == "farcry2":
+                        _cox, _coy = self._get_fc2_world_offset(
+                            "", fallback_path=xml_file_path)
+                        sector_x, sector_y = global_sector_coords(
+                            sector_x, sector_y, (_cox, _coy))
+
                     # Find entities in this sector
                     sector_entities = []
                     for entity in self.entities:
@@ -13659,7 +13788,7 @@ class SimplifiedMapEditor(QMainWindow):
             if getattr(self.canvas, 'unified_mode', False):
                 cur_gx = int(x // 64)
                 cur_gy = int(y // 64)
-                cur_sid = cur_gy * 16 + cur_gx
+                cur_sid = cur_gy * sector_grid_stride(self.game_mode) + cur_gx
                 src_sid = getattr(entity, 'source_sector_id', -1)
                 layer = getattr(entity, 'source_layer', 'main') or 'main'
                 if cur_sid != src_sid and src_sid >= 0:

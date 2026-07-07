@@ -2548,11 +2548,14 @@ class EntityImportDialog(QDialog):
         return new_root
 
     def _get_sector_id_from_path(self, sector_file_path):
-        """Read GX/GY from WorldSector XML and return GY*16+GX. Returns -1 on failure."""
+        """Read GX/GY from WorldSector XML and return the global sector id
+        (GY*stride+GX — stride 16 for Avatar, 80 for FC2 with cell-local header
+        coords lifted by the owning cell's offset). Returns -1 on failure."""
         try:
             tree = None
-            if hasattr(self, 'parent_editor') and hasattr(self.parent_editor, 'worldsectors_trees'):
-                tree = self.parent_editor.worldsectors_trees.get(sector_file_path)
+            editor = getattr(self, 'parent_editor', None)
+            if editor is not None and hasattr(editor, 'worldsectors_trees'):
+                tree = editor.worldsectors_trees.get(sector_file_path)
             if tree is None:
                 tree = ET.parse(sector_file_path)
             root = tree.getroot()
@@ -2562,7 +2565,14 @@ class EntityImportDialog(QDialog):
                 gx = int(gx_field.get('value-Int32', -1))
                 gy = int(gy_field.get('value-Int32', -1))
                 if gx >= 0 and gy >= 0:
-                    return gy * 16 + gx
+                    from simplified_map_editor import (sector_grid_stride,
+                                                       global_sector_coords)
+                    game_mode = getattr(editor, 'game_mode', 'avatar')
+                    if game_mode == "farcry2" and editor is not None:
+                        cox, coy = editor._get_fc2_world_offset(
+                            "", fallback_path=sector_file_path)
+                        gx, gy = global_sector_coords(gx, gy, (cox, coy))
+                    return gy * sector_grid_stride(game_mode) + gx
         except Exception:
             pass
         return -1

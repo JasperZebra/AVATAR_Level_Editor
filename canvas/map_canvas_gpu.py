@@ -6478,9 +6478,17 @@ class MapCanvas(QOpenGLWidget):
 
                         # Subtract any FC2 cell offset that was applied at load time
                         # so we write back the original local (cell-space) coordinates.
+                        # Prefer the per-file offset recorded by the unified loader
+                        # (worldsectors_cell_offsets); fall back to the legacy single
+                        # global offset for non-unified loads.
                         editor = getattr(self, 'editor', None)
-                        cell_off_x = getattr(editor, 'fc2_cell_offset_x', 0.0)
-                        cell_off_y = getattr(editor, 'fc2_cell_offset_y', 0.0)
+                        _per_file = getattr(editor, 'worldsectors_cell_offsets', None) or {}
+                        _off = _per_file.get(os.path.normcase(xml_file_path))
+                        if _off is not None:
+                            cell_off_x, cell_off_y = _off
+                        else:
+                            cell_off_x = getattr(editor, 'fc2_cell_offset_x', 0.0)
+                            cell_off_y = getattr(editor, 'fc2_cell_offset_y', 0.0)
                         save_x = entity.x - cell_off_x
                         save_y = entity.y - cell_off_y
                         self._update_fcb_position_field(entity_elem, "hidPos", save_x, save_y, entity.z)
@@ -6675,7 +6683,11 @@ class MapCanvas(QOpenGLWidget):
             return
         gx = int(entity.x // 64)
         gy = int(entity.y // 64)
-        new_sector_id = gy * 16 + gx
+        # Global sector-grid stride: Avatar single 16x16 grid; FC2 5x5 world of
+        # 16x16-sector cells → 80 sectors per row. Must match the sector IDs
+        # computed by load_all_worldsectors / _save_unified_worldsectors.
+        stride = 80 if getattr(self, 'is_fc2_world', False) else 16
+        new_sector_id = gy * stride + gx
         source_id = getattr(entity, 'source_sector_id', -1)
         # Always dirty the old source sector (it must be rebuilt to remove/update the entity)
         if source_id >= 0:
