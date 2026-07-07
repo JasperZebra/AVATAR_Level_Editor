@@ -142,6 +142,7 @@ reference: <reference to this change in the docs if applicable>
 | `simplified_map_editor.py` | `tests/test_fc2_sector_math.py` | — | FC2 global sector-grid math (`sector_grid_stride` 16/80, `global_sector_coords` local→global lift + passthrough) and `rebuild_sector_xml` `pos_offset` cell-local write-back; helpers **mirrored** in the test (module needs GL/Qt) — excluded from `--cov` |
 | `canvas/terrain_editor_dialog.py` | `tests/test_terrain_editor_fc2.py` | — | FC2 `TerrainData`: `.sdat` offset-592 read, global-sd-numbering remap (row stride 80), save writes back to the recorded per-index source file preserving header/trailer bytes; Avatar `.csdat`/708 default unchanged; module loaded by **file path** — excluded from `--cov` |
 | `set_patch_folder.py` | `tests/test_scan_print_encoding.py` | — | Encoding-safe `print` shim: ✓/✗ scan-log glyphs on a cp1252 stdout no longer raise UnicodeEncodeError (which aborted the whole folder scan with "0 worlds found") — excluded from `--cov` |
+| `simplified_map_editor.py` | `tests/test_unified_thread_safety.py` | — | AST scan of the real `load_all_worldsectors` source: every GUI call (`set_entities`/`update_entity_tree`/`update_entity_statistics`/`processEvents`/`showMessage`) must be guarded by `_on_main_thread` (FC2 world1 background-thread access-violation regression) — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -783,7 +784,7 @@ New dialog (`MPSpawnCreatorDialog`) accessible via 2D view right-click menu → 
 **Why:** Eliminates the old second model-assignment + second pre-load pass that ran after unified sectors. Previously, model assignment ran twice (once for mapsdata entities, once after unified sectors) and the full model pre-load ran twice. Now it runs once on the complete entity list.
 
 **Thread safety notes:**
-- `load_all_worldsectors` runs on a background thread; it emits no Qt signals. Only `print()` used as log callback (thread-safe via GIL).
+- `load_all_worldsectors` runs on a background thread; it emits no Qt signals. Only `print()` used as log callback (thread-safe via GIL). **July 2026 fix:** its tail used to call `canvas.set_entities` / `update_entity_tree` / `update_entity_statistics` / `statusBar().showMessage` directly — tolerated at Avatar scale but an access-violation crash on FC2 world1 (~50K entities; "QBasicTimer can only be used with threads started with QThread" spam, then death in `expand_all`). It now computes `_on_main_thread` and does GUI work ONLY when True (data + plain attribute writes otherwise); `load_complete_level`'s main-thread finalization refreshes the UI after the join. Guarded-call invariant enforced by `tests/test_unified_thread_safety.py` (AST scan of the real source). Never add unguarded widget/timer calls to this function.
 - `_phase_a_worker` writes only to its local `GLTFModel` object — no shared state.
 - `_load_embedded_textures` and `_create_opengl_resources` use the OpenGL context — always Phase B, always main thread.
 - `QApplication.processEvents()` is called only on the main thread. Never called from background threads.

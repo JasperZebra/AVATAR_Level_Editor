@@ -6175,6 +6175,16 @@ class SimplifiedMapEditor(QMainWindow):
                 except Exception:
                     pass
 
+        # Qt widgets/timers must only be touched from the main thread. This
+        # loader runs on a plain threading.Thread during load_complete_level —
+        # building the entity tree from there crashed with an access violation
+        # on FC2 world1 (~50K entities). On a worker thread we do DATA work
+        # only; load_complete_level's finalization refreshes the UI after the
+        # join. Manual main-thread callers (open_all_sectors) keep the full
+        # inline UI refresh.
+        import threading as _threading
+        _on_main_thread = _threading.current_thread() is _threading.main_thread()
+
         if isinstance(worldsectors_folder, (list, tuple)):
             folders = [f for f in worldsectors_folder if f]
         else:
@@ -6361,7 +6371,7 @@ class SimplifiedMapEditor(QMainWindow):
                     progress_callback(87 + int((i + 1) / total_files * 8))
                 if (i + 1) % log_interval == 0 or (i + 1) == total_files:
                     _log(f"  Sectors: {i + 1}/{total_files} loaded ({total_entities} entities)")
-                else:
+                elif _on_main_thread:
                     QApplication.processEvents()
 
             except Exception as e:
@@ -6404,10 +6414,11 @@ class SimplifiedMapEditor(QMainWindow):
              f"carried {carried} model assignments over)")
 
         # ── 4. Activate unified mode ──────────────────────────────────────────
+        # Plain attribute writes are thread-safe; anything that touches Qt
+        # widgets, repaints, or timers is main-thread only (see note above).
         if hasattr(self, 'canvas'):
             self.canvas.unified_mode = True
             self.canvas.current_map = None   # disables per-map filter
-            self.canvas.set_entities(self.entities)
 
             # Auto-enable sector boundary overlay in unified mode
             self.canvas.show_sector_boundaries = True
@@ -6417,16 +6428,20 @@ class SimplifiedMapEditor(QMainWindow):
                 except Exception:
                     pass
 
-        if hasattr(self, 'update_entity_tree'):
-            self.update_entity_tree()
-        if hasattr(self, 'update_entity_statistics'):
-            self.update_entity_statistics()
+            if _on_main_thread:
+                self.canvas.set_entities(self.entities)
 
-        # Status bar
-        n_sectors = len(xml_files)
-        if hasattr(self, 'statusBar'):
-            self.statusBar().showMessage(
-                f"Unified mode — {n_sectors} sectors loaded, {total_entities} entities")
+        if _on_main_thread:
+            if hasattr(self, 'update_entity_tree'):
+                self.update_entity_tree()
+            if hasattr(self, 'update_entity_statistics'):
+                self.update_entity_statistics()
+
+            # Status bar
+            if hasattr(self, 'statusBar'):
+                self.statusBar().showMessage(
+                    f"Unified mode — {len(xml_files)} sectors loaded, "
+                    f"{total_entities} entities")
 
         return total_entities
 
@@ -9137,6 +9152,15 @@ class SimplifiedMapEditor(QMainWindow):
 
             print(f"Processing {len(trees_to_process)} worldsector files...")
 
+            # Group entities by source file ONCE — the old per-file scan over
+            # self.entities was O(files × entities), which at FC2 full-world
+            # scale (~5.7K files × ~50K entities) took minutes.
+            entities_by_path = {}
+            for entity in self.entities:
+                fp = getattr(entity, 'source_file_path', None)
+                if fp:
+                    entities_by_path.setdefault(fp, []).append(entity)
+
             # Process each worldsector file
             for xml_file_path, tree in trees_to_process.items():
                 try:
@@ -9175,12 +9199,8 @@ class SimplifiedMapEditor(QMainWindow):
                         sector_x, sector_y = global_sector_coords(
                             sector_x, sector_y, (_cox, _coy))
 
-                    # Find entities in this sector
-                    sector_entities = []
-                    for entity in self.entities:
-                        if hasattr(entity, 'source_file_path'):
-                            if entity.source_file_path == xml_file_path:
-                                sector_entities.append(entity)
+                    # Find entities in this sector (pre-grouped above)
+                    sector_entities = entities_by_path.get(xml_file_path, [])
                     
                     # Calculate world bounds for verification
                     world_min_x = sector_x * 64
