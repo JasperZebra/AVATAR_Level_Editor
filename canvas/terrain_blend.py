@@ -109,17 +109,28 @@ _TILE_PREFILTER_CACHE = {}
 _MIN_TILE_SWATCH_PX = 24
 
 
-def _feather_seam_edges(small, margin_frac=0.15):
-    """Blend a swatch's own edges toward each other so PLAIN (non-mirrored)
+def _feather_seam_edges(small, margin_frac=0.15, h_target=None, v_target=None):
+    """Blend a swatch's edges toward a target profile so PLAIN (non-mirrored)
     wraparound tiling doesn't show a hard seam.
 
     For each axis, the outer `margin_frac` band on BOTH edges is cross-faded
-    toward their shared average, tapering back to the original content
-    inward — so the two edge columns/rows converge to nearly the same value
-    right at the boundary (where tile N's right edge meets tile N+1's left
-    edge), while the interior is untouched. This is the standard "make
-    seamless" texture trick (offset-and-blend, done here directly on the
-    edges since we don't need the interior seam moved).
+    toward a target value, tapering back to the original content inward — so
+    the two edge columns/rows converge to nearly the same value right at the
+    boundary (where tile N's right edge meets tile N+1's left edge), while
+    the interior is untouched. This is the standard "make seamless" texture
+    trick (offset-and-blend, done here directly on the edges since we don't
+    need the interior seam moved).
+
+    `h_target`/`v_target` (each (h,3)/(w,3), or None): the per-row/per-column
+    value edges converge toward. Pass None for the classic single-swatch case
+    (converge toward THIS swatch's own left/right or top/bottom average).
+    Pass a SHARED profile (computed once, e.g. from a reference swatch) when
+    feathering multiple variants of the same layer — this is required for
+    `_variant_tile` to mix different variants adjacently without a seam:
+    two variants that each converge toward their OWN average would meet at
+    a MISMATCHED boundary (different crops → different average colour);
+    converging toward one shared profile makes every variant's edge equal
+    the same value, so any pair of variants tiles seamlessly.
 
     Why not mirror-tiling (the previous approach): mirror-tiling GUARANTEES
     a seamless border only via strictly ALTERNATING flip states between
@@ -133,23 +144,19 @@ def _feather_seam_edges(small, margin_frac=0.15):
     h, w = small.shape[:2]
     out = small.astype(np.float32).copy()
 
+    ht = h_target if h_target is not None else 0.5 * (out[:, 0, :] + out[:, w - 1, :])
     mx = max(1, int(round(w * margin_frac)))
     for i in range(mx):
         t = (i + 1) / (mx + 1)
-        left = out[:, i, :].copy()
-        right = out[:, w - 1 - i, :].copy()
-        avg = 0.5 * (left + right)
-        out[:, i, :] = left * t + avg * (1 - t)
-        out[:, w - 1 - i, :] = right * t + avg * (1 - t)
+        out[:, i, :] = out[:, i, :] * t + ht * (1 - t)
+        out[:, w - 1 - i, :] = out[:, w - 1 - i, :] * t + ht * (1 - t)
 
+    vt = v_target if v_target is not None else 0.5 * (out[0, :, :] + out[h - 1, :, :])
     my = max(1, int(round(h * margin_frac)))
     for j in range(my):
         t = (j + 1) / (my + 1)
-        top = out[j, :, :].copy()
-        bot = out[h - 1 - j, :, :].copy()
-        avg = 0.5 * (top + bot)
-        out[j, :, :] = top * t + avg * (1 - t)
-        out[h - 1 - j, :, :] = bot * t + avg * (1 - t)
+        out[j, :, :] = out[j, :, :] * t + vt * (1 - t)
+        out[h - 1 - j, :, :] = out[h - 1 - j, :, :] * t + vt * (1 - t)
 
     return np.clip(out, 0, 255)
 
@@ -160,6 +167,28 @@ def _plain_tile(small, reps):
     `_feather_seam_edges`; unlike mirror-tiling this introduces no forced
     kaleidoscope symmetry between neighbouring copies."""
     return np.tile(small, (reps, reps, 1))
+
+
+_NUM_TILE_VARIANTS = 6   # distinct swatches sourced per layer — see _variant_tile.
+# Swept 1/3/6/9 side by side: 1->3 already breaks up the worst uniformity, 3->6
+# adds meaningfully more organic variety, 6->9 was diminishing returns. 6 is
+# the balance point.
+
+
+def _variant_tile(variants, reps):
+    """Assemble a reps×reps grid where each cell picks one of `variants`
+    (each already made edge-seamless) via a fixed non-alternating hash of its
+    (row,col) — NOT a checkerboard, so no two cells are forced into a
+    periodic relationship the eye can lock onto. Any variant can sit next to
+    any other because every variant's OWN edges already match every other
+    variant's edges (they all converge to the same per-edge running average
+    inside `_feather_seam_edges`), so plain adjacency stays seamless."""
+    n = len(variants)
+    rows = []
+    for r in range(reps):
+        row_tiles = [variants[(r * 2654435761 + c * 40503) % n] for c in range(reps)]
+        rows.append(np.concatenate(row_tiles, axis=1))
+    return np.concatenate(rows, axis=0)
 
 
 def _tile_sample(img, size, repeats):
@@ -192,6 +221,21 @@ def _tile_sample(img, size, repeats):
        as "I can see a pattern in the terrain"). `_feather_seam_edges` blends
        the swatch's own opposite edges toward each other instead, so plain
        (non-mirrored) tiling has no seam AND no forced symmetry.
+    3. Even seamless, a SINGLE swatch repeated identically is still very
+       perceptible as tiling once the repeat count is low (e.g. Tiling=6 —
+       only ~6 identical copies span a sector; reported as "some spots are
+       too rough looking, like they are not tiled correct"). No amount of
+       extra resolution fixes this — it is genuinely the same content 6
+       times. Fix: derive `_NUM_TILE_VARIANTS` swatches from DIFFERENT crop
+       offsets of the source (real spatial variation, not the same content
+       re-filtered), each feathered toward ONE SHARED edge profile (see
+       `_feather_seam_edges` h_target/v_target — required so any pair of
+       variants can sit adjacent without a seam, since each converging to
+       its OWN average would leave mismatched brightness between crops), and
+       assemble via `_variant_tile`'s non-alternating placement. Breaks "one
+       tile repeated in a perfect grid" into "a short, non-periodic mix of a
+       few different tiles" — reads as organic repetition instead of a
+       graphic pattern.
     """
     from PIL import Image
     h, w = img.shape[:2]
@@ -200,17 +244,30 @@ def _tile_sample(img, size, repeats):
     cell = min(cell, max(h, w))  # never upsample past native resolution
 
     key = (id(img), h, w, cell)
-    small = _TILE_PREFILTER_CACHE.get(key)
-    if small is None:
+    variants = _TILE_PREFILTER_CACHE.get(key)
+    if variants is None:
         src_u8 = np.clip(img * 255.0, 0, 255).astype(np.uint8)
-        boxed = np.asarray(Image.fromarray(src_u8).resize((cell, cell), Image.BOX))
-        small = _feather_seam_edges(boxed).astype(np.uint8)
+        n = _NUM_TILE_VARIANTS if min(h, w) >= cell * 2 else 1  # tiny sources: one variant only
+        boxed_all = []
+        for k in range(n):
+            oy = (k * h) // max(n, 1)
+            ox = (k * w) // max(n, 1)
+            rolled = np.roll(np.roll(src_u8, -oy, axis=0), -ox, axis=1)
+            boxed_all.append(np.asarray(Image.fromarray(rolled).resize((cell, cell), Image.BOX)))
+        ref = boxed_all[0].astype(np.float32)
+        h_target = 0.5 * (ref[:, 0, :] + ref[:, -1, :])
+        v_target = 0.5 * (ref[0, :, :] + ref[-1, :, :])
+        variants = [
+            _feather_seam_edges(b, h_target=h_target, v_target=v_target).astype(np.uint8)
+            for b in boxed_all
+        ]
         if len(_TILE_PREFILTER_CACHE) > 64:
             _TILE_PREFILTER_CACHE.clear()
-        _TILE_PREFILTER_CACHE[key] = small
+        _TILE_PREFILTER_CACHE[key] = variants
 
     reps = (size // cell) + 2
-    tiled = _plain_tile(small, reps)[:size, :size]
+    tiled = (_plain_tile(variants[0], reps) if len(variants) == 1
+             else _variant_tile(variants, reps))[:size, :size]
     return tiled.astype(np.float32) / 255.0
 
 
