@@ -99,21 +99,60 @@ def _resize_1ch(a, size, lo, hi):
 
 
 _TILE_PREFILTER_CACHE = {}
+_MIN_TILE_SWATCH_PX = 64   # never collapse a tiled detail texture below this — see _tile_sample
 
 
-def _mirror_tile(small, reps):
-    """Tile (h,w,3) *reps* times per axis using mirror-repeat (like GL's
-    GL_MIRRORED_REPEAT): alternate rows/columns are flipped so adjacent copies
-    always share identical edge pixels — no hard seam, unlike plain wraparound
-    tiling of a texture whose opposite edges don't match."""
-    flipped_x = small[:, ::-1, :]
-    row_even = small if reps <= 1 else np.concatenate(
-        [small if c % 2 == 0 else flipped_x for c in range(reps)], axis=1)
-    if reps <= 1:
-        return row_even
-    flipped_y = row_even[::-1, :, :]
-    return np.concatenate(
-        [row_even if r % 2 == 0 else flipped_y for r in range(reps)], axis=0)
+def _feather_seam_edges(small, margin_frac=0.15):
+    """Blend a swatch's own edges toward each other so PLAIN (non-mirrored)
+    wraparound tiling doesn't show a hard seam.
+
+    For each axis, the outer `margin_frac` band on BOTH edges is cross-faded
+    toward their shared average, tapering back to the original content
+    inward — so the two edge columns/rows converge to nearly the same value
+    right at the boundary (where tile N's right edge meets tile N+1's left
+    edge), while the interior is untouched. This is the standard "make
+    seamless" texture trick (offset-and-blend, done here directly on the
+    edges since we don't need the interior seam moved).
+
+    Why not mirror-tiling (the previous approach): mirror-tiling GUARANTEES
+    a seamless border only via strictly ALTERNATING flip states between
+    neighbours — that alternation is structurally required, not incidental,
+    and it makes every 2x2 group of tiles perfectly mirror-symmetric about
+    its center. That symmetry is highly perceptible as a kaleidoscope/grid
+    pattern to the human eye regardless of how much real detail is inside
+    each tile (reported as "I can see a pattern in the terrain"). A
+    seamless-edged swatch tiled PLAINLY has no such forced symmetry.
+    """
+    h, w = small.shape[:2]
+    out = small.astype(np.float32).copy()
+
+    mx = max(1, int(round(w * margin_frac)))
+    for i in range(mx):
+        t = (i + 1) / (mx + 1)
+        left = out[:, i, :].copy()
+        right = out[:, w - 1 - i, :].copy()
+        avg = 0.5 * (left + right)
+        out[:, i, :] = left * t + avg * (1 - t)
+        out[:, w - 1 - i, :] = right * t + avg * (1 - t)
+
+    my = max(1, int(round(h * margin_frac)))
+    for j in range(my):
+        t = (j + 1) / (my + 1)
+        top = out[j, :, :].copy()
+        bot = out[h - 1 - j, :, :].copy()
+        avg = 0.5 * (top + bot)
+        out[j, :, :] = top * t + avg * (1 - t)
+        out[h - 1 - j, :, :] = bot * t + avg * (1 - t)
+
+    return np.clip(out, 0, 255)
+
+
+def _plain_tile(small, reps):
+    """Tile (h,w,3) *reps* times per axis via plain wraparound (np.tile) — safe
+    to use once `small`'s own edges have been made seamless by
+    `_feather_seam_edges`; unlike mirror-tiling this introduces no forced
+    kaleidoscope symmetry between neighbouring copies."""
+    return np.tile(small, (reps, reps, 1))
 
 
 def _tile_sample(img, size, repeats):
@@ -125,28 +164,46 @@ def _tile_sample(img, size, repeats):
     ~8-10px per repeat) naive nearest-neighbour indexing aliases into a harsh,
     blotchy pattern — it discards almost all of the source texture's pixels.
 
-    Fix: LANCZOS-downsample the source to its PER-REPEAT output footprint
-    (cell = size/repeats) — this is exactly a mip-level average — THEN
-    mirror-tile that already band-limited patch across the output (plain
-    wraparound tiling left a visible hard grid seam because the source
-    texture's opposite edges don't match; mirroring guarantees they do).
+    Fix: BOX-downsample (true area average — no ringing) the source to a
+    swatch size, make the swatch's own edges seamless (`_feather_seam_edges`),
+    THEN tile it PLAINLY (`_plain_tile`). Two things had to be solved:
+
+    1. The swatch is NOT simply size/repeats (one cell per nominal repeat).
+       Collapsing the source all the way down to a near-uniform per-repeat
+       blob homogenises away all real texture variation — floor the swatch
+       size well above the nominal per-repeat size (`_MIN_TILE_SWATCH_PX`) so
+       it keeps real detail. This means very high Tiling values show FEWER,
+       LARGER, more detailed repeats than the nominal count (a deliberate
+       trade-off: looks like real repeated ground texture, not a flat blob).
+    2. A raw crop's opposite edges don't match, so naive wraparound tiling
+       shows a hard seam. The first fix for that was mirror-tiling — but
+       mirror-tiling only guarantees a seamless border via strictly
+       ALTERNATING flip states between neighbours, and that forced
+       alternation makes every 2x2 group of tiles perfectly mirror-symmetric
+       about its center — highly perceptible to the eye as a kaleidoscope/
+       grid pattern no matter how much detail is inside each tile (reported
+       as "I can see a pattern in the terrain"). `_feather_seam_edges` blends
+       the swatch's own opposite edges toward each other instead, so plain
+       (non-mirrored) tiling has no seam AND no forced symmetry.
     """
     from PIL import Image
     h, w = img.shape[:2]
     cell = max(2, int(round(size / max(repeats, 0.001))))
+    cell = max(cell, min(_MIN_TILE_SWATCH_PX, max(h, w)))
     cell = min(cell, max(h, w))  # never upsample past native resolution
 
     key = (id(img), h, w, cell)
     small = _TILE_PREFILTER_CACHE.get(key)
     if small is None:
         src_u8 = np.clip(img * 255.0, 0, 255).astype(np.uint8)
-        small = np.asarray(Image.fromarray(src_u8).resize((cell, cell), Image.LANCZOS))
+        boxed = np.asarray(Image.fromarray(src_u8).resize((cell, cell), Image.BOX))
+        small = _feather_seam_edges(boxed).astype(np.uint8)
         if len(_TILE_PREFILTER_CACHE) > 64:
             _TILE_PREFILTER_CACHE.clear()
         _TILE_PREFILTER_CACHE[key] = small
 
     reps = (size // cell) + 2
-    tiled = _mirror_tile(small, reps)[:size, :size]
+    tiled = _plain_tile(small, reps)[:size, :size]
     return tiled.astype(np.float32) / 255.0
 
 
