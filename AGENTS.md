@@ -754,6 +754,14 @@ Each sector is 65×65 samples but spans only 64 world units. Adjacent sectors sh
 
 **Fix — `step = grid_size - 1 = 64`; sector `col` placed at `[col*64 : col*64+65]`.**
 
+### Terrain downsample must preserve seams (July 2026, BOTH games)
+
+`TerrainExporter.downsample_heightmap` (`canvas/terrain_to_gltf.py`) reduces the combined heightmap to the display-mesh budget. Adjacent sectors AND adjacent FC2 open-world cells share their boundary vertices EXACTLY — verified against real data: a sector's last row/col is byte-identical to its neighbour's first, and cell w1_c_3's right edge equals w1_c_4's left edge (maxdiff 0.000). So the shared boundaries live at combined-grid indices `0, 64, 128, …, dim-1`.
+
+**Bug (caused visible gaps/seams between FC2 cells):** the old code did `new = width // factor` (1025 → 512, dropping the shared +1 edge) then `PIL Image.resize(..., LANCZOS)` (interpolates). Both break the seam — a cell's downsampled right edge no longer equals its neighbour's left edge in position OR height, so the two cell meshes don't weld.
+
+**Fix:** decimate by an INTEGER factor that divides `(dim-1)` evenly (snap down to a divisor) and sample the source values directly via `heightmap[np.ix_(ys, xs)]` — no interpolation. Result width = `(dim-1)//factor + 1` (e.g. 1025 → 513 at stride 2), endpoints kept. Because both cells are full 16×16 → identical dims → identical stride, their shared edge downsamples to identical vertices (verified: adjacent-cell seam position + height mismatch = 0.0000). `create_gltf`'s own MAX_DIM decimation was already endpoint-preserving (appends `width-1`, exact `np.ix_` sampling), so only `downsample_heightmap` needed the fix. Cells render 1024 units apart (`col*1024`) matching each mesh's `sectors_x*64 = 1024` span, so seams coincide in world space. Tests: `tests/test_terrain_seam_fc2.py`.
+
 Affected files (all changed together to stay consistent):
 - `canvas/terrain_editor_dialog.py` — `_rebuild_combined`, `save_dirty_sectors`, `mark_dirty_from_brush`
 - `canvas/terrain_renderer.py` — `_generate_terrain_image_procedural`, `get_height_at_world`, `load_sdat_cell`, `render_terrain_2d`

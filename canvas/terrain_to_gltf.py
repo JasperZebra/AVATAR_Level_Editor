@@ -599,29 +599,59 @@ class TerrainExporter:
         return combined
     
     def downsample_heightmap(self, heightmap, target_resolution):
-        """Downsample heightmap to target resolution"""
+        """Downsample the heightmap to target resolution WITHOUT breaking seams.
+
+        Sectors — and adjacent open-world cells — share their boundary vertices:
+        a sector's last row/column is byte-identical to its neighbour's first
+        (verified against real Avatar and FC2 data). Those shared boundaries sit
+        at combined-grid indices 0, step, 2*step, …, (dim-1). To keep every seam
+        gap-free, the downsample must land a vertex EXACTLY on each boundary and
+        keep its ORIGINAL height on both sides.
+
+        The old approach (`width // factor` + LANCZOS `resize`) violated both: it
+        dropped the shared +1 edge (1025 → 512) and interpolated the samples, so
+        a cell's right edge no longer equalled its neighbour's left edge — the
+        source of the gaps/seams between cells. Instead we decimate by an integer
+        factor that divides (dim-1) evenly and sample the source values directly
+        (no blending). Result width = (dim-1)//factor + 1, endpoints preserved.
+        Applies to both games (FC2 open-world cells and Avatar multi-part tiles).
+        """
         height, width = heightmap.shape
-        
-        # Calculate downsample factor based on target triangle count
-        target_verts = int(math.sqrt(target_resolution / 2))
-        
-        factor_x = max(1, width // target_verts)
-        factor_y = max(1, height // target_verts)
-        factor = max(factor_x, factor_y)
-        
-        if factor <= 1:
+        target_verts = max(2, int(math.sqrt(target_resolution / 2)))
+
+        span_x = width - 1    # world-unit span (e.g. 1024 for a 1025-wide map)
+        span_y = height - 1
+
+        def _endpoint_factor(span):
+            """Largest integer that divides `span` evenly and yields <= the
+            requested vertex budget — guarantees indices 0 and `span` are kept."""
+            if span <= 1:
+                return 1
+            want = max(1, span // max(1, target_verts - 1))
+            f = want
+            while f > 1 and span % f != 0:
+                f -= 1
+            return max(1, f)
+
+        fx = _endpoint_factor(span_x)
+        fy = _endpoint_factor(span_y)
+
+        if fx <= 1 and fy <= 1:
             return heightmap, width, height
-        
-        new_width = width // factor
-        new_height = height // factor
-        
-        print(f"Downsampling from {width}x{height} to {new_width}x{new_height} (factor: {factor})")
-        
-        # Use PIL for high-quality downsampling
-        img = Image.fromarray(heightmap.astype(np.float32))
-        img_resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-        
-        return np.array(img_resized), new_width, new_height
+
+        xs = np.arange(0, width, fx, dtype=np.int64)
+        ys = np.arange(0, height, fy, dtype=np.int64)
+        # fx|span_x so arange already ends on width-1; guard for odd spans anyway.
+        if xs[-1] != width - 1:
+            xs = np.append(xs, width - 1)
+        if ys[-1] != height - 1:
+            ys = np.append(ys, height - 1)
+
+        new_hm = np.ascontiguousarray(heightmap[np.ix_(ys, xs)])
+        new_height, new_width = new_hm.shape
+        print(f"Downsampling from {width}x{height} to {new_width}x{new_height} "
+              f"(endpoint-preserving stride {fx}x{fy}; seams kept exact)")
+        return new_hm, new_width, new_height
     
     def downsample_texture(self, texture, target_width, target_height):
         """Downsample texture to match heightmap dimensions"""
