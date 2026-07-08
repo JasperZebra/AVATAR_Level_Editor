@@ -34,7 +34,12 @@ from PyQt5.QtWidgets import (
     QColorDialog, QFileDialog, QPlainTextEdit, QMessageBox, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QColor, QFont, QImage, QPixmap
+
+# Layer texture slots that get an XBT thumbnail preview: (attr, caption, is_normal)
+_TEX_SLOTS = [('Texture', 'Diffuse', False), ('NormalMap', 'Normal', True),
+              ('SpecularMap', 'Specular', False), ('HeightMap', 'Height', False)]
+_THUMB_PX = 96
 
 GUID_RE = re.compile(
     r'^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-'
@@ -153,6 +158,8 @@ class WorldEditorWindow(QDialog):
         self._binary = False       # source was Dunia binary-XML (FC2) vs text (Avatar)
         self._ai_rml = False       # AI/rml variant of the binary format
         self._meta_attrs = _meta_attr_names()
+        self._tex_loader = None     # lazy canvas.texture_loader.TextureLoader
+        self._thumb_cache = {}      # (rel, is_normal, size) -> QPixmap|None
         self._dirty = False
         self._rows = []      # (search_text, label, widget, group)
         self._groups = []
@@ -323,6 +330,11 @@ class WorldEditorWindow(QDialog):
         gv.setContentsMargins(8, 6, 8, 8)
         gv.setSpacing(3)
 
+        # Terrain Layer -> live XBT thumbnail previews at the top of the group
+        tex_targets = {}
+        if elem.tag == 'Layer':
+            tex_targets = self._build_layer_previews(gv, elem)
+
         attrs = [(k, v) for k, v in elem.attrib.items()
                  if k not in self._meta_attrs]
         if attrs:
@@ -337,6 +349,9 @@ class WorldEditorWindow(QDialog):
                 lbl.setToolTip(name)
                 lbl.setStyleSheet("font-size: 11px;")
                 widget = self._make_widget(elem, name, value)
+                # editing a texture path live-refreshes its thumbnail
+                if name in tex_targets and isinstance(widget, QLineEdit):
+                    self._wire_texture_live(widget, *tex_targets[name])
                 grid.addWidget(lbl, r, 0)
                 grid.addWidget(widget, r, 1)
                 self._rows.append((f"{name} {value}".lower(), lbl, widget, group))
@@ -433,6 +448,127 @@ class WorldEditorWindow(QDialog):
         h.addWidget(swatch)
         h.addWidget(le, 1)
         return wrap
+
+    # --------------------------------------------------- terrain XBT previews
+
+    def _build_layer_previews(self, gv, elem):
+        """Add a row of XBT thumbnails for a <Layer>. Returns
+        {attr_name: (thumb_label, is_normal)} for live refresh wiring."""
+        present = [(n, cap, isn) for n, cap, isn in _TEX_SLOTS
+                   if (elem.get(n) or '').strip().lower().endswith('.xbt')]
+        if not present:
+            return {}
+        targets = {}
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        row.setContentsMargins(2, 2, 2, 4)
+        for name, cap, is_normal in present:
+            col = QVBoxLayout()
+            col.setSpacing(2)
+            thumb = QLabel()
+            thumb.setFixedSize(_THUMB_PX, _THUMB_PX)
+            thumb.setAlignment(Qt.AlignCenter)
+            thumb.setStyleSheet(
+                "background: #15151e; border: 1px solid #34344a; border-radius: 4px;"
+                " color: #666; font-size: 9px;")
+            self._refresh_thumb(thumb, elem.get(name), is_normal)
+            cap_lbl = QLabel(cap)
+            cap_lbl.setAlignment(Qt.AlignCenter)
+            cap_lbl.setStyleSheet("color: #8a9a8a; font-size: 9px; font-weight: normal;")
+            col.addWidget(thumb, 0, Qt.AlignCenter)
+            col.addWidget(cap_lbl)
+            row.addLayout(col)
+            targets[name] = (thumb, is_normal)
+        row.addStretch()
+        gv.addLayout(row)
+        return targets
+
+    def _wire_texture_live(self, line_edit, thumb, is_normal):
+        """Debounced: re-render *thumb* from *line_edit*'s text as the user edits."""
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.setInterval(400)
+        timer.timeout.connect(
+            lambda: self._refresh_thumb(thumb, line_edit.text(), is_normal))
+        line_edit.textChanged.connect(lambda _t: timer.start())
+        thumb._we_timer = timer  # keep a ref so it isn't GC'd
+
+    def _refresh_thumb(self, thumb, rel, is_normal):
+        pix = self._texture_pixmap(rel, is_normal, _THUMB_PX)
+        if pix is not None and not pix.isNull():
+            thumb.setPixmap(pix)
+            thumb.setToolTip(self._resolve_texture(rel) or rel)
+        else:
+            thumb.setPixmap(QPixmap())
+            thumb.setText("not found" if (rel or '').strip() else "—")
+            thumb.setToolTip(rel or "")
+
+    def _texture_pixmap(self, rel, is_normal, size):
+        key = (rel, is_normal, size)
+        if key in self._thumb_cache:
+            return self._thumb_cache[key]
+        pix = None
+        path = self._resolve_texture(rel)
+        if path:
+            try:
+                tl = self._texloader()
+                dec = tl.decode_xbt_to_rgba(path, is_normal_map=is_normal) if tl else None
+                if dec:
+                    w, h, rgba, _ = dec
+                    img = QImage(bytes(rgba), w, h, QImage.Format_RGBA8888)
+                    pix = QPixmap.fromImage(img).scaled(
+                        size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            except Exception:
+                pix = None
+        self._thumb_cache[key] = pix
+        return pix
+
+    def _texloader(self):
+        if self._tex_loader is not None:
+            return self._tex_loader or None
+        try:
+            from canvas.texture_loader import TextureLoader
+            root = next(iter(self._candidate_roots()), '') or ''
+            self._tex_loader = TextureLoader(os.path.join(root, 'graphics', '_materials'))
+        except Exception:
+            self._tex_loader = False
+        return self._tex_loader or None
+
+    def _candidate_roots(self):
+        """Directories to try as the base for a `graphics\\...\\x.xbt` path:
+        the canvas' game data path, then every ancestor of the .game.xml."""
+        roots = []
+        if self.canvas is not None:
+            for a in ('game_data_path', 'patch_folder', 'worlds_folder'):
+                v = getattr(self.canvas, a, None)
+                if v:
+                    roots.append(v)
+        d = os.path.dirname(os.path.abspath(self.game_xml_path or '.'))
+        for _ in range(8):
+            roots.append(d)
+            nd = os.path.dirname(d)
+            if nd == d:
+                break
+            d = nd
+        seen, out = set(), []
+        for r in roots:
+            if r and r not in seen:
+                seen.add(r)
+                out.append(r)
+        return out
+
+    def _resolve_texture(self, rel):
+        if not rel:
+            return None
+        rel = rel.strip().replace('\\', '/').lstrip('/')
+        if not rel.lower().endswith('.xbt'):
+            return None
+        parts = rel.split('/')
+        for root in self._candidate_roots():
+            cand = os.path.join(root, *parts)
+            if os.path.isfile(cand):
+                return cand
+        return None
 
     # ------------------------------------------------------------- edit/save
 
