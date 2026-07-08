@@ -2213,7 +2213,12 @@ class MapCanvas(QOpenGLWidget):
         if not sdat_path:
             print("[TerrainEdit] No sdat_path found — load a level first")
             return
-        td = TerrainData()
+        # Game-aware: FC2 reads/writes .sdat heightmaps at offset 592 and remaps
+        # its global sd numbering; Avatar uses .csdat at 708. Without game_mode
+        # the loader globs .csdat and finds nothing for FC2, so in-canvas 3D
+        # sculpting silently did nothing on FC2 levels.
+        game_mode = getattr(self, 'game_mode', 'avatar')
+        td = TerrainData(game_mode=game_mode)
         if td.load(sdat_path):
             self._terrain_data = td
             tr = getattr(self, 'terrain_renderer', None)
@@ -2222,7 +2227,8 @@ class MapCanvas(QOpenGLWidget):
             self._rebuild_terrain_edit_mesh()
             print(f"[TerrainEdit] Loaded {td.sectors_x}×{td.sectors_y} sectors from {sdat_path}")
         else:
-            print(f"[TerrainEdit] No csdat files found in {sdat_path}")
+            _ext = ".sdat" if game_mode == "farcry2" else ".csdat"
+            print(f"[TerrainEdit] No {_ext} files found in {sdat_path}")
 
     def _rebuild_terrain_edit_mesh(self):
         """Build vertex/color/index arrays from self._terrain_data for 3D rendering."""
