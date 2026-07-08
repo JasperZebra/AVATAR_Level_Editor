@@ -25,7 +25,8 @@ class WaterData:
     def __init__(self, sector_num):
         self.sector_num = sector_num
         self.has_water = False
-        self.water_flag = 0       # byte at 0xA8 — game's authoritative render flag
+        self.water_flag = 0       # Avatar: byte at 0xA8. FC2: still-water flag at 52.
+        self.water_river_flag = 0 # FC2 only: river-water flag at 56 (0 for Avatar)
         self.water_height = 0.0
         self.material_path = None
         self.hex_offset_height = None
@@ -40,9 +41,11 @@ class TerrainRenderer:
     # FC2 2D orientation knob: TOTAL whole-region rotation = N x -90° CCW
     # (Avatar always gets its single -90; FC2 uses exactly N, not N-1 extras).
     # The tile pipeline is shared with Avatar (correct tile pieces); ONLY this
-    # final rotation differs. User-verified July 2026: the old -180 total left
-    # every region 180° off, so FC2 needs NO whole-region rotation (0).
-    _FC2_2D_QUARTER_TURNS = 0
+    # final rotation differs. User-verified July 2026: with 0 turns each
+    # complete 16x16-sector region sat 90° clockwise of the (correct) 3D view,
+    # so FC2 needs exactly ONE 90° CCW whole-region turn. This rotates the
+    # finished region composite only — individual sector tiles are untouched.
+    _FC2_2D_QUARTER_TURNS = 1
 
     def __init__(self, game_mode: str = "avatar"):
         self.game_mode = game_mode
@@ -87,17 +90,28 @@ class TerrainRenderer:
 
         # Per-game terrain offsets
         # Avatar: .csdat, terrain at 708, water height at 0xB0
-        # FC2:    .sdat,  terrain at 592, water above-ground flag at 52, water height at 60
+        # FC2:    .sdat,  terrain at 592. Water block sits near the file start:
+        #   0x34 (52) still-water flag, 0x38 (56) river-water flag,
+        #   0x3C (60) water height (f32), 0x44 (68) null-terminated material path.
+        #   The engine has distinct Water / WaterRiver render types (confirmed in
+        #   the Dunia decompile); still vs river cells set the matching flag, and
+        #   a sector renders water when EITHER flag is set. Open-world river cells
+        #   (e.g. w1_c_3) are almost entirely river-flag, so checking only the
+        #   still-water flag hides their whole river.
         if game_mode == "farcry2":
             self._file_ext = ".sdat"
             self._terrain_offset = 592
-            self._water_flag_offset = 52       # 1 byte: 0 = no water above ground
-            self._water_height_offset = 60     # 4-byte float
+            self._water_flag_offset = 52        # still-water flag (1 byte)
+            self._water_river_flag_offset = 56  # river-water flag (1 byte)
+            self._water_height_offset = 60      # 4-byte float
+            self._water_material_offset = 68    # null-terminated path
         else:
             self._file_ext = ".csdat"
             self._terrain_offset = 708
             self._water_flag_offset = None     # Avatar uses a different detection scheme
+            self._water_river_flag_offset = None
             self._water_height_offset = 0xB0  # 4-byte float
+            self._water_material_offset = None
 
     # ----------------------------
     # SDAT Loading
@@ -359,16 +373,32 @@ class TerrainRenderer:
                 water.water_height = struct.unpack('<f', height_bytes)[0]
                 water.hex_offset_height = height_offset
 
-                # FC2: water only exists above ground if flag byte at offset 52 is non-zero
-                # Avatar: flag byte at 0xA8 is the authoritative "render water" indicator;
-                #         height can be non-zero even for sectors without visible water.
+                # FC2: a sector renders water if EITHER the still-water flag (52)
+                #      or the river-water flag (56) is set. Height alone is the
+                #      cell water-table baseline and is NOT a render indicator
+                #      (matches Avatar, where the flag is authoritative).
+                # Avatar: flag byte at 0xA8 is the authoritative "render water"
+                #      indicator; height can be non-zero without visible water.
                 if self.game_mode == "farcry2":
+                    flag = river = 0
                     if self._water_flag_offset is not None and len(data) > self._water_flag_offset:
                         flag = data[self._water_flag_offset]
-                        water.water_flag = flag
-                        water.has_water = (flag != 0 and water.water_height != 0.0)
-                    else:
-                        water.has_water = False
+                    if (self._water_river_flag_offset is not None and
+                            len(data) > self._water_river_flag_offset):
+                        river = data[self._water_river_flag_offset]
+                    water.water_flag = flag
+                    water.water_river_flag = river
+                    water.has_water = (flag != 0 or river != 0)
+
+                    # Material path (null-terminated) at 0x44
+                    mo = self._water_material_offset
+                    if mo is not None and len(data) > mo:
+                        end = data.find(b'\x00', mo)
+                        if end != -1 and end > mo:
+                            path = data[mo:end].decode('latin-1', errors='ignore')
+                            if path.lower().startswith('graphics'):
+                                water.material_path = path
+                                water.hex_offset_material = mo
                 else:
                     if len(data) > 0xA8:
                         water.water_flag = data[0xA8]

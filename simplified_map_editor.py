@@ -3241,9 +3241,11 @@ class SimplifiedMapEditor(QMainWindow):
             if hasattr(self.canvas, 'terrain_renderer'):
                 terrain_renderer = self.canvas.terrain_renderer
         
-        # Show the dialog with live preview support
-        show_water_editor(parent=self, terrain_renderer=terrain_renderer, canvas=canvas)
-        
+        # Show the dialog with live preview support (game-aware: FC2 .sdat vs
+        # Avatar .csdat, different water-block offsets)
+        show_water_editor(parent=self, terrain_renderer=terrain_renderer,
+                          canvas=canvas, game_mode=self.game_mode)
+
         # Refresh canvas after editing
         if canvas:
             canvas.update()

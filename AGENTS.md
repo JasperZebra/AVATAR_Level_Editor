@@ -705,6 +705,25 @@ Binary structure of the pre-terrain header in `.csdat` files (terrain data start
 
 **`parse_water_from_sector`:** `WaterData.water_flag` holds the raw flag byte. `WaterData.has_water = (water_flag != 0)`.
 
+### FC2 sdat water format + Water Editor parity (July 2026)
+
+FC2 `.sdat` stores its per-sector water block near the START of the file (not at 0xA8 like Avatar). Ground-truthed against all 14,364 retail sdats (Fortune's Edition worlds + MP maps):
+
+```
+0x34 (52): uint8  — still-water flag  ("Water" render pass)
+0x38 (56): uint8  — river-water flag  ("WaterRiver" render pass)
+0x3C (60): float32 — water height (world units)
+0x44 (68): string — null-terminated material path (graphics\_materials\editor\water_*.mlm)
+```
+
+**Two flags, one meaning for detection:** the engine exposes distinct `Water` / `WaterRiver` / `WaterBottom` render passes (confirmed in the Dunia decompile, `FUN_10002a00("Water")`/`("WaterRiver")` around dump lines 717371–717750). A sector renders water when **EITHER** flag is set. Open-world river cells (e.g. `w1_c_3`) are almost entirely river-flag; sea/pond MP maps (e.g. `mp_10_l_fishingvillage`) use the still flag; a few cells (`w1_b_3`) mix both. **Height alone is NOT a water indicator** — every cell stores a baseline water-table height (e.g. 16.0) on all sectors; only the flag renders it (same principle as Avatar's 0xA8).
+
+**Bug fixed:** the old FC2 read path checked only the still flag AND required non-zero height (`flag@52 != 0 and height != 0`), so it hid the entire river in every open-world cell (110 river-flag sectors in w1_c_3). `parse_water_from_sector` now sets `has_water = (still_flag or river_flag)` and reads the material at 0x44. `WaterData.water_river_flag` holds the river byte (0 for Avatar).
+
+**Safe write region:** material path region is `[68, 192)` — the longest retail path ends at 132 and real header data never resumes before offset 329, so 192 is a safe fixed bound. FC2 has **no** fix-byte slot (Avatar's `0x21` holds real FC2 header data — never write fix bytes for FC2). Terrain heightmap starts at 592. Round-trip verified on real data: prefix (0..52), mid-header (192..592), and terrain (592+) are all byte-preserved.
+
+**`water_editor_dialog.py` is now game-aware** via `WaterFormat(game_mode)` — one code path, per-game offsets/material list/flag semantics. `SectorGridWidget` uses `scan_sector_files()` which globs `*{ext}` and remaps FC2 global sd numbering (row stride 80) / Avatar multi-part numbering to local 0-based grid indices (same algorithm as `TerrainEditor.load`), so grid indices line up with `terrain_renderer.water_data`. FC2 mode adds a Still/River type selector (enabling water sets the chosen flag and clears the other). `open_water_editor` in `simplified_map_editor.py` passes `game_mode=self.game_mode`. Tests: `tests/test_water_editor_fc2.py`.
+
 ### pip installs must update requirements.txt
 When installing any new Python package, always add it to `requirements.txt` before or immediately after installing. The file is at the project root and has sections for app deps, build, and testing.
 
