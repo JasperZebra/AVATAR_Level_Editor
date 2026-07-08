@@ -2044,6 +2044,15 @@ class SimplifiedMapEditor(QMainWindow):
         water_editor_action.setToolTip("Open the water editing tool")
         tools_menu.addAction(water_editor_action)
 
+        # World Editor action — edit the level's .game.xml (WorldDescriptor:
+        # environment presets, terrain layers, grids, missions)
+        world_editor_action = QAction("🌍 World Editor...", self)
+        world_editor_action.triggered.connect(self.open_world_editor)
+        world_editor_action.setToolTip(
+            "Edit this level's .game.xml — environment/lighting presets, "
+            "terrain layers, grids and missions")
+        tools_menu.addAction(world_editor_action)
+
 
     def create_toolbar(self):
         """Toolbar removed — all actions are in the menu bar."""
@@ -3249,6 +3258,52 @@ class SimplifiedMapEditor(QMainWindow):
         # Refresh canvas after editing
         if canvas:
             canvas.update()
+
+    def _find_game_xml(self):
+        """Locate the current level's <name>.game.xml (WorldDescriptor).
+
+        Searches the loaded world folder (and its generated/ subfolder). Works
+        for both games — FC2 and Avatar both ship a <name>.game.xml per world.
+        Returns the path or None.
+        """
+        import glob
+        roots = []
+        wf = getattr(self, 'worlds_folder', None)
+        if wf:
+            roots += [wf, os.path.join(wf, 'generated')]
+        sp = getattr(self, 'sdat_path', None)
+        if sp:
+            # sdat_path is .../<world>/[levels/<level>/]generated/sdat — walk up
+            roots += [os.path.dirname(os.path.dirname(sp)), sp]
+        for root in roots:
+            if not root or not os.path.isdir(root):
+                continue
+            hits = glob.glob(os.path.join(root, '*.game.xml'))
+            if not hits:
+                hits = glob.glob(os.path.join(root, '**', '*.game.xml'), recursive=True)
+            if hits:
+                return hits[0]
+        return None
+
+    def open_world_editor(self):
+        """Open the World Editor on this level's .game.xml (WorldDescriptor)."""
+        from world_editor import show_world_editor
+
+        game_xml = self._find_game_xml()
+        if not game_xml:
+            reply = QMessageBox.question(
+                self, "World Editor",
+                "No .game.xml found for the loaded level.\n\n"
+                "Open one manually?",
+                QMessageBox.Yes | QMessageBox.No)
+            if reply != QMessageBox.Yes:
+                return
+            game_xml = None  # dialog offers a file picker
+
+        canvas = getattr(self, 'canvas', None)
+        self._world_editor = show_world_editor(
+            parent=self, game_xml_path=game_xml,
+            game_mode=self.game_mode, canvas=canvas)
 
     def open_object_library(self):
         """Focus the Object Library tab in the right panel (place new entities by
