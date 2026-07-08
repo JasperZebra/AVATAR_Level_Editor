@@ -5546,28 +5546,6 @@ class MapCanvas(QOpenGLWidget):
             self.input_handler.handle_wheel(event)
             self.update()
         
-    def select_entity_2d(self, mouse_x, mouse_y):
-        """Select entity in 2D (your existing implementation)"""
-        if not self.entities:
-            return None
-        
-        world_x, world_y = self.screen_to_world(mouse_x, mouse_y)
-        
-        closest_entity = None
-        closest_distance = float('inf')
-        selection_radius = 10.0 / self.scale_factor
-        
-        for entity in self.entities:
-            dx = entity.x - world_x
-            dy = entity.y - world_y
-            distance = (dx * dx + dy * dy) ** 0.5
-            
-            if distance < selection_radius and distance < closest_distance:
-                closest_distance = distance
-                closest_entity = entity
-        
-        return closest_entity
-    
     def select_entity_3d(self, mouse_x, mouse_y):
         """Select entity in 3D mode using per-triangle raycasting.
 
