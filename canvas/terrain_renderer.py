@@ -13,6 +13,7 @@ from PyQt5.QtGui import QPainter, QImage, QPixmap, QTransform
 from PyQt5.QtCore import Qt
 import io
 import os
+import re
 import glob
 import struct
 import tempfile
@@ -74,6 +75,15 @@ class TerrainRenderer:
         self.texture_layer = None
         self.atlas_mapping = {}
         self.sector_to_path = {}
+
+        # In-game terrain look: splat-blend the <Layers> detail textures over
+        # the baked diffuse (see canvas/terrain_blend.py). Off until the editor
+        # supplies the map's .game.xml via set_blend_source().
+        self.blend_game_xml = None
+        self.blend_data_roots = []
+        self._blend_layers = None          # None = not loaded yet; [] = nothing usable
+        self._blend_cache = {}
+        self.texture_tile_px = 160         # per-sector baked texture resolution
 
         # Water data storage
         self.water_data = {}  # sector_num -> WaterData
@@ -623,18 +633,56 @@ class TerrainRenderer:
         self.terrain_world_h = float(self.sectors_y * step)
         print(f"Generated procedural terrain image: {total_width}x{total_height}")
 
+    def set_blend_source(self, game_xml_path, data_roots):
+        """Enable the in-game terrain look: supply the map's .game.xml (for the
+        <Layers> detail textures) and the data roots to resolve texture paths
+        against. Loads the layers and, if terrain is already built, regenerates.
+        Pass game_xml_path=None to disable."""
+        self.blend_game_xml = game_xml_path
+        self.blend_data_roots = list(data_roots or [])
+        self._blend_layers = None
+        self._blend_cache = {}
+        if self.sectors_data:
+            self._generate_terrain_image()
+
+    def _ensure_blend_layers(self):
+        """Lazily load the detail-texture layers. Returns the list ([] if off)."""
+        if self._blend_layers is not None:
+            return self._blend_layers
+        self._blend_layers = []
+        if self.blend_game_xml:
+            try:
+                from canvas import terrain_blend
+            except Exception:
+                import terrain_blend
+            try:
+                self._blend_layers = terrain_blend.load_layers(
+                    self.blend_game_xml, self.blend_data_roots)
+                if self._blend_layers:
+                    print(f"[Terrain] Splat blend enabled — {len(self._blend_layers)} "
+                          f"detail layers: {[l['name'] for l in self._blend_layers]}")
+            except Exception as e:
+                print(f"[Terrain] blend layer load failed: {e}")
+                self._blend_layers = []
+        return self._blend_layers
+
     def _generate_terrain_image_textured(self):
         """Generate terrain using atlas/DDS textures - MATCHES WORKING CODE"""
         if not self.sectors_data:
             return
 
-        total_width = self.sectors_x * self.grid_size
-        total_height = self.sectors_y * self.grid_size
-        combined_image = QImage(total_width, total_height, QImage.Format_RGB888)
-        combined_image.fill(Qt.black)
-
         if not self.atlas_mapping:
             self.build_atlas_mapping()
+
+        # In-game look: blend the <Layers> detail textures over the baked
+        # diffuse, at a higher per-sector resolution so detail is visible.
+        blend_layers = self._ensure_blend_layers()
+        tex = int(self.texture_tile_px) if blend_layers else self.grid_size
+
+        total_width = self.sectors_x * tex
+        total_height = self.sectors_y * tex
+        combined_image = QImage(total_width, total_height, QImage.Format_RGB888)
+        combined_image.fill(Qt.black)
 
         painter = QPainter(combined_image)
 
@@ -654,41 +702,65 @@ class TerrainRenderer:
                 # Load texture from atlas mapping
                 if self.atlas_mapping and sector_index in self.atlas_mapping:
                     atlas_path, sub_sector = self.atlas_mapping[sector_index]
-                    try:
-                        img = Image.open(atlas_path).convert("RGB")
-                        img_array = np.array(img)
-                        h, w = img_array.shape[:2]
-                        half_h, half_w = h // 2, w // 2
 
-                        # Extract correct quadrant (STANDARD 2x2 layout from atlas file)
-                        # The swap happens in get_sector_index_from_position, not here
-                        if sub_sector == 0:  # Top-left
-                            sub_img = img_array[0:half_h, 0:half_w]
-                        elif sub_sector == 1:  # Top-right
-                            sub_img = img_array[0:half_h, half_w:w]
-                        elif sub_sector == 2:  # Bottom-left
-                            sub_img = img_array[half_h:h, 0:half_w]
-                        else:  # Bottom-right (3)
-                            sub_img = img_array[half_h:h, half_w:w]
+                    # In-game splat-blended tile (mask + tiled detail + diffuse)
+                    if blend_layers:
+                        try:
+                            from canvas import terrain_blend
+                        except Exception:
+                            import terrain_blend
+                        try:
+                            m = re.match(r'atlas(\d+)', os.path.basename(atlas_path))
+                            if m:
+                                tile = terrain_blend.build_sector_tile(
+                                    self.current_directory, int(m.group(1)),
+                                    sub_sector, blend_layers, tex, self._blend_cache)
+                                if tile is not None:
+                                    sector_texture = self.pil_image_to_qimage(
+                                        Image.fromarray(tile))
+                        except Exception as e:
+                            print(f"[Terrain] blend tile failed s{sector_index}: {e}")
+                            sector_texture = None
 
-                        pil_img = Image.fromarray(sub_img)
-                        pil_img = pil_img.resize((self.grid_size, self.grid_size), 
-                                                Image.Resampling.LANCZOS)
-                        sector_texture = self.pil_image_to_qimage(pil_img)
-                    except Exception as e:
-                        print(f"Error loading atlas {atlas_path}: {e}")
-                        sector_texture = None
+                    # Fallback: plain baked-diffuse quadrant (original path)
+                    if sector_texture is None:
+                        try:
+                            img = Image.open(atlas_path).convert("RGB")
+                            img_array = np.array(img)
+                            h, w = img_array.shape[:2]
+                            half_h, half_w = h // 2, w // 2
+
+                            # Extract correct quadrant (STANDARD 2x2 layout from atlas file)
+                            # The swap happens in get_sector_index_from_position, not here
+                            if sub_sector == 0:  # Top-left
+                                sub_img = img_array[0:half_h, 0:half_w]
+                            elif sub_sector == 1:  # Top-right
+                                sub_img = img_array[0:half_h, half_w:w]
+                            elif sub_sector == 2:  # Bottom-left
+                                sub_img = img_array[half_h:h, 0:half_w]
+                            else:  # Bottom-right (3)
+                                sub_img = img_array[half_h:h, half_w:w]
+
+                            pil_img = Image.fromarray(sub_img)
+                            pil_img = pil_img.resize((tex, tex),
+                                                    Image.Resampling.LANCZOS)
+                            sector_texture = self.pil_image_to_qimage(pil_img)
+                        except Exception as e:
+                            print(f"Error loading atlas {atlas_path}: {e}")
+                            sector_texture = None
 
                 # Procedural fallback
                 if sector_texture is None:
                     heights = np.flipud(self.sectors_data[sector_index])
                     norm = (heights - heights.min()) / (heights.max() - heights.min() + 1e-5)
                     rgb_array = np.stack([norm * 255] * 3, axis=-1).astype(np.uint8)
-                    sector_texture = QImage(rgb_array.data, self.grid_size, self.grid_size, 
-                                           self.grid_size * 3, QImage.Format_RGB888)
+                    rgb_array = np.ascontiguousarray(rgb_array)
+                    src = QImage(rgb_array.data, self.grid_size, self.grid_size,
+                                 self.grid_size * 3, QImage.Format_RGB888)
+                    sector_texture = src.scaled(tex, tex) if tex != self.grid_size else src
 
-                start_x = col * self.grid_size
-                start_y = display_row * self.grid_size
+                start_x = col * tex
+                start_y = display_row * tex
                 painter.drawImage(start_x, start_y, sector_texture)
 
         painter.end()

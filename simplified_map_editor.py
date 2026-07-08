@@ -3285,6 +3285,43 @@ class SimplifiedMapEditor(QMainWindow):
                 return hits[0]
         return None
 
+    def _terrain_data_roots(self):
+        """Roots to resolve a layer's `graphics\\...\\x.xbt` path against — the
+        game data path plus the world folder and its ancestors (Avatar textures
+        live under <data>/graphics, FC2's under its own root)."""
+        roots = []
+        v = getattr(self, 'game_data_path', None)
+        if v:
+            roots.append(v)
+        p = getattr(self, 'worlds_folder', None)
+        for _ in range(8):
+            if not p:
+                break
+            roots.append(p)
+            nxt = os.path.dirname(p)
+            if nxt == p:
+                break
+            p = nxt
+        seen, out = set(), []
+        for r in roots:
+            if r and r not in seen:
+                seen.add(r)
+                out.append(r)
+        return out
+
+    def _apply_terrain_blend(self):
+        """Turn on splat-blended (in-game-look) terrain textures on the 2D
+        renderer using this level's .game.xml <Layers> detail textures."""
+        tr = getattr(self.canvas, 'terrain_renderer', None)
+        if tr is None or not hasattr(tr, 'set_blend_source'):
+            return
+        try:
+            game_xml = self._find_game_xml()
+            if game_xml:
+                tr.set_blend_source(game_xml, self._terrain_data_roots())
+        except Exception as e:
+            print(f"[Terrain] blend source not set: {e}")
+
     def open_world_editor(self):
         """Open the World Editor on this level's .game.xml (WorldDescriptor)."""
         from world_editor import show_world_editor
@@ -5852,6 +5889,10 @@ class SimplifiedMapEditor(QMainWindow):
                     self.canvas.terrain_renderer.terrain_pixmap_cells = []
                 if hasattr(self.canvas, 'terrain_models'):
                     self.canvas.terrain_models = []
+
+                # Enable the in-game terrain look BEFORE terrain loads, so the
+                # 2D bake blends the <Layers> detail textures over the diffuse.
+                self._apply_terrain_blend()
 
                 fc2_cells = getattr(self, '_fc2_sdat_cells', [])
                 use_multicell = self.game_mode == "farcry2" and len(fc2_cells) > 1

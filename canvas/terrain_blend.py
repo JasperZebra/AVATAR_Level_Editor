@@ -185,15 +185,31 @@ def _resolve_texture(rel, data_roots):
 
 
 def _load_xbt_rgb(path, size=None):
-    """XBT file -> (H,W,3) uint8, optionally resized. None on failure."""
-    try:
-        from terrain_texture_painter import _load_xbt, _dds_to_pil
-    except Exception:
-        from canvas.terrain_texture_painter import _load_xbt, _dds_to_pil
-    dds, _ = _load_xbt(path)
-    if dds is None:
+    """Load an atlas image to (H,W,3) uint8. Handles .xbt (TBX→DDS→PIL), and
+    plain .dds/.png/.tga via PIL directly. Optional resize. None on failure."""
+    if not path:
         return None
-    img = _dds_to_pil(dds)
+    try:
+        with open(path, 'rb') as f:
+            head = f.read(4)
+    except OSError:
+        return None
+    img = None
+    if head[:3] == b'TBX':
+        try:
+            from terrain_texture_painter import _load_xbt, _dds_to_pil
+        except Exception:
+            from canvas.terrain_texture_painter import _load_xbt, _dds_to_pil
+        dds, _ = _load_xbt(path)
+        if dds is not None:
+            img = _dds_to_pil(dds)
+    else:
+        from PIL import Image
+        try:
+            img = Image.open(path)
+            img.load()
+        except Exception:
+            img = None
     if img is None:
         return None
     img = img.convert('RGB')
@@ -260,14 +276,24 @@ def _crop_quad(a, sub):
     return a[r * hh:(r + 1) * hh, c * hw:(c + 1) * hw]
 
 
-def build_sector_tile(diffuse_atlas_path, sub_sector, layers, out_size, cache,
+def _find_atlas(sdat_dir, atlas_num, suffixes):
+    for suf in suffixes:
+        for ext in ('.xbt', '.dds', '.png', '.tga'):
+            p = os.path.join(sdat_dir, f"atlas{atlas_num}_{suf}{ext}")
+            if os.path.isfile(p):
+                return p
+    return None
+
+
+def build_sector_tile(sdat_dir, atlas_num, sub_sector, layers, out_size, cache,
                       **kw):
-    """Composite one sector's in-game tile from the diffuse atlas path already
-    resolved by a renderer. Loads the mask/color siblings, crops the sector
+    """Composite one sector's in-game tile from the original sdat atlas files.
+
+    Loads atlas{N}_{diffuse,mask,color}.xbt from *sdat_dir*, crops the sector
     quadrant, and blends the detail *layers*. *cache* is a dict (path -> RGB
-    ndarray) the caller owns for the duration of a bake. Returns (out,out,3)
-    uint8, or None to signal 'fall back to the old diffuse-only path'."""
-    if not layers or not diffuse_atlas_path:
+    ndarray) the caller owns for the life of a bake. Returns (out,out,3) uint8,
+    or None to signal 'fall back to the old diffuse-only path'."""
+    if not layers or not sdat_dir:
         return None
 
     def _atlas(path):
@@ -277,11 +303,11 @@ def build_sector_tile(diffuse_atlas_path, sub_sector, layers, out_size, cache,
             cache[path] = _load_xbt_rgb(path)
         return cache[path]
 
-    diff = _atlas(diffuse_atlas_path)
+    diff = _atlas(_find_atlas(sdat_dir, atlas_num, ('diffuse', 'd', 'color')))
     if diff is None:
         return None
-    mask = _atlas(_atlas_sibling(diffuse_atlas_path, 'mask'))
-    color = _atlas(_atlas_sibling(diffuse_atlas_path, 'color'))
+    mask = _atlas(_find_atlas(sdat_dir, atlas_num, ('mask',)))
+    color = _atlas(_find_atlas(sdat_dir, atlas_num, ('color',)))
     d = _crop_quad(diff, sub_sector)
     m = _crop_quad(mask, sub_sector) if mask is not None else None
     c = _crop_quad(color, sub_sector) if color is not None else None
