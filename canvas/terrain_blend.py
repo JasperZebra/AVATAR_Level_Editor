@@ -28,8 +28,8 @@ import re
 import numpy as np
 
 # Tunables (kept here so both renderers share one look)
-DEFAULT_DETAIL_STRENGTH = 0.85   # 0 → baked diffuse only; 1 → detail fully recolours
-DEFAULT_BRIGHTNESS = 1.2
+DEFAULT_DETAIL_STRENGTH = 0.55   # 0 → baked diffuse only; 1 → detail fully recolours
+DEFAULT_BRIGHTNESS = 1.1
 DEFAULT_TILING_SCALE = 1.0       # multiplies each layer's Tiling (repeats per sector)
 MAX_MASK_LAYERS = 3              # mask carries 3 usable channels (A is unused/DXT1)
 
@@ -54,6 +54,18 @@ def _resize_nn(a, size):
     yi = (np.arange(size) * h // size).clip(0, h - 1)
     xi = (np.arange(size) * w // size).clip(0, w - 1)
     return a[np.ix_(yi, xi)]
+
+
+def _resize_smooth(a, size):
+    """Bilinear resize (float, (H,W,3)) via PIL — smooth splat/colour transitions
+    so layer boundaries don't come out blocky/harsh."""
+    try:
+        from PIL import Image
+        im = Image.fromarray(np.clip(a * 255.0, 0, 255).astype(np.uint8))
+        im = im.resize((size, size), Image.BILINEAR)
+        return np.asarray(im).astype(np.float32) / 255.0
+    except Exception:
+        return _resize_nn(a, size)
 
 
 def _tile_sample(img, size, repeats):
@@ -89,7 +101,7 @@ def composite_sector(mask, color, shadow, layers, out_size, *,
     """
     o = int(out_size)
     base = diffuse if diffuse is not None else color
-    base_f = _resize_nn(_to_float_rgb(base), o) if base is not None else None
+    base_f = _resize_smooth(_to_float_rgb(base), o) if base is not None else None
 
     if not layers:
         if base_f is None:
@@ -104,7 +116,8 @@ def composite_sector(mask, color, shadow, layers, out_size, *,
                for l in layers[:MAX_MASK_LAYERS]]
 
     if mask is not None:
-        w = _resize_nn(_to_float_rgb(mask), o)
+        # smooth (bilinear) so splat weights blend across layer boundaries
+        w = _resize_smooth(_to_float_rgb(mask), o)
         s = w.sum(axis=2, keepdims=True)
         w = np.where(s > 1e-3, w / s, w)
     else:
@@ -118,9 +131,11 @@ def composite_sector(mask, color, shadow, layers, out_size, *,
     if base_f is None:
         out = detail
     else:
-        # detail normalised to mean 1 per channel → modulates the baked colour
+        # detail normalised to mean 1 per channel → modulates the baked colour.
+        # Clamp the modulation so tiled highlights/shadows can't blow out the
+        # baked colour (the main cause of a "harsh" look).
         dmean = detail.reshape(-1, 3).mean(axis=0) + 1e-4
-        dn = detail / dmean
+        dn = np.clip(detail / dmean, 0.5, 1.6)
         out = base_f * ((1.0 - detail_strength) + detail_strength * dn)
 
     out = out * brightness
