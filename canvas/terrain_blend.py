@@ -40,15 +40,16 @@ import re
 import numpy as np
 
 # Tunables (kept here so both renderers share one look)
-DEFAULT_DETAIL_STRENGTH = 0.55   # 0 → baked diffuse only; 1 → detail fully recolours
-# The baked diffuse atlas is quite dark on its own (measured mean ~28,32,20 out
-# of 255 on real Avatar/FC2 atlases) — almost certainly an unlit albedo
-# reference meant to be relit by the engine's dynamic sun/sky pass in 3D. Our
-# 2D map has no lighting pass at all, and our 3D bake bypasses lighting for the
-# combined texture bytes themselves (lighting is applied later, per-vertex, by
-# the fixed-function GL rig) — so the raw atlas reads far too dark in both
-# unless we compensate here. 2.3x brings a ~0.11 mean to a legible ~0.28-0.35.
-DEFAULT_BRIGHTNESS = 2.3
+# NOTE: these were previously dead (composite_sector had its own separate
+# hardcoded defaults, 0.8/1.0, that nothing overrode — see AGENTS.md "dark
+# spots" fix). The look the user actually approved of was produced by THOSE
+# values, not by tuning attempts made while the dead-constant bug was still
+# live. Keep these matched to that approved look; only the per-layer self-
+# normalisation in composite_sector (not a brightness bump) should fix uneven
+# darkness — a global brightness increase on top made everything look washed
+# out/"fake" instead.
+DEFAULT_DETAIL_STRENGTH = 0.8    # 0 → baked diffuse only; 1 → detail fully recolours
+DEFAULT_BRIGHTNESS = 1.0
 DEFAULT_TILING_SCALE = 1.0       # multiplies each layer's Tiling (repeats per sector)
 MAX_MASK_LAYERS = 3              # mask carries 3 usable channels (A is unused/DXT1)
 
