@@ -25,6 +25,7 @@ debounced auto-save).
 import os
 import re
 import glob
+import json
 import shutil
 import xml.etree.ElementTree as ET
 
@@ -101,6 +102,28 @@ def _meta_attr_names():
         return set(c._META_ATTRS) if c else {'avx_type'}
     except Exception:
         return {'avx_type'}
+
+
+# Global preset catalog (env_preset_catalog.json, built by
+# tools/build_env_preset_catalog.py) — every CEnvironment* preset across all
+# maps/worlds of both games, so a slot can use a preset from ANY map, not just
+# the one whose managers.xml sits next to this .game.xml.
+_CATALOG = None
+
+
+def _preset_catalog():
+    global _CATALOG
+    if _CATALOG is not None:
+        return _CATALOG
+    _CATALOG = {}
+    try:
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         'env_preset_catalog.json')
+        with open(p, encoding='utf-8') as f:
+            _CATALOG = json.load(f).get('categories', {})
+    except Exception:
+        _CATALOG = {}
+    return _CATALOG
 
 
 def _read_manager_presets(managers_xml_path):
@@ -390,16 +413,41 @@ class WorldEditorWindow(QDialog):
     def _make_preset_combo(self, elem, name, value, cls):
         combo = QComboBox()
         combo.addItem("(none)", ZERO_GUID)
-        options = self.presets.get(cls, []) if cls else []
-        if not options and not cls:
-            # unknown slot class: offer every preset, labelled by class
+        seen = {ZERO_GUID}
+
+        # 1) Local presets — defined in THIS map's managers, resolve in-game now.
+        if cls:
+            for nm, g in self.presets.get(cls, []):
+                if g not in seen:
+                    combo.addItem(nm, g)
+                    seen.add(g)
+        else:
             for c, items in sorted(self.presets.items()):
                 for nm, g in items:
-                    combo.addItem(f"[{c[11:]}] {nm}", g)
-        else:
-            for nm, g in options:
-                combo.addItem(nm, g)
-        # select current
+                    if g not in seen:
+                        combo.addItem(f"[{c[11:]}] {nm}", g)
+                        seen.add(g)
+
+        # 2) Global catalog — presets from OTHER maps/worlds (both games). These
+        # need their Template copied into this map's managers to resolve in-game;
+        # marked with the source map after a divider.
+        catalog = _preset_catalog()
+        cat_items = catalog.get(cls, []) if cls else [
+            e for items in catalog.values() for e in items]
+        extra = [e for e in cat_items if e.get('guid') not in seen]
+        if extra:
+            combo.insertSeparator(combo.count())
+            for e in extra:
+                g = e['guid']
+                maps = e.get('maps') or []
+                src = maps[0] if maps else '?'
+                label = e.get('name') or '(unnamed)'
+                if not cls:
+                    label = f"[{e.get('class', '')[11:]}] {label}"
+                combo.addItem(f"{label}   ·  {src}", g)
+                seen.add(g)
+
+        # select current value
         idx = combo.findData(value)
         if idx < 0:
             combo.addItem(f"(unknown) {value}", value)
@@ -407,7 +455,10 @@ class WorldEditorWindow(QDialog):
         combo.setCurrentIndex(idx)
         combo.currentIndexChanged.connect(
             lambda _i, e=elem, n=name, c=combo: self._set(e, n, c.currentData()))
-        combo.setToolTip(f"{name}: preset GUID (class {cls or '?'})")
+        combo.setToolTip(
+            f"{name}: {cls or 'preset'} GUID. Presets below the divider come from "
+            f"other maps — they need their preset copied into this map's managers "
+            f"to take effect in-game.")
         return combo
 
     def _make_color_widget(self, elem, name, value):
