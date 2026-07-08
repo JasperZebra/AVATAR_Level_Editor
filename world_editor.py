@@ -232,11 +232,17 @@ class WorldEditorWindow(QDialog):
         self._status.setStyleSheet("color: #7a7a90; font-size: 10px;")
         load_btn = QPushButton("Open .game.xml…")
         load_btn.clicked.connect(self._browse)
+        self._import_btn = QPushButton("⤵ Import used presets")
+        self._import_btn.setToolTip(
+            "Copy every environment preset this map references from another map "
+            "into this map's managers.fcb, so cross-map presets resolve in-game.")
+        self._import_btn.clicked.connect(self._sync_presets)
         self._save_btn = QPushButton("Save")
         self._save_btn.clicked.connect(self.save)
         header.addWidget(self._title)
         header.addStretch()
         header.addWidget(self._status)
+        header.addWidget(self._import_btn)
         header.addWidget(load_btn)
         header.addWidget(self._save_btn)
         root.addLayout(header)
@@ -499,6 +505,82 @@ class WorldEditorWindow(QDialog):
         h.addWidget(swatch)
         h.addWidget(le, 1)
         return wrap
+
+    # ---------------------------------------------- cross-map preset import
+
+    def _sync_presets(self):
+        """Copy every cross-map preset this map's Environment references into
+        this map's managers.fcb, so they resolve in-game."""
+        from PyQt5.QtWidgets import QApplication
+        import env_preset_copy
+
+        if self.root is None or not self.managers_xml_path or not os.path.isfile(self.managers_xml_path):
+            QMessageBox.information(self, "Import presets",
+                "No managers.xml sits next to this .game.xml — nothing to import into.")
+            return
+
+        local = {g for items in self.presets.values() for (_n, g) in items}
+        by_guid = {}
+        for _cls, items in _preset_catalog().items():
+            for e in items:
+                by_guid[e['guid']] = e
+
+        env = self.root.find('Environment')
+        needed = {}
+        if env is not None:
+            for el in env.iter():
+                for v in el.attrib.values():
+                    if GUID_RE.match(v) and v != ZERO_GUID and v not in local:
+                        e = by_guid.get(v)
+                        if e:
+                            needed[v] = e.get('maps') or []
+
+        if not needed:
+            QMessageBox.information(self, "Import presets",
+                "Every preset this map references is already in its managers — "
+                "nothing to import.")
+            return
+
+        names = sorted({by_guid[g]['name'] for g in needed})
+        preview = ", ".join(names[:8]) + (" …" if len(names) > 8 else "")
+        if QMessageBox.question(self, "Import presets",
+                f"Copy {len(needed)} cross-map preset(s) into this map's "
+                f"managers.fcb and rebuild it?\n\n{preview}\n\n"
+                f"A .bak of managers.xml and managers.fcb is kept.",
+                QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+            return
+
+        self._import_btn.setEnabled(False)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self._set_status("importing presets…", warn=True)
+        QApplication.processEvents()
+        try:
+            res = env_preset_copy.copy_presets(
+                self.managers_xml_path, needed, self._candidate_roots(),
+                rebuild_fcb=True, log=print)
+        except Exception as e:
+            res = {'ok': False, 'error': str(e)}
+        finally:
+            QApplication.restoreOverrideCursor()
+            self._import_btn.setEnabled(True)
+
+        if not res.get('ok'):
+            QMessageBox.warning(self, "Import presets",
+                f"Import failed: {res.get('error', 'unknown')}")
+            self._set_status("import failed", warn=True)
+            return
+
+        # reload local presets so the copied ones now show as in-map
+        self.presets = _read_manager_presets(self.managers_xml_path)
+        self._rebuild_tabs()
+        msg = (f"Copied {len(res['copied'])} preset(s); "
+               f"{len(res['skipped'])} already present.")
+        if res['missing']:
+            msg += f"\n{len(res['missing'])} not found in any scanned map."
+        if res.get('fcb'):
+            msg += f"\nRebuilt {os.path.basename(res['fcb'])}."
+        QMessageBox.information(self, "Import presets", msg)
+        self._set_status(f"imported {len(res['copied'])} presets")
 
     # --------------------------------------------------- terrain XBT previews
 
