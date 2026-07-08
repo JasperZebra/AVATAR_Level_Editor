@@ -1129,10 +1129,15 @@ class TerrainExporter:
         return water_planes
 
     def extract_water_height(self, csdat_file):
-        """Extract water height from CSDAT file at offset 0xB0"""
+        """Extract water height from a sector file (Avatar .csdat @0xB0, FC2 .sdat @60).
+
+        Currently unused (water is rendered procedurally from TerrainRenderer's
+        parsed water_data), but kept game-aware so it can't silently read the
+        wrong offset if revived for FC2."""
+        height_off = 60 if self.game_mode == "farcry2" else 0xB0
         try:
             with open(csdat_file, 'rb') as f:
-                f.seek(0xB0)  # Water height offset
+                f.seek(height_off)
                 water_bytes = f.read(4)
                 if len(water_bytes) == 4:
                     water_height = struct.unpack('<f', water_bytes)[0]

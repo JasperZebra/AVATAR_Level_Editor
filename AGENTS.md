@@ -242,6 +242,18 @@ FC2 was brought to feature parity with Avatar. The invariants below are load-bea
 
 **Also pass `game_mode` to `TerrainData()`** — same trap (July 2026). The in-canvas 3D sculpt path `MapCanvas._load_terrain_data` built `TerrainData()` with no `game_mode`, so it globbed `.csdat` and silently loaded nothing on FC2 levels (the EDIT TERRAIN badge did nothing). Now uses `TerrainData(game_mode=getattr(self, 'game_mode', 'avatar'))`. The Terrain Editor **dialog** already passed it (`open_terrain_editor` → `game_mode=self.game_mode`), so dialog-based FC2 terrain editing already worked; this closes the in-canvas gap. `TerrainData.save_dirty_sectors` / `_write_sector` are game-aware (FC2 writes only the height low-bytes at offset 592, preserving the 2-byte pad, the whole header, and the trailing texture data — verified by round-trip on real FC2 data: +10 sculpt reproduced exactly, headers/pad/tail byte-identical). For multi-cell FC2 worlds `sdat_path` is the primary cell and `terrain_world_offset_x/y` positions the edit mesh on it — one cell at a time, matching the dialog.
 
+### FC2 terrain feature parity — complete audit (July 2026)
+User goal: FC2 must have the SAME terrain support as Avatar. Full sweep of every terrain code path; all now game-aware:
+- **2D render** — `TerrainRenderer` (game_mode) ✓
+- **3D render** — `terrain_to_gltf` (game_mode) ✓ + seam-free downsample ✓
+- **Height sculpt** — Terrain Editor dialog ✓ AND in-canvas EDIT TERRAIN badge ✓ (`_load_terrain_data` now passes game_mode)
+- **Water read/edit** — `water_editor_dialog` game-aware ✓ (still/river flags, material)
+- **Texture painting** — `terrain_texture_painter` is game-agnostic (`atlas*{_mask,_diffuse,_color}.{xbt,dds}`); FC2 has the same atlas naming, verified loading all 3 types at 256/256 tiles. It was only blocked because `_load_texture_painter` → `_load_terrain_data` defaulted to Avatar; fixed by the TerrainData game_mode fix. No painter changes needed.
+- **Folder detection/counting** — `set_patch_folder.py` used `'.dat' in name`, which does NOT match `.sdat` (no `.dat` substring). Fixed both the validate check and the terrain-file counter to test `.csdat`/`.sdat` suffixes.
+- **`extract_water_height`** (dead code) made game-aware (0xB0 Avatar / 60 FC2) so a future revival can't read the wrong offset.
+
+**Deliberately NOT read for either game (so parity holds):** the heightmap section is 65×65 × 4 bytes = TWO interleaved u16 channels. Bytes 0-1 = height (read/edited). Bytes 2-3 = a second per-vertex channel (correlates with slope; the engine's terrain has `TerrainHeights`/`TerrainNormals`/`TerrainParams` + `SurfaceTypeID` per the decompile — likely packed normals/surface params). Neither game reads it, but the sculpt writer preserves it byte-for-byte (only overwrites bytes 0-1). The ~6.5 KB tail after the heightmap is packed `_sdat_atlas`/normal data, also preserved, not decoded. If terrain data reading is ever extended, do it for BOTH games together.
+
 ### 3D right-click pan — mouse anchor/warp
 In 3D mode, right-click-drag pans the camera. The cursor is hidden (`BlankCursor`) and warped back to its original click position after every move event using `QCursor.setPos(self._mouse_anchor_global)`. This lets the user pan indefinitely without the cursor drifting to a window edge. `_mouse_anchor_global` is a `QPoint` in global screen coordinates set on `RightButton` press via `self.mapToGlobal(event.position().toPoint())`. The warp generates a synthetic move event with dx=dy=0 which is skipped. All logic is in `canvas/map_canvas_gpu.py` → `mousePressEvent`, `mouseMoveEvent`.
 

@@ -610,8 +610,9 @@ class PatchFolderScanner(QThread):
             # Check if current directory is named sdat (case-insensitive)
             current_dir = os.path.basename(root).lower()
             if current_dir == 'sdat':
-                # Check for terrain files
-                terrain_files = [f for f in files if '.csdat' in f.lower() or '.dat' in f.lower()]
+                # Check for terrain files (Avatar .csdat + FC2 .sdat)
+                terrain_files = [f for f in files
+                                 if f.lower().endswith('.csdat') or f.lower().endswith('.sdat')]
                 if terrain_files:
                     return True
             
@@ -687,7 +688,8 @@ class PatchFolderScanner(QThread):
                 
                 # Check if in sdat directory
                 if 'sdat' in root.lower():
-                    counts['terrain_files'] += len([f for f in files if '.csdat' in f.lower() or '.dat' in f.lower()])
+                    counts['terrain_files'] += len([f for f in files
+                                                    if f.lower().endswith('.csdat') or f.lower().endswith('.sdat')])
         
         return counts
     
