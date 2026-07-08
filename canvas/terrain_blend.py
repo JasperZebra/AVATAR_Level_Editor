@@ -99,7 +99,14 @@ def _resize_1ch(a, size, lo, hi):
 
 
 _TILE_PREFILTER_CACHE = {}
-_MIN_TILE_SWATCH_PX = 64   # never collapse a tiled detail texture below this — see _tile_sample
+# Never collapse a tiled detail texture's swatch below this many pixels (keeps
+# some real grain instead of homogenising to a flat blob — see _tile_sample).
+# Was 64: at production tile size that made high-Tiling layers show fewer,
+# much LARGER repeats than nominal — big enough to read as blotchy/chunky
+# "rough" patches rather than fine ground texture. Lowered to 24 — still well
+# above naive collapse-to-one-pixel-per-repeat, but small enough that the
+# grain stays fine at the scale we actually bake at.
+_MIN_TILE_SWATCH_PX = 24
 
 
 def _feather_seam_edges(small, margin_frac=0.15):
