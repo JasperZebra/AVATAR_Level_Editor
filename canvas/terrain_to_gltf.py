@@ -67,6 +67,9 @@ class TerrainExporter:
         self.blend_data_roots = list(blend_data_roots or [])
         self._blend_layers = None          # None = not loaded yet; [] = disabled
         self._blend_cache = {}
+        self._blend_meters_per_step = 1.0  # world meters per heightmap grid step (for slope)
+        self._blend_world_min_h = 0.0
+        self._blend_world_max_h = 1.0
         self.texture_tile_px = self.grid_size
         self.sectors_data = {}
         self.sectors_textures = {}
@@ -290,6 +293,8 @@ class TerrainExporter:
                     self.blend_game_xml, self.blend_data_roots)
                 if self._blend_layers:
                     self.texture_tile_px = 160
+                    self._blend_meters_per_step = terrain_blend.load_meters_per_step(
+                        self.blend_game_xml, grid_size=self.grid_size)
                     print(f"[Terrain3D] Splat blend enabled — {len(self._blend_layers)} "
                           f"detail layers: {[l['name'] for l in self._blend_layers]}")
             except Exception as e:
@@ -319,9 +324,17 @@ class TerrainExporter:
             except Exception:
                 import terrain_blend
             try:
+                if not hasattr(self, '_blend_range_computed'):
+                    self._blend_world_min_h, self._blend_world_max_h = (
+                        terrain_blend.compute_height_range(self.sectors_data.values()))
+                    self._blend_range_computed = True
                 tile = terrain_blend.build_sector_tile(
                     str(self.sdat_path), atlas_num, sub_sector,
-                    blend_layers, self.texture_tile_px, self._blend_cache)
+                    blend_layers, self.texture_tile_px, self._blend_cache,
+                    heightmap=self.sectors_data.get(sector_num),
+                    world_min_h=self._blend_world_min_h,
+                    world_max_h=self._blend_world_max_h,
+                    meters_per_step=self._blend_meters_per_step)
                 if tile is not None:
                     return tile
             except Exception as e:

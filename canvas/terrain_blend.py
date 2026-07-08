@@ -17,10 +17,22 @@ We reconstruct the close-up look:
   detail  = Σ weight_i * layer_i( uv * Tiling_i )     # high-freq tiled textures
   out     = detail * (color * gain) * shadow          # baked tint + AO
 
-Mask channel → layer mapping is by <Layers> order (R→0, G→1, B→2); the base
-ground layer (index 0) also fills any weight the mask leaves unassigned. Pure
-numpy, fully vectorised, no Qt/GL — callable from the CPU 2D path and the GLTF
-bake path alike.
+Layer SELECTION (which layer applies where) is reconstructed from each
+<Layer>'s own MinSlope/MaxSlope/AltStart/AltEnd rule, evaluated against the
+REAL sector heightmap — not by guessing a mask-channel<->layer mapping.
+Confirmed via a Ghidra decompile of the retail engine binary (see AGENTS.md
+"Tiling fix" section): the runtime never reads MinSlope/MaxSlope/AltStart/
+AltEnd/ProjAxis/Smooth (zero literal occurrences in ~61k functions) — these
+are bake-time-only concepts the ORIGINAL exporter used once to build the
+mask/diffuse atlas. So we redo that same bake-time computation ourselves
+against the map's own .game.xml + its own heightmap, which is unambiguous,
+instead of assuming mask R/G/B map to the first 3 <Layers> in document order
+(which is not documented anywhere and was very likely wrong — visible as
+"layers on top of ones they shouldn't be" reports). Layers whose rule allows
+them EVERYWHERE (e.g. two different "flat ground" layers with identical
+full-range rules) can't be told apart by rules alone; for that subgroup only,
+the painted mask still breaks the tie. Pure numpy, fully vectorised, no
+Qt/GL — callable from the CPU 2D path and the GLTF bake path alike.
 """
 
 import os
@@ -66,6 +78,16 @@ def _resize_smooth(a, size):
         return np.asarray(im).astype(np.float32) / 255.0
     except Exception:
         return _resize_nn(a, size)
+
+
+def _resize_1ch(a, size, lo, hi):
+    """Bilinear resize a single-channel float array (e.g. slope in degrees,
+    altitude 0..255) to size×size, preserving its original value range."""
+    rng = max(hi - lo, 1e-6)
+    norm = np.clip((a - lo) / rng, 0.0, 1.0)
+    rgb = np.stack([norm, norm, norm], axis=-1)
+    out = _resize_smooth(rgb, size)[:, :, 0]
+    return out * rng + lo
 
 
 _TILE_PREFILTER_CACHE = {}
@@ -120,9 +142,86 @@ def _tile_sample(img, size, repeats):
     return tiled.astype(np.float32) / 255.0
 
 
+def _smooth_gate(x, lo, hi, feather, full_range):
+    """Soft step: ~1 where lo<=x<=hi, fading to 0 over *feather* outside each
+    bound. A bound at the natural extreme (lo<=0, or hi>=full_range) is treated
+    as 'no gate on that side' — e.g. MinSlope=0,MaxSlope=90 is fully unrestricted."""
+    w = np.ones_like(x, dtype=np.float32)
+    fw = max(feather, 1e-3)
+    if lo > 0:
+        w = w * np.clip((x - (lo - feather)) / fw, 0.0, 1.0)
+    if hi < full_range:
+        w = w * np.clip(((hi + feather) - x) / fw, 0.0, 1.0)
+    return w
+
+
+def _layer_is_unrestricted(layer):
+    """True if the layer's rule allows it everywhere (no real slope/altitude
+    gate) — such layers can only be told apart from each other by the mask."""
+    return (layer.get('min_slope', 0) <= 0 and layer.get('max_slope', 90) >= 90
+            and layer.get('alt_start', 0) <= 0 and layer.get('alt_end', 255) >= 255)
+
+
+def rule_weights(heightmap, layers, out_size, world_min_h, world_max_h,
+                 meters_per_step=1.0, mask=None):
+    """Per-texel, per-layer weight in [0,1] (NOT yet normalised) derived from
+    each layer's own MinSlope/MaxSlope/AltStart/AltEnd rule evaluated against
+    the sector's real heightmap — see module docstring for why this replaces
+    guessing a mask-channel<->layer mapping. `Smooth` narrows/widens the
+    transition feather (Smooth="0" layers, e.g. cliffs, cut in faster).
+
+    Layers that are unrestricted (apply everywhere) are further weighted, among
+    themselves only, by the painted splat mask (channel order) — their rule
+    alone can't distinguish e.g. two different "flat ground" layers.
+
+    Returns (out_size,out_size,len(layers)) float32.
+    """
+    hm = np.asarray(heightmap, dtype=np.float32)
+    gy, gx = np.gradient(hm, max(meters_per_step, 1e-3))
+    slope_deg = np.degrees(np.arctan(np.sqrt(gx * gx + gy * gy)))
+    rng = max(world_max_h - world_min_h, 1e-3)
+    alt = np.clip((hm - world_min_h) / rng * 255.0, 0.0, 255.0)
+
+    o = int(out_size)
+    slope_r = _resize_1ch(slope_deg, o, 0.0, 90.0)
+    alt_r = _resize_1ch(alt, o, 0.0, 255.0)
+
+    weights = np.zeros((o, o, len(layers)), np.float32)
+    unrestricted = []
+    for i, lay in enumerate(layers):
+        smooth = lay.get('smooth', True)
+        sf = 6.0 if smooth else 1.5
+        af = 14.0 if smooth else 3.0
+        w_slope = _smooth_gate(slope_r, lay.get('min_slope', 0), lay.get('max_slope', 90), sf, 90.0)
+        w_alt = _smooth_gate(alt_r, lay.get('alt_start', 0), lay.get('alt_end', 255), af, 255.0)
+        weights[:, :, i] = w_slope * w_alt
+        if _layer_is_unrestricted(lay):
+            unrestricted.append(i)
+
+    if len(unrestricted) > 1:
+        if mask is not None:
+            m = _resize_smooth(_to_float_rgb(mask), o)
+            s = m.sum(axis=2, keepdims=True)
+            m = np.divide(m, s, out=m.copy(), where=s > 1e-3)
+            for k, i in enumerate(unrestricted[:3]):
+                weights[:, :, i] = weights[:, :, i] * m[:, :, k]
+        # The mask has only 3 usable channels (R,G,B — see module docstring),
+        # so at most 3 unrestricted layers can be told apart at all. Beyond
+        # that there is NO real per-texel signal to place them; leaving them
+        # at flat full weight everywhere would just blend in arbitrary noise
+        # across the whole map (this is what maps with many same-range layers,
+        # e.g. FC2 jungle maps, would otherwise hit) — drop them instead.
+        for i in unrestricted[3:]:
+            weights[:, :, i] = 0.0
+
+    return weights
+
+
 def composite_sector(mask, color, shadow, layers, out_size, *,
                      diffuse=None, detail_strength=0.8,
-                     tiling_scale=DEFAULT_TILING_SCALE, brightness=1.0):
+                     tiling_scale=DEFAULT_TILING_SCALE, brightness=1.0,
+                     heightmap=None, world_min_h=0.0, world_max_h=1.0,
+                     meters_per_step=1.0):
     """Composite one sector's in-game-look tile.
 
     The baked *diffuse* atlas is the colour/brightness anchor (it is the game's
@@ -136,9 +235,16 @@ def composite_sector(mask, color, shadow, layers, out_size, *,
     where base = diffuse (preferred) or color, and s = *detail_strength*
     (0 → just the baked look; 1 → detail fully recolours).
 
+    Layer SELECTION: when *heightmap* is given, weights come from each layer's
+    own rule (MinSlope/MaxSlope/AltStart/AltEnd) evaluated against the real
+    heightmap via `rule_weights()` — ALL layers participate (not capped at 3),
+    since we're no longer limited to 3 mask channels. Without a heightmap
+    (legacy/defensive path), falls back to treating mask R/G/B as weights for
+    the first 3 layers in document order.
+
     mask/color/shadow/diffuse : (H,W,3) atlas quadrants (uint8/float) or None.
-    layers : list of {'img': (h,w,3), 'tiling': float} ordered by <Layers>;
-             index 0 is the base ground layer. Up to MAX_MASK_LAYERS blend.
+    layers : list of {'img','tiling','min_slope','max_slope','alt_start',
+             'alt_end','smooth'} from `load_layers()`.
     Returns (out_size, out_size, 3) uint8.
     """
     o = int(out_size)
@@ -153,22 +259,35 @@ def composite_sector(mask, color, shadow, layers, out_size, *,
             out = out * _resize_nn(_to_float_rgb(shadow), o)
         return np.clip(out * 255.0, 0, 255).astype(np.uint8)
 
-    imgs = [_to_float_rgb(l['img']) for l in layers[:MAX_MASK_LAYERS]]
-    tilings = [max(1.0, float(l.get('tiling', 1)) * tiling_scale)
-               for l in layers[:MAX_MASK_LAYERS]]
-
-    if mask is not None:
-        # smooth (bilinear) so splat weights blend across layer boundaries
-        w = _resize_smooth(_to_float_rgb(mask), o)
-        s = w.sum(axis=2, keepdims=True)
-        w = np.where(s > 1e-3, w / s, w)
+    if heightmap is not None:
+        active = layers
+        weights = rule_weights(heightmap, active, o, world_min_h, world_max_h,
+                               meters_per_step, mask=mask)
+        s = weights.sum(axis=2, keepdims=True)
+        w = np.divide(weights, s, out=np.zeros_like(weights), where=s > 1e-3)
+        no_layer = (s[:, :, 0] <= 1e-3)
+        if no_layer.any():
+            w[no_layer, 0] = 1.0   # nothing matched (shouldn't happen) -> base layer
     else:
-        w = np.zeros((o, o, 3), np.float32)
-        w[:, :, 0] = 1.0
+        active = layers[:MAX_MASK_LAYERS]
+        if mask is not None:
+            # smooth (bilinear) so splat weights blend across layer boundaries
+            w = _resize_smooth(_to_float_rgb(mask), o)
+            s = w.sum(axis=2, keepdims=True)
+            w = np.divide(w, s, out=w.copy(), where=s > 1e-3)
+        else:
+            w = np.zeros((o, o, 3), np.float32)
+            w[:, :, 0] = 1.0
+
+    imgs = [_to_float_rgb(l['img']) for l in active]
+    tilings = [max(1.0, float(l.get('tiling', 1)) * tiling_scale) for l in active]
 
     detail = np.zeros((o, o, 3), np.float32)
     for i, (img, tl) in enumerate(zip(imgs, tilings)):
-        detail += w[:, :, i:i + 1] * _tile_sample(img, o, tl)
+        wi = w[:, :, i:i + 1]
+        if wi.max() <= 1e-4:
+            continue   # this layer's rule never matches in this sector — skip its tile
+        detail += wi * _tile_sample(img, o, tl)
 
     if base_f is None:
         out = detail
@@ -276,12 +395,19 @@ def _load_xbt_rgb(path, size=None):
     return np.asarray(img)
 
 
-def load_layers(game_xml_path, data_roots, max_layers=MAX_MASK_LAYERS, size=256):
-    """Load the first *max_layers* terrain detail textures from a map's
-    .game.xml <Layers> block (text or FC2-binary), resolving each Texture path
-    against *data_roots*. Returns an ordered list of {'img','tiling','name'};
-    index i aligns with mask channel i (R,G,B). A layer whose texture can't be
-    found becomes a neutral-grey placeholder so channel alignment is preserved.
+DEFAULT_MAX_LAYERS = 12   # bound bake time on maps with many layers (FC2: up to 44)
+
+
+def load_layers(game_xml_path, data_roots, max_layers=DEFAULT_MAX_LAYERS, size=256):
+    """Load up to *max_layers* terrain detail textures + their placement RULES
+    from a map's .game.xml <Layers> block (text or FC2-binary), resolving each
+    Texture path against *data_roots*.
+
+    Returns an ordered list of dicts: {'img','tiling','name','min_slope',
+    'max_slope','alt_start','alt_end','smooth'} — consumed by rule_weights()
+    to decide WHERE each layer applies (see module docstring). A layer whose
+    texture can't be resolved on disk is skipped (no mask-channel alignment to
+    preserve now that selection is rule-based, not channel-order-based).
     Returns [] if nothing usable."""
     if not game_xml_path or not os.path.isfile(game_xml_path):
         return []
@@ -292,24 +418,74 @@ def load_layers(game_xml_path, data_roots, max_layers=MAX_MASK_LAYERS, size=256)
     if lys is None:
         return []
     layer_els = [l for l in lys.findall('Layer')
-                 if (l.get('Texture') or '').lower().endswith('.xbt')][:max_layers]
+                 if (l.get('Texture') or '').lower().endswith('.xbt')]
     if not layer_els:
         return []
+
+    def _f(lay, name, default):
+        try:
+            return float(lay.get(name, default))
+        except (TypeError, ValueError):
+            return float(default)
+
     out = []
-    for lay in layer_els:
+    skipped = 0
+    for lay in layer_els[:max_layers]:
         p = _resolve_texture(lay.get('Texture'), data_roots)
         img = _load_xbt_rgb(p, size) if p else None
         if img is None:
-            img = np.full((8, 8, 3), 128, np.uint8)  # placeholder keeps alignment
-        try:
-            tiling = float(lay.get('Tiling', 16) or 16)
-        except ValueError:
-            tiling = 16.0
-        out.append({'img': img, 'tiling': tiling, 'name': lay.get('Name') or '?'})
-    # if every layer was a placeholder, blending adds nothing
-    if all(l['img'].shape[0] == 8 for l in out):
-        return []
+            skipped += 1
+            continue
+        tiling = _f(lay, 'Tiling', 16.0)
+        out.append({
+            'img': img, 'tiling': tiling if tiling > 0 else 16.0,
+            'name': lay.get('Name') or '?',
+            'min_slope': _f(lay, 'MinSlope', 0.0), 'max_slope': _f(lay, 'MaxSlope', 90.0),
+            'alt_start': _f(lay, 'AltStart', 0.0), 'alt_end': _f(lay, 'AltEnd', 255.0),
+            'smooth': lay.get('Smooth', '1') != '0',
+        })
+    if len(layer_els) > max_layers:
+        print(f"[terrain_blend] {len(layer_els)} layers defined in {os.path.basename(game_xml_path)}; "
+              f"using the first {max_layers}")
+    if skipped:
+        print(f"[terrain_blend] {skipped} layer texture(s) could not be resolved on disk — skipped")
     return out
+
+
+def load_meters_per_step(game_xml_path, grid_size=65, default=1.0):
+    """World meters per heightmap grid step, from <Grids><GridMapSectors
+    Granularity=.../> (sector world size) — needed to compute a real slope
+    ANGLE from the heightmap gradient. Falls back to *default* (1.0, matching
+    the common Granularity=64 / grid_size=65 case) if unavailable."""
+    root = _parse_game_xml(game_xml_path)
+    if root is None:
+        return default
+    grids = root.find('Grids')
+    if grids is None:
+        return default
+    gm = grids.find('GridMapSectors')
+    if gm is None or not gm.get('Granularity'):
+        return default
+    try:
+        granularity = float(gm.get('Granularity'))
+        return granularity / max(grid_size - 1, 1)
+    except ValueError:
+        return default
+
+
+def compute_height_range(heightmaps):
+    """(min,max) world height across an iterable of (h,w) heightmap arrays —
+    the altitude-rule normalisation reference. (0.0, 1.0) if none are usable."""
+    lo = hi = None
+    for hm in heightmaps:
+        if hm is None or getattr(hm, 'size', 0) == 0:
+            continue
+        mn, mx = float(np.min(hm)), float(np.max(hm))
+        lo = mn if lo is None else min(lo, mn)
+        hi = mx if hi is None else max(hi, mx)
+    if lo is None:
+        return 0.0, 1.0
+    return lo, hi
 
 
 def _atlas_sibling(diffuse_path, suffix):
@@ -348,8 +524,12 @@ def build_sector_tile(sdat_dir, atlas_num, sub_sector, layers, out_size, cache,
 
     Loads atlas{N}_{diffuse,mask,color}.xbt from *sdat_dir*, crops the sector
     quadrant, and blends the detail *layers*. *cache* is a dict (path -> RGB
-    ndarray) the caller owns for the life of a bake. Returns (out,out,3) uint8,
-    or None to signal 'fall back to the old diffuse-only path'."""
+    ndarray) the caller owns for the life of a bake. Pass `heightmap=`,
+    `world_min_h=`, `world_max_h=`, `meters_per_step=` (forwarded via **kw to
+    composite_sector) to select layers by their real MinSlope/MaxSlope/
+    AltStart/AltEnd rule instead of the legacy mask-channel-order guess.
+    Returns (out,out,3) uint8, or None to signal 'fall back to the old
+    diffuse-only path'."""
     if not layers or not sdat_dir:
         return None
 

@@ -83,6 +83,7 @@ class TerrainRenderer:
         self.blend_data_roots = []
         self._blend_layers = None          # None = not loaded yet; [] = nothing usable
         self._blend_cache = {}
+        self._blend_meters_per_step = 1.0  # world meters per heightmap grid step (for slope)
         self.texture_tile_px = 160         # per-sector baked texture resolution
 
         # Water data storage
@@ -659,6 +660,8 @@ class TerrainRenderer:
                 self._blend_layers = terrain_blend.load_layers(
                     self.blend_game_xml, self.blend_data_roots)
                 if self._blend_layers:
+                    self._blend_meters_per_step = terrain_blend.load_meters_per_step(
+                        self.blend_game_xml, grid_size=self.grid_size)
                     print(f"[Terrain] Splat blend enabled — {len(self._blend_layers)} "
                           f"detail layers: {[l['name'] for l in self._blend_layers]}")
             except Exception as e:
@@ -678,6 +681,18 @@ class TerrainRenderer:
         # diffuse, at a higher per-sector resolution so detail is visible.
         blend_layers = self._ensure_blend_layers()
         tex = int(self.texture_tile_px) if blend_layers else self.grid_size
+
+        # Layer SELECTION uses each layer's real MinSlope/MaxSlope/AltStart/
+        # AltEnd rule against this map's own heightmap (see terrain_blend
+        # module docstring) — need the world height range to normalise altitude.
+        blend_world_min_h, blend_world_max_h = 0.0, 1.0
+        if blend_layers:
+            try:
+                from canvas import terrain_blend as _tb
+            except Exception:
+                import terrain_blend as _tb
+            blend_world_min_h, blend_world_max_h = _tb.compute_height_range(
+                self.sectors_data.values())
 
         total_width = self.sectors_x * tex
         total_height = self.sectors_y * tex
@@ -714,7 +729,11 @@ class TerrainRenderer:
                             if m:
                                 tile = terrain_blend.build_sector_tile(
                                     self.current_directory, int(m.group(1)),
-                                    sub_sector, blend_layers, tex, self._blend_cache)
+                                    sub_sector, blend_layers, tex, self._blend_cache,
+                                    heightmap=self.sectors_data.get(sector_index),
+                                    world_min_h=blend_world_min_h,
+                                    world_max_h=blend_world_max_h,
+                                    meters_per_step=self._blend_meters_per_step)
                                 if tile is not None:
                                     sector_texture = self.pil_image_to_qimage(
                                         Image.fromarray(tile))
