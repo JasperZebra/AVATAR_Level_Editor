@@ -41,7 +41,14 @@ import numpy as np
 
 # Tunables (kept here so both renderers share one look)
 DEFAULT_DETAIL_STRENGTH = 0.55   # 0 → baked diffuse only; 1 → detail fully recolours
-DEFAULT_BRIGHTNESS = 1.1
+# The baked diffuse atlas is quite dark on its own (measured mean ~28,32,20 out
+# of 255 on real Avatar/FC2 atlases) — almost certainly an unlit albedo
+# reference meant to be relit by the engine's dynamic sun/sky pass in 3D. Our
+# 2D map has no lighting pass at all, and our 3D bake bypasses lighting for the
+# combined texture bytes themselves (lighting is applied later, per-vertex, by
+# the fixed-function GL rig) — so the raw atlas reads far too dark in both
+# unless we compensate here. 2.3x brings a ~0.11 mean to a legible ~0.28-0.35.
+DEFAULT_BRIGHTNESS = 2.3
 DEFAULT_TILING_SCALE = 1.0       # multiplies each layer's Tiling (repeats per sector)
 MAX_MASK_LAYERS = 3              # mask carries 3 usable channels (A is unused/DXT1)
 
@@ -189,9 +196,13 @@ def rule_weights(heightmap, layers, out_size, world_min_h, world_max_h,
     weights = np.zeros((o, o, len(layers)), np.float32)
     unrestricted = []
     for i, lay in enumerate(layers):
+        # Even Smooth="0" layers (cliffs) still need a real transition band —
+        # too narrow a feather reads as an unblended hard graphic edge where
+        # the layer boundary happens to fall (looked like an abrupt dark/light
+        # seam rather than a natural cliff line).
         smooth = lay.get('smooth', True)
-        sf = 6.0 if smooth else 1.5
-        af = 14.0 if smooth else 3.0
+        sf = 6.0 if smooth else 3.5
+        af = 14.0 if smooth else 8.0
         w_slope = _smooth_gate(slope_r, lay.get('min_slope', 0), lay.get('max_slope', 90), sf, 90.0)
         w_alt = _smooth_gate(alt_r, lay.get('alt_start', 0), lay.get('alt_end', 255), af, 255.0)
         weights[:, :, i] = w_slope * w_alt
@@ -218,8 +229,8 @@ def rule_weights(heightmap, layers, out_size, world_min_h, world_max_h,
 
 
 def composite_sector(mask, color, shadow, layers, out_size, *,
-                     diffuse=None, detail_strength=0.8,
-                     tiling_scale=DEFAULT_TILING_SCALE, brightness=1.0,
+                     diffuse=None, detail_strength=DEFAULT_DETAIL_STRENGTH,
+                     tiling_scale=DEFAULT_TILING_SCALE, brightness=DEFAULT_BRIGHTNESS,
                      heightmap=None, world_min_h=0.0, world_max_h=1.0,
                      meters_per_step=1.0):
     """Composite one sector's in-game-look tile.
@@ -287,16 +298,25 @@ def composite_sector(mask, color, shadow, layers, out_size, *,
         wi = w[:, :, i:i + 1]
         if wi.max() <= 1e-4:
             continue   # this layer's rule never matches in this sector — skip its tile
-        detail += wi * _tile_sample(img, o, tl)
+        tile = _tile_sample(img, o, tl)
+        # Normalise EACH layer to its OWN mean before blending — a texture
+        # that's locally darker than its neighbours (e.g. a rock cliff patch
+        # sitting in mostly-grass) must be compared to ITS OWN brightness, not
+        # a mismatched whole-tile average dominated by a different, lighter
+        # texture. Comparing against a shared global mean crushed the darker
+        # layer toward the modulation floor wherever it was a minority in the
+        # tile — showing up as unwanted dark patches with a harsh cutoff at
+        # the layer boundary (looked "not blended").
+        tile_mean = tile.reshape(-1, 3).mean(axis=0) + 1e-4
+        detail += wi * (tile / tile_mean)
 
     if base_f is None:
         out = detail
     else:
-        # detail normalised to mean 1 per channel → modulates the baked colour.
-        # Clamp the modulation so tiled highlights/shadows can't blow out the
-        # baked colour (the main cause of a "harsh" look).
-        dmean = detail.reshape(-1, 3).mean(axis=0) + 1e-4
-        dn = np.clip(detail / dmean, 0.5, 1.6)
+        # Each layer's contribution already averages ~1 (self-normalised
+        # above), so the weighted sum stays near 1 without a further global
+        # divide. Still clamp so extremes can't blow out the baked colour.
+        dn = np.clip(detail, 0.5, 1.6)
         out = base_f * ((1.0 - detail_strength) + detail_strength * dn)
 
     out = out * brightness
