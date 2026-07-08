@@ -146,6 +146,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/texture_loader.py` | `tests/test_xbt_cache_eviction.py` | — | `_xbt_cache` FIFO cap (`_xbt_cache_put`): decode cache no longer pins every texture's raw RGBA for the session (FC2 full-world OOM → glTexImage2D access violation); module loaded by **file path** — excluded from `--cov` |
 | `canvas/model_loader.py` | `tests/test_vbo_build_budget.py` | — | `_ensure_mesh_vbo` per-frame build budget: exhausted budget defers (None + `_vbo_stream_pending`), built meshes bypass, unbuildable meshes fail permanently without consuming budget; module loaded by **file path** — excluded from `--cov` |
 | `cache_manager.py` | `tests/test_terrain_cache_key_fc2.py` | — | `generate_terrain_cache_key` includes `*.sdat` (FC2) — old `.csdat`-only glob pinned stale FC2 terrain images with a never-changing path key |
+| `canvas/map_canvas_gpu.py` | `tests/test_pick_landmark_priority.py` | — | 3D pick two-track resolution (**mirrored**): landmark LOD twins at the same spot lose to the real entity within a 3-unit tie tolerance; genuinely-closer landmarks still win; hidden sources unpickable — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests

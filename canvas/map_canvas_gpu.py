@@ -5611,8 +5611,49 @@ class MapCanvas(QOpenGLWidget):
 
             closest_entity = None
             closest_t      = float('inf')
+            # Landmark far/near files carry LOD COPIES of objects at the SAME
+            # position as the real worldsector entity (FC2 especially: every
+            # object has 1-2 twins). Track the best NON-landmark hit separately
+            # so clicking an object selects the real entity, not its invisible
+            # twin whose fallback box sits closer to the camera.
+            closest_nl_entity = None
+            closest_nl_t      = float('inf')
+            LM_TIE_TOLERANCE  = 3.0   # world units — same-spot twins differ by ~box size
             FALLBACK_RADIUS = 1.5
             tested_ids = set()
+
+            def _is_landmark(e):
+                if (getattr(e, 'source_file', '') or '') == 'landmark':
+                    return True
+                return 'landmark' in (getattr(e, 'source_file_path', '') or '').lower()
+
+            # Hidden sources must not be pickable — respect the same per-source
+            # visibility flags the renderer uses.
+            _show_ws = self.show_worldsector_entities
+            _show_md = self.show_mapsdata_entities
+            _show_om = self.show_omnis_entities
+            _show_lm = self.show_landmark_entities
+
+            def _pickable(e):
+                if _show_ws and _show_md and _show_om and _show_lm:
+                    return True
+                if _is_landmark(e):
+                    return _show_lm
+                src = getattr(e, 'source_file', '') or ''
+                if src == 'worldsectors':
+                    return _show_ws
+                if src == 'mapsdata':
+                    return _show_md
+                if src == 'omnis':
+                    return _show_om
+                return True
+
+            def _record_hit(t, e):
+                nonlocal closest_entity, closest_t, closest_nl_entity, closest_nl_t
+                if t < closest_t:
+                    closest_t, closest_entity = t, e
+                if not _is_landmark(e) and t < closest_nl_t:
+                    closest_nl_t, closest_nl_entity = t, e
 
             if hasattr(self, 'model_loader') and self.model_loader is not None:
                 # Array-native GDR mode skips prepare_batches, so instance_batches
@@ -5639,6 +5680,8 @@ class MapCanvas(QOpenGLWidget):
                         # tuple: (entity, px, py, pz, rx, ry, rz, scale, is_selected)
                         entity = inst[0]
                         tested_ids.add(id(entity))
+                        if not _pickable(entity):
+                            continue
 
                         pos   = np.array((inst[1], inst[2], inst[3]), dtype=np.float64)
                         rot   = (inst[4], inst[5], inst[6])  # (rx, ry, rz) degrees
@@ -5666,7 +5709,10 @@ class MapCanvas(QOpenGLWidget):
                             t_broad = _ray_aabb_intersect(local_o, local_d,
                                                           np.full(3, -r), np.full(3, r))
 
-                        if t_broad is None or t_broad >= closest_t:
+                        # Prune only when the hit can't improve EITHER track
+                        # (overall closest, or closest non-landmark).
+                        if t_broad is None or (t_broad >= closest_t and
+                                               t_broad >= closest_nl_t):
                             continue
 
                         # --- Narrow phase: per-triangle Möller-Trumbore ---
@@ -5685,27 +5731,33 @@ class MapCanvas(QOpenGLWidget):
                                     local_o, local_d, mesh.vertices, idx)
                                 if t_tri is not None and (t_hit is None or t_tri < t_hit):
                                     t_hit = t_tri
-                            if t_hit is not None and 0.0 < t_hit < closest_t:
-                                closest_t      = t_hit
-                                closest_entity = entity
+                            if t_hit is not None and 0.0 < t_hit:
+                                _record_hit(t_hit, entity)
                         else:
                             # No mesh data available — accept the AABB hit
-                            if 0.0 < t_broad < closest_t:
-                                closest_t      = t_broad
-                                closest_entity = entity
+                            if 0.0 < t_broad:
+                                _record_hit(t_broad, entity)
 
             # Pass 2: visible entities with no 3D model — small box fallback
             for entity in self._get_visible_entities():
                 if id(entity) in tested_ids:
                     continue
+                if not _pickable(entity):
+                    continue
                 if not (hasattr(entity, 'x') and hasattr(entity, 'y') and hasattr(entity, 'z')):
                     continue
                 p = np.array([float(entity.x), float(entity.z), float(-entity.y)])
                 t = _ray_aabb_intersect(ray_o, ray_d, p - FALLBACK_RADIUS, p + FALLBACK_RADIUS)
-                if t is not None and 0.0 < t < closest_t:
-                    closest_t      = t
-                    closest_entity = entity
+                if t is not None and 0.0 < t and (t < closest_t or t < closest_nl_t):
+                    _record_hit(t, entity)
 
+            # Landmark twins sit at the SAME spot as the real object — if the
+            # overall winner is a landmark but a real entity was hit within the
+            # tie tolerance, the user almost certainly meant the real one.
+            if (closest_entity is not None and _is_landmark(closest_entity)
+                    and closest_nl_entity is not None
+                    and closest_nl_t <= closest_t + LM_TIE_TOLERANCE):
+                return closest_nl_entity
             return closest_entity
 
         except Exception as e:
