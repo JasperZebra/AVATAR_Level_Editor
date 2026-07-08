@@ -68,14 +68,56 @@ def _resize_smooth(a, size):
         return _resize_nn(a, size)
 
 
+_TILE_PREFILTER_CACHE = {}
+
+
+def _mirror_tile(small, reps):
+    """Tile (h,w,3) *reps* times per axis using mirror-repeat (like GL's
+    GL_MIRRORED_REPEAT): alternate rows/columns are flipped so adjacent copies
+    always share identical edge pixels — no hard seam, unlike plain wraparound
+    tiling of a texture whose opposite edges don't match."""
+    flipped_x = small[:, ::-1, :]
+    row_even = small if reps <= 1 else np.concatenate(
+        [small if c % 2 == 0 else flipped_x for c in range(reps)], axis=1)
+    if reps <= 1:
+        return row_even
+    flipped_y = row_even[::-1, :, :]
+    return np.concatenate(
+        [row_even if r % 2 == 0 else flipped_y for r in range(reps)], axis=0)
+
+
 def _tile_sample(img, size, repeats):
-    """Sample (h,w,3) tiled *repeats* times across a size×size output."""
+    """Sample (h,w,3) float 0..1 tiled *repeats* times across a size×size output.
+
+    A real in-game terrain samples the tiled detail texture per-pixel with full
+    GPU mipmapping; our 2D map and 3D bake are single static images, so at a
+    high Tiling value (e.g. 16-20 repeats crammed into a ~160px sector tile,
+    ~8-10px per repeat) naive nearest-neighbour indexing aliases into a harsh,
+    blotchy pattern — it discards almost all of the source texture's pixels.
+
+    Fix: LANCZOS-downsample the source to its PER-REPEAT output footprint
+    (cell = size/repeats) — this is exactly a mip-level average — THEN
+    mirror-tile that already band-limited patch across the output (plain
+    wraparound tiling left a visible hard grid seam because the source
+    texture's opposite edges don't match; mirroring guarantees they do).
+    """
+    from PIL import Image
     h, w = img.shape[:2]
-    t = np.arange(size, dtype=np.float32) / size * repeats
-    frac = t - np.floor(t)
-    yi = (frac * h).astype(np.int32) % h
-    xi = (frac * w).astype(np.int32) % w
-    return img[np.ix_(yi, xi)]
+    cell = max(2, int(round(size / max(repeats, 0.001))))
+    cell = min(cell, max(h, w))  # never upsample past native resolution
+
+    key = (id(img), h, w, cell)
+    small = _TILE_PREFILTER_CACHE.get(key)
+    if small is None:
+        src_u8 = np.clip(img * 255.0, 0, 255).astype(np.uint8)
+        small = np.asarray(Image.fromarray(src_u8).resize((cell, cell), Image.LANCZOS))
+        if len(_TILE_PREFILTER_CACHE) > 64:
+            _TILE_PREFILTER_CACHE.clear()
+        _TILE_PREFILTER_CACHE[key] = small
+
+    reps = (size // cell) + 2
+    tiled = _mirror_tile(small, reps)[:size, :size]
+    return tiled.astype(np.float32) / 255.0
 
 
 def composite_sector(mask, color, shadow, layers, out_size, *,
