@@ -44,10 +44,11 @@ import numpy as np
 
 class TerrainExporter:
     # FC2 3D texture orientation knob (see create_combined_texture): the
-    # finished combined texture is rotated N x 90° CCW for FC2. 2 = 180°,
-    # replacing the old 180° render-time mesh rotation (geometry stays
-    # unrotated — proven correct against entity heights).
-    _FC2_3D_TEXTURE_TURNS = 2
+    # finished combined texture is rotated N x 90° CCW for FC2 (0 = none).
+    # Geometry stays unrotated (proven correct against entity heights).
+    # User-verified July 2026: the 180° texture turn left every region 180°
+    # off — the region needs NO extra rotation at all.
+    _FC2_3D_TEXTURE_TURNS = 0
 
     def __init__(self, input_path, output_path, resolution, meters_per_coordinate=1.0, game_mode="avatar"):
         self.input_path = Path(input_path)

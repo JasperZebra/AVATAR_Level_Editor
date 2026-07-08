@@ -37,10 +37,12 @@ class WaterData:
 class TerrainRenderer:
     """Handles terrain rendering in 2D canvas"""
 
-    # FC2 2D orientation knob: total whole-image rotation = N x -90° CCW.
+    # FC2 2D orientation knob: TOTAL whole-region rotation = N x -90° CCW
+    # (Avatar always gets its single -90; FC2 uses exactly N, not N-1 extras).
     # The tile pipeline is shared with Avatar (correct tile pieces); ONLY this
-    # final rotation differs. 2 = original behaviour (-180 total).
-    _FC2_2D_QUARTER_TURNS = 2
+    # final rotation differs. User-verified July 2026: the old -180 total left
+    # every region 180° off, so FC2 needs NO whole-region rotation (0).
+    _FC2_2D_QUARTER_TURNS = 0
 
     def __init__(self, game_mode: str = "avatar"):
         self.game_mode = game_mode
@@ -662,18 +664,19 @@ class TerrainRenderer:
         painter.end()
 
         # The per-tile pipeline above is shared; the games differ ONLY in this
-        # final whole-image rotation. Avatar: one -90. FC2: total rotation is
-        # _FC2_2D_QUARTER_TURNS x -90 — the single tuning knob for FC2 2D
-        # orientation (2 = the original behaviour: -90 shared + one extra -90).
-        transform = QTransform()
-        transform.rotate(-90)
-        final_image = combined_image.transformed(transform)
-
+        # final whole-region rotation. Avatar: one -90. FC2: exactly
+        # _FC2_2D_QUARTER_TURNS x -90 total (0 = none) — the single tuning
+        # knob for FC2 2D region orientation.
         if self.game_mode == "farcry2":
-            for _ in range(self._FC2_2D_QUARTER_TURNS - 1):
+            final_image = combined_image
+            for _ in range(self._FC2_2D_QUARTER_TURNS % 4):
                 extra = QTransform()
                 extra.rotate(-90)
                 final_image = final_image.transformed(extra)
+        else:
+            transform = QTransform()
+            transform.rotate(-90)
+            final_image = combined_image.transformed(transform)
 
         self.terrain_image = final_image
         self.terrain_pixmap = QPixmap.fromImage(final_image)

@@ -473,10 +473,10 @@ class CacheManager:
         import glob
 
         # Bump when terrain assembly/orientation logic changes — cached images
-        # baked with old logic must not survive a fix (tv4, July 2026: shared
+        # baked with old logic must not survive a fix (tv5, July 2026: shared
         # Avatar tile pipeline restored for FC2; per-game difference is only
         # the final whole-image rotation knobs).
-        RENDER_VERSION = "tv4"
+        RENDER_VERSION = "tv5"
 
         try:
             # Both games: Avatar .csdat and FC2 .sdat. (The old .csdat-only
