@@ -3318,7 +3318,11 @@ class SimplifiedMapEditor(QMainWindow):
         try:
             game_xml = self._find_game_xml()
             if game_xml:
-                tr.set_blend_source(game_xml, self._terrain_data_roots())
+                roots = self._terrain_data_roots()
+                tr.set_blend_source(game_xml, roots)
+                # Also hand it to the 3D terrain bake (terrain_to_gltf reads this
+                # when generating the combined texture).
+                self.canvas._terrain_blend_source = (game_xml, roots)
         except Exception as e:
             print(f"[Terrain] blend source not set: {e}")
 

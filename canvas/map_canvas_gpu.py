@@ -859,11 +859,14 @@ class MapCanvas(QOpenGLWidget):
 
             # Generate terrain GLTF with custom resolution and scale
             print("Calling terrain generator...")
+            _blend = getattr(self, '_terrain_blend_source', None) or (None, None)
             gltf_path, bin_path = terrain_gen.generate_terrain_for_level(
                 str(sdat_path),
                 resolution=resolution,
                 scale=scale,
-                game_mode=getattr(self, 'game_mode', 'avatar')
+                game_mode=getattr(self, 'game_mode', 'avatar'),
+                blend_game_xml=_blend[0],
+                blend_data_roots=_blend[1],
             )
             
             if not gltf_path or not bin_path:
@@ -953,9 +956,11 @@ class MapCanvas(QOpenGLWidget):
             if not sdat_path:
                 return False
 
+            _blend = getattr(self, '_terrain_blend_source', None) or (None, None)
             gltf_path, bin_path = terrain_gen.generate_terrain_for_level(
                 str(sdat_path), resolution=resolution, scale=scale,
-                game_mode=getattr(self, 'game_mode', 'avatar')
+                game_mode=getattr(self, 'game_mode', 'avatar'),
+                blend_game_xml=_blend[0], blend_data_roots=_blend[1],
             )
             if not gltf_path or not bin_path:
                 return False

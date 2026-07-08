@@ -3040,3 +3040,39 @@ New `world_editor.py` (`Tools ▸ 🌍 World Editor…`, `open_world_editor` in 
 **Global preset catalog (use presets from any map).** `tools/build_env_preset_catalog.py` scans every converted `<map>.managers.xml` across both games (use `os.walk`, NOT `glob **` — FC2's data lives under a `...MODDING` dot-directory that `glob` skips) and extracts every `CEnvironment*` Template (name+GUID+class+which maps define it), deduped by GUID, into `env_preset_catalog.json` at the repo root (`{categories: {class: [{name,guid,game,maps}]}, stats}`). Current build: 52 maps → 488 presets (50 Sky, 95 Fog, 93 Lighting, …). The World Editor loads it (`_preset_catalog()`) and each slot dropdown lists LOCAL presets (from this map's managers, resolve in-game now) first, then a divider, then every same-class preset from OTHER maps, labelled `name · sourceMap`. NOTE: Avatar and FC2 SHARE GUIDs for engine-default presets (e.g. `Default.Clear.Sky` `{1899F900-…}` appears in 47 maps across both games) — so `game` is just the first map that defined it; `maps` is the source of truth. CAVEAT (not yet done): choosing a cross-map preset only writes the GUID — for it to resolve in-game its `Template` must also be copied into this map's `managers.fcb` (a future step; the dropdown tooltip says so).
 
 **Terrain Layer XBT thumbnails.** Each `<Layer>` in the Terrain Layers tab shows live thumbnails of its `Texture` (diffuse), `NormalMap`, `SpecularMap`, `HeightMap` XBT files (`_build_layer_previews`, `_THUMB_PX=96`). The layer stores an engine-relative path like `graphics\...\rf_fernground_d.xbt`; `_resolve_texture()` finds it on disk by trying the canvas' `game_data_path`/`patch_folder`/`worlds_folder` then every ancestor of the .game.xml (Avatar resolves under `<data>/graphics/…`, FC2 under its own root — both worked). Decoding reuses `canvas.texture_loader.TextureLoader.decode_xbt_to_rgba(path, is_normal_map=…)` (XBT→DDS→PIL→RGBA, its own 32-entry cache, DXT5-GA unpack for normals), wrapped to a `QImage(Format_RGBA8888)`→scaled `QPixmap`; results cached in `self._thumb_cache` keyed `(rel, is_normal, size)` so tab rebuilds are instant. Editing a texture path live-refreshes its thumb via a 400 ms debounce (`_wire_texture_live`). Unresolved paths show a "not found" placeholder. NOTE: `TextureLoader.__init__` requires a `materials_path` but `decode_xbt_to_rgba` doesn't use it — we pass a best-effort `<root>/graphics/_materials`.
+
+## In-game terrain texturing — splat-blended detail, 2D + 3D (July 2026)
+
+Both the 2D map and the 3D viewport previously showed the flat baked *diffuse*
+atlas per sector. They now composite the in-game look via the shared
+`canvas/terrain_blend.py`: per sector, sample the `atlas*_mask` splat (RGB weights,
+partition-of-unity), blend the first 3 `<Layers>` detail textures tiled by each
+layer's `Tiling`, and modulate the baked diffuse (the game's own low-freq colour
+anchor), so large-scale colour stays correct while high-freq tiled detail is added:
+`out = diffuse * ((1-s) + s*detail/mean(detail))`, s=`DEFAULT_DETAIL_STRENGTH` 0.85.
+`build_sector_tile(sdat_dir, atlas_num, sub_sector, layers, out_size, cache)` reads
+`atlas{N}_{diffuse,mask,color}.xbt` from the sdat and composites one quadrant;
+`load_layers(game_xml, data_roots)` pulls the detail textures from the map's
+.game.xml (text or FC2-binary via convert_avatar_xml) resolved against data roots.
+
+- **2D** (`terrain_renderer`): `set_blend_source(game_xml, data_roots)` + a bump from
+  the 65px heightmap grid to `texture_tile_px=160` per sector in
+  `_generate_terrain_image_textured` (terrain_pixmap is display-only, drawn scaled to
+  world coords, so pixel res is decoupled — safe). Falls back to the diffuse quadrant
+  on any error.
+- **3D** (`terrain_to_gltf`): `TerrainExporter(..., blend_game_xml, blend_data_roots)`;
+  `load_sector_texture` returns the composited tile and `create_combined_texture` bakes
+  at `texture_tile_px` (160) instead of grid_size. UVs are 0..1 across the mesh so
+  higher texel count needs NO geometry/UV/shader change — the existing single-diffuse
+  fixed-function path just gets a detailed baked atlas. `generate_terrain_for_level`
+  uses a fresh temp dir each call (no stale cache), so edits always re-bake.
+- **Wiring**: editor `_apply_terrain_blend()` resolves the level's .game.xml
+  (`_find_game_xml`) + data roots (`_terrain_data_roots`: game_data_path + worlds_folder
+  ancestors — Avatar textures under `<data>/graphics`, FC2 under its own root), calls
+  `terrain_renderer.set_blend_source` AND stores `canvas._terrain_blend_source`; the two
+  `generate_terrain_for_level` call sites in `map_canvas_gpu` (single + FC2 cell) pass it
+  through. Runs before terrain loads so the first bake is already blended.
+
+Both games. Verified headlessly: 2D pixmap 650→1600px, 3D baked texture 650→1600px,
+both showing rock along ridgelines + vegetation in flats (splat-driven) vs the old flat
+diffuse. GUI look (in the actual 3D viewport) still needs a user click-test.

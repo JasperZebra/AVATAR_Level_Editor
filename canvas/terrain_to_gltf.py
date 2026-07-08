@@ -50,13 +50,24 @@ class TerrainExporter:
     # off — the region needs NO extra rotation at all.
     _FC2_3D_TEXTURE_TURNS = 0
 
-    def __init__(self, input_path, output_path, resolution, meters_per_coordinate=1.0, game_mode="avatar"):
+    def __init__(self, input_path, output_path, resolution, meters_per_coordinate=1.0,
+                 game_mode="avatar", blend_game_xml=None, blend_data_roots=None):
         self.input_path = Path(input_path)
         self.output_path = Path(output_path)
         self.resolution = resolution
         self.meters_per_coordinate = meters_per_coordinate
         self.game_mode = game_mode
         self.grid_size = 65  # Each sector is 65x65
+
+        # In-game terrain look: splat-blend the <Layers> detail textures over the
+        # baked diffuse into the combined texture (see canvas/terrain_blend.py).
+        # Off unless the map's .game.xml is supplied. When on, the per-sector
+        # texture cell is baked larger so the tiled detail is visible.
+        self.blend_game_xml = blend_game_xml
+        self.blend_data_roots = list(blend_data_roots or [])
+        self._blend_layers = None          # None = not loaded yet; [] = disabled
+        self._blend_cache = {}
+        self.texture_tile_px = self.grid_size
         self.sectors_data = {}
         self.sectors_textures = {}
         self.atlas_mapping = {}
@@ -263,9 +274,32 @@ class TerrainExporter:
         else:
             print("\nNo texture atlas files found")
     
+    def _ensure_blend_layers(self):
+        """Lazily load the <Layers> detail textures; bump the per-sector texture
+        cell so the tiled detail is visible. Returns the layer list ([] if off)."""
+        if self._blend_layers is not None:
+            return self._blend_layers
+        self._blend_layers = []
+        if self.blend_game_xml:
+            try:
+                from canvas import terrain_blend
+            except Exception:
+                import terrain_blend
+            try:
+                self._blend_layers = terrain_blend.load_layers(
+                    self.blend_game_xml, self.blend_data_roots)
+                if self._blend_layers:
+                    self.texture_tile_px = 160
+                    print(f"[Terrain3D] Splat blend enabled — {len(self._blend_layers)} "
+                          f"detail layers: {[l['name'] for l in self._blend_layers]}")
+            except Exception as e:
+                print(f"[Terrain3D] blend layer load failed: {e}")
+                self._blend_layers = []
+        return self._blend_layers
+
     def load_sector_texture(self, sector_num):
         """Load texture for a sector from atlas
-        
+
         Standard extraction pattern (matches viewer script):
         - sub_sector 0 = Top-Left (TL)
         - sub_sector 1 = Top-Right (TR)
@@ -274,9 +308,25 @@ class TerrainExporter:
         """
         if sector_num not in self.atlas_mapping:
             return None
-        
+
         atlas_num, sub_sector = self.atlas_mapping[sector_num]
-        
+
+        # In-game splat-blended tile (mask + tiled <Layers> detail + diffuse).
+        blend_layers = self._ensure_blend_layers()
+        if blend_layers:
+            try:
+                from canvas import terrain_blend
+            except Exception:
+                import terrain_blend
+            try:
+                tile = terrain_blend.build_sector_tile(
+                    str(self.sdat_path), atlas_num, sub_sector,
+                    blend_layers, self.texture_tile_px, self._blend_cache)
+                if tile is not None:
+                    return tile
+            except Exception as e:
+                print(f"[Terrain3D] blend tile failed s{sector_num}: {e}")
+
         # Try to find the atlas file
         patterns = [
             f"atlas{atlas_num}_d.xbt",
@@ -316,10 +366,11 @@ class TerrainExporter:
                     else:  # sub_sector == 3, Bottom-Right
                         sub_texture = img_array[half_h:height, half_w:width]
 
-                    # Resize to match sector grid size
+                    # Resize to the per-sector texture cell size
                     sub_img = Image.fromarray(sub_texture)
-                    sub_img = sub_img.resize((self.grid_size, self.grid_size), Image.Resampling.LANCZOS)
-                    
+                    sub_img = sub_img.resize((self.texture_tile_px, self.texture_tile_px),
+                                             Image.Resampling.LANCZOS)
+
                     return np.array(sub_img)
                 except Exception as e:
                     print(f"Error loading texture from {texture_path}: {e}")
@@ -564,14 +615,15 @@ class TerrainExporter:
         if not self.sectors_textures:
             return None
         
-        total_width = sectors_x * self.grid_size
-        total_height = sectors_y * self.grid_size
-        
+        tex = int(self.texture_tile_px)
+        total_width = sectors_x * tex
+        total_height = sectors_y * tex
+
         combined = np.zeros((total_height, total_width, 3), dtype=np.uint8)
-        
+
         print(f"\nCreating combined texture at full resolution: {total_width}x{total_height}")
         print("Using Avatar Game Layout (2x2 blocks, vertical)...")
-        
+
         for display_row in range(sectors_y):
             for col in range(sectors_x):
                 # Shared tile pipeline for BOTH games (Avatar Game Layout pattern
@@ -579,14 +631,14 @@ class TerrainExporter:
                 sector_index = self.get_sector_index_from_position(display_row, col, sectors_x, sectors_y)
 
                 if sector_index in self.sectors_textures:
-                    start_y = display_row * self.grid_size
-                    start_x = col * self.grid_size
+                    start_y = display_row * tex
+                    start_x = col * tex
 
-                    # Get texture for this sector (already 65x65)
+                    # Get texture for this sector (texture_tile_px square)
                     texture_data = self.sectors_textures[sector_index]
 
                     # Avatar layout: NO flip (textures match heightmap orientation)
-                    combined[start_y:start_y+self.grid_size, start_x:start_x+self.grid_size] = texture_data
+                    combined[start_y:start_y+tex, start_x:start_x+tex] = texture_data
 
         # FC2 3D texture orientation knob: the original 3D look was tuned with
         # a 180° terrain RENDER rotation. Geometry now stays unrotated (proven
@@ -1301,7 +1353,8 @@ class TerrainExporter:
         
         return True
 
-def generate_terrain_for_level(level_sdat_path, output_dir=None, resolution=500000, scale=1.0, game_mode="avatar"):
+def generate_terrain_for_level(level_sdat_path, output_dir=None, resolution=500000, scale=1.0,
+                               game_mode="avatar", blend_game_xml=None, blend_data_roots=None):
     """
     Generate terrain GLTF for a specific level on-demand.
 
@@ -1321,7 +1374,9 @@ def generate_terrain_for_level(level_sdat_path, output_dir=None, resolution=5000
         output_dir = tempfile.mkdtemp(prefix="terrain_")
 
     try:
-        exporter = TerrainExporter(level_sdat_path, output_dir, resolution, scale, game_mode=game_mode)
+        exporter = TerrainExporter(level_sdat_path, output_dir, resolution, scale,
+                                   game_mode=game_mode, blend_game_xml=blend_game_xml,
+                                   blend_data_roots=blend_data_roots)
         success = exporter.export()
         
         if success:
