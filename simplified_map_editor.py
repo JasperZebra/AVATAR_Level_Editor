@@ -4154,34 +4154,46 @@ class SimplifiedMapEditor(QMainWindow):
             except Exception as e:
                 print(f"Error scanning patch folders: {e}")
             
-            # Find levels that exist in both folders
-            common_levels = worlds_levels.intersection(levels_levels)
-            all_levels = worlds_levels.union(levels_levels)
-            
-            print(f"Found {len(worlds_levels)} worlds, {len(levels_levels)} levels, {len(common_levels)} complete")
-            
-            for level_name in sorted(all_levels):
-                worlds_path = os.path.join(worlds_folder, level_name) if level_name in worlds_levels else None
-                levels_path = os.path.join(levels_folder, level_name) if level_name in levels_levels else None
-                
-                # Validate paths with detailed feedback
-                worlds_valid = False
+            # Pair each worlds/ name with its levels/ folder. Most REAL Avatar
+            # levels name their levels/ folder with a "_l" suffix (verified:
+            # 9 of 10 folders under ATGE\patch\levels — every sp_*/mp_* retail
+            # map — e.g. worlds/mp_mridge_df_01 <-> levels/mp_mridge_df_01_l;
+            # only dev/test maps like z_anim_creatures match exactly). A plain
+            # set-intersection match (the old logic) never matches the "_l"
+            # case, so every one of those levels showed up as TWO separate,
+            # perpetually-incomplete entries (world data with no terrain, and
+            # terrain with no environment) instead of one usable level.
+            def _resolve_levels_name(world_name):
+                if world_name in levels_levels:
+                    return world_name
+                if f"{world_name}_l" in levels_levels:
+                    return f"{world_name}_l"
+                return None
+
+            matched_levels_names = set()
+            print(f"Found {len(worlds_levels)} worlds, {len(levels_levels)} levels")
+
+            for level_name in sorted(worlds_levels):
+                worlds_path = os.path.join(worlds_folder, level_name)
+                levels_name = _resolve_levels_name(level_name)
+                levels_path = os.path.join(levels_folder, levels_name) if levels_name else None
+                if levels_name:
+                    matched_levels_names.add(levels_name)
+
+                worlds_valid = self.validate_worlds_folder(worlds_path)
+                if worlds_valid:
+                    print(f"   {level_name} worlds folder valid")
+                else:
+                    print(f"   {level_name} worlds folder invalid (no XML files)")
+
                 levels_valid = False
-                
-                if worlds_path:
-                    worlds_valid = self.validate_worlds_folder(worlds_path)
-                    if worlds_valid:
-                        print(f"   {level_name} worlds folder valid")
-                    else:
-                        print(f"   {level_name} worlds folder invalid (no XML files)")
-                
                 if levels_path:
                     levels_valid = self.validate_levels_folder(levels_path)
                     if levels_valid:
-                        print(f"   {level_name} levels folder valid")
+                        print(f"   {level_name} levels folder valid ({levels_name})")
                     else:
                         print(f"   {level_name} levels folder invalid (no worldsectors)")
-                
+
                 if worlds_valid or levels_valid:
                     level_info = {
                         'name': level_name,
@@ -4191,11 +4203,32 @@ class SimplifiedMapEditor(QMainWindow):
                         'complete': worlds_valid and levels_valid
                     }
                     level_data.append(level_info)
-                    
+
                     status = "complete" if worlds_valid and levels_valid else "partial"
                     print(f"   Added {level_name} ({status})")
                 else:
                     print(f"   Skipped {level_name} (no valid data)")
+
+            # Any levels/ folders with no matching worlds/ entry (orphaned
+            # terrain-only data) still get a partial entry, same as before.
+            for level_name in sorted(levels_levels - matched_levels_names):
+                levels_path = os.path.join(levels_folder, level_name)
+                levels_valid = self.validate_levels_folder(levels_path)
+                if levels_valid:
+                    print(f"   {level_name} levels folder valid (no matching worlds/)")
+                    level_data.append({
+                        'name': level_name,
+                        'worlds_path': None,
+                        'levels_path': levels_path,
+                        'base_folder': base_folder,
+                        'complete': False
+                    })
+                    print(f"   Added {level_name} (partial)")
+                else:
+                    print(f"   Skipped {level_name} (no valid data)")
+
+            complete_count = sum(1 for lv in level_data if lv['complete'])
+            print(f"   {complete_count} complete level(s) after pairing")
         
         # Pattern 2: Direct level folder
         else:
