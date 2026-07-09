@@ -84,7 +84,7 @@ class TerrainRenderer:
         self._blend_layers = None          # None = not loaded yet; [] = nothing usable
         self._blend_cache = {}
         self._blend_meters_per_step = 1.0  # world meters per heightmap grid step (for slope)
-        self.texture_tile_px = 160         # per-sector baked texture resolution
+        self.texture_tile_px = 224         # per-sector baked texture resolution
 
         # Water data storage
         self.water_data = {}  # sector_num -> WaterData

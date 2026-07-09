@@ -292,7 +292,7 @@ class TerrainExporter:
                 self._blend_layers = terrain_blend.load_layers(
                     self.blend_game_xml, self.blend_data_roots)
                 if self._blend_layers:
-                    self.texture_tile_px = 160
+                    self.texture_tile_px = 224
                     self._blend_meters_per_step = terrain_blend.load_meters_per_step(
                         self.blend_game_xml, grid_size=self.grid_size)
                     print(f"[Terrain3D] Splat blend enabled — {len(self._blend_layers)} "
