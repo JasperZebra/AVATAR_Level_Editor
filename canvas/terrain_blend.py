@@ -331,6 +331,40 @@ def rule_weights(heightmap, layers, out_size, world_min_h, world_max_h,
         if _layer_is_unrestricted(lay):
             unrestricted.append(i)
 
+    # Triplanar siblings: two layers with the SAME slope/altitude rule that
+    # differ only by ProjAxis 0 (X) vs 1 (Y) — e.g. mridge's Rock_X/Rock_Y,
+    # both MinSlope=55..90, same texture, different cliff-face UV projection
+    # — are alternate projections of ONE material, not independently
+    # mask-competing layers (confirmed: a sector's .csdat file carries real
+    # per-vertex tangent-space normal data in its otherwise-undocumented
+    # byte[2]/byte[3] fields — byte[2] matches the standard-encoded normal X
+    # component computed from this same heightmap gradient almost exactly,
+    # corr=0.979, mean error 5.8/255 — so the engine really does have a
+    # per-pixel surface-facing direction to pick a projection axis with).
+    # Blending both unconditionally (the old behaviour, since they share one
+    # rule) mixed two different UV orientations of the same rock texture
+    # everywhere both were active — read as blurry/incoherent, not a clean
+    # cliff face. Select one via whichever axis the LOCAL normal faces more.
+    by_rule = {}
+    for i, lay in enumerate(layers):
+        rule_key = (lay.get('min_slope', 0), lay.get('max_slope', 90),
+                   lay.get('alt_start', 0), lay.get('alt_end', 255))
+        by_rule.setdefault(rule_key, []).append(i)
+    for rule_key, idxs in by_rule.items():
+        x_idxs = [i for i in idxs if layers[i].get('proj_axis') == 0]
+        y_idxs = [i for i in idxs if layers[i].get('proj_axis') == 1]
+        if x_idxs and y_idxs:
+            norm3 = np.sqrt(gx * gx + gy * gy + 1.0)
+            nx_r = _resize_1ch(-gx / norm3, o, -1.0, 1.0)
+            ny_r = _resize_1ch(-gy / norm3, o, -1.0, 1.0)
+            ax, ay = np.abs(nx_r), np.abs(ny_r)
+            fx = ax / (ax + ay + 1e-6)
+            fy = 1.0 - fx
+            for i in x_idxs:
+                weights[:, :, i] = weights[:, :, i] * fx
+            for i in y_idxs:
+                weights[:, :, i] = weights[:, :, i] * fy
+
     if len(unrestricted) > 1:
         if mask is not None:
             m = _resize_smooth(_to_float_rgb(mask), o)
@@ -585,6 +619,7 @@ def load_layers(game_xml_path, data_roots, max_layers=DEFAULT_MAX_LAYERS, size=2
             'min_slope': _f(lay, 'MinSlope', 0.0), 'max_slope': _f(lay, 'MaxSlope', 90.0),
             'alt_start': _f(lay, 'AltStart', 0.0), 'alt_end': _f(lay, 'AltEnd', 255.0),
             'smooth': lay.get('Smooth', '1') != '0',
+            'proj_axis': int(_f(lay, 'ProjAxis', 2)),
         })
     if len(layer_els) > max_layers:
         print(f"[terrain_blend] {len(layer_els)} layers defined in {os.path.basename(game_xml_path)}; "
