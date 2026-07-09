@@ -696,7 +696,21 @@ def _atlas_sibling(diffuse_path, suffix):
 
 
 def _crop_quad(a, sub):
-    """2x2 quadrant: 0=TL 1=TR 2=BL 3=BR."""
+    """2x2 quadrant: 0=TL 1=TR 2=BL 3=BR.
+
+    NOTE: tried adding a per-quadrant mirror+rot90 here based on a slope-vs-
+    mask correlation measurement (individual sectors did correlate better in
+    isolation — e.g. sector 0 went -0.10 -> +0.63). REVERTED: rendering the
+    full map with it showed every sector visibly disconnected from its
+    neighbours — ridgelines that previously flowed continuously across
+    sector boundaries fragmented into a hard checkerboard. The per-sector
+    correlation test optimised something real but too narrow (one sector's
+    alignment to ITS OWN heightmap) while ignoring the thing that actually
+    matters for a coherent map: adjacent sectors' crops staying mutually
+    consistent. The untransformed crop is what actually tiles seamlessly —
+    keep it as-is unless a future fix demonstrably preserves cross-sector
+    continuity, not just single-sector slope correlation.
+    """
     h, w = a.shape[:2]
     hh, hw = h // 2, w // 2
     r, c = sub // 2, sub % 2
