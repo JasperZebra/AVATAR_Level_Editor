@@ -72,6 +72,7 @@ class TerrainExporter:
         self._blend_world_max_h = 1.0
         self.texture_tile_px = self.grid_size
         self.sectors_data = {}
+        self.sectors_underwater = {}  # sector_index -> (grid,grid) bool: real per-vertex water flag (csdat byte[3])
         self.sectors_textures = {}
         self.atlas_mapping = {}
         self._sector_file_paths = {}  # local_idx (or global_id before remap) → file_path
@@ -120,35 +121,47 @@ class TerrainExporter:
         return None
     
     def load_heightmap_from_csdat(self, file_path):
-        """Load heightmap data from a sector file (.csdat or .sdat)"""
+        """Load one sector's 65x65 grid of 4-byte terrain samples from a
+        sector file (.csdat or .sdat).
+
+        bytes[0:2] = packed uint16 height (LE) / 128. byte[2] is a standard-
+        encoded tangent-space normal-map X component (confirmed empirically,
+        not yet consumed here). byte[3] is a genuine per-vertex "underwater /
+        at water level" flag the original exporter baked in — a clean
+        bimodal split (0-95 dry land, 224-239 underwater) matching
+        height<=water_height with 99.3-99.9% agreement on real sectors — see
+        AGENTS.md "byte3 deep dive". Returns (heightmap, underwater_mask);
+        underwater_mask is None if the file is too short for the full
+        4-byte-per-sample block.
+        """
         try:
-            heightmap = []
             with open(file_path, 'rb') as f:
                 f.seek(self._terrain_offset)
-                terrain_data = io.BytesIO(f.read())
-            
-            for y in range(self.grid_size):
+                raw = f.read()
+
+            n = self.grid_size
+            if len(raw) >= n * n * 4:
+                arr = np.frombuffer(raw, dtype=np.uint8, count=n * n * 4).reshape(n, n, 4)
+                heightmap = (arr[:, :, 1].astype(np.uint32) * 256
+                            + arr[:, :, 0].astype(np.uint32)).astype(np.float64) / 128.0
+                underwater_mask = arr[:, :, 3] > 150
+                return heightmap, underwater_mask
+
+            # Fallback for a short/odd-sized read: original byte-by-byte parse.
+            terrain_data = io.BytesIO(raw)
+            heightmap = []
+            for y in range(n):
                 row = []
-                for x in range(self.grid_size):
-                    # Read only first 2 bytes (little-endian)
+                for x in range(n):
                     bytes_data = terrain_data.read(2)
-                    if len(bytes_data) < 2:
-                        height = 0
-                    else:
-                        # Divide by 128 to get correct scale (same as Blender importer)
-                        height = struct.unpack('<H', bytes_data)[0] / 128
-                    
+                    height = 0 if len(bytes_data) < 2 else struct.unpack('<H', bytes_data)[0] / 128
                     row.append(height)
-                    
-                    # Skip remaining 2 bytes (we ignore them)
                     terrain_data.read(2)
-                
                 heightmap.append(row)
-            
-            return np.array(heightmap)
+            return np.array(heightmap), None
         except Exception as e:
             print(f"Error loading heightmap from {file_path}: {e}")
-            return None
+            return None, None
     
     def extract_dds_from_xbt(self, xbt_data):
         """Extract DDS data from XBT container"""
@@ -334,7 +347,8 @@ class TerrainExporter:
                     heightmap=self.sectors_data.get(sector_num),
                     world_min_h=self._blend_world_min_h,
                     world_max_h=self._blend_world_max_h,
-                    meters_per_step=self._blend_meters_per_step)
+                    meters_per_step=self._blend_meters_per_step,
+                    underwater_mask=self.sectors_underwater.get(sector_num))
                 if tile is not None:
                     return tile
             except Exception as e:
@@ -407,10 +421,12 @@ class TerrainExporter:
             try:
                 # Strip leading "sd" and trailing extension to get the sector number
                 sector_num = int(filename[2:-ext_len])
-                heightmap = self.load_heightmap_from_csdat(file_path)
+                heightmap, underwater_mask = self.load_heightmap_from_csdat(file_path)
 
                 if heightmap is not None:
                     self.sectors_data[sector_num] = heightmap
+                    if underwater_mask is not None:
+                        self.sectors_underwater[sector_num] = underwater_mask
                     self._sector_file_paths[sector_num] = file_path
                     loaded_count += 1
                     print(f"  Loaded sector {sector_num}")
@@ -439,14 +455,18 @@ class TerrainExporter:
             if gap_found:
                 remapped_s = {}
                 remapped_files = {}  # local_idx → file_path (parallel to remapped_s)
+                remapped_u = {}
                 for sn in sorted_nums:
                     diff = sn - min_s
                     local_idx = (diff // row_stride) * secs_per_row + (diff % row_stride)
                     remapped_s[local_idx] = self.sectors_data[sn]
                     if sn in self._sector_file_paths:
                         remapped_files[local_idx] = self._sector_file_paths[sn]
+                    if sn in self.sectors_underwater:
+                        remapped_u[local_idx] = self.sectors_underwater[sn]
                 self.sectors_data = remapped_s
                 self._sector_file_paths = remapped_files
+                self.sectors_underwater = remapped_u
                 self._fc2_sector_base = min_s
                 self._fc2_row_stride = row_stride
                 self._fc2_secs_per_row = secs_per_row
@@ -480,13 +500,17 @@ class TerrainExporter:
             return
         remapped_s = {}
         remapped_files = {}  # local_idx → file_path (parallel to remapped_s)
+        remapped_u = {}
         for sn in sorted_nums:
             local_idx = sn - min_s
             remapped_s[local_idx] = self.sectors_data[sn]
             if sn in self._sector_file_paths:
                 remapped_files[local_idx] = self._sector_file_paths[sn]
+            if sn in self.sectors_underwater:
+                remapped_u[local_idx] = self.sectors_underwater[sn]
         self.sectors_data = remapped_s
         self._sector_file_paths = remapped_files
+        self.sectors_underwater = remapped_u
         print(f"Avatar remap: {len(remapped_s)} sectors, "
               f"global[{min_s}..{sorted_nums[-1]}] → local[0..{max(remapped_s)}]")
     

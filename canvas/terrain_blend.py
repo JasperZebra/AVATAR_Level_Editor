@@ -292,12 +292,24 @@ def _layer_is_unrestricted(layer):
 
 
 def rule_weights(heightmap, layers, out_size, world_min_h, world_max_h,
-                 meters_per_step=1.0, mask=None):
+                 meters_per_step=1.0, mask=None, underwater_mask=None):
     """Per-texel, per-layer weight in [0,1] (NOT yet normalised) derived from
     each layer's own MinSlope/MaxSlope/AltStart/AltEnd rule evaluated against
     the sector's real heightmap — see module docstring for why this replaces
     guessing a mask-channel<->layer mapping. `Smooth` narrows/widens the
     transition feather (Smooth="0" layers, e.g. cliffs, cut in faster).
+
+    `underwater_mask` (optional (H,W) bool, native heightmap resolution): the
+    REAL per-vertex "underwater / at water level" flag recovered from the
+    sector's own .csdat file (byte[3] — a clean bimodal split, 0-95 dry land
+    vs 224-239 underwater, confirmed 99.3-99.9% agreement with
+    height<=water_height on real sectors; see AGENTS.md "byte3 deep dive").
+    For any layer whose rule is clearly "underwater/beach" (AltEnd<=10, e.g.
+    Underwater_Z's AltStart=0,AltEnd=0), this REPLACES the synthetic global-
+    height-range altitude gate — the real signal is computed by the original
+    exporter per-sector against that sector's OWN water body, so unlike a
+    single global min/max normalisation it correctly handles multiple water
+    bodies sitting at different absolute elevations across one map.
 
     Layers that are unrestricted (apply everywhere) are further weighted, among
     themselves only, by the painted splat mask (channel order) — their rule
@@ -314,6 +326,8 @@ def rule_weights(heightmap, layers, out_size, world_min_h, world_max_h,
     o = int(out_size)
     slope_r = _resize_1ch(slope_deg, o, 0.0, 90.0)
     alt_r = _resize_1ch(alt, o, 0.0, 255.0)
+    underwater_r = (_resize_1ch(underwater_mask.astype(np.float32), o, 0.0, 1.0)
+                    if underwater_mask is not None else None)
 
     weights = np.zeros((o, o, len(layers)), np.float32)
     unrestricted = []
@@ -326,7 +340,10 @@ def rule_weights(heightmap, layers, out_size, world_min_h, world_max_h,
         sf = 6.0 if smooth else 3.5
         af = 14.0 if smooth else 8.0
         w_slope = _smooth_gate(slope_r, lay.get('min_slope', 0), lay.get('max_slope', 90), sf, 90.0)
-        w_alt = _smooth_gate(alt_r, lay.get('alt_start', 0), lay.get('alt_end', 255), af, 255.0)
+        if underwater_r is not None and lay.get('alt_end', 255) <= 10:
+            w_alt = underwater_r
+        else:
+            w_alt = _smooth_gate(alt_r, lay.get('alt_start', 0), lay.get('alt_end', 255), af, 255.0)
         weights[:, :, i] = w_slope * w_alt
         if _layer_is_unrestricted(lay):
             unrestricted.append(i)
@@ -335,12 +352,12 @@ def rule_weights(heightmap, layers, out_size, world_min_h, world_max_h,
     # differ only by ProjAxis 0 (X) vs 1 (Y) — e.g. mridge's Rock_X/Rock_Y,
     # both MinSlope=55..90, same texture, different cliff-face UV projection
     # — are alternate projections of ONE material, not independently
-    # mask-competing layers (confirmed: a sector's .csdat file carries real
-    # per-vertex tangent-space normal data in its otherwise-undocumented
-    # byte[2]/byte[3] fields — byte[2] matches the standard-encoded normal X
-    # component computed from this same heightmap gradient almost exactly,
-    # corr=0.979, mean error 5.8/255 — so the engine really does have a
-    # per-pixel surface-facing direction to pick a projection axis with).
+    # mask-competing layers (confirmed: a sector's .csdat file's byte[2]
+    # matches the standard-encoded tangent-space normal X component computed
+    # from this same heightmap gradient almost exactly, corr=0.979, mean
+    # error 5.8/255 — so the engine really does have a per-pixel surface-
+    # facing direction to pick a projection axis with; byte[3] turned out to
+    # be a SEPARATE per-vertex underwater flag, see `underwater_mask` above).
     # Blending both unconditionally (the old behaviour, since they share one
     # rule) mixed two different UV orientations of the same rock texture
     # everywhere both were active — read as blurry/incoherent, not a clean
@@ -388,7 +405,7 @@ def composite_sector(mask, color, shadow, layers, out_size, *,
                      diffuse=None, detail_strength=DEFAULT_DETAIL_STRENGTH,
                      tiling_scale=DEFAULT_TILING_SCALE, brightness=DEFAULT_BRIGHTNESS,
                      heightmap=None, world_min_h=0.0, world_max_h=1.0,
-                     meters_per_step=1.0):
+                     meters_per_step=1.0, underwater_mask=None):
     """Composite one sector's in-game-look tile.
 
     The baked *diffuse* atlas is the colour/brightness anchor (it is the game's
@@ -429,7 +446,7 @@ def composite_sector(mask, color, shadow, layers, out_size, *,
     if heightmap is not None:
         active = layers
         weights = rule_weights(heightmap, active, o, world_min_h, world_max_h,
-                               meters_per_step, mask=mask)
+                               meters_per_step, mask=mask, underwater_mask=underwater_mask)
         s = weights.sum(axis=2, keepdims=True)
         w = np.divide(weights, s, out=np.zeros_like(weights), where=s > 1e-3)
         no_layer = (s[:, :, 0] <= 1e-3)

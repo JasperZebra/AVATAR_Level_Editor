@@ -52,6 +52,7 @@ class TerrainRenderer:
         self.game_mode = game_mode
         self.grid_size = 65
         self.sectors_data = {}
+        self.sectors_underwater = {}  # sector_index -> (grid,grid) bool: real per-vertex water flag (csdat byte[3])
         self.combined_heightmap = None
         self.terrain_image = None
         self.terrain_pixmap = None
@@ -137,6 +138,7 @@ class TerrainRenderer:
         self.sdat_path = sdat_path
         self.current_directory = sdat_path
         self.sectors_data = {}
+        self.sectors_underwater = {}
         self.water_data = {}
         self.atlas_mapping = {}   # must rebuild per folder so each cell uses its own textures
         self.sector_to_path = {}
@@ -178,10 +180,12 @@ class TerrainRenderer:
                 else:
                     sector_num = int(name)
 
-                height_data = self._load_single_sector(file_path)
+                height_data, underwater_mask = self._load_single_sector(file_path)
                 if height_data is not None:
                     self.sectors_data[sector_num] = height_data
-                    
+                    if underwater_mask is not None:
+                        self.sectors_underwater[sector_num] = underwater_mask
+
                     # Parse water data from this sector
                     water = self.parse_water_from_sector(file_path, sector_num)
                     self.water_data[sector_num] = water
@@ -217,7 +221,7 @@ class TerrainRenderer:
                         gap_found = True
                         break
                 if gap_found:
-                    remapped_s, remapped_w = {}, {}
+                    remapped_s, remapped_w, remapped_u = {}, {}, {}
                     for sn in sorted_nums:
                         diff = sn - min_s
                         local_idx = (diff // row_stride) * secs_per_row + (diff % row_stride)
@@ -225,8 +229,11 @@ class TerrainRenderer:
                             remapped_s[local_idx] = self.sectors_data[sn]
                         if sn in self.water_data:
                             remapped_w[local_idx] = self.water_data[sn]
+                        if sn in self.sectors_underwater:
+                            remapped_u[local_idx] = self.sectors_underwater[sn]
                     self.sectors_data = remapped_s
                     self.water_data = remapped_w
+                    self.sectors_underwater = remapped_u
                     self._fc2_sector_base = min_s
                     self._fc2_row_stride = row_stride
                     self._fc2_secs_per_row = secs_per_row
@@ -240,14 +247,17 @@ class TerrainRenderer:
                 sorted_nums = sorted(self.sectors_data.keys())
                 min_s = sorted_nums[0]
                 if min_s > 0:
-                    remapped_s, remapped_w = {}, {}
+                    remapped_s, remapped_w, remapped_u = {}, {}, {}
                     for sn in sorted_nums:
                         local_idx = sn - min_s
                         remapped_s[local_idx] = self.sectors_data[sn]
                         if sn in self.water_data:
                             remapped_w[local_idx] = self.water_data[sn]
+                        if sn in self.sectors_underwater:
+                            remapped_u[local_idx] = self.sectors_underwater[sn]
                     self.sectors_data = remapped_s
                     self.water_data = remapped_w
+                    self.sectors_underwater = remapped_u
                     print(f"[Terrain] Avatar remap: global[{min_s}..{sorted_nums[-1]}] "
                           f"→ local[0..{max(remapped_s)}]")
 
@@ -294,9 +304,11 @@ class TerrainRenderer:
                     sector_num = int(name)
 
                 if sector_num not in self.sectors_data:
-                    height_data = self._load_single_sector(file_path)
+                    height_data, underwater_mask = self._load_single_sector(file_path)
                     if height_data is not None:
                         self.sectors_data[sector_num] = height_data
+                        if underwater_mask is not None:
+                            self.sectors_underwater[sector_num] = underwater_mask
                         water = self.parse_water_from_sector(file_path, sector_num)
                         self.water_data[sector_num] = water
                         added += 1
@@ -340,25 +352,50 @@ class TerrainRenderer:
         return True
 
     def _load_single_sector(self, file_path: str):
+        """Load one sector's 65x65 grid of 4-byte terrain samples.
+
+        bytes[0:2] = packed uint16 height (LE) / 128 — used since this editor
+        existed. bytes[2:4] were previously discarded entirely; byte[2] is a
+        standard-encoded tangent-space normal-map X component (confirmed:
+        corr=0.979 against a heightmap-gradient-derived normal, mean error
+        5.8/255 — not yet consumed here). byte[3] is a genuine per-vertex
+        "underwater / at water level" flag the original exporter baked in:
+        a clean bimodal split (0-95 dry land, 224-239 underwater, a completely
+        empty gap in between) that matches height<=water_height with 99.3-99.9%
+        agreement on real sectors — see AGENTS.md "byte3 deep dive". Returns
+        (height_array, underwater_mask) — underwater_mask is None if the file
+        is too short to contain the full 4-byte-per-sample block (older/odd
+        files still get a valid height_array via a byte-by-byte fallback).
+        """
         try:
             with open(file_path, 'rb') as f:
                 f.seek(self._terrain_offset)
-                terrain_data = io.BytesIO(f.read(16900))
+                raw = f.read(16900)
 
-            height_array = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
-            for y in range(self.grid_size):
-                for x in range(self.grid_size):
+            n = self.grid_size
+            if len(raw) >= n * n * 4:
+                arr = np.frombuffer(raw, dtype=np.uint8, count=n * n * 4).reshape(n, n, 4)
+                height_array = (arr[:, :, 1].astype(np.uint32) * 256
+                               + arr[:, :, 0].astype(np.uint32)).astype(np.float32) / 128.0
+                underwater_mask = arr[:, :, 3] > 150
+                return height_array, underwater_mask
+
+            # Fallback for a short/odd-sized read: original byte-by-byte parse.
+            terrain_data = io.BytesIO(raw)
+            height_array = np.zeros((n, n), dtype=np.float32)
+            for y in range(n):
+                for x in range(n):
                     data = terrain_data.read(2)
                     if len(data) < 2:
                         break
                     height = int.from_bytes(data, 'little') / 128
                     height_array[y, x] = height
                     terrain_data.read(2)
-            return height_array
+            return height_array, None
 
         except Exception as e:
             print(f"Error loading {file_path}: {e}")
-            return None
+            return None, None
 
     # ----------------------------
     # Water Parsing
@@ -733,7 +770,8 @@ class TerrainRenderer:
                                     heightmap=self.sectors_data.get(sector_index),
                                     world_min_h=blend_world_min_h,
                                     world_max_h=blend_world_max_h,
-                                    meters_per_step=self._blend_meters_per_step)
+                                    meters_per_step=self._blend_meters_per_step,
+                                    underwater_mask=self.sectors_underwater.get(sector_index))
                                 if tile is not None:
                                     sector_texture = self.pil_image_to_qimage(
                                         Image.fromarray(tile))
