@@ -3719,11 +3719,11 @@ class MapCanvas(QOpenGLWidget):
         self._reset_gl_state_for_qpainter()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        
+
         try:
             if hasattr(self, 'terrain_renderer'):
                 self.terrain_renderer.render_terrain_2d(painter, self)
-            
+
             if self.show_entities:
                 entities_to_draw = self._filter_entities_by_source(self._get_visible_entities())
                 if entities_to_draw:
@@ -3733,7 +3733,6 @@ class MapCanvas(QOpenGLWidget):
 
             self.gizmo_renderer.render_rotation_gizmo_2d(painter, self)
 
-            # ADD THIS LINE HERE:
             self._render_selection_box(painter)
 
             if getattr(self, 'show_sector_boundaries', False):
