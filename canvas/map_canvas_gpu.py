@@ -599,7 +599,14 @@ class MapCanvas(QOpenGLWidget):
         self.day_night_enabled = True
         self.time_of_day = 0.5          # noon
         self._daynight_play = False
-        self._daynight_speed = 1.0 / 600.0   # ~20 s full cycle at the 30 FPS glow tick
+        # Play advances the clock in even 10-minute JUMPS (not a continuous scroll),
+        # so the displayed time reads cleanly as 12:00, 12:10, 12:20 … instead of
+        # jittery odd minutes. One jump every _daynight_step_ticks glow ticks (~33ms
+        # each): 30 ticks ≈ 1 real second per 10-min step → a full 24h day in ~2.4
+        # real minutes. Bump the tick count to slow it further, lower it to speed up.
+        self._daynight_step_min = 10               # in-game minutes per jump
+        self._daynight_step_ticks = 30             # glow ticks between jumps (~1 s)
+        self._daynight_step_accum = 0              # ticks since the last jump
         self._night_factor = 0.0        # 0 day → 1 night (read by the bio shaders)
         self._sun_elev_sin = 1.0        # sin(sun elevation), set by _apply_day_night
         self._sun_az = 0.0              # sun azimuth (editor world), set by _apply_day_night
@@ -3242,9 +3249,17 @@ class MapCanvas(QOpenGLWidget):
         something is selected OR any loaded material has scrolling UVs."""
         if self.mode != MODE_3D:
             return
-        # Advance the day/night cycle when playing.
+        # Advance the day/night cycle when playing — in even 10-minute jumps on a
+        # slow cadence so the clock ticks cleanly (12:00 → 12:10 → …) rather than
+        # scrolling by uneven fractions every frame.
         if self.day_night_enabled and self._daynight_play:
-            self.time_of_day = (self.time_of_day + self._daynight_speed) % 1.0
+            self._daynight_step_accum += 1
+            if self._daynight_step_accum >= self._daynight_step_ticks:
+                self._daynight_step_accum = 0
+                step = self._daynight_step_min
+                cur_min = self.time_of_day * 1440.0
+                nxt_min = (math.floor(cur_min / step) + 1) * step   # next even mark
+                self.time_of_day = (nxt_min / 1440.0) % 1.0
         if (self.selected_entity is not None
                 or getattr(self, '_dbg_mode', 0) != 0   # keep profiler updating live
                 or (self.day_night_enabled and self._daynight_play)
