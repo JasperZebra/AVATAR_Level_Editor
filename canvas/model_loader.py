@@ -85,40 +85,6 @@ def load_entity_patterns(entitylib_xml_path):
         return _entity_patterns_from_protos(root.findall(".//object[@name='EntityPrototype']"))
 
 
-# ── Renderability gate ───────────────────────────────────────────────────────
-# The engine only renders an entity that carries a graphic component. Verified on
-# sp_hellsgate_01 worldsector 73: every one of the 425 in-game-visible entities has
-# a CGraphicComponent (incl. all 24 kit NPCs, which carry both CGraphicKitComponent
-# AND CGraphicComponent), while the 64 without one are exactly the things the game
-# never draws as a mesh — CPrefabEntity wrappers (e.g. Structures.CORP_Helipad_Small_515,
-# whose real visible model is its CGraphicComponent-bearing child), lights, sound
-# points, tag points, occlusion boxes and AI Duty/Social markers. The editor mirrors
-# this: an entity whose Components container lacks BOTH graphic components gets
-# neither a 3D model nor a marker cube — it survives only as data (still selectable
-# and editable via the object list / 2D map). Entities with no xml/Components to judge
-# (e.g. editor-created objects) default to renderable so they are never hidden.
-_GRAPHIC_COMPONENT_NAMES = frozenset(('CGraphicComponent', 'CGraphicKitComponent'))
-
-
-def entity_has_graphic_component(entity):
-    """True if the entity's own Components container has a (kit) graphic component.
-
-    Cached on entity._has_graphic_component. Defaults to True when there is no
-    xml_element or no Components container, so editor-created entities that don't
-    follow the full schema are never suppressed."""
-    cached = getattr(entity, '_has_graphic_component', None)
-    if cached is not None:
-        return cached
-    result = True
-    xe = getattr(entity, 'xml_element', None)
-    if xe is not None:
-        comps = xe.find("./object[@name='Components']")
-        if comps is not None:
-            result = any(c.get('name') in _GRAPHIC_COMPONENT_NAMES for c in comps)
-    entity._has_graphic_component = result
-    return result
-
-
 class GLTFModel:
     """Represents a loaded GLTF model with all its data"""
 
@@ -583,7 +549,6 @@ class ModelLoader:
         matched = 0
         unmatched = 0
         skipped_done = 0   # entities already resolved by an earlier pass this load
-        skipped_nongraphic = 0   # entities with no graphic component (not rendered, like the game)
         unfound_models = []
         found_models = []
         converted_xbg_count = 0
@@ -628,19 +593,6 @@ class ModelLoader:
             # and must never see a marked-but-half-assigned entity.
             if getattr(entity, '_model_assign_done', False):
                 skipped_done += 1
-                continue
-
-            # Engine parity: an entity with no graphic component is never drawn by
-            # the game (prefab wrappers, lights, sound/tag points, AI markers). Skip
-            # model assignment so it renders as neither mesh nor cube — its data is
-            # left untouched and stays selectable via the object list / 2D map. The
-            # marker is set here (like the end-of-loop case) so the concurrent
-            # unified-sectors swap carries this empty assignment to any new twin.
-            if not entity_has_graphic_component(entity):
-                entity.model_file = None
-                entity.kit_model_files = None
-                entity._model_assign_done = True
-                skipped_nongraphic += 1
                 continue
 
             entity_name = getattr(entity, "hid_name", getattr(entity, "name", None))
@@ -822,8 +774,7 @@ class ModelLoader:
 
         log(f"Model assignment complete: {matched} matched, {unmatched} unmatched, "
             f"{converted_xbg_count} read directly from XBG"
-            + (f", {skipped_done} already assigned (skipped)" if skipped_done else "")
-            + (f", {skipped_nongraphic} no-graphic (not rendered)" if skipped_nongraphic else ""))
+            + (f", {skipped_done} already assigned (skipped)" if skipped_done else ""))
         
         if kit_fallback_count > 0:
             log(f"  _Kit fallbacks used: {kit_fallback_count}")
