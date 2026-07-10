@@ -3467,7 +3467,10 @@ class MapCanvas(QOpenGLWidget):
                 self._shadow_bias = sm.shadow_bias('model')
                 self._shadow_bias_terrain = sm.shadow_bias('terrain')
                 if sm.begin() is not None:
-                    cast = ml.cast_shadows(light_vp)
+                    # canvas=self → cast the WHOLE scene (every object), AM3D-style,
+                    # so off-screen objects still cast onto visible terrain. The
+                    # on-screen render still uses the camera-visible frame.
+                    cast = ml.cast_shadows(light_vp, canvas=self)
                     # AM3D parity: cast the terrain too, so it's a SOLID occluder in
                     # the shadow map (hills cast, terrain self-shadows, models get
                     # shadowed by terrain). This is the piece Avatar was missing.

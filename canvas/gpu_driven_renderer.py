@@ -866,14 +866,37 @@ class GPUDrivenRenderer:
             groups.append((cmd_arr, np.asarray(gmat[grp], np.uint32)))
         return (inst_arr, groups)
 
-    def cast(self, light_vp):
+    def _frame_from_dict(self, fr):
+        """Build (inst_arr, groups) from an explicit {inst,counts,offsets} dict —
+        same as _build_frame's fast path but from a caller-supplied frame (used by
+        the shadow cast to render a WHOLE-SCENE instance set, independent of the
+        camera-visible render frame). Returns None if empty."""
+        if fr is None:
+            return None
+        if (self.group_templates is None
+                or self._tmpl_slots_version != getattr(self.ml, '_gdr_slots_version', None)):
+            self._rebuild_templates()
+        if self.group_templates is None:
+            return None
+        counts, offsets = fr['counts'], fr['offsets']
+        groups = [build_group_commands(self.group_templates[grp], counts, offsets)
+                  for grp in (0, 1, 2)]
+        if not any(len(c) for c, _ in groups):
+            return None
+        return (fr['inst'], groups)
+
+    def cast(self, light_vp, shadow_frame=None):
         """Depth-only MDI of ALL model groups into the currently-bound shadow FBO
         (caller binds it via ShadowMap.begin()). With the alpha-test cast program:
         opaque casts solid, alpha-masked (foliage/grates) and blend (glass/FX) are
         alpha-tested so cut-outs cast their real shape and clear glass casts
         ~nothing. If that program failed to compile, falls back to the opaque-only
-        empty-FS program (groups 0+1 solid). Caches the frame so the following
-        render() reuses the same instance layout. True if it drew."""
+        empty-FS program (groups 0+1 solid).
+
+        shadow_frame: an explicit {inst,counts,offsets} dict to cast (the whole-
+        scene set, so every object casts like AM3D). When given, self._frame is NOT
+        cached, so the color pass rebuilds from the camera-visible frame. When None,
+        casts the visible frame and caches it for render() to reuse. True if drew."""
         alpha = bool(self.sundepth_program)
         prog = self.sundepth_program or self.depth_program
         if self._failed or not prog:
@@ -883,8 +906,11 @@ class GPUDrivenRenderer:
                 return False
             g = self._gl()
             import ctypes
-            frame = self._build_frame()
-            self._frame = frame
+            if shadow_frame is not None:
+                frame = self._frame_from_dict(shadow_frame)   # whole-scene, NOT cached
+            else:
+                frame = self._build_frame()
+                self._frame = frame
             if frame is None:
                 return False
             inst_arr, groups = frame

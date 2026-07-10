@@ -2504,15 +2504,47 @@ class ModelLoader:
         self._shadows_on = bool(on)
         self._shadow_bias = float(bias)
 
-    def cast_shadows(self, light_vp):
+    def build_shadow_frame(self, canvas):
+        """Instance frame of ALL modelled entities (ignoring the camera frustum) for
+        the shadow cast — so EVERY object casts onto the terrain like AM3D (which
+        casts the whole scene), not just the camera-visible ones. Same {inst,counts,
+        offsets} format as prepare_gpu_frame but with every model row included and
+        no contribution/pixel-size cull. Returns None if unavailable."""
+        if not self.force_render_tier or self._gpu_driven in (False, None):
+            return None
+        if getattr(self._gpu_driven, '_failed', False):
+            return None
+        try:
+            if not self._ensure_gdr_rows(canvas):
+                return None
+            pos = getattr(canvas, '_positions_3d', None)
+            valid = canvas._valid_entities_3d
+            if pos is None or self._gdr_row_ent is None or len(pos) != len(valid):
+                return None
+            self._gdr_update_overlay(getattr(canvas, 'selected', None) or [])
+            from gpu_driven_renderer import assemble_frame
+            ent_vis = np.ones(len(valid), bool)   # ALL entities (only modelled have rows)
+            inst, counts, offsets = assemble_frame(
+                self._gdr_row_ent, self._gdr_row_slot, self._gdr_row_rot,
+                self._gdr_row_scale, self._gdr_overlay,
+                pos, ent_vis, len(self._gdr_model_paths))
+            return {'inst': inst, 'counts': counts, 'offsets': offsets}
+        except Exception as _e:
+            print(f"[gpu-driven] build_shadow_frame failed: {_e}")
+            return None
+
+    def cast_shadows(self, light_vp, canvas=None):
         """Render model depth into the currently-bound shadow FBO (GPU-driven
-        path only). Caller binds the FBO via ShadowMap.begin() first. Returns
-        True if it cast anything."""
+        path only). Caller binds the FBO via ShadowMap.begin() first. When `canvas`
+        is given, casts the WHOLE-SCENE instance set (every object, AM3D-style) so
+        off-screen objects still cast onto visible terrain; else casts the current
+        (visible) frame. Returns True if it cast anything."""
         if self.loading_suspended:
             return False   # never touch the GDR build mid-level-load
         if self.force_render_tier and self._gpu_driven:
             try:
-                return self._gpu_driven.cast(light_vp)
+                shadow_frame = self.build_shadow_frame(canvas) if canvas is not None else None
+                return self._gpu_driven.cast(light_vp, shadow_frame)
             except Exception as _e:
                 print(f"[gpu-driven] cast_shadows failed: {_e}")
         return False
