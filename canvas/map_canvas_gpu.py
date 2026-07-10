@@ -38,7 +38,7 @@ from .gizmo_3d import Gizmo3D, HANDLE_NONE as GIZMO3D_HANDLE_NONE
 from .input_handler import InputHandler
 from .camera_controller import CameraController
 from .opengl_utils import OpenGLUtils
-from .model_loader import ModelLoader
+from .model_loader import ModelLoader, entity_has_graphic_component
 from .undo_redo import UndoRedoManager, MoveCommand, RotateCommand
 from water_mesh_editor import ImprovedWaterMeshEditor
 from water_plane_renderer import WaterPlaneRenderer, strip_baked_water
@@ -1305,6 +1305,9 @@ class MapCanvas(QOpenGLWidget):
             for entity in entities_sorted:
                 if id(entity) in entities_with_models:
                     continue
+                # Engine parity: no graphic component -> not drawn (no mesh, no cube).
+                if not entity_has_graphic_component(entity):
+                    continue
                 is_selected = id(entity) in selected_set
                 color = self._get_entity_color_for_3d(
                     entity, vehicle_ids, seated_npc_ids,
@@ -1482,6 +1485,9 @@ class MapCanvas(QOpenGLWidget):
             for i, e in enumerate(valid):
                 idx_of[id(e)] = i
                 if id(e) in modelled:
+                    continue
+                # Engine parity: no graphic component -> not drawn (no mesh, no cube).
+                if not entity_has_graphic_component(e):
                     continue
                 marker[i] = True
                 colors[i] = self._get_entity_color_for_3d(
