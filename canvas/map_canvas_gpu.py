@@ -602,9 +602,9 @@ class MapCanvas(QOpenGLWidget):
         # Play advances the clock SMOOTHLY (continuous, every ~33ms glow tick) so the
         # sun/sky/shadows glide fluidly through dawn→day→dusk→night like a real game
         # cycle — no choppy stepping. Rate = fraction-of-day added per tick: at 30
-        # ticks/s, 1/2700 ≈ a full 24h day every ~90 real seconds. Lower the divisor
+        # ticks/s, 1/1800 ≈ a full 24h day every ~60 real seconds. Lower the divisor
         # to speed the cycle up, raise it to slow it down.
-        self._daynight_speed = 1.0 / 2700.0
+        self._daynight_speed = 1.0 / 1800.0
         self._night_factor = 0.0        # 0 day → 1 night (read by the bio shaders)
         self._sun_elev_sin = 1.0        # sin(sun elevation), set by _apply_day_night
         self._sun_az = 0.0              # sun azimuth (editor world), set by _apply_day_night
