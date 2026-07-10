@@ -2496,12 +2496,14 @@ class ModelLoader:
             return False
 
     def set_shadow_inputs(self, shadow_tex, light_vp, on, bias=0.0018):
-        """Canvas sets the sun shadow map + light matrix each frame; the
-        GPU-driven model shader samples them when `on`. `bias` is the normalized
-        depth bias, scaled by the canvas to the (level-sized) shadow box."""
+        """Canvas sets the sun shadow map + light matrix each frame; the GPU-driven
+        model shader samples them when `on` > 0. `on` is a 0..1 shadow STRENGTH
+        (day/night synced) — the shader fades the shadow darkness by it — so True
+        (1.0) / False (0.0) still work as before. `bias` is the normalized depth
+        bias, scaled by the canvas to the (level-sized) shadow box."""
         self._shadow_tex = int(shadow_tex) if shadow_tex else 0
         self._shadow_light_vp = light_vp
-        self._shadows_on = bool(on)
+        self._shadows_on = float(on)
         self._shadow_bias = float(bias)
 
     def build_shadow_frame(self, canvas):

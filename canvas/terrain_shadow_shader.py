@@ -94,10 +94,10 @@ void main() {
 _SHADOW_GLSL = """
 uniform sampler2DShadow u_shadow;   // hardware depth-compare sampler (LINEAR = bilinear PCF)
 uniform mat4  u_light_vp;      // world -> sun light clip
-uniform float u_shadow_on;     // 1 = sample shadows, 0 = fully lit
+uniform float u_shadow_on;     // 0..1 shadow STRENGTH (day/night synced); 0 = fully lit
 uniform float u_shadow_bias;   // normalized depth bias (scaled to the box size)
 float sun_shadow(vec3 world) {
-    if (u_shadow_on < 0.5) return 1.0;
+    if (u_shadow_on < 0.003) return 1.0;
     vec4 lp = u_light_vp * vec4(world, 1.0);
     if (lp.w <= 0.0) return 1.0;
     vec3 pc = lp.xyz / lp.w * 0.5 + 0.5;               // -> [0,1]
@@ -138,8 +138,11 @@ void main() {
     vec4 tex = texture2D(u_tex, gl_TexCoord[0].xy);
     // Deepen the shadow so object shadows read clearly on the ground: darken the
     // WHOLE colour where the sun is blocked (not just drop the sun highlight). A
-    // shadowed patch goes to SHADOW_DARK of its lit brightness.
-    float shade = mix(SHADOW_DARK, 1.0, sh);
+    // shadowed patch goes to SHADOW_DARK of its lit brightness AT FULL STRENGTH;
+    // near dawn/dusk u_shadow_on eases the darkness back toward 1.0 (no shadow),
+    // so the shadow fades in/out with the sun instead of snapping on.
+    float darkAmt = mix(1.0, SHADOW_DARK, u_shadow_on);
+    float shade = mix(darkAmt, 1.0, sh);
     gl_FragColor = vec4(tex.rgb * lit * shade, tex.a);
 }
 """.replace('__SHADOW__', _SHADOW_GLSL).replace('SHADOW_DARK', '0.25')

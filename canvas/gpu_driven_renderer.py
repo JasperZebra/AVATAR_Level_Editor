@@ -349,7 +349,7 @@ uniform float u_time;    // seconds, for animated-UV scroll
 uniform float u_night;   // bioluminescence: emission scaled by this (1=day/off, night→glow)
 uniform int   u_flip_green;   // debug: 1 = flip normal-map green (Y)
 uniform int   u_flip_normal;  // debug: 1 = flip base geometry normal
-uniform int   u_shadows_on;   // 1 = sample the sun shadow map
+uniform float u_shadows_on;   // 0..1 shadow STRENGTH (day/night synced); 0 = off
 uniform mat4  u_light_vp;     // world -> sun light clip space
 uniform sampler2DShadow u_shadow_tex;  // hardware depth-compare (LINEAR = bilinear PCF)
 uniform float u_shadow_bias;  // normalized depth bias, scaled to the box size
@@ -363,7 +363,7 @@ flat in uint v_mat;
 
 // 0 = fully shadowed, 1 = fully lit. PCF 3x3 with slope-scaled bias.
 float sunVisibility(vec3 N, vec3 L) {
-    if (u_shadows_on == 0) return 1.0;
+    if (u_shadows_on < 0.003) return 1.0;
     vec4 lc = u_light_vp * vec4(v_wp, 1.0);
     vec3 p = lc.xyz / lc.w * 0.5 + 0.5;
     if (p.z > 1.0 || p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 1.0;
@@ -430,7 +430,9 @@ void main(){
             color += gl_LightSource[i].specular.rgb * m.specShin.rgb * specMap * s * vis;
         }
     }
-    color *= mix(0.25, 1.0, sunVis);   // deepen shadow so shadowed models read clearly
+    // Deepen shadow so shadowed models read clearly; darkness fades with the
+    // day/night strength (u_shadows_on) so it eases in/out synced to the sun.
+    color *= mix(mix(1.0, 0.25, u_shadows_on), 1.0, sunVis);
     if (m.hasflags.w > 0.5) color += texture(sampler2D(m.hEmission), uv).rgb * m.emissive.rgb * u_night;
 
     color = mix(color, vec3(0.35, 0.50, 1.0), v_overlay);
@@ -982,8 +984,10 @@ class GPUDrivenRenderer:
                       1 if getattr(self.ml, 'dbg_flip_normal', False) else 0)
         # Shadow receive (sun = light 0 only). Depth map → unit 4; material
         # textures are bindless so there's no texture-unit conflict.
-        use_shadow = 1 if (shadows_on and shadow_tex and light_vp is not None) else 0
-        g.glUniform1i(self._uloc[b'u_shadows_on'], use_shadow)
+        # shadows_on is a 0..1 STRENGTH (day/night synced), not just a flag.
+        strength = float(shadows_on) if (shadow_tex and light_vp is not None) else 0.0
+        use_shadow = strength > 0.003
+        g.glUniform1f(self._uloc[b'u_shadows_on'], strength)
         if use_shadow:
             if self._uloc[b'u_shadow_bias'] != -1:
                 g.glUniform1f(self._uloc[b'u_shadow_bias'], float(shadow_bias))

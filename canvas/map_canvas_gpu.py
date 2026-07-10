@@ -16,13 +16,11 @@ from PyQt5.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QHBoxLayout, QLab
 MODE_TOPDOWN = 0
 MODE_3D = 1
 
-# Sun-shadow casting window, as an explicit fraction-of-day clock range. Shadows
-# cast only while time_of_day is inside [start, end]; outside it (night / deep
-# dawn-dusk) nothing casts. Tuned by eye to on at 05:42, off at 18:27 — a direct
-# time window is used instead of a sun-elevation threshold so the transitions land
-# at predictable clock times rather than drifting with the elevation curve.
-_SUN_SHADOW_START = 5.7 / 24.0     # 05:42
-_SUN_SHADOW_END   = 18.45 / 24.0   # 18:27
+# Below this shadow strength we don't bother running the cast pass (deep night —
+# shadows would be invisible anyway). Above it, shadow DARKNESS fades with the same
+# day/night curve as the lighting (see _shadow_strength) so shadows ease in/out in
+# lockstep with the sun instead of popping on/off at a hard time boundary.
+_SUN_SHADOW_MIN_STRENGTH = 0.02
 
 # Import GPU components
 try:
@@ -664,13 +662,20 @@ class MapCanvas(QOpenGLWidget):
         self._light_pitch = int(pitch) % 361
         self.update()
 
+    def _shadow_strength(self):
+        """0..1 shadow intensity, tied to the SAME day/night curve as the lighting
+        (the `day` smoothstep). This is the key to a synced transition: shadows fade
+        in through dawn, sit at full strength across the day, and fade out through
+        dusk — exactly as the sun brightens/dims — instead of snapping on/off at a
+        hard time while the light fades on a different schedule. 0 at night → 1 at
+        full day. Drives both the cast gate and the per-pixel shadow darkening."""
+        return self._daynight_factors()[2]
+
     def _sun_casts_shadows(self):
-        """True when the sun should cast shadows at the current time_of_day. Uses
-        the explicit [_SUN_SHADOW_START, _SUN_SHADOW_END] clock window so on/off
-        happens at the tuned times (05:42 / 18:27), not on a drifting elevation
-        threshold. Both cast paths (_cast_sun_shadows, _precast_shadows) gate here."""
-        t = float(self.time_of_day) % 1.0
-        return _SUN_SHADOW_START <= t <= _SUN_SHADOW_END
+        """True when shadows are strong enough to bother casting. Below the floor
+        (deep night) they'd be invisible, so the cast pass is skipped. Both cast
+        paths (_cast_sun_shadows, _precast_shadows) gate here."""
+        return self._shadow_strength() > _SUN_SHADOW_MIN_STRENGTH
 
     def _daynight_factors(self):
         """From time_of_day → (sun_elevation -1..1, day 0..1, horizon 0..1).
@@ -3496,7 +3501,10 @@ class MapCanvas(QOpenGLWidget):
                     cast_terrain = self._cast_terrain_depth(light_vp)
                     sm.end(self.defaultFramebufferObject(), self.width(), self.height())
                     if cast or cast_terrain:
-                        ml.set_shadow_inputs(sm.tex, light_vp, True, self._shadow_bias)
+                        # Pass the 0..1 strength (not just True) so model shadows
+                        # fade with the sun, synced to the lighting curve.
+                        ml.set_shadow_inputs(sm.tex, light_vp, self._shadow_strength(),
+                                             self._shadow_bias)
                         active = True
                         # Stash a consistent (tex, light_vp) pair for the TERRAIN
                         # receiver. Terrain draws earlier in the frame than this
@@ -4143,7 +4151,9 @@ class MapCanvas(QOpenGLWidget):
                             _ts_on = True   # set NOW so finally always restores prog 0
                             glUniform1i(_tsl['u_tex'], 0)
                             glUniform1i(_tsl['u_shadow'], 1)
-                            glUniform1f(_tsl['u_shadow_on'], 1.0)
+                            # u_shadow_on carries the 0..1 day strength: fades the
+                            # ground shadow in/out in sync with the sun + models.
+                            glUniform1f(_tsl['u_shadow_on'], float(self._shadow_strength()))
                             glUniform1f(_tsl['u_shadow_bias'], float(getattr(self, '_shadow_bias_terrain', 0.0006)))
                             glUniform3f(_tsl['u_tile_offset'], float(tx), 0.0, float(-ty))
                             glUniformMatrix4fv(_tsl['u_light_vp'], 1, GL_TRUE,
