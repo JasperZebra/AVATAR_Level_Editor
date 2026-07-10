@@ -691,16 +691,29 @@ This covers `entUser` in every `InitialUsers` seat slot AND `entInitialUser` in 
 Binary structure of the pre-terrain header in `.csdat` files (terrain data starts at offset 708 = 0x2C4):
 
 ```
-0xA8:        uint8   — water visible flag (1=render water, 0=no water)
+0xA8:        uint8   — SECONDARY water sub-flag (0/1). NOT the render indicator (see below).
 0xA9–0xAF:  7 bytes — always zero padding
 0xB0–0xB3: float32  — water height (world units)
 0xB4–0xB8:  5 bytes — always zero padding
 0xB9..null:  string  — null-terminated material path (e.g. graphics\_materials\editor\water_av_riverbank.mlm)
 ```
 
+**Water render indicator (CORRECTED July 2026 — 0xA8 is NOT it):** a sector renders
+water iff it has a **water material path assigned AND a non-zero water height** —
+`has_mat_water and abs(height) > 1e-6`. The old rule (`data[0xA8] != 0`) is wrong: the
+0xA8 flag **splits contiguous water bodies**. On `sp_drifting_sierra_fm_01_l1`, sectors
+62/63/78/79/94/95/110/111 are ONE lake at height 73 (a 4×2 contiguous block), yet 0xA8 is
+set only on the top half (94/95/110/111) and 0 on 62/63/78/79 — and sector 63 is 99% below
+the water line. Rendering by 0xA8 floods only ~2/3 of each lake and leaves hard rectangular
+edges mid-water (the user's "water doesn't look all correct"). The signals are strictly
+nested `flag(20) ⊆ height≠0(30) ⊆ material(32)` per level; the **material assignment** is the
+true extent. 0xA8 is a secondary per-sector sub-flag (partial coverage — likely a visible-
+surface / reflection-probe anchor), kept in `WaterData.water_flag` for reference only.
+The earlier `sp_sebastien` "flag authoritative" call was a misdiagnosis (it compared flag vs
+height, never material). `water_plane_renderer` clips each watered sector to terrain < height,
+so promoting the extra sectors can't reintroduce floating planes.
+
 **Key gotchas:**
-- `flag=0` sectors can still have non-zero height and a material path stored — height alone is NOT a reliable water indicator. Use `data[0xA8] != 0` as the authoritative check.
-- This was confirmed against `sp_sebastien_rb_02_l` where all 256 sectors have `height=20.0` but only 179 have `flag=1`.
 - There are NO polygon/shape structures. Water shape is implicitly terrain height < water height, per 64×64 sector.
 - Material path length varies (rainforest = 50 chars, polluted variants = 58 chars). Always read null-terminated from 0xB9.
 - `0xA0–0xA3` (200.0) and `0xA4–0xA7` (level-specific negative float) are terrain height bounds — DO NOT overwrite when adding water; they differ per level.
@@ -717,9 +730,9 @@ Binary structure of the pre-terrain header in `.csdat` files (terrain data start
 
 **`add_water_block` pattern:** Only write the water-specific bytes (flag=1, height=1.0, default material). Do NOT copy a template over the full header — the 0x00–0xA7 region contains level-specific terrain metadata that must be preserved.
 
-**`parse_water_from_sector`:** `WaterData.water_flag` holds the raw flag byte. `WaterData.has_water = (water_flag != 0)`.
+**`parse_water_from_sector`:** `WaterData.water_flag` holds the raw 0xA8 sub-flag byte (reference only). `WaterData.has_water = (has_mat_water and abs(water_height) > 1e-6)` — material assignment + non-zero height, NOT the flag.
 
-> **Do NOT promote flag=0 sectors to has_water using material+height.** It was tried (drifting_sierra stores water_*.mlm + height 73 with flag=0) and reverted: it contradicts the in-game-confirmed sp_sebastien result (256 sectors height=20, only 179 render). The 0xA8 flag is authoritative; a stored material path + height on a flag=0 sector is inert metadata, not rendered water.
+> **sp_sebastien caveat:** that level stores height=20 on all 256 sectors; under the material rule it needs re-checking in-game (if all 256 also carry a water material, the whole level floods — the terrain<height clip still bounds it). Verify visually if that level is edited.
 
 ### Avatar .csdat full format map (cracked July 2026)
 
@@ -734,9 +747,9 @@ header
   0x07C           124          20       POINTERS     serialized WinXP DLL addrs (0x77c3xxxx) — runtime garbage, not data
   0x0A0           160          4        float32      terrain height bound (200.0) — preserve on edit
   0x0A4           164          4        float32      terrain height bound (level-specific) — preserve
-  0x0A8           168          1        uint8        WATER VISIBLE FLAG (authoritative) (confirmed)
+  0x0A8           168          1        uint8        water SUB-flag (0/1) — NOT render extent; material path is (confirmed)
   0x0B0           176          4        float32      WATER HEIGHT (confirmed)
-  0x0B9           185          var      string       water material path graphics\_materials\editor\water_*.mlm (0-filled if none)
+  0x0B9           185          var      string       water material path graphics\_materials\editor\water_*.mlm (0-filled if none) — RENDER INDICATOR
   0x1F8           504          60       descriptor   "DXT1" embedded-texture descriptor, dims 61x61 (per-sector baked tex meta)
   0x264 / 0x2AC   —            —        POINTERS     more serialized DLL/ntdll addrs (0x7c91xxxx) — runtime garbage
   0x2C4           708          —        —            end of header / start of terrain

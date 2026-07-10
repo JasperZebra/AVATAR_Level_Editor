@@ -463,20 +463,19 @@ class TerrainRenderer:
                 else:
                     if len(data) > 0xA8:
                         water.water_flag = data[0xA8]
-                        water.has_water = (water.water_flag != 0)
 
                     water_patterns = [
                         b'graphics\\_materials\\editor\\water_',
                         b'graphics_materials\\editor\\water_'
                     ]
-                    
+
                     graphics_pos = -1
                     for pattern in water_patterns:
                         pos = data.find(pattern)
                         if pos != -1:
                             graphics_pos = pos
                             break
-                    
+
                     if graphics_pos != -1:
                         material_start = graphics_pos
                         material_end = data.find(b'\x00', material_start)
@@ -486,7 +485,24 @@ class TerrainRenderer:
                         else:
                             water.material_path = data[material_start:material_start+100].decode('latin-1', errors='ignore')
                             water.hex_offset_material = material_start
-                    
+
+                    # WATER RENDER INDICATOR = a water material is assigned AND a
+                    # non-zero water height, NOT the 0xA8 flag. Proof: the 0xA8
+                    # flag splits contiguous water bodies. On drifting_sierra l1
+                    # sectors 62/63/78/79/94/95/110/111 are ONE lake at height
+                    # 73 (a 4x2 contiguous block), yet 0xA8 is set only on the
+                    # top half (94/95/110/111) and 0 on 62/63/78/79 — and 63 is
+                    # 99% below the water line. Rendering by 0xA8 alone floods
+                    # ~2/3 of each lake and leaves hard rectangular edges mid-
+                    # water. The water material assignment is the true extent;
+                    # 0xA8 is a secondary per-sector sub-flag (partial coverage,
+                    # ~visible-surface/reflection anchor). water_plane_renderer
+                    # then clips each watered sector to terrain < height, so the
+                    # extra sectors hug the terrain instead of floating.
+                    has_mat_water = bool(water.material_path
+                                         and 'water' in water.material_path.lower())
+                    water.has_water = (has_mat_water and abs(water.water_height) > 1e-6)
+
                     if water.has_water:
                         print(f"Water found in sector {sector_num}:")
                         if water.material_path:
