@@ -5924,6 +5924,7 @@ class SimplifiedMapEditor(QMainWindow):
                 # Clear any multi-cell terrain from a previous load.
                 if hasattr(self.canvas, 'terrain_renderer'):
                     self.canvas.terrain_renderer.terrain_pixmap_cells = []
+                    self.canvas.terrain_renderer.water_cells = []
                 if hasattr(self.canvas, 'terrain_models'):
                     self.canvas.terrain_models = []
 

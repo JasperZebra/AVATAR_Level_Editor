@@ -50,41 +50,33 @@ class WaterPlaneRenderer:
     """
 
     def force_update_sector(self, sector_num, terrain_renderer):
-        """Drop the cached submerged-cell geometry for one sector so the next
-        frame re-clips it against the (edited) heightmap / water height."""
+        """Drop cached submerged-cell geometry so the next frame re-clips against
+        the (edited) heightmap / water height. Cache keys are (cell, sector) so
+        just clear the whole cache — water edits are infrequent."""
         cache = getattr(self, '_geom_cache', None)
         if cache is not None:
-            cache.pop(sector_num, None)
+            cache.clear()
 
-    def _get_submerged_geometry(self, terrain_renderer, sector_num, wd):
-        """Return the water geometry for a sector, clipped to where the game
+    def _get_submerged_geometry(self, hm, um, wy, is_fc2, cache_key):
+        """Return the water geometry for one sector, clipped to where the game
         would actually show water: terrain height < water height, per cell
         (AGENTS.md: '.csdat' header — 'Water shape is implicitly terrain height
-        < water height, per sector'; NO polygon is stored). The heightmap is
-        the direct rule and works for both games; the byte[3] underwater mask
-        (Avatar only) is the fallback when heights are unavailable.
+        < water height, per sector'; NO polygon is stored). `hm` is the sector's
+        heightmap (direct rule, both games), `um` the byte[3] underwater mask
+        (Avatar fallback when heights are unavailable), `wy` the water height.
 
         Returns one of:
           'FULL'  — whole sector submerged, draw the single flat quad (fast)
-          'SKIP'  — no cell submerged (water flag set but nothing below the
+          'SKIP'  — no cell submerged (water assigned but nothing below the
                     line → the 'floating water that isn't in-game' case)
           [(u0,u1,v0,v1), ...] — normalized spans of submerged cells to draw
 
-        Result is cached per sector and only recomputed when the heightmap
-        object or the water height changes (both rare)."""
+        Cached per `cache_key` (=(cell_index, sector_num)) and only recomputed
+        when the heightmap object or the water height changes (both rare)."""
         cache = getattr(self, '_geom_cache', None)
         if cache is None:
             cache = self._geom_cache = {}
 
-        hm = None
-        um = None
-        try:
-            hm = terrain_renderer.sectors_data.get(sector_num)
-            um = terrain_renderer.sectors_underwater.get(sector_num)
-        except AttributeError:
-            pass
-
-        wy = float(getattr(wd, 'water_height', 0.0))
         if hm is not None:
             key = ('h', id(hm), round(wy, 4))
         elif um is not None:
@@ -92,7 +84,7 @@ class WaterPlaneRenderer:
         else:
             return 'FULL'  # no per-vertex data (old cache / short file) — keep old behaviour
 
-        cached = cache.get(sector_num)
+        cached = cache.get(cache_key)
         if cached is not None and cached[0] == key:
             return cached[1]
 
@@ -101,7 +93,7 @@ class WaterPlaneRenderer:
         n = sub.shape[0]
         if n < 2:
             geom = 'FULL'
-            cache[sector_num] = (key, geom)
+            cache[cache_key] = (key, geom)
             return geom
 
         # A cell (between 4 vertices) is water if ANY of its corners is
@@ -114,8 +106,7 @@ class WaterPlaneRenderer:
         # water-height field, so never let it fully HIDE a flagged sector there
         # (a unit mismatch would read as all-dry). Clipping floating-over-hills
         # still applies; only the all-dry -> hidden case is vetoed for FC2.
-        fc2_heightclip = (key[0] == 'h' and
-                          getattr(terrain_renderer, 'game_mode', None) == 'farcry2')
+        fc2_heightclip = (key[0] == 'h' and is_fc2)
 
         if not cell.any():
             geom = 'FULL' if fc2_heightclip else 'SKIP'
@@ -139,35 +130,107 @@ class WaterPlaneRenderer:
                         j += 1
             geom = spans
 
-        cache[sector_num] = (key, geom)
+        cache[cache_key] = (key, geom)
         return geom
 
-    def render_water_planes(self, terrain_renderer, canvas=None, water_mesh_editor=None):
-        if not terrain_renderer or not terrain_renderer.water_data:
+    def _iter_cells(self, terrain_renderer, canvas):
+        """Yield one render bundle per terrain tile. Stacked Avatar levels (e.g.
+        Tantalus l1+l2) load each tile via load_sdat_cell, which snapshots its
+        own water_data/sectors_data/offset into terrain_renderer.water_cells —
+        the shared top-level dicts otherwise keep ONLY the last tile, so without
+        this the other tile's water is lost and this tile's water renders at the
+        wrong tile's origin (the reported Tantalus floating water). Single-cell
+        levels have no water_cells, so we synthesize one bundle from the live
+        dicts (identical to the old single-tile path)."""
+        cells = getattr(terrain_renderer, 'water_cells', None)
+        if cells:
+            for i, c in enumerate(cells):
+                yield i, c
             return
-
-        sx = getattr(terrain_renderer, 'sectors_x', 16)
-        sy = getattr(terrain_renderer, 'sectors_y', 16)
-        ox = getattr(terrain_renderer, 'terrain_offset_x', 0.0)
-        oy = getattr(terrain_renderer, 'terrain_offset_y', 0.0)
-
-        # Derive sector dimensions from combined heightmap if available.
-        # With shared-edge assembly (1025×1025), world extent = w_px - 1 = 1024,
-        # so each of 16 sectors spans (w_px-1)/sx = 64 world units.
         combined = terrain_renderer.combined_heightmap
         if combined is None and canvas is not None:
             td = getattr(canvas, '_terrain_data', None)
             if td is not None:
                 combined = td.combined
+        yield 0, {
+            'water_data': terrain_renderer.water_data,
+            'sectors_data': getattr(terrain_renderer, 'sectors_data', {}) or {},
+            'sectors_underwater': getattr(terrain_renderer, 'sectors_underwater', {}) or {},
+            'combined': combined,
+            'sectors_x': getattr(terrain_renderer, 'sectors_x', 16),
+            'sectors_y': getattr(terrain_renderer, 'sectors_y', 16),
+            # single-tile: the "cell offset" is just terrain_offset (usually 0),
+            # reproducing the old x=ox+..., z=-(oy+...) math exactly.
+            'world_x': getattr(terrain_renderer, 'terrain_offset_x', 0.0),
+            'world_y': getattr(terrain_renderer, 'terrain_offset_y', 0.0),
+        }
 
+    def _emit_cell(self, cell_idx, cell, is_fc2):
+        """Emit GL_QUADS for one terrain tile's water, clipped per sector and
+        translated by the tile's world offset (matching the terrain mesh, which
+        is drawn with glTranslatef(world_x, 0, -world_y))."""
+        wd = cell.get('water_data') or {}
+        sdd = cell.get('sectors_data') or {}
+        umm = cell.get('sectors_underwater') or {}
+        sx = cell.get('sectors_x', 16) or 16
+        sy = cell.get('sectors_y', 16) or 16
+        combined = cell.get('combined')
         if combined is not None:
             h_px, w_px = combined.shape
             sector_w = float(w_px - 1) / max(sx, 1)
             sector_h = float(h_px - 1) / max(sy, 1)
         else:
-            # Fallback: 64 steps per sector at scale 1.0
-            sector_w = 64.0
-            sector_h = 64.0
+            sector_w = sector_h = 64.0
+        wx = float(cell.get('world_x', 0.0))
+        wy_off = float(cell.get('world_y', 0.0))
+
+        for sector_num, wdi in wd.items():
+            if not getattr(wdi, 'has_water', False):
+                continue
+            hm = sdd.get(sector_num)
+            um = umm.get(sector_num)
+            wy = float(getattr(wdi, 'water_height', 0.0))
+            geom = self._get_submerged_geometry(hm, um, wy, is_fc2, (cell_idx, sector_num))
+            if geom == 'SKIP':
+                continue
+
+            col = sector_num % sx
+            row = sector_num // sx   # 0 = bottom of map
+            # Tile-local position + tile world offset (mesh translate: x+wx, z-wy).
+            x0 = col * sector_w + wx
+            x1 = (col + 1) * sector_w + wx
+            z0 = -(row * sector_h) - wy_off
+            z1 = -((row + 1) * sector_h) - wy_off
+            y = wy
+            dx = x1 - x0
+            dz = z1 - z0
+
+            if geom == 'FULL':
+                glVertex3f(x0, y, z0)
+                glVertex3f(x1, y, z0)
+                glVertex3f(x1, y, z1)
+                glVertex3f(x0, y, z1)
+            else:
+                # geom = normalized (u0,u1,v0,v1) submerged spans. u -> x across
+                # the sector, v -> z (south->north); no flip, matching the
+                # linear+flipud heightmap assembly.
+                for u0, u1, v0, v1 in geom:
+                    xa = x0 + u0 * dx
+                    xb = x0 + u1 * dx
+                    za = z0 + v0 * dz
+                    zb = z0 + v1 * dz
+                    glVertex3f(xa, y, za)
+                    glVertex3f(xb, y, za)
+                    glVertex3f(xb, y, zb)
+                    glVertex3f(xa, y, zb)
+
+    def render_water_planes(self, terrain_renderer, canvas=None, water_mesh_editor=None):
+        if not terrain_renderer:
+            return
+        if not terrain_renderer.water_data and not getattr(terrain_renderer, 'water_cells', None):
+            return
+
+        is_fc2 = getattr(terrain_renderer, 'game_mode', None) == 'farcry2'
 
         try:
             glDisable(GL_LIGHTING)
@@ -188,48 +251,8 @@ class WaterPlaneRenderer:
             glColor4f(0.09, 0.45, 0.95, 0.70)
 
             glBegin(GL_QUADS)
-            for sector_num, wd in terrain_renderer.water_data.items():
-                if not wd.has_water:
-                    continue
-
-                # Clip the sector's water to where terrain is actually below the
-                # water line — the game stores no water polygon, it derives the
-                # shape as terrain height < water height per cell. A single flat
-                # sector quad (the old behaviour) floats over any terrain that
-                # pokes above the line. See _get_submerged_geometry.
-                geom = self._get_submerged_geometry(terrain_renderer, sector_num, wd)
-                if geom == 'SKIP':
-                    continue
-
-                col = sector_num % sx
-                row = sector_num // sx   # 0 = bottom of map
-
-                x0 = ox + col * sector_w
-                x1 = ox + (col + 1) * sector_w
-                z0 = -(oy + row * sector_h)
-                z1 = -(oy + (row + 1) * sector_h)
-                y = float(wd.water_height)
-                dx = x1 - x0
-                dz = z1 - z0
-
-                if geom == 'FULL':
-                    glVertex3f(x0, y, z0)
-                    glVertex3f(x1, y, z0)
-                    glVertex3f(x1, y, z1)
-                    glVertex3f(x0, y, z1)
-                else:
-                    # geom is a list of normalized (u0,u1,v0,v1) submerged spans.
-                    # u -> x across the sector, v -> z (south->north); no flip,
-                    # matching the linear+flipud heightmap assembly.
-                    for u0, u1, v0, v1 in geom:
-                        xa = x0 + u0 * dx
-                        xb = x0 + u1 * dx
-                        za = z0 + v0 * dz
-                        zb = z0 + v1 * dz
-                        glVertex3f(xa, y, za)
-                        glVertex3f(xb, y, za)
-                        glVertex3f(xb, y, zb)
-                        glVertex3f(xa, y, zb)
+            for cell_idx, cell in self._iter_cells(terrain_renderer, canvas):
+                self._emit_cell(cell_idx, cell, is_fc2)
             glEnd()
 
         except Exception as e:

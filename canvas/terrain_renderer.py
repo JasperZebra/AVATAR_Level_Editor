@@ -93,6 +93,12 @@ class TerrainRenderer:
         # Multi-cell terrain support (FC2 5×5 grid)
         # Each entry: (QPixmap, world_x, world_y, world_w, world_h)
         self.terrain_pixmap_cells = []
+        # Per-tile WATER snapshots for stacked/multi-cell levels. load_sdat_folder
+        # resets water_data/sectors_data each call, so the shared dicts keep only
+        # the LAST tile; each load_sdat_cell snapshots its own water here so the
+        # water renderer can draw every tile at its own offset. NOT reset in
+        # load_sdat_folder (mirrors terrain_pixmap_cells) — cleared per level load.
+        self.water_cells = []
 
         # FC2 remap info — set by load_sdat_folder when global sector IDs are remapped to local.
         self._fc2_sector_base = 0
@@ -349,6 +355,20 @@ class TerrainRenderer:
         self.terrain_pixmap_cells.append(
             (self.terrain_pixmap, float(world_x), float(world_y), world_w, world_h)
         )
+        # Snapshot this tile's water so the 3D water renderer can draw every tile
+        # at its own offset. load_sdat_folder REBINDS these dicts on the next call
+        # (self.x = {}) rather than mutating them, so storing the references here
+        # is safe — the next tile gets fresh dicts and these stay intact.
+        self.water_cells.append({
+            'water_data': self.water_data,
+            'sectors_data': self.sectors_data,
+            'sectors_underwater': self.sectors_underwater,
+            'combined': self.combined_heightmap,
+            'sectors_x': self.sectors_x,
+            'sectors_y': self.sectors_y,
+            'world_x': float(world_x),
+            'world_y': float(world_y),
+        })
         return True
 
     def _load_single_sector(self, file_path: str):
