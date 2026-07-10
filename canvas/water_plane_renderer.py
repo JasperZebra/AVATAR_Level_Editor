@@ -52,10 +52,12 @@ class WaterPlaneRenderer:
     def force_update_sector(self, sector_num, terrain_renderer):
         """Drop cached submerged-cell geometry so the next frame re-clips against
         the (edited) heightmap / water height. Cache keys are (cell, sector) so
-        just clear the whole cache — water edits are infrequent."""
+        just clear the whole cache — water edits are infrequent. Also bumps the
+        geometry version so the baked display list rebuilds."""
         cache = getattr(self, '_geom_cache', None)
         if cache is not None:
             cache.clear()
+        self._geom_version = getattr(self, '_geom_version', 0) + 1
 
     def _get_submerged_geometry(self, hm, um, wy, is_fc2, cache_key):
         """Return the water geometry for one sector, clipped to where the game
@@ -227,7 +229,8 @@ class WaterPlaneRenderer:
     def render_water_planes(self, terrain_renderer, canvas=None, water_mesh_editor=None):
         if not terrain_renderer:
             return
-        if not terrain_renderer.water_data and not getattr(terrain_renderer, 'water_cells', None):
+        cells_ref = getattr(terrain_renderer, 'water_cells', None)
+        if not terrain_renderer.water_data and not cells_ref:
             return
 
         is_fc2 = getattr(terrain_renderer, 'game_mode', None) == 'farcry2'
@@ -246,14 +249,48 @@ class WaterPlaneRenderer:
             # Pull the planes in front of terrain at near-equal depth (shoreline)
             glEnable(GL_POLYGON_OFFSET_FILL)
             glPolygonOffset(-1.0, -1.0)
-            # Match the old baked-water look it replaced: dodger-blue at ~0.7
-            # alpha (was 0.45 — too pale once the baked plane was removed).
-            glColor4f(0.09, 0.45, 0.95, 0.70)
+            # Dodger-blue, semi-transparent. Colour is set OUTSIDE the display
+            # list (below), so opacity can change without rebuilding geometry.
+            glColor4f(0.09, 0.45, 0.95, 0.50)
 
-            glBegin(GL_QUADS)
-            for cell_idx, cell in self._iter_cells(terrain_renderer, canvas):
-                self._emit_cell(cell_idx, cell, is_fc2)
-            glEnd()
+            # The water geometry is STATIC frame-to-frame (it only changes on
+            # level load or a water edit), so bake it into a display list ONCE
+            # and just call it each frame — otherwise every corner is a per-frame
+            # glVertex3f (immediate mode), which is what made stacked levels (2x
+            # the quads) drop FPS. Rebuild only when the signature changes: tile
+            # set identity, geom version (force_update_sector), or a cheap content
+            # hash (watered-sector count + height sum) so the water editor's live
+            # in-memory toggles/height changes still refresh.
+            def _content_sig():
+                n = 0
+                s = 0.0
+                buckets = ([c.get('water_data') or {} for c in cells_ref]
+                           if cells_ref else [terrain_renderer.water_data])
+                for wd in buckets:
+                    for v in wd.values():
+                        if getattr(v, 'has_water', False):
+                            n += 1
+                            s += float(getattr(v, 'water_height', 0.0))
+                return (n, round(s, 2))
+
+            sig = (id(cells_ref) if cells_ref else id(terrain_renderer.water_data),
+                   getattr(self, '_geom_version', 0), _content_sig())
+            if getattr(self, '_water_dl_sig', None) != sig or not getattr(self, '_water_dl', None):
+                if getattr(self, '_water_dl', None):
+                    try:
+                        glDeleteLists(self._water_dl, 1)
+                    except Exception:
+                        pass
+                self._water_dl = glGenLists(1)
+                glNewList(self._water_dl, GL_COMPILE)
+                glBegin(GL_QUADS)
+                for cell_idx, cell in self._iter_cells(terrain_renderer, canvas):
+                    self._emit_cell(cell_idx, cell, is_fc2)
+                glEnd()
+                glEndList()
+                self._water_dl_sig = sig
+
+            glCallList(self._water_dl)
 
         except Exception as e:
             print(f"[WaterPlane] Render error: {e}")
