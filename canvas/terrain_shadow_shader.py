@@ -154,3 +154,35 @@ def build():
     for name in UNIFORMS:
         locs[name] = glGetUniformLocation(prog, name)
     return prog, locs
+
+
+# ── Terrain depth-CAST program (makes the terrain a solid shadow occluder) ──────
+# AM3D casts its terrain chunks into the shadow map so the ground is a real
+# occluder (hills cast, terrain self-shadows, objects are shadowed by terrain
+# between them and the sun). Avatar's terrain was invisible to the shadow pass —
+# it only received. This depth-only program writes the terrain's depth into the
+# map using the SAME world position as the receiver (gl_Vertex + tile offset),
+# projected by the sun's light_vp. Empty fragment = depth only. Polygon offset
+# (set by ShadowMap.begin) keeps it from self-shadow-acne'ing the terrain.
+TERRAIN_DEPTH_VS = """
+#version 120
+uniform mat4 u_light_vp;
+uniform vec3 u_tile_offset;
+void main() {
+    gl_Position = u_light_vp * vec4(gl_Vertex.xyz + u_tile_offset, 1.0);
+}
+"""
+TERRAIN_DEPTH_FS = """
+#version 120
+void main() { }
+"""
+DEPTH_UNIFORMS = ('u_light_vp', 'u_tile_offset')
+
+
+def build_depth():
+    """Compile the terrain depth-cast program. Returns (prog, {uniform: loc});
+    prog == 0 on failure (caller simply skips terrain casting)."""
+    prog = compile_program(TERRAIN_DEPTH_VS, TERRAIN_DEPTH_FS, label='terrain-depth')
+    if not prog:
+        return 0, {}
+    return prog, {n: glGetUniformLocation(prog, n) for n in DEPTH_UNIFORMS}

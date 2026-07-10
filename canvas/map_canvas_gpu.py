@@ -3460,8 +3460,12 @@ class MapCanvas(QOpenGLWidget):
                 self._shadow_bias_terrain = sm.shadow_bias('terrain')
                 if sm.begin() is not None:
                     cast = ml.cast_shadows(light_vp)
+                    # AM3D parity: cast the terrain too, so it's a SOLID occluder in
+                    # the shadow map (hills cast, terrain self-shadows, models get
+                    # shadowed by terrain). This is the piece Avatar was missing.
+                    cast_terrain = self._cast_terrain_depth(light_vp)
                     sm.end(self.defaultFramebufferObject(), self.width(), self.height())
-                    if cast:
+                    if cast or cast_terrain:
                         ml.set_shadow_inputs(sm.tex, light_vp, True, self._shadow_bias)
                         active = True
                         # Stash a consistent (tex, light_vp) pair for the TERRAIN
@@ -3494,6 +3498,84 @@ class MapCanvas(QOpenGLWidget):
             self._terrain_shadow_prog = int(prog)
             self._terrain_shadow_locs = locs
         return self._terrain_shadow_prog, getattr(self, '_terrain_shadow_locs', {})
+
+    def _ensure_terrain_depth_shader(self):
+        """Lazily compile the terrain depth-CAST program (AM3D parity: terrain is a
+        solid shadow occluder). Returns (prog, locs); prog == 0 → skip terrain cast."""
+        prog = getattr(self, '_terrain_depth_prog', None)
+        if prog is None:
+            try:
+                from terrain_shadow_shader import build_depth
+                prog, locs = build_depth()
+            except Exception as _e:
+                print(f"[terrain-shadow] depth build error: {_e}")
+                prog, locs = 0, {}
+            self._terrain_depth_prog = int(prog)
+            self._terrain_depth_locs = locs
+        return self._terrain_depth_prog, getattr(self, '_terrain_depth_locs', {})
+
+    def _cast_terrain_depth(self, light_vp):
+        """Render the terrain's depth into the currently-bound shadow FBO so the
+        terrain is a SOLID occluder in the shadow map (AM3D casts its terrain too).
+        Uses the same per-tile world offset as the on-screen/receiver path and the
+        terrain VBOs (no per-frame CPU transfer). Polygon offset from ShadowMap.begin
+        keeps the terrain from self-shadow-acne'ing. Returns True if it drew."""
+        prog, locs = self._ensure_terrain_depth_shader()
+        if not prog:
+            return False
+        models = []
+        if getattr(self, 'terrain_models', []):
+            models = [(m, wx, wy) for m, wx, wy in self.terrain_models]
+        elif getattr(self, 'terrain_model', None):
+            _tr = getattr(self, 'terrain_renderer', None)
+            tx = getattr(self, 'terrain_world_offset_x',
+                         getattr(_tr, 'terrain_offset_x', 0.0) if _tr else 0.0)
+            ty = getattr(self, 'terrain_world_offset_y',
+                         getattr(_tr, 'terrain_offset_y', 0.0) if _tr else 0.0)
+            models = [(self.terrain_model, tx, ty)]
+        if not models:
+            return False
+        drew = False
+        try:
+            glUseProgram(prog)
+            glUniformMatrix4fv(locs['u_light_vp'], 1, GL_TRUE,
+                               np.ascontiguousarray(light_vp, dtype=np.float32))
+            _z = ctypes.c_void_p(0)
+            for model, tx, ty in models:
+                if not (hasattr(model, 'use_immediate_mode') and model.use_immediate_mode):
+                    continue
+                glUniform3f(locs['u_tile_offset'], float(tx), 0.0, float(-ty))
+                for mesh in model.meshes:
+                    if mesh.vertices is None:
+                        continue
+                    tvbo = (self._ensure_terrain_vbo(mesh)
+                            if getattr(self, '_terrain_vbo_enabled', True) else False)
+                    glEnableClientState(GL_VERTEX_ARRAY)
+                    if tvbo:
+                        glBindBuffer(GL_ARRAY_BUFFER, tvbo['pos'])
+                        glVertexPointer(3, GL_FLOAT, 0, _z)
+                        if tvbo['ibo']:
+                            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, tvbo['ibo'])
+                            glDrawElements(GL_TRIANGLES, tvbo['count'], GL_UNSIGNED_INT, _z)
+                        else:
+                            glDrawArrays(GL_TRIANGLES, 0, tvbo['nverts'])
+                        glBindBuffer(GL_ARRAY_BUFFER, 0)
+                        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
+                    else:
+                        glVertexPointer(3, GL_FLOAT, 0, mesh.vertices)
+                        if mesh.indices is not None:
+                            glDrawElements(GL_TRIANGLES, len(mesh.indices), GL_UNSIGNED_INT, mesh.indices)
+                        else:
+                            glDrawArrays(GL_TRIANGLES, 0, len(mesh.vertices))
+                    glDisableClientState(GL_VERTEX_ARRAY)
+                    drew = True
+        except Exception as _e:
+            print(f"[shadow] terrain cast error: {_e}")
+        finally:
+            glBindBuffer(GL_ARRAY_BUFFER, 0)
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
+            glUseProgram(0)
+        return drew
 
     # ── Day/night control API (for the slider/play UI) ──
     def set_day_night_enabled(self, enabled):
