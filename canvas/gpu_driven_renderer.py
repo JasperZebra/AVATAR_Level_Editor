@@ -503,6 +503,59 @@ void main(){
 """
 
 
+# Sun shadow-CAST program: like the camera depth-prepass but projected by the
+# sun's light_vp (uniform), and it alpha-tests BOTH masked (tint.w==1, foliage/
+# grates cutouts) AND blend (tint.w==2, glass/FX) materials — so trees/bushes cast
+# leaf-shaped shadows instead of solid blocks (or nothing), and clear glass casts
+# ~nothing. Opaque (tint.w==0) skips the texture fetch and just writes depth.
+# This is what lets the transparent/blend group cast at all (the old empty-FS cast
+# skipped it entirely, so foliage had no ground shadow).
+_GDR_SUNDEPTH_VS = """
+#version 460 compatibility
+layout(location=0) in vec3 a_position;
+layout(location=2) in vec2 a_uv;
+struct Inst { vec4 posScale; vec4 rotOverlay; };
+layout(std430, binding=0) readonly buffer Instances { Inst insts[]; };
+layout(std430, binding=1) readonly buffer DrawMat  { uint drawMat[]; };
+uniform mat4 u_light_vp;
+out vec2 v_uv;
+flat out uint v_mat;
+vec3 rotX(vec3 p,float d){float a=radians(d),c=cos(a),s=sin(a);return vec3(p.x,c*p.y-s*p.z,s*p.y+c*p.z);}
+vec3 rotY(vec3 p,float d){float a=radians(d),c=cos(a),s=sin(a);return vec3(c*p.x+s*p.z,p.y,-s*p.x+c*p.z);}
+vec3 rotZ(vec3 p,float d){float a=radians(d),c=cos(a),s=sin(a);return vec3(c*p.x-s*p.y,s*p.x+c*p.y,p.z);}
+vec3 modelRot(vec3 p, vec3 r){ p=rotY(p,r.y); p=rotX(p,r.x); p=rotZ(p,-r.z); p=rotX(p,-90.0); return p; }
+void main(){
+    Inst I = insts[gl_BaseInstance + gl_InstanceID];
+    vec3 wp = modelRot(a_position * I.posScale.w, I.rotOverlay.xyz) + I.posScale.xyz;
+    v_uv  = a_uv;
+    v_mat = drawMat[gl_DrawID];
+    gl_Position = u_light_vp * vec4(wp, 1.0);
+}
+"""
+_GDR_SUNDEPTH_FS = """
+#version 460 compatibility
+#extension GL_ARB_bindless_texture : require
+struct Material {
+    uvec2 hDiffuse; uvec2 hNormal; uvec2 hSpecular; uvec2 hEmission;
+    vec4 tint; vec4 emissive; vec4 specShin; vec4 hasflags; vec4 anim;
+};
+layout(std430, binding=2) readonly buffer Materials { Material mats[]; };
+in vec2 v_uv;
+flat in uint v_mat;
+void main(){
+    Material m = mats[v_mat];
+    int mode = int(m.tint.w);                    // 0 opaque, 1 masked, 2 blend
+    if (mode > 0 && m.hasflags.x > 0.5) {
+        float a = texture(sampler2D(m.hDiffuse), v_uv).a;
+        // masked → the material's own cutoff; blend (glass/FX) → 0.5 so only the
+        // denser parts occlude the sun and clear glass casts nearly nothing.
+        float cutoff = (mode == 1) ? m.emissive.w : 0.5;
+        if (a < cutoff) discard;
+    }
+}
+"""
+
+
 class GPUDrivenRenderer:
     """One glMultiDrawElementsIndirect for ALL opaque model instances.
 
@@ -519,7 +572,8 @@ class GPUDrivenRenderer:
         self._failed = False
         self._build_key = None
         self.program = 0
-        self.depth_program = 0      # depth-only cast program for shadow mapping
+        self.depth_program = 0      # depth-only cast program for shadow mapping (opaque, empty FS)
+        self.sundepth_program = 0   # sun-cast program with alpha test (foliage/glass cast real shapes)
         self.camdepth_program = 0   # camera-space depth-prepass program (early-Z occlusion)
         self._frame = None       # cached per-frame (insts, gcmds, gmat) shared by cast+draw
         self.vao = 0
@@ -582,6 +636,10 @@ class GPUDrivenRenderer:
         if self.depth_program == 0:
             # Non-fatal: if it fails, cast() no-ops and the scene renders unshadowed.
             self.depth_program = _compile_program(g, _GDR_DEPTH_VS, _GDR_DEPTH_FS)
+        if self.sundepth_program == 0:
+            # Non-fatal: if it fails, cast() falls back to the opaque-only empty-FS
+            # program (groups 0+1 solid), i.e. the previous behaviour.
+            self.sundepth_program = _compile_program(g, _GDR_SUNDEPTH_VS, _GDR_SUNDEPTH_FS)
         if self.camdepth_program == 0:
             # Non-fatal: if it fails, the depth prepass is skipped (color pass still draws).
             self.camdepth_program = _compile_program(g, _GDR_CAMDEPTH_VS, _GDR_CAMDEPTH_FS)
@@ -808,10 +866,16 @@ class GPUDrivenRenderer:
         return (inst_arr, groups)
 
     def cast(self, light_vp):
-        """Depth-only MDI of opaque + two-sided groups into the currently-bound
-        shadow FBO (caller binds it via ShadowMap.begin()). Caches the frame so
-        the following render() reuses the same instance layout. True if it drew."""
-        if self._failed or not self.depth_program:
+        """Depth-only MDI of ALL model groups into the currently-bound shadow FBO
+        (caller binds it via ShadowMap.begin()). With the alpha-test cast program:
+        opaque casts solid, alpha-masked (foliage/grates) and blend (glass/FX) are
+        alpha-tested so cut-outs cast their real shape and clear glass casts
+        ~nothing. If that program failed to compile, falls back to the opaque-only
+        empty-FS program (groups 0+1 solid). Caches the frame so the following
+        render() reuses the same instance layout. True if it drew."""
+        alpha = bool(self.sundepth_program)
+        prog = self.sundepth_program or self.depth_program
+        if self._failed or not prog:
             return False
         try:
             if not self._ensure_built():
@@ -823,17 +887,27 @@ class GPUDrivenRenderer:
             if frame is None:
                 return False
             inst_arr, groups = frame
-            g.glUseProgram(self.depth_program)
-            g.glUniformMatrix4fv(g.glGetUniformLocation(self.depth_program, b'u_light_vp'),
+            g.glUseProgram(prog)
+            g.glUniformMatrix4fv(g.glGetUniformLocation(prog, b'u_light_vp'),
                                  1, g.GL_TRUE, np.ascontiguousarray(light_vp, np.float32))
             g.glBindVertexArray(self.vao)
             self._upload_instances(g, inst_arr)
+            if alpha:
+                # binding 2: material table — the alpha test reads m.tint.w / hDiffuse.
+                g.glBindBufferBase(g.GL_SHADER_STORAGE_BUFFER, 2, self.mat_ssbo)
             g.glEnable(g.GL_DEPTH_TEST); g.glDepthMask(g.GL_TRUE); g.glDepthFunc(g.GL_LESS)
             g.glDisable(g.GL_BLEND); g.glDisable(g.GL_CULL_FACE)   # two-sided foliage casts too
-            for grp in (0, 1):                                    # skip 2 (transparent/FX)
-                cmd_arr, _dm = groups[grp]
+            # Alpha path casts every group (2 = glass/FX/blended foliage now
+            # included); opaque-only fallback keeps the old 0+1.
+            for grp in ((0, 1, 2) if alpha else (0, 1)):
+                cmd_arr, dm = groups[grp]
                 if not len(cmd_arr):
                     continue
+                if alpha:
+                    # binding 1: per-draw material id, indexed by gl_DrawID.
+                    g.glBindBuffer(g.GL_SHADER_STORAGE_BUFFER, self.drawmat_buf)
+                    g.glBufferData(g.GL_SHADER_STORAGE_BUFFER, dm.nbytes, dm, g.GL_DYNAMIC_DRAW)
+                    g.glBindBufferBase(g.GL_SHADER_STORAGE_BUFFER, 1, self.drawmat_buf)
                 g.glBindBuffer(g.GL_DRAW_INDIRECT_BUFFER, self.cmd_buf)
                 g.glBufferData(g.GL_DRAW_INDIRECT_BUFFER, cmd_arr.nbytes, cmd_arr, g.GL_DYNAMIC_DRAW)
                 g.glMultiDrawElementsIndirect(g.GL_TRIANGLES, g.GL_UNSIGNED_INT,
