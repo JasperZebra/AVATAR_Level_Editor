@@ -3403,6 +3403,30 @@ class MapCanvas(QOpenGLWidget):
         print(f"🟣 [F8] depth prepass (early-Z occlusion): {'ON' if on else 'OFF'}{extra}")
         self.update()
 
+    def _shadow_half_size(self):
+        """Half-extent (world units) of the sun shadow box. Sized to span the whole
+        level so EVERY object casts (AM3D parity), not just those in a small box
+        near the camera. Derived once from the entity spread (cached, keyed on the
+        position array), clamped so tiny levels still get coverage and huge worlds
+        don't blow past a usable resolution. Falls back to a large default."""
+        pos = getattr(self, '_positions_3d', None)
+        key = id(pos) if pos is not None else None
+        if (getattr(self, '_shadow_half_size_val', None) is not None
+                and getattr(self, '_shadow_half_size_key', None) == key):
+            return self._shadow_half_size_val
+        hs = 1200.0
+        try:
+            if pos is not None and len(pos):
+                xr = float(pos[:, 0].max() - pos[:, 0].min())
+                zr = float(pos[:, 2].max() - pos[:, 2].min())
+                hs = max(xr, zr) * 0.5 + 64.0          # + margin so edge objects fit
+        except Exception:
+            pass
+        hs = max(400.0, min(hs, 6000.0))               # sane coverage vs resolution
+        self._shadow_half_size_val = hs
+        self._shadow_half_size_key = key
+        return hs
+
     def _cast_sun_shadows(self):
         """Render model depth from the sun into the shadow map, then tell the
         model_loader to sample it. Called after prepare_batches (so the visible
@@ -3423,14 +3447,19 @@ class MapCanvas(QOpenGLWidget):
                     from shadow_map import ShadowMap
                     self._shadow_map = ShadowMap()
                 sm = self._shadow_map
+                # AM3D parity: size the light box to the WHOLE level so every
+                # object casts (not just those within a small box near the camera).
+                sm.half_size = self._shadow_half_size()
                 light_vp = sm.update_light_vp(
                     self.camera_3d.position, self.camera_3d.forward,
                     getattr(self, '_sun_dir_world', (0.0, 1.0, 0.0)))
+                # Bias scaled to the (now level-sized) box so shadows don't detach.
+                self._shadow_bias = sm.shadow_bias()
                 if sm.begin() is not None:
                     cast = ml.cast_shadows(light_vp)
                     sm.end(self.defaultFramebufferObject(), self.width(), self.height())
                     if cast:
-                        ml.set_shadow_inputs(sm.tex, light_vp, True)
+                        ml.set_shadow_inputs(sm.tex, light_vp, True, self._shadow_bias)
                         active = True
                         # Stash a consistent (tex, light_vp) pair for the TERRAIN
                         # receiver. Terrain draws earlier in the frame than this
@@ -3958,6 +3987,7 @@ class MapCanvas(QOpenGLWidget):
                             glUniform1i(_tsl['u_tex'], 0)
                             glUniform1i(_tsl['u_shadow'], 1)
                             glUniform1f(_tsl['u_shadow_on'], 1.0)
+                            glUniform1f(_tsl['u_shadow_bias'], float(getattr(self, '_shadow_bias', 0.0018)))
                             glUniform3f(_tsl['u_tile_offset'], float(tx), 0.0, float(-ty))
                             glUniformMatrix4fv(_tsl['u_light_vp'], 1, GL_TRUE,
                                                np.ascontiguousarray(_lvp, dtype=np.float32))

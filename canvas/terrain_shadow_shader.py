@@ -95,14 +95,15 @@ _SHADOW_GLSL = """
 uniform sampler2D u_shadow;
 uniform mat4  u_light_vp;      // world -> sun light clip
 uniform float u_shadow_on;     // 1 = sample shadows, 0 = fully lit
+uniform float u_shadow_bias;   // normalized depth bias (scaled to the box size)
 float sun_shadow(vec3 world) {
     if (u_shadow_on < 0.5) return 1.0;
     vec4 lp = u_light_vp * vec4(world, 1.0);
     if (lp.w <= 0.0) return 1.0;
     vec3 pc = lp.xyz / lp.w * 0.5 + 0.5;               // -> [0,1]
     if (pc.x < 0.0 || pc.x > 1.0 || pc.y < 0.0 || pc.y > 1.0 || pc.z > 1.0) return 1.0;
-    float bias = 0.0018;
-    float tx = 1.0 / 2048.0;                            // ShadowMap.SIZE
+    float bias = u_shadow_bias;
+    float tx = 1.0 / 4096.0;                            // ShadowMap.SIZE (keep in sync)
     float s = 0.0;
     for (int i = -1; i <= 1; i++)
         for (int j = -1; j <= 1; j++) {
@@ -140,7 +141,7 @@ void main() {
 
 
 # Uniform names the caller looks up (kept together so map_canvas_gpu stays tidy).
-UNIFORMS = ('u_tex', 'u_shadow', 'u_light_vp', 'u_shadow_on', 'u_tile_offset')
+UNIFORMS = ('u_tex', 'u_shadow', 'u_light_vp', 'u_shadow_on', 'u_tile_offset', 'u_shadow_bias')
 
 
 def build():

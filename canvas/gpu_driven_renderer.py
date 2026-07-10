@@ -352,6 +352,7 @@ uniform int   u_flip_normal;  // debug: 1 = flip base geometry normal
 uniform int   u_shadows_on;   // 1 = sample the sun shadow map
 uniform mat4  u_light_vp;     // world -> sun light clip space
 uniform sampler2D u_shadow_tex;
+uniform float u_shadow_bias;  // normalized depth bias, scaled to the box size
 in vec3 v_posES;
 in vec3 v_normalES;
 in vec3 v_tangentES;
@@ -366,7 +367,7 @@ float sunVisibility(vec3 N, vec3 L) {
     vec4 lc = u_light_vp * vec4(v_wp, 1.0);
     vec3 p = lc.xyz / lc.w * 0.5 + 0.5;
     if (p.z > 1.0 || p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 1.0;
-    float bias = max(0.0030 * (1.0 - dot(N, L)), 0.0010);
+    float bias = max(u_shadow_bias * 1.7 * (1.0 - dot(N, L)), u_shadow_bias);
     vec2 tx = 1.0 / vec2(textureSize(u_shadow_tex, 0));
     float s = 0.0;
     for (int x = -1; x <= 1; x++)
@@ -595,7 +596,7 @@ class GPUDrivenRenderer:
         import OpenGL.GL as g
         return g
 
-    def render(self, anim_t, shadow_tex=0, light_vp=None, shadows_on=False):
+    def render(self, anim_t, shadow_tex=0, light_vp=None, shadows_on=False, shadow_bias=0.0018):
         """Returns True if it drew (caller skips the fallback), False to fall back."""
         if self._failed:
             return False
@@ -603,7 +604,7 @@ class GPUDrivenRenderer:
             if not self._ensure_built():
                 self._failed = True
                 return False
-            return self._draw(anim_t, shadow_tex, light_vp, shadows_on)
+            return self._draw(anim_t, shadow_tex, light_vp, shadows_on, shadow_bias)
         except Exception as e:
             import traceback
             print(f"[gpu-driven] runtime error -> fallback: {e}")
@@ -632,7 +633,7 @@ class GPUDrivenRenderer:
             # Cache the rest once — glGetUniformLocation per frame is wasted CPU.
             self._uloc = {n: g.glGetUniformLocation(self.program, n) for n in
                           (b'u_flip_green', b'u_flip_normal', b'u_shadows_on',
-                           b'u_light_vp', b'u_shadow_tex')}
+                           b'u_light_vp', b'u_shadow_tex', b'u_shadow_bias')}
         if self.depth_program == 0:
             # Non-fatal: if it fails, cast() no-ops and the scene renders unshadowed.
             self.depth_program = _compile_program(g, _GDR_DEPTH_VS, _GDR_DEPTH_FS)
@@ -921,7 +922,7 @@ class GPUDrivenRenderer:
             self._frame = None
             return False
 
-    def _draw(self, anim_t=0.0, shadow_tex=0, light_vp=None, shadows_on=False):
+    def _draw(self, anim_t=0.0, shadow_tex=0, light_vp=None, shadows_on=False, shadow_bias=0.0018):
         g = self._gl()
         import ctypes
         # Reuse the frame cast() just built (identical instance layout); else build.
@@ -948,6 +949,8 @@ class GPUDrivenRenderer:
         use_shadow = 1 if (shadows_on and shadow_tex and light_vp is not None) else 0
         g.glUniform1i(self._uloc[b'u_shadows_on'], use_shadow)
         if use_shadow:
+            if self._uloc[b'u_shadow_bias'] != -1:
+                g.glUniform1f(self._uloc[b'u_shadow_bias'], float(shadow_bias))
             g.glUniformMatrix4fv(self._uloc[b'u_light_vp'],
                                  1, g.GL_TRUE, np.ascontiguousarray(light_vp, np.float32))
             g.glActiveTexture(g.GL_TEXTURE4)

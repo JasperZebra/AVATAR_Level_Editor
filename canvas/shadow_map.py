@@ -53,7 +53,9 @@ def _ortho(l, r, b, t, n, f):
 
 
 class ShadowMap:
-    SIZE = 2048
+    # 4096 (was 2048): the coverage box is now sized to the whole level (AM3D
+    # parity — everything casts), so a bigger box needs more texels to stay sharp.
+    SIZE = 4096
 
     def __init__(self, half_size=220.0):
         self._failed = False
@@ -62,6 +64,7 @@ class ShadowMap:
         self.tex = 0
         self.half_size = half_size
         self.light_vp = np.eye(4, dtype=np.float32)
+        self.depth_range = 1.0   # far-near of the ortho light frustum; for bias scaling
 
     def _build(self):
         if self._failed:
@@ -111,9 +114,19 @@ class ShadowMap:
         if abs(sd[1]) > 0.95:           # sun near vertical → avoid degenerate up
             up = (0.0, 0.0, 1.0)
         view = _look_at(eye, c, up)
-        proj = _ortho(-S, S, -S, S, 1.0, dist * 2.0 + S * 2.0)
+        far = dist * 2.0 + S * 2.0
+        proj = _ortho(-S, S, -S, S, 1.0, far)
         self.light_vp = (proj @ view).astype(np.float32)
+        self.depth_range = float(far - 1.0)   # for world→normalized bias scaling
         return self.light_vp
+
+    def shadow_bias(self):
+        """Normalized depth bias whose WORLD size stays ~constant as the box grows,
+        so shadows don't detach (peter-pan) when half_size spans a whole level.
+        world_bias ≈ 2 units + a few shadow texels; normalized by the depth range."""
+        texel_world = 2.0 * self.half_size / float(self.SIZE)
+        world_bias = 2.0 + 2.5 * texel_world
+        return world_bias / max(self.depth_range, 1.0)
 
     def begin(self):
         """Bind the shadow FBO for the depth (cast) pass. Returns light_vp."""

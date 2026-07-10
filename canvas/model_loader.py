@@ -2495,12 +2495,14 @@ class ModelLoader:
             self._gdr_frame = None
             return False
 
-    def set_shadow_inputs(self, shadow_tex, light_vp, on):
+    def set_shadow_inputs(self, shadow_tex, light_vp, on, bias=0.0018):
         """Canvas sets the sun shadow map + light matrix each frame; the
-        GPU-driven model shader samples them when `on`."""
+        GPU-driven model shader samples them when `on`. `bias` is the normalized
+        depth bias, scaled by the canvas to the (level-sized) shadow box."""
         self._shadow_tex = int(shadow_tex) if shadow_tex else 0
         self._shadow_light_vp = light_vp
         self._shadows_on = bool(on)
+        self._shadow_bias = float(bias)
 
     def cast_shadows(self, light_vp):
         """Render model depth into the currently-bound shadow FBO (GPU-driven
@@ -2550,7 +2552,8 @@ class ModelLoader:
                 anim_t = time.monotonic() - self._anim_t0
                 had_array_frame = self._gdr_frame is not None
                 drew = self._gpu_driven.render(anim_t, self._shadow_tex,
-                                               self._shadow_light_vp, self._shadows_on)
+                                               self._shadow_light_vp, self._shadows_on,
+                                               getattr(self, '_shadow_bias', 0.0018))
                 self._gdr_frame = None   # consumed (or invalid) — never reuse next frame
                 if drew:
                     self.gdr_drew_last = True
