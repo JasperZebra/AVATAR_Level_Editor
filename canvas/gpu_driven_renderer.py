@@ -351,7 +351,7 @@ uniform int   u_flip_green;   // debug: 1 = flip normal-map green (Y)
 uniform int   u_flip_normal;  // debug: 1 = flip base geometry normal
 uniform int   u_shadows_on;   // 1 = sample the sun shadow map
 uniform mat4  u_light_vp;     // world -> sun light clip space
-uniform sampler2D u_shadow_tex;
+uniform sampler2DShadow u_shadow_tex;  // hardware depth-compare (LINEAR = bilinear PCF)
 uniform float u_shadow_bias;  // normalized depth bias, scaled to the box size
 in vec3 v_posES;
 in vec3 v_normalES;
@@ -368,11 +368,15 @@ float sunVisibility(vec3 N, vec3 L) {
     vec3 p = lc.xyz / lc.w * 0.5 + 0.5;
     if (p.z > 1.0 || p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 1.0;
     float bias = max(u_shadow_bias * 1.7 * (1.0 - dot(N, L)), u_shadow_bias);
+    float ref = p.z - bias;
     vec2 tx = 1.0 / vec2(textureSize(u_shadow_tex, 0));
+    // 3x3 grid of hardware-PCF taps. Each texture(sampler2DShadow, ...) is a
+    // bilinear-filtered depth compare, so edges resolve smoothly instead of the
+    // old blocky NEAREST compare that read as "pixelated" on the ground.
     float s = 0.0;
     for (int x = -1; x <= 1; x++)
       for (int y = -1; y <= 1; y++)
-        s += (p.z - bias > texture(u_shadow_tex, p.xy + vec2(x, y) * tx).r) ? 0.0 : 1.0;
+        s += texture(u_shadow_tex, vec3(p.xy + vec2(x, y) * tx, ref));
     return s / 9.0;
 }
 void main(){

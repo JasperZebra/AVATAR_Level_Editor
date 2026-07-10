@@ -92,7 +92,7 @@ void main() {
 # 2048, standard [0,1] depth, GL_LESS cast) and the light_vp convention
 # (row-major, uploaded transpose=GL_TRUE).
 _SHADOW_GLSL = """
-uniform sampler2D u_shadow;
+uniform sampler2DShadow u_shadow;   // hardware depth-compare sampler (LINEAR = bilinear PCF)
 uniform mat4  u_light_vp;      // world -> sun light clip
 uniform float u_shadow_on;     // 1 = sample shadows, 0 = fully lit
 uniform float u_shadow_bias;   // normalized depth bias (scaled to the box size)
@@ -102,14 +102,15 @@ float sun_shadow(vec3 world) {
     if (lp.w <= 0.0) return 1.0;
     vec3 pc = lp.xyz / lp.w * 0.5 + 0.5;               // -> [0,1]
     if (pc.x < 0.0 || pc.x > 1.0 || pc.y < 0.0 || pc.y > 1.0 || pc.z > 1.0) return 1.0;
-    float bias = u_shadow_bias;
+    float ref = pc.z - u_shadow_bias;
     float tx = 1.0 / 4096.0;                            // ShadowMap.SIZE (keep in sync)
+    // 3x3 grid of hardware-PCF taps. Each shadow2D() is a bilinear-filtered
+    // depth compare (4 sub-taps), so 9 calls = 36 effective samples -> smooth,
+    // non-pixelated edges instead of the old blocky NEAREST compare.
     float s = 0.0;
     for (int i = -1; i <= 1; i++)
-        for (int j = -1; j <= 1; j++) {
-            float d = texture2D(u_shadow, pc.xy + vec2(float(i), float(j)) * tx).r;
-            s += (pc.z - bias > d) ? 0.0 : 1.0;
-        }
+        for (int j = -1; j <= 1; j++)
+            s += shadow2D(u_shadow, vec3(pc.xy + vec2(float(i), float(j)) * tx, ref)).r;
     return s / 9.0;
 }
 """

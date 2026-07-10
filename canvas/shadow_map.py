@@ -74,11 +74,17 @@ class ShadowMap:
             glBindTexture(GL_TEXTURE_2D, self.tex)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, self.SIZE, self.SIZE,
                          0, GL_DEPTH_COMPONENT, GL_FLOAT, None)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+            # LINEAR + depth-compare = hardware PCF. Each shadow tap becomes a
+            # bilinear-weighted 2x2 depth comparison in the sampler, so shadow
+            # edges come out smooth instead of the blocky NEAREST stair-steps the
+            # user saw ("too pixelated"). Requires sampler2DShadow in the shaders.
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
             glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, [1.0, 1.0, 1.0, 1.0])
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL)
             self.fbo = int(glGenFramebuffers(1))
             glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, self.tex, 0)

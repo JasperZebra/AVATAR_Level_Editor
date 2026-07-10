@@ -3429,12 +3429,12 @@ class MapCanvas(QOpenGLWidget):
                 # Distance along the view ray down to the ground plane (y≈0): a solid
                 # proxy for zoom — close/low view → small sharp box, high/far → bigger.
                 focus = abs(py) / abs(fy)
-                hs = focus * 0.95
+                hs = focus * 0.75     # tighter than the view distance → more texels/object
             else:
-                hs = 2600.0            # looking level/up → cover a wide swath
+                hs = 2200.0            # looking level/up → cover a wide swath
         except Exception:
             pass
-        return max(500.0, min(hs, 4000.0))            # sharpness floor .. coarse ceiling
+        return max(350.0, min(hs, 3200.0))            # sharpness floor .. coarse ceiling
         return hs
 
     def _cast_sun_shadows(self):
