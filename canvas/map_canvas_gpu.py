@@ -3412,27 +3412,29 @@ class MapCanvas(QOpenGLWidget):
         self.update()
 
     def _shadow_half_size(self):
-        """Half-extent (world units) of the sun shadow box. Sized to span the whole
-        level so EVERY object casts (AM3D parity), not just those in a small box
-        near the camera. Derived once from the entity spread (cached, keyed on the
-        position array), clamped so tiny levels still get coverage and huge worlds
-        don't blow past a usable resolution. Falls back to a large default."""
-        pos = getattr(self, '_positions_3d', None)
-        key = id(pos) if pos is not None else None
-        if (getattr(self, '_shadow_half_size_val', None) is not None
-                and getattr(self, '_shadow_half_size_key', None) == key):
-            return self._shadow_half_size_val
-        hs = 1200.0
+        """Half-extent (world units) of the sun shadow box. Camera-FOCUSED (AM3D-
+        style — the box follows the view), sized to the patch of ground the camera
+        is looking at, so shadows stay SHARP where you're working. A level-wide box
+        made a fixed 4096² map cover the whole world → each object's shadow was only
+        a few coarse texels (pixelated, blobby). By scaling the box to the view, a
+        vehicle/crate gets many texels and its shadow is recognizable. Objects within
+        the box cast; the box moves + scales with the camera. Clamped so it never
+        gets tiny (min sharpness floor) or absurdly coarse."""
+        hs = 1400.0
         try:
-            if pos is not None and len(pos):
-                xr = float(pos[:, 0].max() - pos[:, 0].min())
-                zr = float(pos[:, 2].max() - pos[:, 2].min())
-                hs = max(xr, zr) * 0.5 + 64.0          # + margin so edge objects fit
+            cam = self.camera_3d
+            py = float(cam.position[1])
+            fy = float(cam.forward[1])
+            if fy < -0.05:
+                # Distance along the view ray down to the ground plane (y≈0): a solid
+                # proxy for zoom — close/low view → small sharp box, high/far → bigger.
+                focus = abs(py) / abs(fy)
+                hs = focus * 0.95
+            else:
+                hs = 2600.0            # looking level/up → cover a wide swath
         except Exception:
             pass
-        hs = max(400.0, min(hs, 6000.0))               # sane coverage vs resolution
-        self._shadow_half_size_val = hs
-        self._shadow_half_size_key = key
+        return max(500.0, min(hs, 4000.0))            # sharpness floor .. coarse ceiling
         return hs
 
     def _cast_sun_shadows(self):

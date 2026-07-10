@@ -135,9 +135,13 @@ void main() {
              + gl_LightSource[0].diffuse.rgb * d0 * sh
              + gl_LightSource[1].diffuse.rgb * d1;
     vec4 tex = texture2D(u_tex, gl_TexCoord[0].xy);
-    gl_FragColor = vec4(tex.rgb * lit, tex.a);
+    // Deepen the shadow so object shadows read clearly on the ground: darken the
+    // WHOLE colour where the sun is blocked (not just drop the sun highlight). A
+    // shadowed patch goes to SHADOW_DARK of its lit brightness.
+    float shade = mix(SHADOW_DARK, 1.0, sh);
+    gl_FragColor = vec4(tex.rgb * lit * shade, tex.a);
 }
-""".replace('__SHADOW__', _SHADOW_GLSL)
+""".replace('__SHADOW__', _SHADOW_GLSL).replace('SHADOW_DARK', '0.40')
 
 
 # Uniform names the caller looks up (kept together so map_canvas_gpu stays tidy).

@@ -409,11 +409,16 @@ void main(){
 
     vec3 specMap = (m.hasflags.z > 0.5) ? texture(sampler2D(m.hSpecular), uv).rgb : vec3(1.0);
     vec3 color = gl_LightModel.ambient.rgb * base;
+    // Sun (light 0) visibility — computed once; drives both the sun-term shadow and
+    // an overall darkening so shadowed models read as clearly as the terrain.
+    vec4 sunLp = gl_LightSource[0].position;
+    vec3 sunL = normalize(sunLp.xyz - v_posES * sunLp.w);
+    float sunVis = sunVisibility(N, sunL);
     for (int i = 0; i < 2; i++) {
         vec4 lp = gl_LightSource[i].position;
         vec3 L = normalize(lp.xyz - v_posES * lp.w);
         float ndl = max(dot(N, L), 0.0);
-        float vis = (i == 0) ? sunVisibility(N, L) : 1.0;   // only the sun (light 0) casts
+        float vis = (i == 0) ? sunVis : 1.0;   // only the sun (light 0) casts
         color += base * gl_LightSource[i].diffuse.rgb * ndl * vis;
         if (ndl > 0.0) {
             vec3 H = normalize(L + V);
@@ -421,6 +426,7 @@ void main(){
             color += gl_LightSource[i].specular.rgb * m.specShin.rgb * specMap * s * vis;
         }
     }
+    color *= mix(0.40, 1.0, sunVis);   // deepen shadow so shadowed models read clearly
     if (m.hasflags.w > 0.5) color += texture(sampler2D(m.hEmission), uv).rgb * m.emissive.rgb * u_night;
 
     color = mix(color, vec3(0.35, 0.50, 1.0), v_overlay);
