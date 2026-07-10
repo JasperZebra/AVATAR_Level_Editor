@@ -120,12 +120,23 @@ class ShadowMap:
         self.depth_range = float(far - 1.0)   # for world→normalized bias scaling
         return self.light_vp
 
-    def shadow_bias(self):
-        """Normalized depth bias whose WORLD size stays ~constant as the box grows,
-        so shadows don't detach (peter-pan) when half_size spans a whole level.
-        world_bias ≈ 2 units + a few shadow texels; normalized by the depth range."""
+    def shadow_bias(self, receiver='model'):
+        """Normalized depth bias whose WORLD size stays ~constant as the box grows
+        (so shadows don't detach / peter-pan when half_size spans a whole level).
+
+        Split by receiver because their acne risk differs:
+        - 'terrain' NEVER casts into the map, so it can't self-shadow → NO acne
+          risk. Use a tiny bias so object shadows sit tight on the ground instead
+          of floating through it (the big-box bias was making grounded objects
+          lose their contact shadow entirely).
+        - 'model' meshes cast AND receive, so they self-shadow → need enough bias
+          to avoid acne stripes on curved surfaces.
+        """
         texel_world = 2.0 * self.half_size / float(self.SIZE)
-        world_bias = 2.0 + 2.5 * texel_world
+        if receiver == 'terrain':
+            world_bias = 0.25 + 1.0 * texel_world
+        else:
+            world_bias = 1.5 + 2.0 * texel_world
         return world_bias / max(self.depth_range, 1.0)
 
     def begin(self):

@@ -3454,7 +3454,10 @@ class MapCanvas(QOpenGLWidget):
                     self.camera_3d.position, self.camera_3d.forward,
                     getattr(self, '_sun_dir_world', (0.0, 1.0, 0.0)))
                 # Bias scaled to the (now level-sized) box so shadows don't detach.
-                self._shadow_bias = sm.shadow_bias()
+                # Terrain gets a much smaller bias (it never self-shadows) so object
+                # shadows sit tight on the ground instead of floating through it.
+                self._shadow_bias = sm.shadow_bias('model')
+                self._shadow_bias_terrain = sm.shadow_bias('terrain')
                 if sm.begin() is not None:
                     cast = ml.cast_shadows(light_vp)
                     sm.end(self.defaultFramebufferObject(), self.width(), self.height())
@@ -3987,7 +3990,7 @@ class MapCanvas(QOpenGLWidget):
                             glUniform1i(_tsl['u_tex'], 0)
                             glUniform1i(_tsl['u_shadow'], 1)
                             glUniform1f(_tsl['u_shadow_on'], 1.0)
-                            glUniform1f(_tsl['u_shadow_bias'], float(getattr(self, '_shadow_bias', 0.0018)))
+                            glUniform1f(_tsl['u_shadow_bias'], float(getattr(self, '_shadow_bias_terrain', 0.0006)))
                             glUniform3f(_tsl['u_tile_offset'], float(tx), 0.0, float(-ty))
                             glUniformMatrix4fv(_tsl['u_light_vp'], 1, GL_TRUE,
                                                np.ascontiguousarray(_lvp, dtype=np.float32))
