@@ -377,7 +377,20 @@ class TerrainRenderer:
                 arr = np.frombuffer(raw, dtype=np.uint8, count=n * n * 4).reshape(n, n, 4)
                 height_array = (arr[:, :, 1].astype(np.uint32) * 256
                                + arr[:, :, 0].astype(np.uint32)).astype(np.float32) / 128.0
-                underwater_mask = arr[:, :, 3] > 150
+                # byte[3] is per-vertex meaning that DIFFERS by game:
+                #   Avatar (.csdat): underwater flag — clean bimodal split
+                #     (0-95 dry / 224-239 wet), threshold >150 lands in the gap.
+                #   FC2 (.sdat): a packed MATERIAL-LAYER INDEX (range 0-111,
+                #     never >=224) — NOT underwater. Confirmed across shanty /
+                #     w1 / fishingvillage: max=111, 0% of vertices >150. Reading
+                #     it as an underwater mask yields an all-False array that
+                #     then wrongly suppresses FC2 beach/underwater blend layers.
+                # So only Avatar gets a real mask; FC2 gets None (water there is
+                # driven by the header flags + heightmap clip, not byte[3]).
+                if self.game_mode == "farcry2":
+                    underwater_mask = None
+                else:
+                    underwater_mask = arr[:, :, 3] > 150
                 return height_array, underwater_mask
 
             # Fallback for a short/odd-sized read: original byte-by-byte parse.

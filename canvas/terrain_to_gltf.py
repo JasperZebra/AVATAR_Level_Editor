@@ -144,7 +144,13 @@ class TerrainExporter:
                 arr = np.frombuffer(raw, dtype=np.uint8, count=n * n * 4).reshape(n, n, 4)
                 heightmap = (arr[:, :, 1].astype(np.uint32) * 256
                             + arr[:, :, 0].astype(np.uint32)).astype(np.float64) / 128.0
-                underwater_mask = arr[:, :, 3] > 150
+                # byte[3] is Avatar's underwater flag but FC2's packed material
+                # index (range 0-111, never >150) — see load_single_sector in
+                # terrain_renderer.py. Only Avatar gets a real underwater mask.
+                if self.game_mode == "farcry2":
+                    underwater_mask = None
+                else:
+                    underwater_mask = arr[:, :, 3] > 150
                 return heightmap, underwater_mask
 
             # Fallback for a short/odd-sized read: original byte-by-byte parse.

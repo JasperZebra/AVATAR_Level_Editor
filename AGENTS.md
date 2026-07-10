@@ -719,6 +719,44 @@ Binary structure of the pre-terrain header in `.csdat` files (terrain data start
 
 **`parse_water_from_sector`:** `WaterData.water_flag` holds the raw flag byte. `WaterData.has_water = (water_flag != 0)`.
 
+> **Do NOT promote flag=0 sectors to has_water using material+height.** It was tried (drifting_sierra stores water_*.mlm + height 73 with flag=0) and reverted: it contradicts the in-game-confirmed sp_sebastien result (256 sectors height=20, only 179 render). The 0xA8 flag is authoritative; a stored material path + height on a flag=0 sector is inert metadata, not rendered water.
+
+### Avatar .csdat full format map (cracked July 2026)
+
+Complete byte layout of an Avatar sector file, verified across all 512 sectors of `sp_drifting_sierra_fm_01_l1`+`_l2`. Total size = 708 (header) + 16900 (terrain) + variable trailer (~6.0–6.7 KB).
+
+```
+REGION            OFFSET        LEN      TYPE        MEANING (confidence)
+header
+  0x000           0            8        magic       52 10 00 e9 09 00 00 00  version/magic (confirmed const)
+  0x024           36           8        version     03 02 01 00 | 5c 59 00 00  (const)
+  0x034           52           ~38      ascii        WORLD NAME, e.g. "Avatar_SP_Tantalus_01_TheBansheeFields" (confirmed)
+  0x07C           124          20       POINTERS     serialized WinXP DLL addrs (0x77c3xxxx) — runtime garbage, not data
+  0x0A0           160          4        float32      terrain height bound (200.0) — preserve on edit
+  0x0A4           164          4        float32      terrain height bound (level-specific) — preserve
+  0x0A8           168          1        uint8        WATER VISIBLE FLAG (authoritative) (confirmed)
+  0x0B0           176          4        float32      WATER HEIGHT (confirmed)
+  0x0B9           185          var      string       water material path graphics\_materials\editor\water_*.mlm (0-filled if none)
+  0x1F8           504          60       descriptor   "DXT1" embedded-texture descriptor, dims 61x61 (per-sector baked tex meta)
+  0x264 / 0x2AC   —            —        POINTERS     more serialized DLL/ntdll addrs (0x7c91xxxx) — runtime garbage
+  0x2C4           708          —        —            end of header / start of terrain
+terrain           708          16900    65x65 x 4 bytes-per-vertex sample:
+  sample[0:2]     uint16 LE / 128       HEIGHT (world units) (confirmed, long-known)
+  sample[2]       uint8                 NORMAL X (tangent-space): (b-127.5)/127.5; corr(-dH/dx)=0.93 (confirmed)
+  sample[3]       uint8                 UNDERWATER FLAG: bimodal <96 dry / >=224 wet, empty 96..223 gap; threshold >150 (confirmed)
+trailer           17608        var
+  +0              0            1056     AO/light map (uint8; 0xFF=unoccluded; ~mean 254; flat sector=all 0xFF)
+  +1056           —            4        marker       03 00 00 00 (channel count; const across all 512 sectors)
+  +1060           —            4225     NORMAL Y map (65x65 uint8): (b-127.5)/127.5; corr(-dH/dy)=0.54..0.96 (confirmed)
+  +5285           —            3        00 00 00
+  +5288           —            var      record list (12-byte records; flat sector fills 672 bytes of 0x11) — engine LOD/feature data
+  tail            —            ~20      footer       recurring 3-float (~1.49, 2.97, 6.99) + count — sector bounds/scale (likely)
+```
+
+**Full per-vertex normal recovery:** the engine bakes the real surface normal split across two places — **X** in terrain `sample[2]`, **Y** in trailer `+1060` (65x65). Reconstruct **Z** = `sqrt(1 - X² - Y²)` (mean Z ≈ 0.98 on real terrain; `X²+Y² ≤ 1` holds for 100% of vertices). This is more accurate than the current heightmap-gradient normals (which the code only uses byte[2] to *confirm*, corr 0.979) and can drive true per-vertex 3D lighting.
+
+**"100%" caveat:** the format is not 100% *meaningful* — it embeds serialized runtime pointers (fixed WinXP DLL addresses, deterministically constant so they look like data but aren't) and an engine-internal LOD/feature record list in the trailer. Every byte is *categorized* (data-field / texture / pointer-garbage / records / padding), which is the real ceiling for a memory-serialized format.
+
 ### FC2 sdat water format + Water Editor parity (July 2026)
 
 FC2 `.sdat` stores its per-sector water block near the START of the file (not at 0xA8 like Avatar). Ground-truthed against all 14,364 retail sdats (Fortune's Edition worlds + MP maps):
@@ -737,6 +775,32 @@ FC2 `.sdat` stores its per-sector water block near the START of the file (not at
 **Safe write region:** material path region is `[68, 192)` — the longest retail path ends at 132 and real header data never resumes before offset 329, so 192 is a safe fixed bound. FC2 has **no** fix-byte slot (Avatar's `0x21` holds real FC2 header data — never write fix bytes for FC2). Terrain heightmap starts at 592. Round-trip verified on real data: prefix (0..52), mid-header (192..592), and terrain (592+) are all byte-preserved.
 
 **`water_editor_dialog.py` is now game-aware** via `WaterFormat(game_mode)` — one code path, per-game offsets/material list/flag semantics. `SectorGridWidget` uses `scan_sector_files()` which globs `*{ext}` and remaps FC2 global sd numbering (row stride 80) / Avatar multi-part numbering to local 0-based grid indices (same algorithm as `TerrainEditor.load`), so grid indices line up with `terrain_renderer.water_data`. FC2 mode adds a Still/River type selector (enabling water sets the chosen flag and clears the other). `open_water_editor` in `simplified_map_editor.py` passes `game_mode=self.game_mode`. Tests: `tests/test_water_editor_fc2.py`.
+
+### FC2 .sdat full format map (cracked July 2026)
+
+Verified across 14,364 sectors / 67 levels (deep-dived shanty, w1_a_1, w2_a_1, fishingvillage). Size = 592 (header) + 16900 (terrain 65×65×4) + variable trailer (~6044+, 12-byte record quantum). Same architecture as Avatar (baked WinXP pointers, 12-byte trailer records) but **different field offsets and a different byte[3] meaning**.
+
+```
+0x00  u32   file magic 0xE9001052 (const all levels)
+0x04  u32   version/type = 7
+0x08  u32   TOTAL FILE SIZE (self-reference)
+0x0C  u32   footer offset = filesize-20 (points at 20-byte LOD footer)
+0x1C  f32   sector MIN terrain height (corr 1.000 with grid min)
+0x20  f32   sector MAX terrain height (corr 1.000 with grid max)
+0x34  u8/u32 STILL-water flag ; 0x38 RIVER-water flag ; 0x3C f32 water height
+0x44  cstr  water-surface material path (graphics\...\water_*.mlm), region [68,192)
+0x154 (340) .. 0x208 (520): serialized C++ object w/ baked ntdll 0x7c91xxxx +
+            process-heap 0x07xxxxxx pointers — RUNTIME GARBAGE (heap ptrs vary
+            per bake session), preserve verbatim, never interpret
+0x250 (592)      terrain 65×65 × 4B/sample:
+   [0:2] u16 height/128 LE ; [2] u8 normalX (corr -0.95 w/ dH/dx)
+   [3]   u8  PACKED MATERIAL-LAYER INDEX (hi2=>>5, lo=&15; range 0-111) — NOT underwater
+trailer  material-paint quadtree/RLE (layer ids 0x10-0x13) + optional 65×65 0x7f
+   default layer + 12-byte palette records <f32=3.0><u16><u16><u32 layer-idx>
+   + 20-byte LOD footer [u32 step*k][u32 0][f32×3 LOD/bounds]
+```
+
+**CRITICAL per-game divergence — byte[3]:** Avatar's `.csdat` byte[3] is an underwater flag (bimodal 0-95/224-239); **FC2's `.sdat` byte[3] is a material-layer index** (0-111, never ≥224, 0% >150 — confirmed on shanty/w1/fishingvillage). `terrain_renderer._load_single_sector` and `terrain_to_gltf.load_heightmap_from_csdat` now return `underwater_mask=None` for FC2 so the bogus all-False mask can't suppress FC2 beach/underwater blend layers. FC2 water is driven purely by the header flags (@52/@56) + heightmap clip, never byte[3]. @0x1C/@0x20 give the sector's authoritative min/max height without scanning the grid.
 
 ### pip installs must update requirements.txt
 When installing any new Python package, always add it to `requirements.txt` before or immediately after installing. The file is at the project root and has sections for app deps, build, and testing.
