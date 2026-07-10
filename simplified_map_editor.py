@@ -1908,11 +1908,36 @@ class SimplifiedMapEditor(QMainWindow):
         _t_row.addWidget(self._daynight_time_label)
         _light_vbox.addLayout(_t_row)
 
+        # Slider flanked by ◀ / ▶ arrows that nudge the time by one minute each
+        # (wrapping across midnight). Arrow keys / page keys on the slider also work
+        # (single step = 1 min, page step = 15 min).
+        _slider_row = QHBoxLayout(); _slider_row.setSpacing(4)
+        self._daynight_time_prev = QPushButton("◀")
+        self._daynight_time_next = QPushButton("▶")
+        for _b in (self._daynight_time_prev, self._daynight_time_next):
+            _b.setFixedWidth(24)
+            _b.setToolTip("Step time by 1 minute")
+            _b.setAutoRepeat(True)          # hold to scrub
+            _b.setAutoRepeatInterval(60)
         self._daynight_time_slider = QSlider(_Qt.Horizontal)
         self._daynight_time_slider.setRange(0, 1439)   # minutes in a day
         self._daynight_time_slider.setValue(720)        # noon
+        self._daynight_time_slider.setSingleStep(1)     # keyboard arrows = 1 min
+        self._daynight_time_slider.setPageStep(15)      # page keys = 15 min
         self._daynight_time_slider.setToolTip("Time of day (00:00–23:59)")
-        _light_vbox.addWidget(self._daynight_time_slider)
+        _slider_row.addWidget(self._daynight_time_prev)
+        _slider_row.addWidget(self._daynight_time_slider, 1)
+        _slider_row.addWidget(self._daynight_time_next)
+        _light_vbox.addLayout(_slider_row)
+
+        def _dn_step(delta):
+            # Wrap so 00:00 ◀ -> 23:59 and 23:59 ▶ -> 00:00. setValue fires
+            # valueChanged -> _on_dn_time, which pushes the time to the canvas.
+            new = (self._daynight_time_slider.value() + delta) % 1440
+            self._daynight_time_slider.setValue(new)
+
+        self._daynight_time_prev.clicked.connect(lambda: _dn_step(-1))
+        self._daynight_time_next.clicked.connect(lambda: _dn_step(1))
 
         def _dn_fmt(mins):
             return f"{int(mins) // 60:02d}:{int(mins) % 60:02d}"

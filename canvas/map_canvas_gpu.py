@@ -16,12 +16,13 @@ from PyQt5.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QHBoxLayout, QLab
 MODE_TOPDOWN = 0
 MODE_3D = 1
 
-# Sun elevation gate for sun-shadow casting. elev = sin(sun angle), so elev == 0
-# is the sun exactly ON the horizon and elev > 0 is above it. We cast whenever the
-# sun is above the horizon (either side of the sky) and stop once it dips below —
-# a tiny epsilon (not 0) avoids the degenerate exactly-horizontal light where the
-# shadow direction is undefined and shadows stretch to infinity.
-_SUN_SHADOW_ELEV_MIN = 0.01
+# Sun-shadow casting window, as an explicit fraction-of-day clock range. Shadows
+# cast only while time_of_day is inside [start, end]; outside it (night / deep
+# dawn-dusk) nothing casts. Tuned by eye to on at 05:42, off at 18:27 — a direct
+# time window is used instead of a sun-elevation threshold so the transitions land
+# at predictable clock times rather than drifting with the elevation curve.
+_SUN_SHADOW_START = 5.7 / 24.0     # 05:42
+_SUN_SHADOW_END   = 18.45 / 24.0   # 18:27
 
 # Import GPU components
 try:
@@ -663,6 +664,14 @@ class MapCanvas(QOpenGLWidget):
         self._light_pitch = int(pitch) % 361
         self.update()
 
+    def _sun_casts_shadows(self):
+        """True when the sun should cast shadows at the current time_of_day. Uses
+        the explicit [_SUN_SHADOW_START, _SUN_SHADOW_END] clock window so on/off
+        happens at the tuned times (05:42 / 18:27), not on a drifting elevation
+        threshold. Both cast paths (_cast_sun_shadows, _precast_shadows) gate here."""
+        t = float(self.time_of_day) % 1.0
+        return _SUN_SHADOW_START <= t <= _SUN_SHADOW_END
+
     def _daynight_factors(self):
         """From time_of_day → (sun_elevation -1..1, day 0..1, horizon 0..1).
         day smoothly ramps 0(night)→1(day) through dawn/dusk; horizon peaks when
@@ -693,22 +702,26 @@ class MapCanvas(QOpenGLWidget):
         sr = 0.95
         sg = 0.90 - 0.30 * horizon
         sb = 0.82 - 0.55 * horizon
-        moon = (0.10, 0.13, 0.22)
+        moon = (0.20, 0.25, 0.38)      # brighter cool moonlight (was 0.10,0.13,0.22)
         sun = [day * sr + (1 - day) * moon[0],
                day * sg + (1 - day) * moon[1],
                day * sb + (1 - day) * moon[2], 1.0]
         glLightfv(GL_LIGHT0, GL_POSITION, sun_dir)
         glLightfv(GL_LIGHT0, GL_DIFFUSE, sun)
         glLightfv(GL_LIGHT0, GL_SPECULAR, [day * 0.5, day * 0.48, day * 0.44, 1.0])
-        # Sky fill from above: blue daylight bounce, near-nothing at night.
+        # Sky fill from above: blue daylight bounce, a soft moonlit floor at night.
         glLightfv(GL_LIGHT1, GL_POSITION, [0.0, 1.0, 0.0, 0.0])
-        glLightfv(GL_LIGHT1, GL_DIFFUSE, [day * 0.30, day * 0.33, day * 0.42, 1.0])
+        glLightfv(GL_LIGHT1, GL_DIFFUSE,
+                  [day * 0.30 + (1 - day) * 0.08,
+                   day * 0.33 + (1 - day) * 0.10,
+                   day * 0.42 + (1 - day) * 0.14, 1.0])
         glLightfv(GL_LIGHT1, GL_SPECULAR, [0.0, 0.0, 0.0, 1.0])
-        # Ambient: bright neutral day → dim blue night (keeps geometry faintly lit).
+        # Ambient: bright neutral day → dim blue night (keeps geometry clearly lit;
+        # night floor raised so it reads as moonlit dusk, not pitch black).
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT,
-                       [day * 0.38 + (1 - day) * 0.05,
-                        day * 0.38 + (1 - day) * 0.06,
-                        day * 0.42 + (1 - day) * 0.11, 1.0])
+                       [day * 0.38 + (1 - day) * 0.12,
+                        day * 0.38 + (1 - day) * 0.14,
+                        day * 0.42 + (1 - day) * 0.20, 1.0])
 
     def _sky_color(self):
         """Background/clear colour for the current time-of-day (placeholder sky
@@ -3455,7 +3468,7 @@ class MapCanvas(QOpenGLWidget):
         # fallback path there's nothing to receive yet, so skip the depth pass.
         if (getattr(ml, 'force_render_tier', None)
                 and self.day_night_enabled and getattr(self, 'shadows_enabled', True)
-                and getattr(self, '_sun_elev_sin', -1.0) > _SUN_SHADOW_ELEV_MIN):
+                and self._sun_casts_shadows()):
             try:
                 if self._shadow_map is None:
                     from shadow_map import ShadowMap
@@ -3513,7 +3526,7 @@ class MapCanvas(QOpenGLWidget):
         if (ml is None or not getattr(ml, 'force_render_tier', None)
                 or not self.day_night_enabled
                 or not getattr(self, 'shadows_enabled', True)
-                or getattr(self, '_sun_elev_sin', -1.0) <= _SUN_SHADOW_ELEV_MIN):
+                or not self._sun_casts_shadows()):
             # Shadows inactive this frame: make sure the terrain (drawn right after
             # this) and models both revert to unshadowed instead of a stale flag.
             self._shadow_active = False
