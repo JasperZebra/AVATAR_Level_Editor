@@ -10,7 +10,7 @@ Key fixes:
 
 import numpy as np
 from PyQt5.QtGui import QPainter, QImage, QPixmap, QTransform
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QRectF
 import io
 import os
 import re
@@ -981,6 +981,45 @@ class TerrainRenderer:
             QImage.Format_RGB888
         )
 
+    def _draw_terrain_pixmap_clipped(self, painter, canvas, pixmap, world_x, world_y, world_w, world_h):
+        """Draw a terrain pixmap placed over a world rect, but ONLY its on-screen part.
+
+        Drawing the whole pixmap scaled to its full world footprint made the destination
+        rect explode at high zoom (e.g. 102400×102400 px at 100× on a 3584² source, with
+        corner coords past -65000). QPainter's raster engine overflows its fixed-point
+        coordinate range (~±32767), which garbles/tears the terrain, makes it flicker as
+        the overflow wraps differently each frame, and desyncs it from the (viewport-culled)
+        object squares. Clipping the destination to the widget and mapping that back to a
+        source sub-rect keeps every coordinate on-screen (small) AND only scales the visible
+        region — fixing the corruption and making zoomed-in 2D far cheaper."""
+        sx_min, sy_max = canvas.world_to_screen(world_x, world_y)
+        sx_max, sy_min = canvas.world_to_screen(world_x + world_w, world_y + world_h)
+        full_left, full_top = sx_min, sy_min
+        full_w = sx_max - sx_min
+        full_h = sy_max - sy_min
+        if full_w <= 0 or full_h <= 0:
+            return
+        # Intersect the full destination rect with the widget viewport.
+        vw, vh = canvas.width(), canvas.height()
+        vis_left   = max(0.0, full_left)
+        vis_top    = max(0.0, full_top)
+        vis_right  = min(float(vw), full_left + full_w)
+        vis_bottom = min(float(vh), full_top + full_h)
+        if vis_right <= vis_left or vis_bottom <= vis_top:
+            return   # fully off-screen
+        # Map the visible destination sub-rect back into source-pixmap pixels
+        # (pixmap top-left sits at full_left/full_top — preserves existing orientation).
+        src_w, src_h = pixmap.width(), pixmap.height()
+        su_x = (vis_left - full_left) / full_w * src_w
+        su_y = (vis_top  - full_top) / full_h * src_h
+        su_w = (vis_right  - vis_left) / full_w * src_w
+        su_h = (vis_bottom - vis_top) / full_h * src_h
+        painter.drawPixmap(
+            QRectF(vis_left, vis_top, vis_right - vis_left, vis_bottom - vis_top),
+            pixmap,
+            QRectF(su_x, su_y, su_w, su_h),
+        )
+
     def render_terrain_2d(self, painter: QPainter, canvas):
         if not self.show_terrain:
             return
@@ -991,14 +1030,8 @@ class TerrainRenderer:
             if self.terrain_pixmap_cells:
                 # Multi-cell mode (FC2 5×5 grid): each cell has its own pixmap + world offset.
                 for pixmap, world_x, world_y, world_w, world_h in self.terrain_pixmap_cells:
-                    screen_x_min, screen_y_max = canvas.world_to_screen(world_x, world_y)
-                    screen_x_max, screen_y_min = canvas.world_to_screen(
-                        world_x + world_w, world_y + world_h)
-                    painter.drawPixmap(
-                        int(screen_x_min), int(screen_y_min),
-                        int(screen_x_max - screen_x_min), int(screen_y_max - screen_y_min),
-                        pixmap
-                    )
+                    self._draw_terrain_pixmap_clipped(
+                        painter, canvas, pixmap, world_x, world_y, world_w, world_h)
             elif self.terrain_pixmap is not None:
                 # Single-cell mode (Avatar / single FC2 cell).
                 step = self.grid_size - 1
@@ -1006,14 +1039,9 @@ class TerrainRenderer:
                 terrain_world_height = self.terrain_world_h if self.terrain_world_h > 0 else float(self.sectors_y * step)
                 ox = getattr(canvas, 'terrain_world_offset_x', getattr(self, 'terrain_offset_x', 0))
                 oy = getattr(canvas, 'terrain_world_offset_y', getattr(self, 'terrain_offset_y', 0))
-                screen_x_min, screen_y_max = canvas.world_to_screen(ox, oy)
-                screen_x_max, screen_y_min = canvas.world_to_screen(
-                    ox + terrain_world_width, oy + terrain_world_height)
-                painter.drawPixmap(
-                    int(screen_x_min), int(screen_y_min),
-                    int(screen_x_max - screen_x_min), int(screen_y_max - screen_y_min),
-                    self.terrain_pixmap
-                )
+                self._draw_terrain_pixmap_clipped(
+                    painter, canvas, self.terrain_pixmap,
+                    ox, oy, terrain_world_width, terrain_world_height)
 
             painter.restore()
         except Exception as e:
