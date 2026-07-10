@@ -3432,10 +3432,36 @@ class MapCanvas(QOpenGLWidget):
                     if cast:
                         ml.set_shadow_inputs(sm.tex, light_vp, True)
                         active = True
+                        # Stash a consistent (tex, light_vp) pair for the TERRAIN
+                        # receiver. Terrain draws earlier in the frame than this
+                        # cast (see _render_3d_opengl order), so it samples this
+                        # pair next frame — a 1-frame lag that's imperceptible and
+                        # avoids reordering the frame. Both come from the same cast,
+                        # so terrain + model shadows stay mutually consistent.
+                        self._shadow_active = True
+                        self._shadow_tex = int(sm.tex)
+                        self._terrain_light_vp = light_vp
             except Exception as _e:
                 print(f"[shadow] cast pass error: {_e}")
         if not active:
             ml.set_shadow_inputs(0, None, False)
+            self._shadow_active = False
+
+    def _ensure_terrain_shadow_shader(self):
+        """Lazily compile the terrain shadow-RECEIVER program (ported from AM3D).
+        Returns (prog, uniform_loc_dict); prog == 0 → caller uses fixed-function.
+        Compiled once; a 0 result is cached so we don't retry every frame."""
+        prog = getattr(self, '_terrain_shadow_prog', None)
+        if prog is None:
+            try:
+                from terrain_shadow_shader import build
+                prog, locs = build()
+            except Exception as _e:
+                print(f"[terrain-shadow] build error: {_e}")
+                prog, locs = 0, {}
+            self._terrain_shadow_prog = int(prog)
+            self._terrain_shadow_locs = locs
+        return self._terrain_shadow_prog, getattr(self, '_terrain_shadow_locs', {})
 
     # ── Day/night control API (for the slider/play UI) ──
     def set_day_night_enabled(self, enabled):
@@ -3896,6 +3922,7 @@ class MapCanvas(QOpenGLWidget):
             # DRAW TERRAIN (includes water - both in same display list)
             # --------------------------------------------------
             def _render_terrain_model(model, tx, ty):
+                _ts_on = False
                 glPushMatrix()
                 try:
                     if tx or ty:
@@ -3913,6 +3940,31 @@ class MapCanvas(QOpenGLWidget):
 
                     # Terrain uses the same material as entities now that it has
                     # correct per-vertex normals and responds to sun lighting properly.
+
+                    # Terrain shadow RECEIVER (ported from the AM3D editor). When the
+                    # sun shadow map is active (day/night on + sun up + models cast),
+                    # draw the ground through a per-pixel shader that samples the depth
+                    # map, so objects/hills cast real shadows onto the terrain — the
+                    # piece Avatar/FC2 lacked (terrain was fixed-function, couldn't
+                    # sample). Uses the prev-frame (tex, light_vp) pair stashed by
+                    # _cast_sun_shadows. Any miss → fixed-function, unchanged look.
+                    if getattr(self, '_shadow_active', False):
+                        _tsp, _tsl = self._ensure_terrain_shadow_shader()
+                        _lvp = getattr(self, '_terrain_light_vp', None)
+                        _stex = getattr(self, '_shadow_tex', 0)
+                        if _tsp and _lvp is not None and _stex:
+                            glUseProgram(_tsp)
+                            _ts_on = True   # set NOW so finally always restores prog 0
+                            glUniform1i(_tsl['u_tex'], 0)
+                            glUniform1i(_tsl['u_shadow'], 1)
+                            glUniform1f(_tsl['u_shadow_on'], 1.0)
+                            glUniform3f(_tsl['u_tile_offset'], float(tx), 0.0, float(-ty))
+                            glUniformMatrix4fv(_tsl['u_light_vp'], 1, GL_TRUE,
+                                               np.ascontiguousarray(_lvp, dtype=np.float32))
+                            glActiveTexture(GL_TEXTURE1)
+                            glBindTexture(GL_TEXTURE_2D, int(_stex))
+                            glActiveTexture(GL_TEXTURE0)
+
                     if hasattr(model, 'use_immediate_mode') and model.use_immediate_mode:
                         _z = ctypes.c_void_p(0)
                         for mesh in model.meshes:
@@ -3986,6 +4038,11 @@ class MapCanvas(QOpenGLWidget):
                 except Exception as e:
                     print(f"Error rendering terrain: {e}")
                 finally:
+                    if _ts_on:
+                        glUseProgram(0)
+                        glActiveTexture(GL_TEXTURE1)
+                        glBindTexture(GL_TEXTURE_2D, 0)
+                        glActiveTexture(GL_TEXTURE0)
                     glPopMatrix()
 
             import time as _time
