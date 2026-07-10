@@ -8,6 +8,7 @@ cached terrain files at load time.
 
 from OpenGL.GL import *
 import numpy as np
+import ctypes
 
 
 def strip_baked_water(model):
@@ -167,10 +168,12 @@ class WaterPlaneRenderer:
             'world_y': getattr(terrain_renderer, 'terrain_offset_y', 0.0),
         }
 
-    def _emit_cell(self, cell_idx, cell, is_fc2):
-        """Emit GL_QUADS for one terrain tile's water, clipped per sector and
-        translated by the tile's world offset (matching the terrain mesh, which
-        is drawn with glTranslatef(world_x, 0, -world_y))."""
+    def _emit_cell(self, cell_idx, cell, is_fc2, out):
+        """Append GL_QUADS vertices (flat x,y,z floats) for one terrain tile's
+        water into `out`, clipped per sector and translated by the tile's world
+        offset (matching the terrain mesh, drawn with
+        glTranslatef(world_x, 0, -world_y)). Geometry is collected into a numpy
+        array and uploaded to a VBO once — NOT submitted per frame."""
         wd = cell.get('water_data') or {}
         sdd = cell.get('sectors_data') or {}
         umm = cell.get('sectors_underwater') or {}
@@ -208,10 +211,7 @@ class WaterPlaneRenderer:
             dz = z1 - z0
 
             if geom == 'FULL':
-                glVertex3f(x0, y, z0)
-                glVertex3f(x1, y, z0)
-                glVertex3f(x1, y, z1)
-                glVertex3f(x0, y, z1)
+                out.extend((x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1))
             else:
                 # geom = normalized (u0,u1,v0,v1) submerged spans. u -> x across
                 # the sector, v -> z (south->north); no flip, matching the
@@ -221,10 +221,7 @@ class WaterPlaneRenderer:
                     xb = x0 + u1 * dx
                     za = z0 + v0 * dz
                     zb = z0 + v1 * dz
-                    glVertex3f(xa, y, za)
-                    glVertex3f(xb, y, za)
-                    glVertex3f(xb, y, zb)
-                    glVertex3f(xa, y, zb)
+                    out.extend((xa, y, za, xb, y, za, xb, y, zb, xa, y, zb))
 
     def render_water_planes(self, terrain_renderer, canvas=None, water_mesh_editor=None):
         if not terrain_renderer:
@@ -249,18 +246,21 @@ class WaterPlaneRenderer:
             # Pull the planes in front of terrain at near-equal depth (shoreline)
             glEnable(GL_POLYGON_OFFSET_FILL)
             glPolygonOffset(-1.0, -1.0)
-            # Dodger-blue, semi-transparent. Colour is set OUTSIDE the display
-            # list (below), so opacity can change without rebuilding geometry.
+            # Dodger-blue, semi-transparent. Colour is uniform for the whole
+            # buffer, so opacity can change without rebuilding geometry.
             glColor4f(0.09, 0.45, 0.95, 0.50)
 
             # The water geometry is STATIC frame-to-frame (it only changes on
-            # level load or a water edit), so bake it into a display list ONCE
-            # and just call it each frame — otherwise every corner is a per-frame
-            # glVertex3f (immediate mode), which is what made stacked levels (2x
-            # the quads) drop FPS. Rebuild only when the signature changes: tile
-            # set identity, geom version (force_update_sector), or a cheap content
-            # hash (watered-sector count + height sum) so the water editor's live
-            # in-memory toggles/height changes still refresh.
+            # level load or a water edit), so build the quad vertices ONCE and
+            # upload them to a GPU-resident VBO — then each frame is a single
+            # glDrawArrays with NO per-frame CPU->GPU transfer and NO Python
+            # per-vertex loop (which is what made stacked levels drop FPS). A VBO
+            # (not a display list) is used deliberately: it is reliably GPU-
+            # resident on ALL drivers incl. AMD, where compat-profile display
+            # lists may just replay commands. Rebuild only when the signature
+            # changes: tile set identity, geom version (force_update_sector), or a
+            # cheap content hash (watered count + height sum) so the water
+            # editor's live in-memory toggles/height changes still refresh.
             def _content_sig():
                 n = 0
                 s = 0.0
@@ -275,22 +275,29 @@ class WaterPlaneRenderer:
 
             sig = (id(cells_ref) if cells_ref else id(terrain_renderer.water_data),
                    getattr(self, '_geom_version', 0), _content_sig())
-            if getattr(self, '_water_dl_sig', None) != sig or not getattr(self, '_water_dl', None):
-                if getattr(self, '_water_dl', None):
-                    try:
-                        glDeleteLists(self._water_dl, 1)
-                    except Exception:
-                        pass
-                self._water_dl = glGenLists(1)
-                glNewList(self._water_dl, GL_COMPILE)
-                glBegin(GL_QUADS)
+            if getattr(self, '_water_vbo_sig', None) != sig or not getattr(self, '_water_vbo', None):
+                out = []
                 for cell_idx, cell in self._iter_cells(terrain_renderer, canvas):
-                    self._emit_cell(cell_idx, cell, is_fc2)
-                glEnd()
-                glEndList()
-                self._water_dl_sig = sig
+                    self._emit_cell(cell_idx, cell, is_fc2, out)
+                verts = np.asarray(out, dtype=np.float32)
+                self._water_vcount = len(verts) // 3
+                if not getattr(self, '_water_vbo', None):
+                    self._water_vbo = int(glGenBuffers(1))
+                glBindBuffer(GL_ARRAY_BUFFER, self._water_vbo)
+                glBufferData(GL_ARRAY_BUFFER,
+                             verts.nbytes if verts.size else 0,
+                             verts if verts.size else None,
+                             GL_STATIC_DRAW)
+                glBindBuffer(GL_ARRAY_BUFFER, 0)
+                self._water_vbo_sig = sig
 
-            glCallList(self._water_dl)
+            if getattr(self, '_water_vcount', 0):
+                glBindBuffer(GL_ARRAY_BUFFER, self._water_vbo)
+                glEnableClientState(GL_VERTEX_ARRAY)
+                glVertexPointer(3, GL_FLOAT, 0, ctypes.c_void_p(0))
+                glDrawArrays(GL_QUADS, 0, self._water_vcount)
+                glDisableClientState(GL_VERTEX_ARRAY)
+                glBindBuffer(GL_ARRAY_BUFFER, 0)
 
         except Exception as e:
             print(f"[WaterPlane] Render error: {e}")
