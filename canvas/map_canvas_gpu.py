@@ -16,6 +16,13 @@ from PyQt5.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QHBoxLayout, QLab
 MODE_TOPDOWN = 0
 MODE_3D = 1
 
+# Sun elevation gate for sun-shadow casting. elev = sin(sun angle), so elev == 0
+# is the sun exactly ON the horizon and elev > 0 is above it. We cast whenever the
+# sun is above the horizon (either side of the sky) and stop once it dips below —
+# a tiny epsilon (not 0) avoids the degenerate exactly-horizontal light where the
+# shadow direction is undefined and shadows stretch to infinity.
+_SUN_SHADOW_ELEV_MIN = 0.01
+
 # Import GPU components
 try:
     from PyQt5.QtWidgets import QOpenGLWidget
@@ -3448,7 +3455,7 @@ class MapCanvas(QOpenGLWidget):
         # fallback path there's nothing to receive yet, so skip the depth pass.
         if (getattr(ml, 'force_render_tier', None)
                 and self.day_night_enabled and getattr(self, 'shadows_enabled', True)
-                and getattr(self, '_sun_elev_sin', -1.0) > 0.05):
+                and getattr(self, '_sun_elev_sin', -1.0) > _SUN_SHADOW_ELEV_MIN):
             try:
                 if self._shadow_map is None:
                     from shadow_map import ShadowMap
@@ -3506,7 +3513,7 @@ class MapCanvas(QOpenGLWidget):
         if (ml is None or not getattr(ml, 'force_render_tier', None)
                 or not self.day_night_enabled
                 or not getattr(self, 'shadows_enabled', True)
-                or getattr(self, '_sun_elev_sin', -1.0) <= 0.05):
+                or getattr(self, '_sun_elev_sin', -1.0) <= _SUN_SHADOW_ELEV_MIN):
             # Shadows inactive this frame: make sure the terrain (drawn right after
             # this) and models both revert to unshadowed instead of a stale flag.
             self._shadow_active = False
