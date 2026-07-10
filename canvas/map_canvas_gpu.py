@@ -3423,18 +3423,15 @@ class MapCanvas(QOpenGLWidget):
         hs = 1400.0
         try:
             cam = self.camera_3d
-            py = float(cam.position[1])
-            fy = float(cam.forward[1])
-            if fy < -0.05:
-                # Distance along the view ray down to the ground plane (y≈0): a solid
-                # proxy for zoom — close/low view → small sharp box, high/far → bigger.
-                focus = abs(py) / abs(fy)
-                hs = focus * 0.75     # tighter than the view distance → more texels/object
-            else:
-                hs = 2200.0            # looking level/up → cover a wide swath
+            # Size the box from camera HEIGHT only — NOT the look direction. Basing
+            # it on forward.y meant the box grew/shrank every time you tilted the
+            # camera, which resized the texel grid and made shadows swim when you
+            # rotated in place. Height changes only when you actually zoom in/out.
+            py = abs(float(cam.position[1]))
+            hs = py * 1.1
         except Exception:
             pass
-        return max(350.0, min(hs, 3200.0))            # sharpness floor .. coarse ceiling
+        return max(400.0, min(hs, 3200.0))            # sharpness floor .. coarse ceiling
         return hs
 
     def _cast_sun_shadows(self):

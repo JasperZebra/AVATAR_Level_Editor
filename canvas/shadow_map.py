@@ -106,13 +106,22 @@ class ShadowMap:
             return False
 
     def update_light_vp(self, cam_pos, cam_fwd, sun_dir):
-        """Fit the ortho light frustum to a box in front of the camera, looking
-        along the sun direction. sun_dir = direction the light comes FROM."""
+        """Fit the ortho light frustum to a box under the camera, looking along the
+        sun direction. sun_dir = direction the light comes FROM.
+
+        The box is centred on the camera's GROUND position (x,z only) — it does NOT
+        depend on cam_fwd. This is deliberate: a box that followed the look
+        direction re-centred every time you turned the camera, so the shadows
+        appeared to swim/slide when you rotated in place. Position-only centring
+        keeps the covered patch fixed while you look around.
+
+        On top of that we TEXEL-SNAP the frustum: the box origin is quantized to
+        whole shadow-map texels so the shadow pattern locks to a stable grid and
+        doesn't crawl sub-pixel as you pan. Together these make shadows read as
+        static geometry rather than a shimmering projection."""
         S = self.half_size
-        # Centre the box a bit in front of the camera (where you're looking).
-        c = (cam_pos[0] + cam_fwd[0] * S * 0.5,
-             cam_pos[1] + cam_fwd[1] * S * 0.5,
-             cam_pos[2] + cam_fwd[2] * S * 0.5)
+        # Ground point under the camera. No forward term → rotation-invariant.
+        c = (cam_pos[0], 0.0, cam_pos[2])
         sd = _normalize(sun_dir)
         dist = S * 2.5
         eye = (c[0] + sd[0] * dist, c[1] + sd[1] * dist, c[2] + sd[2] * dist)
@@ -122,6 +131,20 @@ class ShadowMap:
         view = _look_at(eye, c, up)
         far = dist * 2.0 + S * 2.0
         proj = _ortho(-S, S, -S, S, 1.0, far)
+
+        # ── Texel snap ──────────────────────────────────────────────────────────
+        # Project the world origin through the (unsnapped) light_vp, measure how far
+        # it sits from a whole-texel boundary, and shove the projection back by that
+        # sub-texel remainder. Now every world point lands on the same texel grid
+        # frame-to-frame, so the shadow edges stop crawling as the box translates.
+        lvp = proj @ view
+        origin = lvp @ np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+        half = self.SIZE * 0.5
+        tx = origin[0] * half
+        ty = origin[1] * half
+        proj[0, 3] += (round(tx) - tx) / half
+        proj[1, 3] += (round(ty) - ty) / half
+
         self.light_vp = (proj @ view).astype(np.float32)
         self.depth_range = float(far - 1.0)   # for world→normalized bias scaling
         return self.light_vp

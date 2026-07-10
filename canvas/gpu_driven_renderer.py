@@ -430,7 +430,7 @@ void main(){
             color += gl_LightSource[i].specular.rgb * m.specShin.rgb * specMap * s * vis;
         }
     }
-    color *= mix(0.40, 1.0, sunVis);   // deepen shadow so shadowed models read clearly
+    color *= mix(0.25, 1.0, sunVis);   // deepen shadow so shadowed models read clearly
     if (m.hasflags.w > 0.5) color += texture(sampler2D(m.hEmission), uv).rgb * m.emissive.rgb * u_night;
 
     color = mix(color, vec3(0.35, 0.50, 1.0), v_overlay);

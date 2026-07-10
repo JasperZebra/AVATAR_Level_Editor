@@ -142,7 +142,7 @@ void main() {
     float shade = mix(SHADOW_DARK, 1.0, sh);
     gl_FragColor = vec4(tex.rgb * lit * shade, tex.a);
 }
-""".replace('__SHADOW__', _SHADOW_GLSL).replace('SHADOW_DARK', '0.40')
+""".replace('__SHADOW__', _SHADOW_GLSL).replace('SHADOW_DARK', '0.25')
 
 
 # Uniform names the caller looks up (kept together so map_canvas_gpu stays tidy).
