@@ -7,6 +7,7 @@ cached terrain files at load time.
 """
 
 from OpenGL.GL import *
+import numpy as np
 
 
 def strip_baked_water(model):
@@ -49,8 +50,97 @@ class WaterPlaneRenderer:
     """
 
     def force_update_sector(self, sector_num, terrain_renderer):
-        """Rendering is fully dynamic — nothing to invalidate."""
-        pass
+        """Drop the cached submerged-cell geometry for one sector so the next
+        frame re-clips it against the (edited) heightmap / water height."""
+        cache = getattr(self, '_geom_cache', None)
+        if cache is not None:
+            cache.pop(sector_num, None)
+
+    def _get_submerged_geometry(self, terrain_renderer, sector_num, wd):
+        """Return the water geometry for a sector, clipped to where the game
+        would actually show water: terrain height < water height, per cell
+        (AGENTS.md: '.csdat' header — 'Water shape is implicitly terrain height
+        < water height, per sector'; NO polygon is stored). The heightmap is
+        the direct rule and works for both games; the byte[3] underwater mask
+        (Avatar only) is the fallback when heights are unavailable.
+
+        Returns one of:
+          'FULL'  — whole sector submerged, draw the single flat quad (fast)
+          'SKIP'  — no cell submerged (water flag set but nothing below the
+                    line → the 'floating water that isn't in-game' case)
+          [(u0,u1,v0,v1), ...] — normalized spans of submerged cells to draw
+
+        Result is cached per sector and only recomputed when the heightmap
+        object or the water height changes (both rare)."""
+        cache = getattr(self, '_geom_cache', None)
+        if cache is None:
+            cache = self._geom_cache = {}
+
+        hm = None
+        um = None
+        try:
+            hm = terrain_renderer.sectors_data.get(sector_num)
+            um = terrain_renderer.sectors_underwater.get(sector_num)
+        except AttributeError:
+            pass
+
+        wy = float(getattr(wd, 'water_height', 0.0))
+        if hm is not None:
+            key = ('h', id(hm), round(wy, 4))
+        elif um is not None:
+            key = ('u', id(um))
+        else:
+            return 'FULL'  # no per-vertex data (old cache / short file) — keep old behaviour
+
+        cached = cache.get(sector_num)
+        if cached is not None and cached[0] == key:
+            return cached[1]
+
+        # Boolean per-vertex "underwater" grid (n x n).
+        sub = (hm < wy) if hm is not None else um
+        n = sub.shape[0]
+        if n < 2:
+            geom = 'FULL'
+            cache[sector_num] = (key, geom)
+            return geom
+
+        # A cell (between 4 vertices) is water if ANY of its corners is
+        # underwater — inclusive at the shoreline so water reaches the bank.
+        cell = sub[:-1, :-1] | sub[1:, :-1] | sub[:-1, 1:] | sub[1:, 1:]
+
+        # byte[3] underwater mask (key 'u') is Avatar ground truth — trust SKIP.
+        # Heightmap clipping (key 'h') is authoritative on Avatar too, but on FC2
+        # we haven't ground-truthed that .sdat heights share units with the
+        # water-height field, so never let it fully HIDE a flagged sector there
+        # (a unit mismatch would read as all-dry). Clipping floating-over-hills
+        # still applies; only the all-dry -> hidden case is vetoed for FC2.
+        fc2_heightclip = (key[0] == 'h' and
+                          getattr(terrain_renderer, 'game_mode', None) == 'farcry2')
+
+        if not cell.any():
+            geom = 'FULL' if fc2_heightclip else 'SKIP'
+        elif cell.all():
+            geom = 'FULL'
+        else:
+            inv = float(n - 1)
+            H, W = cell.shape
+            spans = []
+            for i in range(H):
+                r = cell[i]
+                j = 0
+                while j < W:
+                    if r[j]:
+                        k = j + 1
+                        while k < W and r[k]:
+                            k += 1
+                        spans.append((j / inv, k / inv, i / inv, (i + 1) / inv))
+                        j = k
+                    else:
+                        j += 1
+            geom = spans
+
+        cache[sector_num] = (key, geom)
+        return geom
 
     def render_water_planes(self, terrain_renderer, canvas=None, water_mesh_editor=None):
         if not terrain_renderer or not terrain_renderer.water_data:
@@ -101,6 +191,16 @@ class WaterPlaneRenderer:
             for sector_num, wd in terrain_renderer.water_data.items():
                 if not wd.has_water:
                     continue
+
+                # Clip the sector's water to where terrain is actually below the
+                # water line — the game stores no water polygon, it derives the
+                # shape as terrain height < water height per cell. A single flat
+                # sector quad (the old behaviour) floats over any terrain that
+                # pokes above the line. See _get_submerged_geometry.
+                geom = self._get_submerged_geometry(terrain_renderer, sector_num, wd)
+                if geom == 'SKIP':
+                    continue
+
                 col = sector_num % sx
                 row = sector_num // sx   # 0 = bottom of map
 
@@ -109,11 +209,27 @@ class WaterPlaneRenderer:
                 z0 = -(oy + row * sector_h)
                 z1 = -(oy + (row + 1) * sector_h)
                 y = float(wd.water_height)
+                dx = x1 - x0
+                dz = z1 - z0
 
-                glVertex3f(x0, y, z0)
-                glVertex3f(x1, y, z0)
-                glVertex3f(x1, y, z1)
-                glVertex3f(x0, y, z1)
+                if geom == 'FULL':
+                    glVertex3f(x0, y, z0)
+                    glVertex3f(x1, y, z0)
+                    glVertex3f(x1, y, z1)
+                    glVertex3f(x0, y, z1)
+                else:
+                    # geom is a list of normalized (u0,u1,v0,v1) submerged spans.
+                    # u -> x across the sector, v -> z (south->north); no flip,
+                    # matching the linear+flipud heightmap assembly.
+                    for u0, u1, v0, v1 in geom:
+                        xa = x0 + u0 * dx
+                        xb = x0 + u1 * dx
+                        za = z0 + v0 * dz
+                        zb = z0 + v1 * dz
+                        glVertex3f(xa, y, za)
+                        glVertex3f(xb, y, za)
+                        glVertex3f(xb, y, zb)
+                        glVertex3f(xa, y, zb)
             glEnd()
 
         except Exception as e:
