@@ -450,20 +450,19 @@ class TerrainRenderer:
                 else:
                     if len(data) > 0xA8:
                         water.water_flag = data[0xA8]
-                        water.has_water = (water.water_flag != 0)
 
                     water_patterns = [
                         b'graphics\\_materials\\editor\\water_',
                         b'graphics_materials\\editor\\water_'
                     ]
-                    
+
                     graphics_pos = -1
                     for pattern in water_patterns:
                         pos = data.find(pattern)
                         if pos != -1:
                             graphics_pos = pos
                             break
-                    
+
                     if graphics_pos != -1:
                         material_start = graphics_pos
                         material_end = data.find(b'\x00', material_start)
@@ -473,7 +472,21 @@ class TerrainRenderer:
                         else:
                             water.material_path = data[material_start:material_start+100].decode('latin-1', errors='ignore')
                             water.hex_offset_material = material_start
-                    
+
+                    # A sector renders water if the flag byte @0xA8 is set OR it
+                    # has a water material assigned with a real (non-zero) height.
+                    # The flag ALONE misses whole water bodies: on Tantalus
+                    # (drifting_sierra) sectors like 62/63/78/79 store a
+                    # water_*.mlm material + height 73.0 with flag=0, and the
+                    # engine still floods them (confirmed: 32 sectors carry a
+                    # water material vs only 20 with the flag set). Clipping
+                    # (water_plane_renderer) then trims each to terrain<height so
+                    # the extra sectors never show as floating planes.
+                    has_mat_water = bool(water.material_path
+                                         and 'water' in water.material_path.lower())
+                    water.has_water = ((water.water_flag != 0)
+                                       or (has_mat_water and abs(water.water_height) > 1e-6))
+
                     if water.has_water:
                         print(f"Water found in sector {sector_num}:")
                         if water.material_path:
