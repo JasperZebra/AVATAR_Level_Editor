@@ -1220,15 +1220,23 @@ class MapCanvas(QOpenGLWidget):
                     # Falls back to the classic per-entity prepare_batches loop
                     # when unavailable (universal path, no rows yet, 2D, …).
                     _ml = self.model_loader
-                    _gdr_prepared = False
-                    if getattr(_ml, 'force_render_tier', None):
-                        _gdr_prepared = _ml.prepare_gpu_frame(self, entities_sorted)
-                    if not _gdr_prepared:
-                        _ml.prepare_batches(entities_sorted, self.selected)
-                    _ps = self._pf('prepare', _ps)
-                    # Sun shadow map: cast model depth NOW (instance_batches is
-                    # current for this frame) so render_batched_models can sample it.
-                    self._cast_sun_shadows()
+                    if not getattr(self, '_shadow_precast_done', False):
+                        # Normal path: prepare the frame + cast the shadow map here,
+                        # then render (render samples the just-cast map).
+                        _gdr_prepared = False
+                        if getattr(_ml, 'force_render_tier', None):
+                            _gdr_prepared = _ml.prepare_gpu_frame(self, entities_sorted)
+                        if not _gdr_prepared:
+                            _ml.prepare_batches(entities_sorted, self.selected)
+                        _ps = self._pf('prepare', _ps)
+                        # Sun shadow map: cast model depth NOW (instance_batches is
+                        # current for this frame) so render_batched_models can sample it.
+                        self._cast_sun_shadows()
+                    else:
+                        # AM3D-style: the shadow map was already cast up-front (before
+                        # terrain) via _precast_shadows, reusing the frame prepared
+                        # there — just render it now so terrain + models share one map.
+                        _ps = self._pf('prepare', _ps)
                     instances_rendered = self.model_loader.render_batched_models()
                     self._pf('models', _ps)
                     models_rendered = instances_rendered
@@ -3483,6 +3491,47 @@ class MapCanvas(QOpenGLWidget):
             ml.set_shadow_inputs(0, None, False)
             self._shadow_active = False
 
+    def _precast_shadows(self):
+        """AM3D parity: cast the shadow map (terrain + models) BEFORE the scene is
+        drawn, so the terrain AND the models sample the SAME current-frame depth map
+        and light matrix (no 1-frame lag, no terrain/model mismatch). Prepares the
+        GPU-driven instance frame here so the later model render reuses it, and sets
+        `_shadow_precast_done` so `_render_entities_3d` skips its own prepare + cast.
+        No-op (and clears the flag) unless GPU-driven + day/night + shadows + sun up."""
+        self._shadow_precast_done = False
+        self._shadow_precast_visible = None
+        ml = getattr(self, 'model_loader', None)
+        if (ml is None or not getattr(ml, 'force_render_tier', None)
+                or not self.day_night_enabled
+                or not getattr(self, 'shadows_enabled', True)
+                or getattr(self, '_sun_elev_sin', -1.0) <= 0.05):
+            # Shadows inactive this frame: make sure the terrain (drawn right after
+            # this) and models both revert to unshadowed instead of a stale flag.
+            self._shadow_active = False
+            if ml is not None:
+                try:
+                    ml.set_shadow_inputs(0, None, False)
+                except Exception:
+                    pass
+            return
+        import gc as _gc
+        _gc.disable()
+        try:
+            if self.show_entities:
+                visible = self._filter_entities_by_source(self._get_visible_entities())
+                self._shadow_precast_visible = visible
+                if not ml.prepare_gpu_frame(self, visible):
+                    ml.prepare_batches(visible, self.selected)
+                self._shadow_precast_done = True
+            # Casts models (from the frame just prepared) + terrain into the map and
+            # stashes the CURRENT-frame (tex, light_vp) for both receivers.
+            self._cast_sun_shadows()
+        except Exception as _e:
+            print(f"[shadow] precast error: {_e}")
+            self._shadow_precast_done = False
+        finally:
+            _gc.enable()
+
     def _ensure_terrain_shadow_shader(self):
         """Lazily compile the terrain shadow-RECEIVER program (ported from AM3D).
         Returns (prog, uniform_loc_dict); prog == 0 → caller uses fixed-function.
@@ -4060,8 +4109,9 @@ class MapCanvas(QOpenGLWidget):
                     # draw the ground through a per-pixel shader that samples the depth
                     # map, so objects/hills cast real shadows onto the terrain — the
                     # piece Avatar/FC2 lacked (terrain was fixed-function, couldn't
-                    # sample). Uses the prev-frame (tex, light_vp) pair stashed by
-                    # _cast_sun_shadows. Any miss → fixed-function, unchanged look.
+                    # sample). The (tex, light_vp) pair is cast UP FRONT this frame by
+                    # _precast_shadows (AM3D order), so terrain + models share one map.
+                    # Any miss → fixed-function, unchanged look.
                     if getattr(self, '_shadow_active', False):
                         _tsp, _tsl = self._ensure_terrain_shadow_shader()
                         _lvp = getattr(self, '_terrain_light_vp', None)
@@ -4160,8 +4210,13 @@ class MapCanvas(QOpenGLWidget):
                         glActiveTexture(GL_TEXTURE0)
                     glPopMatrix()
 
+            # AM3D parity: cast the shadow map (terrain + models) UP FRONT, before
+            # drawing the terrain/objects, so both receivers sample the SAME
+            # current-frame map + light matrix. No-op unless shadows are active.
             import time as _time
             _ts = _time.perf_counter()
+            self._precast_shadows()
+            _ts = self._pf('shadowcast', _ts)
             if getattr(self, 'terrain_models', []):
                 # Multi-cell mode (FC2 5×5 grid): each entry has its own world offset.
                 for t_model, t_wx, t_wy in self.terrain_models:
@@ -4212,10 +4267,16 @@ class MapCanvas(QOpenGLWidget):
             # 'cull'/'prepare'/'models'/'cubes' splits come from _render_entities_3d.
             if self.show_entities:
                 _ts = _time.perf_counter()
-                visible = self._get_visible_entities()
-                _ts = self._pf('cull', _ts)
-                visible = self._filter_entities_by_source(visible)
-                _ts = self._pf('srcfilter', _ts)
+                if getattr(self, '_shadow_precast_done', False):
+                    # Reuse the visible set computed by _precast_shadows (avoids a
+                    # second cull) — the model frame is already prepared + cast.
+                    visible = self._shadow_precast_visible
+                    _ts = self._pf('cull', _ts)
+                else:
+                    visible = self._get_visible_entities()
+                    _ts = self._pf('cull', _ts)
+                    visible = self._filter_entities_by_source(visible)
+                    _ts = self._pf('srcfilter', _ts)
                 self._render_entities_3d(visible)        # times prepare/models/cubes internally
                 # Wireframe overlays (prims + triggers + shape points + movie
                 # paths) — cached across frames in world space; rebuilt only on
