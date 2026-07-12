@@ -434,7 +434,12 @@ void main(){
     // day/night strength (u_shadows_on) so it eases in/out synced to the sun.
     // Floor 0.5: shaded areas keep half their ambient light (readable, not black).
     color *= mix(mix(1.0, 0.5, u_shadows_on), 1.0, sunVis);
-    if (m.hasflags.w > 0.5) color += texture(sampler2D(m.hEmission), uv).rgb * m.emissive.rgb * u_night;
+    // Bioluminescence: the emission (bio) texture glows at NIGHT (u_night) OR
+    // wherever the surface sits in the sun's SHADOW during the day — (1-sunVis)
+    // weighted by the shadow strength. So objects/undersides in darkness (under
+    // trees, in cast shadow) light up their bio textures too, not only at night.
+    float bioGlow = max(u_night, (1.0 - sunVis) * u_shadows_on);
+    if (m.hasflags.w > 0.5) color += texture(sampler2D(m.hEmission), uv).rgb * m.emissive.rgb * bioGlow;
 
     color = mix(color, vec3(0.35, 0.50, 1.0), v_overlay);
     float outA = (int(m.tint.w) == 2) ? alpha : 1.0;   // blend materials keep diffuse alpha

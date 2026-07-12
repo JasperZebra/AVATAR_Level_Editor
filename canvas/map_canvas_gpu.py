@@ -726,7 +726,7 @@ class MapCanvas(QOpenGLWidget):
         sr = 0.95
         sg = 0.90 - 0.28 * warmth
         sb = 0.82 - 0.50 * warmth
-        moon = (0.20, 0.25, 0.38)      # brighter cool moonlight (was 0.10,0.13,0.22)
+        moon = (0.26, 0.31, 0.46)      # brighter cool moonlight (raised again for a lighter night)
         sun = [day * sr + (1 - day) * moon[0],
                day * sg + (1 - day) * moon[1],
                day * sb + (1 - day) * moon[2], 1.0]
@@ -739,18 +739,18 @@ class MapCanvas(QOpenGLWidget):
         # Red is held; only green/blue drop, so it warms WITHOUT getting brighter.
         glLightfv(GL_LIGHT1, GL_POSITION, [0.0, 1.0, 0.0, 0.0])
         glLightfv(GL_LIGHT1, GL_DIFFUSE,
-                  [day * 0.30 + (1 - day) * 0.08,
-                   day * (0.33 - 0.02 * warmth) + (1 - day) * 0.10,
-                   day * (0.42 - 0.14 * warmth) + (1 - day) * 0.14, 1.0])
+                  [day * 0.30 + (1 - day) * 0.12,
+                   day * (0.33 - 0.02 * warmth) + (1 - day) * 0.14,
+                   day * (0.42 - 0.14 * warmth) + (1 - day) * 0.20, 1.0])
         glLightfv(GL_LIGHT1, GL_SPECULAR, [0.0, 0.0, 0.0, 1.0])
         # Ambient: bright neutral day → dim blue night (keeps geometry clearly lit;
         # night floor raised so it reads as moonlit dusk, not pitch black). Same
         # warmth echo — a touch less blue/green at a low sun so shaded areas pick up
         # the golden/orange cast of the time of day. Red held (no brightness gain).
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT,
-                       [day * 0.38 + (1 - day) * 0.12,
-                        day * (0.38 - 0.02 * warmth) + (1 - day) * 0.14,
-                        day * (0.42 - 0.12 * warmth) + (1 - day) * 0.20, 1.0])
+                       [day * 0.38 + (1 - day) * 0.18,
+                        day * (0.38 - 0.02 * warmth) + (1 - day) * 0.20,
+                        day * (0.42 - 0.12 * warmth) + (1 - day) * 0.28, 1.0])
 
     def _sky_color(self):
         """Background/clear colour for the current time-of-day (placeholder sky
