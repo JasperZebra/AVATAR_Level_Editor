@@ -3274,11 +3274,14 @@ class MapCanvas(QOpenGLWidget):
                 or getattr(self, '_dbg_mode', 0) != 0   # keep profiler updating live
                 or (self.day_night_enabled and self._daynight_play)
                 or getattr(getattr(self, 'model_loader', None),
-                           'has_animated_materials', False)
-                # Animated water: repaint at ~30 FPS whenever the map has water so
-                # the shader's ripples/sun-glint actually move (3D only).
-                or getattr(getattr(self, 'water_plane_renderer', None),
-                           '_water_vcount', 0)):
+                           'has_animated_materials', False)):
+            # NOTE: intentionally NOT repainting just because the map has water.
+            # Forcing a ~30 FPS repaint to animate the water ripples kept the GPU
+            # busy at idle and spun the fans up (the "water sound"). The water still
+            # animates while you move the camera / interact / play the day-night
+            # cycle; it just holds still (silent, no GPU load) when nothing is
+            # happening. Re-enable a throttled water repaint here if idle ripple
+            # motion is wanted back.
             self.update()
 
     def resizeGL(self, width, height):
