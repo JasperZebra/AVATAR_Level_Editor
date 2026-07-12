@@ -734,18 +734,23 @@ class MapCanvas(QOpenGLWidget):
         glLightfv(GL_LIGHT0, GL_DIFFUSE, sun)
         glLightfv(GL_LIGHT0, GL_SPECULAR, [day * 0.5, day * 0.48, day * 0.44, 1.0])
         # Sky fill from above: blue daylight bounce, a soft moonlit floor at night.
+        # Warmth echoed here too — the cool blue eases off as the sun gets low, so
+        # the fill turns warmer through morning/afternoon and warmest at dawn/dusk.
+        # Red is held; only green/blue drop, so it warms WITHOUT getting brighter.
         glLightfv(GL_LIGHT1, GL_POSITION, [0.0, 1.0, 0.0, 0.0])
         glLightfv(GL_LIGHT1, GL_DIFFUSE,
                   [day * 0.30 + (1 - day) * 0.08,
-                   day * 0.33 + (1 - day) * 0.10,
-                   day * 0.42 + (1 - day) * 0.14, 1.0])
+                   day * (0.33 - 0.02 * warmth) + (1 - day) * 0.10,
+                   day * (0.42 - 0.14 * warmth) + (1 - day) * 0.14, 1.0])
         glLightfv(GL_LIGHT1, GL_SPECULAR, [0.0, 0.0, 0.0, 1.0])
         # Ambient: bright neutral day → dim blue night (keeps geometry clearly lit;
-        # night floor raised so it reads as moonlit dusk, not pitch black).
+        # night floor raised so it reads as moonlit dusk, not pitch black). Same
+        # warmth echo — a touch less blue/green at a low sun so shaded areas pick up
+        # the golden/orange cast of the time of day. Red held (no brightness gain).
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT,
                        [day * 0.38 + (1 - day) * 0.12,
-                        day * 0.38 + (1 - day) * 0.14,
-                        day * 0.42 + (1 - day) * 0.20, 1.0])
+                        day * (0.38 - 0.02 * warmth) + (1 - day) * 0.14,
+                        day * (0.42 - 0.12 * warmth) + (1 - day) * 0.20, 1.0])
 
     def _sky_color(self):
         """Background/clear colour for the current time-of-day (placeholder sky
