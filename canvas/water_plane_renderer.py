@@ -45,6 +45,8 @@ uniform float u_day;       // 0 night .. 1 day
 uniform vec3  u_skyLo;     // reflected sky colour near the horizon
 uniform vec3  u_skyHi;     // reflected sky colour near the zenith
 uniform float u_choppy;    // ripple bump strength
+uniform sampler2D u_normalTex; // the game's water normal map (watercloud_n), if loaded
+uniform float u_hasNormal; // 1 = sample the real normal map, 0 = procedural fallback
 
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p){
@@ -67,13 +69,27 @@ float waves(vec2 p){
     return h;
 }
 void main(){
-    vec2 uv = v_world.xz * 0.03;                      // world -> ripple scale
-    float e = 0.06;
-    float h  = waves(uv);
-    float hx = waves(uv + vec2(e, 0.0));
-    float hz = waves(uv + vec2(0.0, e));
-    // Surface normal from the height gradient (up = +Y). u_choppy scales the tilt.
-    vec3 N = normalize(vec3((h - hx) * u_choppy, 1.0, (h - hz) * u_choppy));
+    vec3 N;
+    if (u_hasNormal > 0.5) {
+        // TWO scrolling layers of the game's real water normal map (watercloud_n),
+        // like water.fx's Tiling1/Tiling2 + Dir1/Dir2. Their xy give the ripple
+        // tilt; u_choppy scales it (kept low for calm, near-flat water).
+        vec2 p = v_world.xz;
+        vec2 uv1 = p * 0.018 + vec2( 0.9, 0.3) * u_time * 0.010;
+        vec2 uv2 = p * 0.033 + vec2(-0.4, 0.9) * u_time * 0.014;
+        vec2 t1 = texture2D(u_normalTex, uv1).xy * 2.0 - 1.0;
+        vec2 t2 = texture2D(u_normalTex, uv2).xy * 2.0 - 1.0;
+        vec2 tilt = (t1 + t2) * 0.5;
+        N = normalize(vec3(tilt.x * u_choppy, 1.0, tilt.y * u_choppy));
+    } else {
+        // Procedural fallback when the game normal map isn't on disk.
+        vec2 uv = v_world.xz * 0.03;                  // world -> ripple scale
+        float e = 0.06;
+        float h  = waves(uv);
+        float hx = waves(uv + vec2(e, 0.0));
+        float hz = waves(uv + vec2(0.0, e));
+        N = normalize(vec3((h - hx) * u_choppy, 1.0, (h - hz) * u_choppy));
+    }
 
     vec3 V = normalize(u_cam - v_world);              // toward camera
     vec3 R = reflect(-V, N);                          // reflected view ray
@@ -402,7 +418,70 @@ class WaterPlaneRenderer:
                     out.extend((xa, y, za, xb, y, za, xb, y, zb, xa, y, zb))
                     cols.extend(wc * 4)
 
-    def _bind_water_shader(self, canvas):
+    def _ensure_water_normal(self, terrain_renderer, canvas):
+        """Load the game's real water normal map (graphics/terrain/water/
+        watercloud_n.xbt — the NormalTexture every water material uses) once and
+        return its GL texture id, or 0 if it can't be found/decoded (shader then
+        uses the procedural ripple fallback). Decoded via the editor's existing XBT
+        decoder + DXT5-GA normal unpack."""
+        if getattr(self, '_water_normal_tex', 0):
+            return self._water_normal_tex
+        if getattr(self, '_water_normal_failed', False):
+            return 0
+        import os
+        rel = ('graphics', 'terrain', 'water', 'watercloud_n.xbt')
+        # Candidate data roots (folders that contain 'graphics/').
+        roots = list(getattr(terrain_renderer, 'blend_data_roots', []) or [])
+        ml = getattr(canvas, 'model_loader', None)
+        md = getattr(ml, 'materials_directory', None) if ml else None
+        if md:  # <root>/graphics/_materials -> <root>
+            roots.append(os.path.dirname(os.path.dirname(md.rstrip('/\\'))))
+        gd = getattr(ml, 'models_directory', None) if ml else None
+        if gd:  # <root>/graphics -> <root>
+            roots.append(os.path.dirname(gd.rstrip('/\\')))
+        path = None
+        for root in roots:
+            if not root:
+                continue
+            cand = os.path.join(root, *rel)
+            if os.path.isfile(cand):
+                path = cand
+                break
+        if not path:
+            print("[WaterPlane] watercloud_n.xbt not found on disk — using procedural ripples")
+            self._water_normal_failed = True
+            return 0
+        try:
+            tl = getattr(ml, 'texture_loader', None) if ml else None
+            if tl is None:
+                from texture_loader import TextureLoader
+                tl = TextureLoader(md or '')
+            res = tl.decode_xbt_to_rgba(path, is_normal_map=True)
+            if not res:
+                self._water_normal_failed = True
+                return 0
+            w, h, rgba, _ = res
+            tex = int(glGenTextures(1))
+            glBindTexture(GL_TEXTURE_2D, tex)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba)
+            try:
+                glGenerateMipmap(GL_TEXTURE_2D)
+            except Exception:
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            glBindTexture(GL_TEXTURE_2D, 0)
+            self._water_normal_tex = tex
+            print(f"[WaterPlane] loaded water normal map watercloud_n ({w}x{h})")
+            return tex
+        except Exception as e:
+            print(f"[WaterPlane] water normal map load failed ({e}) — procedural ripples")
+            self._water_normal_failed = True
+            return 0
+
+    def _bind_water_shader(self, canvas, terrain_renderer=None):
         """Compile (once) and bind the water shader with day/night-driven uniforms.
         Returns True if bound (caller then draws the quads and unbinds); False if
         unavailable, so the caller falls back to the flat-blue quad."""
@@ -417,7 +496,7 @@ class WaterPlaneRenderer:
                 return False
             self._water_uloc = {n: glGetUniformLocation(prog, n) for n in (
                 'u_time', 'u_cam', 'u_sunDir', 'u_sunCol', 'u_day',
-                'u_skyLo', 'u_skyHi', 'u_choppy')}
+                'u_skyLo', 'u_skyHi', 'u_choppy', 'u_normalTex', 'u_hasNormal')}
 
         # ── Derive uniforms from the canvas' day/night state ──────────────────
         day = 1.0
@@ -459,6 +538,21 @@ class WaterPlaneRenderer:
         # (0.45, was 2.2) = mostly FLAT, near-mirror water with only faint ripples —
         # matching the calm look of the game's water. Raise for choppier seas.
         glUniform1f(u['u_choppy'], 0.45)
+
+        # ── Real game water normal map (watercloud_n.xbt) ─────────────────────
+        # Bind the actual scrolling normal texture the game's water shader uses
+        # on texture unit 0. If it can't be loaded, fall back to the procedural
+        # wave ripples (u_hasNormal = 0) so water still animates.
+        ntex = 0
+        if terrain_renderer is not None:
+            ntex = self._ensure_water_normal(terrain_renderer, canvas)
+        if ntex:
+            glActiveTexture(GL_TEXTURE0)
+            glBindTexture(GL_TEXTURE_2D, ntex)
+            glUniform1i(u['u_normalTex'], 0)
+            glUniform1f(u['u_hasNormal'], 1.0)
+        else:
+            glUniform1f(u['u_hasNormal'], 0.0)
         return True
 
     def render_water_planes(self, terrain_renderer, canvas=None, water_mesh_editor=None):
@@ -543,7 +637,7 @@ class WaterPlaneRenderer:
                 self._water_vbo_sig = sig
 
             if getattr(self, '_water_vcount', 0):
-                used_shader = self._bind_water_shader(canvas)
+                used_shader = self._bind_water_shader(canvas, terrain_renderer)
                 glBindBuffer(GL_ARRAY_BUFFER, self._water_vbo)
                 glEnableClientState(GL_VERTEX_ARRAY)
                 glVertexPointer(3, GL_FLOAT, 0, ctypes.c_void_p(0))
@@ -562,6 +656,9 @@ class WaterPlaneRenderer:
                 glDisableClientState(GL_VERTEX_ARRAY)
                 glBindBuffer(GL_ARRAY_BUFFER, 0)
                 if used_shader:
+                    if getattr(self, '_water_normal_tex', 0):
+                        glActiveTexture(GL_TEXTURE0)
+                        glBindTexture(GL_TEXTURE_2D, 0)
                     glUseProgram(0)
 
         except Exception as e:
