@@ -711,10 +711,21 @@ class MapCanvas(QOpenGLWidget):
         self._sun_az = math.atan2(sun_dir[2], sun_dir[0])
         _sl = math.sqrt(sun_dir[0]**2 + sun_dir[1]**2 + sun_dir[2]**2) or 1.0
         self._sun_dir_world = (sun_dir[0] / _sl, sun_dir[1] / _sl, sun_dir[2] / _sl)
-        # Warm sun by day, oranger near the horizon; dim cool moonlight at night.
+        # Sunlight COLOUR tracks the sun's elevation across the whole day (BW-style
+        # noon_factor): golden/warm when the sun is low (morning AND afternoon),
+        # neutral-bright at noon, deep orange right at dawn/dusk. Brightness is held
+        # ~constant — only the warmth shifts (no elevation dimming) — so the daytime
+        # levels the user tuned stay put; only the tint changes with time of day.
+        noon = max(0.0, min(1.0, elev))            # 0 at the horizon → 1 overhead
+        self._noon_factor = noon
+        # warmth: high when the sun is low (morning/afternoon), 0 at noon, with an
+        # extra push right at the horizon (dawn/dusk). Endpoints match the previous
+        # curve (noon & sunrise) so nothing jumps; the middle of the day is what
+        # gains the golden/warm tint it didn't have before.
+        warmth = (1.0 - noon) * 0.5 + horizon * 0.5
         sr = 0.95
-        sg = 0.90 - 0.30 * horizon
-        sb = 0.82 - 0.55 * horizon
+        sg = 0.90 - 0.28 * warmth
+        sb = 0.82 - 0.50 * warmth
         moon = (0.20, 0.25, 0.38)      # brighter cool moonlight (was 0.10,0.13,0.22)
         sun = [day * sr + (1 - day) * moon[0],
                day * sg + (1 - day) * moon[1],
