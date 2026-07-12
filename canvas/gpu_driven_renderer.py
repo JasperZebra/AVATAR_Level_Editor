@@ -432,7 +432,11 @@ void main(){
     }
     // Deepen shadow so shadowed models read clearly; darkness fades with the
     // day/night strength (u_shadows_on) so it eases in/out synced to the sun.
-    color *= mix(mix(1.0, 0.25, u_shadows_on), 1.0, sunVis);
+    // Floor of 0.5 (was 0.25): shaded/under-tree areas keep enough of their
+    // ambient light to stay readable while editing, even at a low sun — the user
+    // wanted shaded parts not pitch-black. Raise toward 1.0 for flatter shadows,
+    // lower toward 0.25 for deeper ones.
+    color *= mix(mix(1.0, 0.5, u_shadows_on), 1.0, sunVis);
     if (m.hasflags.w > 0.5) color += texture(sampler2D(m.hEmission), uv).rgb * m.emissive.rgb * u_night;
 
     color = mix(color, vec3(0.35, 0.50, 1.0), v_overlay);
