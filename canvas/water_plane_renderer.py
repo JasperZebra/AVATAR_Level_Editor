@@ -78,24 +78,32 @@ void main(){
     vec3 V = normalize(u_cam - v_world);              // toward camera
     vec3 R = reflect(-V, N);                          // reflected view ray
 
-    // Sky reflection: blend horizon->zenith by how far up the reflection points.
+    // ── Follows the game's water.fx composition ──────────────────────────────
+    // WATER BODY: the material's WaterColor, LIT (game: fogColor*diffuseComp,
+    // fogColor≈WaterColor, diffuseComp = ambient + sun diffuse). The flat surface
+    // faces up, so the sun term is dot(up, sunDir). A small floor keeps it from
+    // going pure black.
+    float ndl = max(u_sunDir.y, 0.0);
+    vec3 lighting = u_skyLo * 0.55 + u_sunCol * ndl * u_day;
+    vec3 body = v_deep * (lighting + 0.35);
+
+    // REFLECTION: the game uses SkyColor * 0.5 when there's no planar reflection
+    // render target — a DIMMED sky, not a bright mirror (this was the main thing
+    // making the editor water look wrong / too shiny). Horizon->zenith by R.y.
     float up = clamp(R.y * 0.5 + 0.5, 0.0, 1.0);
-    vec3 refl = mix(u_skyLo, u_skyHi, up);
+    vec3 refl = mix(u_skyLo, u_skyHi, up) * 0.5;
 
-    // Fresnel: looking straight down = mostly deep-water tint; grazing = mirror.
-    float fres = pow(clamp(1.0 - max(dot(N, V), 0.0), 0.0, 1.0), 5.0);
-    fres = mix(0.02, 1.0, fres);
+    // Schlick fresnel (game: FresnelBias + (1-FresnelBias)*pow(1-facing,Power)):
+    // mostly body looking straight down, more sky at grazing angles.
+    float facing = max(dot(N, V), 0.0);
+    float fres = 0.02 + 0.98 * pow(1.0 - facing, 5.0);
 
-    // Sun glint: sharp specular toward the sun, day-only.
+    // Sun glint (game SpecularIntensity), day only.
     float glint = pow(max(dot(R, normalize(u_sunDir)), 0.0), 220.0);
-    vec3  sun = u_sunCol * glint * 3.0 * u_day;
+    vec3  sun = u_sunCol * glint * 1.5 * u_day;
 
-    // Per-sector deep-water tint from the material's WaterColor, dimmed at night.
-    vec3 deep = v_deep * (0.35 + 0.65 * u_day);
-    deep.b += (1.0 - u_day) * 0.02;
-
-    vec3 col = mix(deep, refl, fres) + sun;
-    float alpha = mix(0.72, 0.96, fres);              // more opaque/mirror at grazing
+    vec3 col = mix(body, refl, fres) + sun;
+    float alpha = mix(0.82, 0.96, fres);              // fairly opaque murky water
     gl_FragColor = vec4(col, alpha);
 }
 """
