@@ -402,7 +402,10 @@ class WaterPlaneRenderer:
         glUniform3f(u['u_deep'], *deep)
         glUniform3f(u['u_skyLo'], float(sky_lo[0]), float(sky_lo[1]), float(sky_lo[2]))
         glUniform3f(u['u_skyHi'], float(sky_hi[0]), float(sky_hi[1]), float(sky_hi[2]))
-        glUniform1f(u['u_choppy'], 2.2)
+        # Ripple strength: how much the wave height tilts the surface normal. Low
+        # (0.45, was 2.2) = mostly FLAT, near-mirror water with only faint ripples —
+        # matching the calm look of the game's water. Raise for choppier seas.
+        glUniform1f(u['u_choppy'], 0.45)
         return True
 
     def render_water_planes(self, terrain_renderer, canvas=None, water_mesh_editor=None):
