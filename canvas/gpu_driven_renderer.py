@@ -430,19 +430,10 @@ void main(){
             color += gl_LightSource[i].specular.rgb * m.specShin.rgb * specMap * s * vis;
         }
     }
-    // Ground-bounce indirect fill: in real life skylight reflects UP off the
-    // ground and lights the shaded undersides of objects, so shadowed areas are
-    // never flat black. Cheap one-bounce stand-in — a warm fill on faces pointing
-    // DOWNWARD (opposite the sky-fill light), present even in shadow. Scaled by the
-    // sky-fill colour so it dims with the day/night cycle.
-    vec3 upEye = normalize(gl_LightSource[1].position.xyz);   // world-up in eye space
-    float downFace = max(-dot(N, upEye), 0.0);
-    color += base * gl_LightSource[1].diffuse.rgb * vec3(1.3, 1.1, 0.85) * downFace * 0.9;
-    // Soft shadow: the direct sun is already removed (vis on the sun term above),
-    // so here we only GENTLY darken the rest (floor 0.72, was 0.25/0.5). Ambient +
-    // sky-fill + ground-bounce keep shaded areas lit like a real environment
-    // instead of near-black, while the missing sun still reads as shadow.
-    color *= mix(mix(1.0, 0.72, u_shadows_on), 1.0, sunVis);
+    // Deepen shadow so shadowed models read clearly; darkness fades with the
+    // day/night strength (u_shadows_on) so it eases in/out synced to the sun.
+    // Floor 0.5: shaded areas keep half their ambient light (readable, not black).
+    color *= mix(mix(1.0, 0.5, u_shadows_on), 1.0, sunVis);
     if (m.hasflags.w > 0.5) color += texture(sampler2D(m.hEmission), uv).rgb * m.emissive.rgb * u_night;
 
     color = mix(color, vec3(0.35, 0.50, 1.0), v_overlay);

@@ -145,11 +145,10 @@ void main() {
     float shade = mix(darkAmt, 1.0, sh);
     gl_FragColor = vec4(tex.rgb * lit * shade, tex.a);
 }
-// SHADOW_DARK = shadowed ground brightness at full strength. 0.72 (was 0.25→0.5):
-// shaded ground (e.g. under trees) is lit by ambient + skylight bounce like a real
-// environment instead of going near-black. The missing DIRECT sun still reads as
-// shadow. Matched to the model shadow floor.
-""".replace('__SHADOW__', _SHADOW_GLSL).replace('SHADOW_DARK', '0.72')
+// SHADOW_DARK = shadowed ground brightness at full strength. 0.5: shaded ground
+// keeps half its ambient light (readable, not near-black). Matched to the model
+// shadow floor.
+""".replace('__SHADOW__', _SHADOW_GLSL).replace('SHADOW_DARK', '0.5')
 
 
 # Uniform names the caller looks up (kept together so map_canvas_gpu stays tidy).

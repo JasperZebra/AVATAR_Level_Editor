@@ -102,11 +102,10 @@ void main(void)
     // nearby geometry shortens the ray, instead of fading toward nothing.
     accum = accum / float(STEPS) * sqrt(clamp(raylen / maxdist, 0.0, 1.0));
 
-    // Phase function with a HIGH floor: shafts read clearly from EVERY direction
-    // (the user wants them always on, not only when facing the sun), and brighten
-    // further when looking toward the sun.
+    // Phase function: a moderate floor keeps shafts visible from EVERY direction
+    // (always-on) without flooding the frame; they brighten toward the sun.
     float cosang = dot(dir, normalize(sundir));
-    float phase = 0.7 + 0.5 * pow(max(cosang, 0.0), 2.0);
+    float phase = 0.45 + 0.55 * pow(max(cosang, 0.0), 2.0);
 
     finalColor = vec4(raycolor * accum * phase * intensity, 1.0);
 }
