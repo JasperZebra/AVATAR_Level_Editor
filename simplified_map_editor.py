@@ -1959,6 +1959,24 @@ class SimplifiedMapEditor(QMainWindow):
             if hasattr(self, 'canvas'):
                 self.canvas.set_time_of_day(mins / 1440.0)
 
+        # God rays (crepuscular light shafts) — post-process that streams shafts of
+        # sunlight past terrain/objects toward the sun. Only visible while day/night
+        # is on and the sun is above the horizon; strongest at dawn/dusk.
+        _gr_row = QHBoxLayout(); _gr_row.setSpacing(6)
+        self._daynight_godrays_cb = QCheckBox("God rays")
+        self._daynight_godrays_cb.setToolTip("Crepuscular light shafts from the sun (dawn/dusk drama)")
+        self._daynight_godrays_cb.setChecked(True)
+        _gr_row.addWidget(self._daynight_godrays_cb)
+        _gr_row.addStretch()
+        _light_vbox.addLayout(_gr_row)
+
+        def _on_dn_godrays(state):
+            if hasattr(self, 'canvas') and hasattr(self.canvas, 'set_god_rays_enabled'):
+                self.canvas.set_god_rays_enabled(state == _Qt.Checked.value
+                                                 if isinstance(state, int) else bool(state))
+
+        self._daynight_godrays_cb.stateChanged.connect(_on_dn_godrays)
+
         self._daynight_enable_cb.stateChanged.connect(_on_dn_enable)
         self._daynight_play_btn.toggled.connect(_on_dn_play)
         self._daynight_time_slider.valueChanged.connect(_on_dn_time)

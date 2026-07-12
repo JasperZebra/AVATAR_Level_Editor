@@ -612,6 +612,8 @@ class MapCanvas(QOpenGLWidget):
         self._sky_atmosphere = None     # lazily-built spectral daytime sky
         self._shadow_map = None         # lazily-built sun shadow map (canvas/shadow_map.py)
         self.shadows_enabled = True     # F7: sun shadows (only active when day/night + sun up)
+        self._god_rays = None           # lazily-built screen-space god rays (canvas/god_rays.py)
+        self._godrays_enabled = True    # crepuscular light shafts (only when day/night + sun up)
         
         # Sector display
         self.show_sector_boundaries = False
@@ -3662,7 +3664,82 @@ class MapCanvas(QOpenGLWidget):
             glUseProgram(0)
         return drew
 
+    def _render_god_rays(self):
+        """Screen-space crepuscular rays (god_rays.py). Renders the camera-space
+        scene depth + a bright sun disc into a small occlusion buffer, then
+        composites a radial blur additively over the frame. The camera GL matrices
+        must be current (they are, at the frame-end call site). No-ops unless
+        day/night is on, god rays are enabled, and the sun is above the horizon."""
+        if not (self.day_night_enabled and getattr(self, '_godrays_enabled', True)):
+            return
+        _, _, day, horizon = self._daynight_factors()
+        sun_dir = getattr(self, '_sun_dir_world', None)
+        if day <= 0.02 or sun_dir is None or sun_dir[1] <= 0.02:
+            return   # night, or sun below the horizon → no shafts
+
+        try:
+            cam = self.camera_3d
+            cam_pos = (float(cam.position[0]), float(cam.position[1]), float(cam.position[2]))
+
+            # Camera view-projection as a row-major maths matrix, matching the
+            # depth-cast shaders (which upload with transpose=GL_TRUE). glGetFloatv
+            # returns column-major arrays (= the maths matrices transposed), so
+            # mvp_rowmajor = (mv @ proj).T.
+            mv = np.ascontiguousarray(glGetFloatv(GL_MODELVIEW_MATRIX), dtype=np.float64)
+            proj = np.ascontiguousarray(glGetFloatv(GL_PROJECTION_MATRIX), dtype=np.float64)
+            mvp = np.ascontiguousarray((mv @ proj).T, dtype=np.float32)
+
+            # Sun position on screen (0..1 uv) from that MVP.
+            sd = (float(sun_dir[0]), float(sun_dir[1]), float(sun_dir[2]))
+            sun_world = np.array([cam_pos[0] + sd[0] * 4000.0,
+                                  cam_pos[1] + sd[1] * 4000.0,
+                                  cam_pos[2] + sd[2] * 4000.0, 1.0], dtype=np.float32)
+            clip = mvp @ sun_world
+            if clip[3] <= 0.01:
+                return   # sun behind the camera
+            ndc_x = float(clip[0] / clip[3])
+            ndc_y = float(clip[1] / clip[3])
+            if abs(ndc_x) > 2.8 or abs(ndc_y) > 2.8:
+                return   # too far off-screen for visible rays
+            sun_uv = (ndc_x * 0.5 + 0.5, ndc_y * 0.5 + 0.5)
+
+            if self._god_rays is None:
+                from god_rays import GodRays
+                self._god_rays = GodRays()
+            gr = self._god_rays
+
+            vw, vh = self.width(), self.height()
+            default_fbo = self.defaultFramebufferObject()
+
+            # 1) Occlusion buffer: scene depth (camera space) + bright sun disc.
+            if not gr.begin_occlusion():
+                return
+            self._cast_terrain_depth(mvp)
+            try:
+                if self.model_loader is not None:
+                    self.model_loader.cast_shadows(mvp, canvas=self)
+            except Exception as _e:
+                print(f"[god-rays] model occluder pass skipped: {_e}")
+            gr.draw_sun_source(cam_pos, sd, horizon)
+            gr.end_occlusion(default_fbo, vw, vh)
+
+            # 2) Composite the radial shafts. Warmer near the horizon; strongest at
+            # a low sun (dawn/dusk drama) and faded out as the sun nears the
+            # off-screen cutoff so it doesn't pop while panning.
+            raycolor = (1.0, 0.93 - 0.30 * horizon, 0.80 - 0.45 * horizon)
+            edge = max(abs(ndc_x), abs(ndc_y))
+            edgefade = max(0.0, min(1.0, (2.8 - edge) / 0.8))
+            intensity = day * (1.10 + 0.9 * horizon) * edgefade
+            gr.composite(sun_uv, raycolor, intensity, vw, vh)
+        except Exception as _e:
+            print(f"[god-rays] render error: {_e}")
+
     # ── Day/night control API (for the slider/play UI) ──
+    def set_god_rays_enabled(self, enabled):
+        """Toggle the screen-space god rays (crepuscular light shafts)."""
+        self._godrays_enabled = bool(enabled)
+        self.update()
+
     def set_day_night_enabled(self, enabled):
         self.day_night_enabled = bool(enabled)
         self.update()
@@ -4346,6 +4423,11 @@ class MapCanvas(QOpenGLWidget):
 
             # Terrain paint brush gizmo (circle at cursor)
             self._render_terrain_paint_gizmo()
+
+            # God rays: crepuscular light shafts streaming past terrain/objects
+            # toward the sun. Post-process — needs the scene depth still valid and
+            # the camera matrices current (both true here, before the teardown).
+            self._render_god_rays()
 
             # RESTORE OpenGL STATE for 2D rendering
             glDisable(GL_LIGHTING)
