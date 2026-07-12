@@ -613,6 +613,7 @@ class MapCanvas(QOpenGLWidget):
         self._shadow_map = None         # lazily-built sun shadow map (canvas/shadow_map.py)
         self.shadows_enabled = True     # F7: sun shadows (only active when day/night + sun up)
         self._god_rays = None           # lazily-built screen-space god rays (canvas/god_rays.py)
+        self._volumetric_rays = None    # lazily-built volumetric shafts (canvas/volumetric_rays.py)
         self._godrays_enabled = True    # crepuscular light shafts (only when day/night + sun up)
         
         # Sector display
@@ -3444,28 +3445,70 @@ class MapCanvas(QOpenGLWidget):
         print(f"🟣 [F8] depth prepass (early-Z occlusion): {'ON' if on else 'OFF'}{extra}")
         self.update()
 
+    def _shadow_world_box(self):
+        """(center_x, center_z, half_size) of a sun-shadow box that covers the WHOLE
+        map, in render-world units. Computed once from the terrain mesh bounds and
+        cached (recomputed only when the terrain changes).
+
+        This is a deliberate switch away from the old camera-focused box. That box
+        followed the camera and capped at half_size 3200, so as you moved/zoomed,
+        geometry outside the box had NO shadow and shadows visibly "popped in" at a
+        distance. The user wants shadows everywhere at once ("infinite / the whole
+        map"), so the box is now sized to the terrain and CENTERED ON THE MAP — it
+        never moves, every object on the map casts, and nothing pops in as you pan.
+        (Trade-off: one 4096² map spread over the whole level is softer per-object
+        than a tight camera box; coverage is the priority here.)"""
+        key = (id(getattr(self, 'terrain_model', None)),
+               len(getattr(self, 'terrain_models', []) or []))
+        cache = getattr(self, '_shadow_box_cache', None)
+        if cache is not None and cache[0] == key:
+            return cache[1]
+
+        models = []
+        if getattr(self, 'terrain_models', []):
+            models = [(m, wx, wy) for m, wx, wy in self.terrain_models]
+        elif getattr(self, 'terrain_model', None):
+            _tr = getattr(self, 'terrain_renderer', None)
+            tx = getattr(self, 'terrain_world_offset_x',
+                         getattr(_tr, 'terrain_offset_x', 0.0) if _tr else 0.0)
+            ty = getattr(self, 'terrain_world_offset_y',
+                         getattr(_tr, 'terrain_offset_y', 0.0) if _tr else 0.0)
+            models = [(self.terrain_model, tx, ty)]
+
+        minx = minz = float('inf')
+        maxx = maxz = float('-inf')
+        for model, tx, ty in models:
+            for mesh in getattr(model, 'meshes', []):
+                v = getattr(mesh, 'vertices', None)
+                if v is None:
+                    continue
+                try:
+                    a = np.asarray(v, dtype=np.float32).reshape(-1, 3)
+                except Exception:
+                    continue
+                # Render-world position matches the depth-cast: x + tx, z - ty.
+                minx = min(minx, float(a[:, 0].min()) + tx)
+                maxx = max(maxx, float(a[:, 0].max()) + tx)
+                minz = min(minz, float(a[:, 2].min()) - ty)
+                maxz = max(maxz, float(a[:, 2].max()) - ty)
+
+        if minx < maxx and minz < maxz:
+            cx = 0.5 * (minx + maxx)
+            cz = 0.5 * (minz + maxz)
+            # Square half-extent covering the larger side + margin. The extra 15%
+            # gives room for long shadows cast beyond the terrain edge at a low sun.
+            half = 0.5 * max(maxx - minx, maxz - minz) * 1.15 + 100.0
+            box = (cx, cz, half)
+        else:
+            box = (0.0, 0.0, 3200.0)   # no terrain loaded yet → old ceiling
+
+        self._shadow_box_cache = (key, box)
+        return box
+
     def _shadow_half_size(self):
-        """Half-extent (world units) of the sun shadow box. Camera-FOCUSED (AM3D-
-        style — the box follows the view), sized to the patch of ground the camera
-        is looking at, so shadows stay SHARP where you're working. A level-wide box
-        made a fixed 4096² map cover the whole world → each object's shadow was only
-        a few coarse texels (pixelated, blobby). By scaling the box to the view, a
-        vehicle/crate gets many texels and its shadow is recognizable. Objects within
-        the box cast; the box moves + scales with the camera. Clamped so it never
-        gets tiny (min sharpness floor) or absurdly coarse."""
-        hs = 1400.0
-        try:
-            cam = self.camera_3d
-            # Size the box from camera HEIGHT only — NOT the look direction. Basing
-            # it on forward.y meant the box grew/shrank every time you tilted the
-            # camera, which resized the texel grid and made shadows swim when you
-            # rotated in place. Height changes only when you actually zoom in/out.
-            py = abs(float(cam.position[1]))
-            hs = py * 1.1
-        except Exception:
-            pass
-        return max(400.0, min(hs, 3200.0))            # sharpness floor .. coarse ceiling
-        return hs
+        """Half-extent (world units) of the sun shadow box — now the whole map (see
+        _shadow_world_box)."""
+        return self._shadow_world_box()[2]
 
     def _cast_sun_shadows(self):
         """Render model depth from the sun into the shadow map, then tell the
@@ -3487,11 +3530,14 @@ class MapCanvas(QOpenGLWidget):
                     from shadow_map import ShadowMap
                     self._shadow_map = ShadowMap()
                 sm = self._shadow_map
-                # AM3D parity: size the light box to the WHOLE level so every
-                # object casts (not just those within a small box near the camera).
-                sm.half_size = self._shadow_half_size()
+                # Whole-map coverage: size AND center the light box to the terrain
+                # (not the camera) so shadows blanket the entire level and never pop
+                # in as you move. Centering on the map keeps the box stationary.
+                cx, cz, half = self._shadow_world_box()
+                sm.half_size = half
+                box_center = (cx, float(self.camera_3d.position[1]), cz)
                 light_vp = sm.update_light_vp(
-                    self.camera_3d.position, self.camera_3d.forward,
+                    box_center, self.camera_3d.forward,
                     getattr(self, '_sun_dir_world', (0.0, 1.0, 0.0)))
                 # Bias scaled to the (now level-sized) box so shadows don't detach.
                 # Terrain gets a much smaller bias (it never self-shadows) so object
@@ -3665,11 +3711,18 @@ class MapCanvas(QOpenGLWidget):
         return drew
 
     def _render_god_rays(self):
-        """Screen-space crepuscular rays (god_rays.py). Renders the camera-space
-        scene depth + a bright sun disc into a small occlusion buffer, then
-        composites a radial blur additively over the frame. The camera GL matrices
-        must be current (they are, at the frame-end call site). No-ops unless
-        day/night is on, god rays are enabled, and the sun is above the horizon."""
+        """Sun light-shaft post-process. Runs TWO effects (as in the Battalion Wars
+        editor this was ported from):
+
+          • Volumetric shafts (volumetric_rays.py) — march each pixel's view ray
+            through the air sampling the sun shadow map. Visible from ANY camera
+            angle (not just when the sun is on screen), and streams through gaps in
+            geometry/foliage because it reads the same alpha-tested shadow map.
+          • Screen-space crepuscular rays (god_rays.py) — the dramatic radial shafts
+            when the sun itself is in view. Adds on top of the volumetric base.
+
+        Camera GL matrices must be current (they are at the frame-end call site).
+        No-ops unless day/night is on, god rays are enabled, and the sun is up."""
         if not (self.day_night_enabled and getattr(self, '_godrays_enabled', True)):
             return
         _, _, day, horizon = self._daynight_factors()
@@ -3688,51 +3741,103 @@ class MapCanvas(QOpenGLWidget):
             mv = np.ascontiguousarray(glGetFloatv(GL_MODELVIEW_MATRIX), dtype=np.float64)
             proj = np.ascontiguousarray(glGetFloatv(GL_PROJECTION_MATRIX), dtype=np.float64)
             mvp = np.ascontiguousarray((mv @ proj).T, dtype=np.float32)
-
-            # Sun position on screen (0..1 uv) from that MVP.
             sd = (float(sun_dir[0]), float(sun_dir[1]), float(sun_dir[2]))
-            sun_world = np.array([cam_pos[0] + sd[0] * 4000.0,
-                                  cam_pos[1] + sd[1] * 4000.0,
-                                  cam_pos[2] + sd[2] * 4000.0, 1.0], dtype=np.float32)
-            clip = mvp @ sun_world
-            if clip[3] <= 0.01:
-                return   # sun behind the camera
-            ndc_x = float(clip[0] / clip[3])
-            ndc_y = float(clip[1] / clip[3])
-            if abs(ndc_x) > 2.8 or abs(ndc_y) > 2.8:
-                return   # too far off-screen for visible rays
-            sun_uv = (ndc_x * 0.5 + 0.5, ndc_y * 0.5 + 0.5)
-
-            if self._god_rays is None:
-                from god_rays import GodRays
-                self._god_rays = GodRays()
-            gr = self._god_rays
-
             vw, vh = self.width(), self.height()
             default_fbo = self.defaultFramebufferObject()
 
-            # 1) Occlusion buffer: scene depth (camera space) + bright sun disc.
-            if not gr.begin_occlusion():
-                return
-            self._cast_terrain_depth(mvp)
-            try:
-                if self.model_loader is not None:
-                    self.model_loader.cast_shadows(mvp, canvas=self)
-            except Exception as _e:
-                print(f"[god-rays] model occluder pass skipped: {_e}")
-            gr.draw_sun_source(cam_pos, sd, horizon)
-            gr.end_occlusion(default_fbo, vw, vh)
+            # (A) Volumetric shafts — always on, any angle. Needs this frame's
+            # shadow map (from the shadow cast pass earlier this frame).
+            self._render_volumetric_rays(mvp, day, horizon, sd, cam_pos, vw, vh, default_fbo)
 
-            # 2) Composite the radial shafts. Warmer near the horizon; strongest at
-            # a low sun (dawn/dusk drama) and faded out as the sun nears the
-            # off-screen cutoff so it doesn't pop while panning.
-            raycolor = (1.0, 0.93 - 0.30 * horizon, 0.80 - 0.45 * horizon)
-            edge = max(abs(ndc_x), abs(ndc_y))
-            edgefade = max(0.0, min(1.0, (2.8 - edge) / 0.8))
-            intensity = day * (1.10 + 0.9 * horizon) * edgefade
-            gr.composite(sun_uv, raycolor, intensity, vw, vh)
+            # (B) Screen-space radial shafts — only when the sun is on/near screen.
+            self._render_screen_god_rays(mvp, day, horizon, sd, cam_pos, vw, vh, default_fbo)
         except Exception as _e:
             print(f"[god-rays] render error: {_e}")
+
+    def _render_volumetric_rays(self, mvp, day, horizon, sd, cam_pos, vw, vh, default_fbo):
+        """Volumetric (shadow-map-marched) light shafts — visible from any camera
+        angle. Requires the sun shadow map cast this frame."""
+        if not getattr(self, '_shadow_active', False):
+            return   # no shadow map this frame → nothing to march against
+        shadow_tex = getattr(self, '_shadow_tex', 0)
+        light_vp = getattr(self, '_terrain_light_vp', None)
+        if not shadow_tex or light_vp is None:
+            return
+        try:
+            inv_mvp = np.linalg.inv(mvp.astype(np.float64)).astype(np.float32)
+        except np.linalg.LinAlgError:
+            return
+        if self._volumetric_rays is None:
+            from volumetric_rays import VolumetricRays
+            self._volumetric_rays = VolumetricRays()
+        vr = self._volumetric_rays
+
+        # Camera depth pass (terrain + models) with the current camera matrices.
+        if not vr.begin_depth(vw, vh):
+            return
+        self._cast_terrain_depth(mvp)
+        try:
+            if self.model_loader is not None:
+                self.model_loader.cast_shadows(mvp, canvas=self)
+        except Exception as _e:
+            print(f"[volumetric] model depth pass skipped: {_e}")
+        vr.end_depth(default_fbo, vw, vh)
+
+        # March distance + fog e-fold height scaled to the map so the shafts reach
+        # across the whole level (whole-map shadow box) rather than fading short.
+        # fogheight is kept a modest fraction of the map so the glow concentrates
+        # near the ground (where geometry casts) instead of hazing the whole sky.
+        half = self._shadow_world_box()[2]
+        maxdist = max(3000.0, min(half * 2.0, 12000.0))
+        fogheight = max(400.0, min(half * 0.15, 2000.0))
+        shadow_bias = float(getattr(self, '_shadow_bias_terrain', 0.001))
+        raycolor = (1.0, 0.92 - 0.25 * horizon, 0.78 - 0.40 * horizon)
+        intensity = day * (0.55 + 0.75 * horizon)
+        vr.composite(inv_mvp, light_vp, cam_pos, sd, raycolor, intensity,
+                     shadow_tex, shadow_bias, maxdist, fogheight, vw, vh)
+
+    def _render_screen_god_rays(self, mvp, day, horizon, sd, cam_pos, vw, vh, default_fbo):
+        """Screen-space crepuscular rays (god_rays.py): scene depth + a bright sun
+        disc into a small occlusion buffer, then a radial blur composited over the
+        frame. Only contributes when the sun is on/near screen (fades at the edge)."""
+        # Sun position on screen (0..1 uv) from the camera MVP.
+        sun_world = np.array([cam_pos[0] + sd[0] * 4000.0,
+                              cam_pos[1] + sd[1] * 4000.0,
+                              cam_pos[2] + sd[2] * 4000.0, 1.0], dtype=np.float32)
+        clip = mvp @ sun_world
+        if clip[3] <= 0.01:
+            return   # sun behind the camera
+        ndc_x = float(clip[0] / clip[3])
+        ndc_y = float(clip[1] / clip[3])
+        if abs(ndc_x) > 2.8 or abs(ndc_y) > 2.8:
+            return   # too far off-screen for visible rays
+        sun_uv = (ndc_x * 0.5 + 0.5, ndc_y * 0.5 + 0.5)
+
+        if self._god_rays is None:
+            from god_rays import GodRays
+            self._god_rays = GodRays()
+        gr = self._god_rays
+
+        # 1) Occlusion buffer: scene depth (camera space) + bright sun disc.
+        if not gr.begin_occlusion():
+            return
+        self._cast_terrain_depth(mvp)
+        try:
+            if self.model_loader is not None:
+                self.model_loader.cast_shadows(mvp, canvas=self)
+        except Exception as _e:
+            print(f"[god-rays] model occluder pass skipped: {_e}")
+        gr.draw_sun_source(cam_pos, sd, horizon)
+        gr.end_occlusion(default_fbo, vw, vh)
+
+        # 2) Composite the radial shafts. Warmer near the horizon; strongest at a
+        # low sun (dawn/dusk drama) and faded out as the sun nears the off-screen
+        # cutoff so it doesn't pop while panning.
+        raycolor = (1.0, 0.93 - 0.30 * horizon, 0.80 - 0.45 * horizon)
+        edge = max(abs(ndc_x), abs(ndc_y))
+        edgefade = max(0.0, min(1.0, (2.8 - edge) / 0.8))
+        intensity = day * (1.10 + 0.9 * horizon) * edgefade
+        gr.composite(sun_uv, raycolor, intensity, vw, vh)
 
     # ── Day/night control API (for the slider/play UI) ──
     def set_god_rays_enabled(self, enabled):

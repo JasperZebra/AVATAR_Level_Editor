@@ -48,9 +48,9 @@ uniform vec2 screensize;
 uniform vec3 raycolor;
 uniform float intensity;
 
-const int NUM_SAMPLES = 64;
+const int NUM_SAMPLES = 96;
 const float DENSITY = 1.0;
-const float DECAY = 0.996;
+const float DECAY = 0.997;
 
 void main(void)
 {
@@ -141,7 +141,11 @@ def _basis(direction):
 
 
 class GodRays:
-    SIZE = 512   # occlusion buffer resolution (square; screen-mapped)
+    # 1024 (was 512): fine texture transparency (foliage/grate cutouts, window
+    # frames) is only a few texels wide in screen space — at 512 the gaps between
+    # leaves fell below one texel and the tree read as a solid silhouette, blocking
+    # the shafts. 1024 keeps those gaps so the rays pass through.
+    SIZE = 1024   # occlusion buffer resolution (square; screen-mapped)
 
     def __init__(self):
         self._failed = False

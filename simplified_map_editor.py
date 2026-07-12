@@ -1964,7 +1964,8 @@ class SimplifiedMapEditor(QMainWindow):
         # is on and the sun is above the horizon; strongest at dawn/dusk.
         _gr_row = QHBoxLayout(); _gr_row.setSpacing(6)
         self._daynight_godrays_cb = QCheckBox("God rays")
-        self._daynight_godrays_cb.setToolTip("Crepuscular light shafts from the sun (dawn/dusk drama)")
+        self._daynight_godrays_cb.setToolTip("Sun light shafts — volumetric (visible from any angle) "
+                                             "+ screen-space radial rays when looking toward the sun")
         self._daynight_godrays_cb.setChecked(True)
         _gr_row.addWidget(self._daynight_godrays_cb)
         _gr_row.addStretch()

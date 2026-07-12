@@ -553,16 +553,24 @@ struct Material {
     vec4 tint; vec4 emissive; vec4 specShin; vec4 hasflags; vec4 anim;
 };
 layout(std430, binding=2) readonly buffer Materials { Material mats[]; };
+uniform int u_group;                             // 0 opaque 1-sided, 1 two-sided, 2 blend
 in vec2 v_uv;
 flat in uint v_mat;
 void main(){
     Material m = mats[v_mat];
     int mode = int(m.tint.w);                    // 0 opaque, 1 masked, 2 blend
-    if (mode > 0 && m.hasflags.x > 0.5) {
+    // Alpha-test whenever the fragment could be transparent so light/shadows pass
+    // THROUGH cutouts: masked (mode 1) and blend/glass (mode 2) as before, PLUS
+    // two-sided OPAQUE materials (group 1 = foliage/grates). A lot of foliage is
+    // authored as a flat two-sided quad tagged "opaque" with the transparency
+    // baked into the diffuse alpha; without this it cast/occluded as a solid
+    // rectangle (pitch-black under trees, god rays blocked). Single-sided opaque
+    // (buildings/vehicles, group 0) keeps the fast no-fetch path.
+    if (m.hasflags.x > 0.5 && (mode > 0 || u_group == 1)) {
         float a = texture(sampler2D(m.hDiffuse), v_uv).a;
-        // masked → the material's own cutoff; blend (glass/FX) → 0.5 so only the
-        // denser parts occlude the sun and clear glass casts nearly nothing.
-        float cutoff = (mode == 1) ? m.emissive.w : 0.5;
+        // blend (glass/FX) → 0.5 so only denser parts occlude; masked & two-sided
+        // opaque → the material's own alpha cutoff.
+        float cutoff = (mode == 2) ? 0.5 : m.emissive.w;
         if (a < cutoff) discard;
     }
 }
@@ -938,11 +946,16 @@ class GPUDrivenRenderer:
             g.glDisable(g.GL_BLEND); g.glDisable(g.GL_CULL_FACE)   # two-sided foliage casts too
             # Alpha path casts every group (2 = glass/FX/blended foliage now
             # included); opaque-only fallback keeps the old 0+1.
+            u_group = g.glGetUniformLocation(prog, b'u_group') if alpha else -1
             for grp in ((0, 1, 2) if alpha else (0, 1)):
                 cmd_arr, dm = groups[grp]
                 if not len(cmd_arr):
                     continue
                 if alpha:
+                    # Tell the FS which group this draw is so it can alpha-test the
+                    # two-sided-opaque (foliage/grate) group as well as masked/blend.
+                    if u_group >= 0:
+                        g.glUniform1i(u_group, int(grp))
                     # binding 1: per-draw material id, indexed by gl_DrawID.
                     g.glBindBuffer(g.GL_SHADER_STORAGE_BUFFER, self.drawmat_buf)
                     g.glBufferData(g.GL_SHADER_STORAGE_BUFFER, dm.nbytes, dm, g.GL_DYNAMIC_DRAW)
