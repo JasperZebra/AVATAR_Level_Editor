@@ -3479,8 +3479,8 @@ class MapCanvas(QOpenGLWidget):
                          getattr(_tr, 'terrain_offset_y', 0.0) if _tr else 0.0)
             models = [(self.terrain_model, tx, ty)]
 
-        minx = minz = float('inf')
-        maxx = maxz = float('-inf')
+        minx = minz = miny = float('inf')
+        maxx = maxz = maxy = float('-inf')
         for model, tx, ty in models:
             for mesh in getattr(model, 'meshes', []):
                 v = getattr(mesh, 'vertices', None)
@@ -3495,6 +3495,8 @@ class MapCanvas(QOpenGLWidget):
                 maxx = max(maxx, float(a[:, 0].max()) + tx)
                 minz = min(minz, float(a[:, 2].min()) - ty)
                 maxz = max(maxz, float(a[:, 2].max()) - ty)
+                miny = min(miny, float(a[:, 1].min()))
+                maxy = max(maxy, float(a[:, 1].max()))
 
         if minx < maxx and minz < maxz:
             cx = 0.5 * (minx + maxx)
@@ -3503,8 +3505,15 @@ class MapCanvas(QOpenGLWidget):
             # gives room for long shadows cast beyond the terrain edge at a low sun.
             half = 0.5 * max(maxx - minx, maxz - minz) * 1.15 + 100.0
             box = (cx, cz, half)
+            # Ground reference for the volumetric fog: the terrain's lowest point and
+            # its vertical span (so shafts glow from the terrain up, regardless of the
+            # level's absolute world-Y offset).
+            self._shadow_ground_y = miny if miny < maxy else 0.0
+            self._shadow_ground_span = max(200.0, (maxy - miny)) if maxy > miny else 800.0
         else:
             box = (0.0, 0.0, 3200.0)   # no terrain loaded yet → old ceiling
+            self._shadow_ground_y = 0.0
+            self._shadow_ground_span = 800.0
 
         self._shadow_box_cache = (key, box)
         return box
@@ -3789,16 +3798,21 @@ class MapCanvas(QOpenGLWidget):
 
         # March distance + fog e-fold height scaled to the map so the shafts reach
         # across the whole level (whole-map shadow box) rather than fading short.
-        # fogheight is kept a modest fraction of the map so the glow concentrates
-        # near the ground (where geometry casts) instead of hazing the whole sky.
+        # fog is anchored to the terrain height (groundy) and its e-fold height is a
+        # few × the terrain's vertical span, so shafts fill the air above the ground
+        # regardless of the level's absolute world-Y.
         half = self._shadow_world_box()[2]
         maxdist = max(3000.0, min(half * 2.0, 12000.0))
-        fogheight = max(400.0, min(half * 0.15, 2000.0))
+        groundy = float(getattr(self, '_shadow_ground_y', 0.0))
+        span = float(getattr(self, '_shadow_ground_span', 800.0))
+        fogheight = max(600.0, min(span * 2.5, 4000.0))
         shadow_bias = float(getattr(self, '_shadow_bias_terrain', 0.001))
         raycolor = (1.0, 0.92 - 0.25 * horizon, 0.78 - 0.40 * horizon)
-        intensity = day * (0.55 + 0.75 * horizon)
+        # Strong base so the shafts are clearly visible from ANY angle (the user
+        # wants them always on), brighter still at a low sun (dawn/dusk).
+        intensity = day * (1.6 + 1.1 * horizon)
         vr.composite(inv_mvp, light_vp, cam_pos, sd, raycolor, intensity,
-                     shadow_tex, shadow_bias, maxdist, fogheight, vw, vh)
+                     shadow_tex, shadow_bias, maxdist, fogheight, groundy, vw, vh)
 
     def _render_screen_god_rays(self, mvp, day, horizon, sd, cam_pos, vw, vh, default_fbo):
         """Screen-space crepuscular rays (god_rays.py): scene depth + a bright sun

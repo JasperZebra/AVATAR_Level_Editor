@@ -54,6 +54,7 @@ uniform float intensity;
 uniform float shadow_bias;
 uniform float maxdist;       // how far along each ray to march (world units)
 uniform float fogheight;     // air density e-fold height (world units)
+uniform float groundy;       // terrain reference height (fog is densest here)
 uniform vec2 screensize;
 
 const int STEPS = 32;
@@ -89,17 +90,23 @@ void main(void)
     float accum = 0.0;
     for (int i = 0; i < STEPS; i++) {
         float vis = sun_visibility(pos);
-        // Fog density: thicker near the ground, thinning with height (y up).
-        float fog = exp(-max(pos.y, 0.0) / fogheight);
+        // Fog density: densest at the terrain height (groundy), thinning upward.
+        // Referenced to groundy — NOT absolute 0 — so a level whose terrain sits at
+        // a large world-Y offset still glows near the ground (the absolute-y version
+        // collapsed to ~0 and the shafts vanished).
+        float fog = exp(-max(pos.y - groundy, 0.0) / fogheight);
         accum += vis * fog;
         pos += dir * stepsize;
     }
-    accum = accum / float(STEPS) * (raylen / maxdist);
+    // Softer distance weighting (sqrt, not linear) so shafts stay visible even when
+    // nearby geometry shortens the ray, instead of fading toward nothing.
+    accum = accum / float(STEPS) * sqrt(clamp(raylen / maxdist, 0.0, 1.0));
 
-    // Phase function: shafts glow brightest looking toward the sun but stay
-    // visible from every direction (the constant floor).
+    // Phase function with a HIGH floor: shafts read clearly from EVERY direction
+    // (the user wants them always on, not only when facing the sun), and brighten
+    // further when looking toward the sun.
     float cosang = dot(dir, normalize(sundir));
-    float phase = 0.35 + 0.65 * pow(max(cosang, 0.0), 3.0);
+    float phase = 0.7 + 0.5 * pow(max(cosang, 0.0), 2.0);
 
     finalColor = vec4(raycolor * accum * phase * intensity, 1.0);
 }
@@ -227,7 +234,7 @@ class VolumetricRays:
         glViewport(0, 0, int(vw), int(vh))
 
     def composite(self, inv_mvp, light_vp, campos, sundir, raycolor, intensity,
-                  shadow_tex, shadow_bias, maxdist, fogheight, vw, vh):
+                  shadow_tex, shadow_bias, maxdist, fogheight, groundy, vw, vh):
         if self.program is None:
             return
         glPushAttrib(GL_ENABLE_BIT | GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT
@@ -252,6 +259,7 @@ class VolumetricRays:
             glUniform1f(glGetUniformLocation(self.program, "shadow_bias"), float(shadow_bias))
             glUniform1f(glGetUniformLocation(self.program, "maxdist"), float(maxdist))
             glUniform1f(glGetUniformLocation(self.program, "fogheight"), float(fogheight))
+            glUniform1f(glGetUniformLocation(self.program, "groundy"), float(groundy))
             glUniform2f(glGetUniformLocation(self.program, "screensize"), float(vw), float(vh))
 
             glDisable(GL_DEPTH_TEST)
