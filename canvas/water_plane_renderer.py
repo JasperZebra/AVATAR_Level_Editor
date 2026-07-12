@@ -97,31 +97,33 @@ void main(){
     vec3 V = normalize(u_cam - v_world);              // toward camera
     vec3 R = reflect(-V, N);                          // reflected view ray
 
-    // Schlick fresnel (game: FresnelBias + (1-FresnelBias)*pow(1-facing,Power)):
-    // mostly the water BODY looking straight down, more SKY at grazing angles.
+    // Schlick fresnel (game: FresnelBias + (1-FresnelBias)*pow(1-facing,Power)).
+    // A raised bias keeps a constant surface SHEEN even looking straight down, so
+    // the water always reads as a surface (not an invisible hole to the terrain).
     float facing = max(dot(N, V), 0.0);
-    float fres = 0.02 + 0.98 * pow(1.0 - facing, 5.0);
+    float fres = 0.12 + 0.88 * pow(1.0 - facing, 5.0);
 
     // Day/night light on the water (game diffuseComp = ambient(SkyColor) + sun).
     float ndl = max(u_sunDir.y, 0.0);
     vec3 lightCol = u_skyLo + u_sunCol * ndl * u_day;
 
-    // ── WATER BODY — the game's refraction: the TERRAIN SEEN THROUGH the water ──
-    // The real water.fx colour you see looking down is not WaterColor (that's just
-    // a deep fog tint); it's the scene BEHIND the surface (RefractionRealTexture),
-    // tinted by the water hue. We reproduce that with a screen grab of the already-
-    // drawn terrain, sampled at this pixel + a small ripple-normal distortion.
+    // ── WATER BODY — the terrain seen THROUGH the water, but ABSORBED + TINTED ──
+    // Refraction alone (bottom shown ~1:1) makes the water invisible. Real water
+    // absorbs light and tints strongly with depth, so we darken the grabbed
+    // terrain and push it hard toward the water hue, then blend in the water's own
+    // coloured veil — the result clearly reads as water you can still see into.
     vec3 body;
     if (u_hasRefract > 0.5) {
         vec2 suv = gl_FragCoord.xy / u_viewport;
         vec2 off = N.xz * 0.035;                      // ripple refraction wobble
         vec3 bg = texture2D(u_refractTex, clamp(suv + off, 0.001, 0.999)).rgb;
-        // Hue-preserving tint: normalise WaterColor so it colours (not darkens)
-        // the bottom — openfield -> faint warm-green, riverbank -> teal, etc.
         float mx = max(max(v_deep.r, v_deep.g), max(v_deep.b, 1e-4));
-        vec3 hue = v_deep / mx;
-        vec3 tinted = bg * mix(vec3(1.0), hue, 0.55);
-        body = tinted * mix(0.5, 1.0, u_day);         // night absorbs more light
+        vec3 hue = v_deep / mx;                        // material hue, luminance ~1
+        // Absorbed bottom: strong hue tint + darkened (water eats light).
+        vec3 absorbed = bg * mix(vec3(1.0), hue, 0.85) * mix(0.4, 0.72, u_day);
+        // The water's own coloured surface veil (translucent sheet of water).
+        vec3 veil = hue * (u_skyLo * 0.55 + u_sunCol * ndl * 0.35 * u_day);
+        body = mix(absorbed, veil, 0.4);              // see the bottom, but clearly water
     } else {
         // Fallback (no screen grab): lit WaterColor, the old look.
         body = v_deep * (lightCol * 0.55 + 0.35);
