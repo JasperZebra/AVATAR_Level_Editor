@@ -1947,19 +1947,26 @@ class SimplifiedMapEditor(QMainWindow):
             self._daynight_enable_cb.setChecked(True)
             self._daynight_time_slider.setValue(int(mins) % 1440)
 
-        _preset_specs = [("🌅 Dawn", 6 * 60), ("Morning", 9 * 60),
-                         ("☀ Noon", 12 * 60), ("Afternoon", 15 * 60),
-                         ("🌆 Dusk", 18 * 60), ("🌙 Night", 0)]
-        _preset_row = QHBoxLayout(); _preset_row.setSpacing(3)
+        # Full set of times of day (every 3 hours) so you can jump to any point in
+        # the cycle — midnight, pre-dawn, dawn, morning, noon, afternoon, dusk,
+        # evening. Laid out in a 4-wide grid so they all fit.
+        _preset_specs = [
+            ("🌙 Midnight", 0),      ("Late Night", 3 * 60),
+            ("🌅 Dawn", 6 * 60),     ("Morning", 9 * 60),
+            ("☀ Noon", 12 * 60),     ("Afternoon", 15 * 60),
+            ("🌆 Dusk", 18 * 60),    ("🌃 Evening", 21 * 60),
+        ]
+        from PyQt5.QtWidgets import QGridLayout
+        _preset_grid = QGridLayout(); _preset_grid.setSpacing(3)
         self._daynight_preset_btns = []
-        for _label, _mins in _preset_specs:
+        for _i, (_label, _mins) in enumerate(_preset_specs):
             _pb = QPushButton(_label)
             _pb.setToolTip(f"Set time to {_mins // 60:02d}:{_mins % 60:02d}")
             _pb.setStyleSheet("padding:2px 4px;")
             _pb.clicked.connect(lambda _checked=False, m=_mins: _dn_preset(m))
-            _preset_row.addWidget(_pb)
+            _preset_grid.addWidget(_pb, _i // 4, _i % 4)
             self._daynight_preset_btns.append(_pb)
-        _light_vbox.addLayout(_preset_row)
+        _light_vbox.addLayout(_preset_grid)
 
         def _dn_fmt(mins):
             return f"{int(mins) // 60:02d}:{int(mins) % 60:02d}"
