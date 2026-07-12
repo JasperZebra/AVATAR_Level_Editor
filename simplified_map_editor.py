@@ -1939,6 +1939,28 @@ class SimplifiedMapEditor(QMainWindow):
         self._daynight_time_prev.clicked.connect(lambda: _dn_step(-1))
         self._daynight_time_next.clicked.connect(lambda: _dn_step(1))
 
+        # Quick time-of-day presets (like the Battalion Wars editor) — jump straight
+        # to a named time so you can eyeball dawn/noon/dusk/night without scrubbing.
+        # Each enables the cycle (so the lighting actually applies) then moves the
+        # slider, which pushes the time to the canvas via _on_dn_time.
+        def _dn_preset(mins):
+            self._daynight_enable_cb.setChecked(True)
+            self._daynight_time_slider.setValue(int(mins) % 1440)
+
+        _preset_specs = [("🌅 Dawn", 6 * 60), ("Morning", 9 * 60),
+                         ("☀ Noon", 12 * 60), ("Afternoon", 15 * 60),
+                         ("🌆 Dusk", 18 * 60), ("🌙 Night", 0)]
+        _preset_row = QHBoxLayout(); _preset_row.setSpacing(3)
+        self._daynight_preset_btns = []
+        for _label, _mins in _preset_specs:
+            _pb = QPushButton(_label)
+            _pb.setToolTip(f"Set time to {_mins // 60:02d}:{_mins % 60:02d}")
+            _pb.setStyleSheet("padding:2px 4px;")
+            _pb.clicked.connect(lambda _checked=False, m=_mins: _dn_preset(m))
+            _preset_row.addWidget(_pb)
+            self._daynight_preset_btns.append(_pb)
+        _light_vbox.addLayout(_preset_row)
+
         def _dn_fmt(mins):
             return f"{int(mins) // 60:02d}:{int(mins) % 60:02d}"
 
