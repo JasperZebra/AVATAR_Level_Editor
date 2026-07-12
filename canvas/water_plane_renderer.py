@@ -47,6 +47,9 @@ uniform vec3  u_skyHi;     // reflected sky colour near the zenith
 uniform float u_choppy;    // ripple bump strength
 uniform sampler2D u_normalTex; // the game's water normal map (watercloud_n), if loaded
 uniform float u_hasNormal; // 1 = sample the real normal map, 0 = procedural fallback
+uniform sampler2D u_refractTex; // screen grab of the scene BEHIND the water (the bottom)
+uniform vec2  u_viewport;  // framebuffer size in px, to turn gl_FragCoord into a screen UV
+uniform float u_hasRefract; // 1 = show the terrain through the water (game refraction), 0 = off
 
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p){
@@ -94,32 +97,48 @@ void main(){
     vec3 V = normalize(u_cam - v_world);              // toward camera
     vec3 R = reflect(-V, N);                          // reflected view ray
 
-    // ── Follows the game's water.fx composition ──────────────────────────────
-    // WATER BODY: the material's WaterColor, LIT (game: fogColor*diffuseComp,
-    // fogColor≈WaterColor, diffuseComp = ambient + sun diffuse). The flat surface
-    // faces up, so the sun term is dot(up, sunDir). A small floor keeps it from
-    // going pure black.
-    float ndl = max(u_sunDir.y, 0.0);
-    vec3 lighting = u_skyLo * 0.55 + u_sunCol * ndl * u_day;
-    vec3 body = v_deep * (lighting + 0.35);
-
-    // REFLECTION: the game uses SkyColor * 0.5 when there's no planar reflection
-    // render target — a DIMMED sky, not a bright mirror (this was the main thing
-    // making the editor water look wrong / too shiny). Horizon->zenith by R.y.
-    float up = clamp(R.y * 0.5 + 0.5, 0.0, 1.0);
-    vec3 refl = mix(u_skyLo, u_skyHi, up) * 0.5;
-
     // Schlick fresnel (game: FresnelBias + (1-FresnelBias)*pow(1-facing,Power)):
-    // mostly body looking straight down, more sky at grazing angles.
+    // mostly the water BODY looking straight down, more SKY at grazing angles.
     float facing = max(dot(N, V), 0.0);
     float fres = 0.02 + 0.98 * pow(1.0 - facing, 5.0);
+
+    // Day/night light on the water (game diffuseComp = ambient(SkyColor) + sun).
+    float ndl = max(u_sunDir.y, 0.0);
+    vec3 lightCol = u_skyLo + u_sunCol * ndl * u_day;
+
+    // ── WATER BODY — the game's refraction: the TERRAIN SEEN THROUGH the water ──
+    // The real water.fx colour you see looking down is not WaterColor (that's just
+    // a deep fog tint); it's the scene BEHIND the surface (RefractionRealTexture),
+    // tinted by the water hue. We reproduce that with a screen grab of the already-
+    // drawn terrain, sampled at this pixel + a small ripple-normal distortion.
+    vec3 body;
+    if (u_hasRefract > 0.5) {
+        vec2 suv = gl_FragCoord.xy / u_viewport;
+        vec2 off = N.xz * 0.035;                      // ripple refraction wobble
+        vec3 bg = texture2D(u_refractTex, clamp(suv + off, 0.001, 0.999)).rgb;
+        // Hue-preserving tint: normalise WaterColor so it colours (not darkens)
+        // the bottom — openfield -> faint warm-green, riverbank -> teal, etc.
+        float mx = max(max(v_deep.r, v_deep.g), max(v_deep.b, 1e-4));
+        vec3 hue = v_deep / mx;
+        vec3 tinted = bg * mix(vec3(1.0), hue, 0.55);
+        body = tinted * mix(0.5, 1.0, u_day);         // night absorbs more light
+    } else {
+        // Fallback (no screen grab): lit WaterColor, the old look.
+        body = v_deep * (lightCol * 0.55 + 0.35);
+    }
+
+    // REFLECTION: dimmed sky (game: SkyColor*0.5) — NOT a bright mirror.
+    float up = clamp(R.y * 0.5 + 0.5, 0.0, 1.0);
+    vec3 refl = mix(u_skyLo, u_skyHi, up) * 0.5;
 
     // Sun glint (game SpecularIntensity), day only.
     float glint = pow(max(dot(R, normalize(u_sunDir)), 0.0), 220.0);
     vec3  sun = u_sunCol * glint * 1.5 * u_day;
 
     vec3 col = mix(body, refl, fres) + sun;
-    float alpha = mix(0.82, 0.96, fres);              // fairly opaque murky water
+    // With refraction we composite the bottom OURSELVES, so draw (near-)opaque and
+    // let the shader own the whole look; without it, blend over the terrain.
+    float alpha = (u_hasRefract > 0.5) ? 1.0 : mix(0.82, 0.96, fres);
     gl_FragColor = vec4(col, alpha);
 }
 """
@@ -481,6 +500,43 @@ class WaterPlaneRenderer:
             self._water_normal_failed = True
             return 0
 
+    def _capture_refraction(self):
+        """Grab the already-rendered scene (terrain/lakebed) into a texture so the
+        water shader can show it THROUGH the surface — the game's RefractionReal
+        pass. Called each frame right before the water quads draw, so the copy is
+        the scene BEHIND the water (water hasn't been drawn yet). Returns
+        (tex_id, (w, h)) or (0, (0, 0)) if unavailable."""
+        if getattr(self, '_refract_failed', False):
+            return 0, (0, 0)
+        try:
+            vp = glGetIntegerv(GL_VIEWPORT)
+            vx, vy, vw, vh = int(vp[0]), int(vp[1]), int(vp[2]), int(vp[3])
+            if vw <= 0 or vh <= 0:
+                return 0, (0, 0)
+            tex = getattr(self, '_refract_tex', 0)
+            if not tex:
+                tex = int(glGenTextures(1))
+                glBindTexture(GL_TEXTURE_2D, tex)
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+                self._refract_tex = tex
+                self._refract_size = (0, 0)
+            glBindTexture(GL_TEXTURE_2D, tex)
+            if getattr(self, '_refract_size', (0, 0)) != (vw, vh):
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, vw, vh, 0,
+                             GL_RGB, GL_UNSIGNED_BYTE, None)
+                self._refract_size = (vw, vh)
+            # Copy the current colour buffer (terrain + sky, no water yet).
+            glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, vx, vy, vw, vh)
+            glBindTexture(GL_TEXTURE_2D, 0)
+            return tex, (vw, vh)
+        except Exception as e:
+            print(f"[WaterPlane] refraction capture failed ({e}) — flat water")
+            self._refract_failed = True
+            return 0, (0, 0)
+
     def _bind_water_shader(self, canvas, terrain_renderer=None):
         """Compile (once) and bind the water shader with day/night-driven uniforms.
         Returns True if bound (caller then draws the quads and unbinds); False if
@@ -496,7 +552,8 @@ class WaterPlaneRenderer:
                 return False
             self._water_uloc = {n: glGetUniformLocation(prog, n) for n in (
                 'u_time', 'u_cam', 'u_sunDir', 'u_sunCol', 'u_day',
-                'u_skyLo', 'u_skyHi', 'u_choppy', 'u_normalTex', 'u_hasNormal')}
+                'u_skyLo', 'u_skyHi', 'u_choppy', 'u_normalTex', 'u_hasNormal',
+                'u_refractTex', 'u_viewport', 'u_hasRefract')}
 
         # ── Derive uniforms from the canvas' day/night state ──────────────────
         day = 1.0
@@ -553,6 +610,19 @@ class WaterPlaneRenderer:
             glUniform1f(u['u_hasNormal'], 1.0)
         else:
             glUniform1f(u['u_hasNormal'], 0.0)
+
+        # ── Refraction (the terrain seen through the water) ───────────────────
+        rtex = getattr(self, '_refract_tex', 0)
+        rsize = getattr(self, '_refract_size', (0, 0))
+        if rtex and rsize[0] > 0:
+            glActiveTexture(GL_TEXTURE1)
+            glBindTexture(GL_TEXTURE_2D, rtex)
+            glUniform1i(u['u_refractTex'], 1)
+            glUniform2f(u['u_viewport'], float(rsize[0]), float(rsize[1]))
+            glUniform1f(u['u_hasRefract'], 1.0)
+            glActiveTexture(GL_TEXTURE0)          # leave unit 0 active for cleanliness
+        else:
+            glUniform1f(u['u_hasRefract'], 0.0)
         return True
 
     def render_water_planes(self, terrain_renderer, canvas=None, water_mesh_editor=None):
@@ -637,6 +707,9 @@ class WaterPlaneRenderer:
                 self._water_vbo_sig = sig
 
             if getattr(self, '_water_vcount', 0):
+                # Capture the scene behind the water FIRST (terrain is drawn, water
+                # isn't yet) so the shader can refract the bottom through the surface.
+                self._capture_refraction()
                 used_shader = self._bind_water_shader(canvas, terrain_renderer)
                 glBindBuffer(GL_ARRAY_BUFFER, self._water_vbo)
                 glEnableClientState(GL_VERTEX_ARRAY)
@@ -656,8 +729,11 @@ class WaterPlaneRenderer:
                 glDisableClientState(GL_VERTEX_ARRAY)
                 glBindBuffer(GL_ARRAY_BUFFER, 0)
                 if used_shader:
+                    if getattr(self, '_refract_tex', 0):
+                        glActiveTexture(GL_TEXTURE1)
+                        glBindTexture(GL_TEXTURE_2D, 0)
+                    glActiveTexture(GL_TEXTURE0)
                     if getattr(self, '_water_normal_tex', 0):
-                        glActiveTexture(GL_TEXTURE0)
                         glBindTexture(GL_TEXTURE_2D, 0)
                     glUseProgram(0)
 
