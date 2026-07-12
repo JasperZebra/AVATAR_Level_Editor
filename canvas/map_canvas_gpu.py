@@ -3274,7 +3274,11 @@ class MapCanvas(QOpenGLWidget):
                 or getattr(self, '_dbg_mode', 0) != 0   # keep profiler updating live
                 or (self.day_night_enabled and self._daynight_play)
                 or getattr(getattr(self, 'model_loader', None),
-                           'has_animated_materials', False)):
+                           'has_animated_materials', False)
+                # Animated water: repaint at ~30 FPS whenever the map has water so
+                # the shader's ripples/sun-glint actually move (3D only).
+                or getattr(getattr(self, 'water_plane_renderer', None),
+                           '_water_vcount', 0)):
             self.update()
 
     def resizeGL(self, width, height):

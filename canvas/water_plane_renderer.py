@@ -9,6 +9,130 @@ cached terrain files at load time.
 from OpenGL.GL import *
 import numpy as np
 import ctypes
+import time as _time
+
+
+# ── Game-accurate water shader ──────────────────────────────────────────────
+# Reproduces the look of the Dunia (Avatar/FC2) water shader on the editor's
+# per-sector water planes: a rippling surface (animated normals) that reflects
+# the sky, brightens into a sun-glint sparkle, and blends deep-water tint ->
+# reflection by a Fresnel term — all reacting to the day/night cycle. Legacy
+# #version 120 so it drops into the existing fixed-function 3D pass: it reads the
+# GL matrix stack (gl_ModelViewProjectionMatrix) and the position VBO via the
+# built-in gl_Vertex (the water VBO already bakes WORLD-space positions), so no
+# new geometry/UV plumbing is needed. Compile failure → caller falls back to the
+# old flat-blue quad (never a blank/!broken viewport).
+_WATER_VS = """
+#version 120
+varying vec3 v_world;
+void main() {
+    v_world = gl_Vertex.xyz;                          // VBO holds world positions
+    gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+}
+"""
+
+_WATER_FS = """
+#version 120
+varying vec3 v_world;
+uniform float u_time;      // seconds, animates the ripples
+uniform vec3  u_cam;       // camera world position
+uniform vec3  u_sunDir;    // direction TOWARD the sun (normalized, world)
+uniform vec3  u_sunCol;    // sun light colour (for the glint)
+uniform float u_day;       // 0 night .. 1 day
+uniform vec3  u_deep;      // deep-water tint (day/night scaled)
+uniform vec3  u_skyLo;     // reflected sky colour near the horizon
+uniform vec3  u_skyHi;     // reflected sky colour near the zenith
+uniform float u_choppy;    // ripple bump strength
+
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p){
+    vec2 i = floor(p), f = fract(p);
+    float a = hash(i), b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0)), d = hash(i + vec2(1.0, 1.0));
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+// Layered scrolling noise -> a height field. Two dominant drift directions at a
+// few octaves reads as wind-driven ripples rather than a regular pattern.
+float waves(vec2 p){
+    float h = 0.0, amp = 0.5, freq = 1.0;
+    vec2 d1 = vec2(1.0, 0.35), d2 = vec2(-0.45, 1.0);
+    for (int i = 0; i < 4; i++){
+        h += amp * noise(p * freq + d1 * u_time * 0.55 * freq);
+        h += amp * noise(p * freq * 1.7 - d2 * u_time * 0.40 * freq);
+        amp *= 0.5; freq *= 1.9;
+    }
+    return h;
+}
+void main(){
+    vec2 uv = v_world.xz * 0.03;                      // world -> ripple scale
+    float e = 0.06;
+    float h  = waves(uv);
+    float hx = waves(uv + vec2(e, 0.0));
+    float hz = waves(uv + vec2(0.0, e));
+    // Surface normal from the height gradient (up = +Y). u_choppy scales the tilt.
+    vec3 N = normalize(vec3((h - hx) * u_choppy, 1.0, (h - hz) * u_choppy));
+
+    vec3 V = normalize(u_cam - v_world);              // toward camera
+    vec3 R = reflect(-V, N);                          // reflected view ray
+
+    // Sky reflection: blend horizon->zenith by how far up the reflection points.
+    float up = clamp(R.y * 0.5 + 0.5, 0.0, 1.0);
+    vec3 refl = mix(u_skyLo, u_skyHi, up);
+
+    // Fresnel: looking straight down = mostly deep-water tint; grazing = mirror.
+    float fres = pow(clamp(1.0 - max(dot(N, V), 0.0), 0.0, 1.0), 5.0);
+    fres = mix(0.02, 1.0, fres);
+
+    // Sun glint: sharp specular toward the sun, day-only.
+    float glint = pow(max(dot(R, normalize(u_sunDir)), 0.0), 220.0);
+    vec3  sun = u_sunCol * glint * 3.0 * u_day;
+
+    vec3 col = mix(u_deep, refl, fres) + sun;
+    float alpha = mix(0.72, 0.96, fres);              // more opaque/mirror at grazing
+    gl_FragColor = vec4(col, alpha);
+}
+"""
+
+
+def _compile_water_program():
+    """Compile the water shader; return the GL program id, or 0 on any failure."""
+    def _stage(src, kind):
+        sid = glCreateShader(kind)
+        glShaderSource(sid, src)
+        glCompileShader(sid)
+        if glGetShaderiv(sid, GL_COMPILE_STATUS) != GL_TRUE:
+            log = glGetShaderInfoLog(sid)
+            if isinstance(log, bytes):
+                log = log.decode('utf-8', 'replace')
+            print(f'[WaterPlane] shader compile FAILED:\n{log}')
+            glDeleteShader(sid)
+            return 0
+        return sid
+    try:
+        vs = _stage(_WATER_VS, GL_VERTEX_SHADER)
+        if not vs:
+            return 0
+        fs = _stage(_WATER_FS, GL_FRAGMENT_SHADER)
+        if not fs:
+            glDeleteShader(vs)
+            return 0
+        prog = glCreateProgram()
+        glAttachShader(prog, vs); glAttachShader(prog, fs)
+        glLinkProgram(prog)
+        glDeleteShader(vs); glDeleteShader(fs)
+        if glGetProgramiv(prog, GL_LINK_STATUS) != GL_TRUE:
+            log = glGetProgramInfoLog(prog)
+            if isinstance(log, bytes):
+                log = log.decode('utf-8', 'replace')
+            print(f'[WaterPlane] shader link FAILED:\n{log}')
+            glDeleteProgram(prog)
+            return 0
+        print(f'[WaterPlane] water shader ready (prog {int(prog)})')
+        return int(prog)
+    except Exception as e:
+        print(f'[WaterPlane] shader build error: {e}')
+        return 0
 
 
 def strip_baked_water(model):
@@ -223,6 +347,64 @@ class WaterPlaneRenderer:
                     zb = z0 + v1 * dz
                     out.extend((xa, y, za, xb, y, za, xb, y, zb, xa, y, zb))
 
+    def _bind_water_shader(self, canvas):
+        """Compile (once) and bind the water shader with day/night-driven uniforms.
+        Returns True if bound (caller then draws the quads and unbinds); False if
+        unavailable, so the caller falls back to the flat-blue quad."""
+        if getattr(self, '_water_shader_failed', False):
+            return False
+        prog = getattr(self, '_water_prog', None)
+        if not prog:
+            prog = _compile_water_program()
+            self._water_prog = prog
+            if not prog:
+                self._water_shader_failed = True
+                return False
+            self._water_uloc = {n: glGetUniformLocation(prog, n) for n in (
+                'u_time', 'u_cam', 'u_sunDir', 'u_sunCol', 'u_day',
+                'u_deep', 'u_skyLo', 'u_skyHi', 'u_choppy')}
+
+        # ── Derive uniforms from the canvas' day/night state ──────────────────
+        day = 1.0
+        cam = (0.0, 500.0, 0.0)
+        sun = (0.3, 0.85, 0.3)
+        try:
+            if canvas is not None:
+                if getattr(canvas, 'day_night_enabled', False) and hasattr(canvas, '_daynight_factors'):
+                    day = canvas._daynight_factors()[2]
+                c = canvas.camera_3d.position
+                cam = (float(c[0]), float(c[1]), float(c[2]))
+                sun = getattr(canvas, '_sun_dir_world', sun)
+        except Exception:
+            pass
+        # Reflected sky: horizon band from the canvas sky colour, a deeper-blue
+        # zenith; both already fade to near-black at night, so the water darkens.
+        sky = (0.45, 0.62, 0.85)
+        try:
+            if canvas is not None and hasattr(canvas, '_sky_color'):
+                sky = canvas._sky_color()
+        except Exception:
+            pass
+        sky_lo = sky
+        sky_hi = (sky[0] * 0.55, sky[1] * 0.72, min(1.0, sky[2] * 1.05))
+        # Deep-water tint (teal), darker + slightly bluer at night.
+        dscale = 0.35 + 0.65 * day
+        deep = (0.015 * dscale, 0.09 * dscale, 0.11 * dscale + (1.0 - day) * 0.02)
+        sun_col = (1.0, 0.96, 0.88)
+
+        glUseProgram(prog)
+        u = self._water_uloc
+        glUniform1f(u['u_time'], float(_time.perf_counter()))
+        glUniform3f(u['u_cam'], *cam)
+        glUniform3f(u['u_sunDir'], float(sun[0]), float(sun[1]), float(sun[2]))
+        glUniform3f(u['u_sunCol'], *sun_col)
+        glUniform1f(u['u_day'], float(day))
+        glUniform3f(u['u_deep'], *deep)
+        glUniform3f(u['u_skyLo'], float(sky_lo[0]), float(sky_lo[1]), float(sky_lo[2]))
+        glUniform3f(u['u_skyHi'], float(sky_hi[0]), float(sky_hi[1]), float(sky_hi[2]))
+        glUniform1f(u['u_choppy'], 2.2)
+        return True
+
     def render_water_planes(self, terrain_renderer, canvas=None, water_mesh_editor=None):
         if not terrain_renderer:
             return
@@ -246,9 +428,9 @@ class WaterPlaneRenderer:
             # Pull the planes in front of terrain at near-equal depth (shoreline)
             glEnable(GL_POLYGON_OFFSET_FILL)
             glPolygonOffset(-1.0, -1.0)
-            # Dodger-blue, semi-transparent. Colour is uniform for the whole
-            # buffer, so opacity can change without rebuilding geometry.
-            glColor4f(0.09, 0.45, 0.95, 0.50)
+            # Appearance is produced by the water SHADER (bound per-draw below),
+            # which ripples + reflects the sky + sun-glints per the day/night cycle.
+            # The flat glColor is only the fallback if the shader failed to compile.
 
             # The water geometry is STATIC frame-to-frame (it only changes on
             # level load or a water edit), so build the quad vertices ONCE and
@@ -292,15 +474,24 @@ class WaterPlaneRenderer:
                 self._water_vbo_sig = sig
 
             if getattr(self, '_water_vcount', 0):
+                used_shader = self._bind_water_shader(canvas)
+                if not used_shader:
+                    glColor4f(0.09, 0.45, 0.95, 0.50)   # fallback flat blue
                 glBindBuffer(GL_ARRAY_BUFFER, self._water_vbo)
                 glEnableClientState(GL_VERTEX_ARRAY)
                 glVertexPointer(3, GL_FLOAT, 0, ctypes.c_void_p(0))
                 glDrawArrays(GL_QUADS, 0, self._water_vcount)
                 glDisableClientState(GL_VERTEX_ARRAY)
                 glBindBuffer(GL_ARRAY_BUFFER, 0)
+                if used_shader:
+                    glUseProgram(0)
 
         except Exception as e:
             print(f"[WaterPlane] Render error: {e}")
+            try:
+                glUseProgram(0)
+            except Exception:
+                pass
         finally:
             glDisable(GL_POLYGON_OFFSET_FILL)
             glDepthMask(GL_TRUE)
