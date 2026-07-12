@@ -25,8 +25,10 @@ import time as _time
 _WATER_VS = """
 #version 120
 varying vec3 v_world;
+varying vec3 v_deep;
 void main() {
     v_world = gl_Vertex.xyz;                          // VBO holds world positions
+    v_deep  = gl_Color.rgb;                           // per-sector WaterColor (xbm)
     gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
 }
 """
@@ -34,12 +36,12 @@ void main() {
 _WATER_FS = """
 #version 120
 varying vec3 v_world;
+varying vec3 v_deep;       // per-sector deep-water tint (material WaterColor)
 uniform float u_time;      // seconds, animates the ripples
 uniform vec3  u_cam;       // camera world position
 uniform vec3  u_sunDir;    // direction TOWARD the sun (normalized, world)
 uniform vec3  u_sunCol;    // sun light colour (for the glint)
 uniform float u_day;       // 0 night .. 1 day
-uniform vec3  u_deep;      // deep-water tint (day/night scaled)
 uniform vec3  u_skyLo;     // reflected sky colour near the horizon
 uniform vec3  u_skyHi;     // reflected sky colour near the zenith
 uniform float u_choppy;    // ripple bump strength
@@ -88,11 +90,50 @@ void main(){
     float glint = pow(max(dot(R, normalize(u_sunDir)), 0.0), 220.0);
     vec3  sun = u_sunCol * glint * 3.0 * u_day;
 
-    vec3 col = mix(u_deep, refl, fres) + sun;
+    // Per-sector deep-water tint from the material's WaterColor, dimmed at night.
+    vec3 deep = v_deep * (0.35 + 0.65 * u_day);
+    deep.b += (1.0 - u_day) * 0.02;
+
+    vec3 col = mix(deep, refl, fres) + sun;
     float alpha = mix(0.72, 0.96, fres);              // more opaque/mirror at grazing
     gl_FragColor = vec4(col, alpha);
 }
 """
+
+
+# Per-material WaterColor (the `WaterColor` float property inside each water `.xbm`
+# material), extracted from the real Avatar + FC2 material files. Keyed by the
+# material file basename (lowercase, no extension) so it matches whatever `.mlm`/
+# `.xbm` path a sector stores. This is what gives each water material its own tint
+# (swamp murky, riverbank teal, rainforest green, ...) instead of one flat colour.
+_WATER_COLORS = {
+    # Far Cry 2
+    'water_default_top':                 (0.1490, 0.1569, 0.1137),
+    'waterriver_default_top':            (0.1490, 0.1569, 0.1176),
+    'water_moss_low_fishingvillage_top': (0.1490, 0.1569, 0.1098),
+    # Avatar
+    'df_water_default_top':              (0.6745, 0.3922, 0.3922),
+    'water_av_openfield':                (0.0745, 0.0745, 0.0588),
+    'water_av_rainforest':               (0.1255, 0.1608, 0.0941),
+    'water_av_rainforest_prolemuris_noreflection': (0.1961, 0.2471, 0.1529),
+    'water_av_riverbank':                (0.0863, 0.1725, 0.1294),
+    'water_av_swamp':                    (0.1059, 0.1059, 0.0706),
+    'water_riverbank_polluted_top':      (0.1451, 0.1333, 0.1137),
+    'water_riverbank_pollutedmix_top':   (0.1451, 0.1216, 0.0941),
+    'waterriver_av_riverbankriver':      (0.0863, 0.1451, 0.1216),
+}
+# Fallback for a material we don't have a WaterColor for (neutral murky teal).
+_WATER_DEFAULT = (0.1176, 0.1451, 0.1098)
+
+
+def _water_color_for(material_path):
+    """WaterColor RGB for a sector's stored water-material path. Matches by file
+    basename so `.mlm`/`.xbm`/case differences don't matter; unknown → default."""
+    if not material_path:
+        return _WATER_DEFAULT
+    base = str(material_path).replace('\\', '/').rsplit('/', 1)[-1]
+    base = base.rsplit('.', 1)[0].lower()
+    return _WATER_COLORS.get(base, _WATER_DEFAULT)
 
 
 def _compile_water_program():
@@ -292,10 +333,11 @@ class WaterPlaneRenderer:
             'world_y': getattr(terrain_renderer, 'terrain_offset_y', 0.0),
         }
 
-    def _emit_cell(self, cell_idx, cell, is_fc2, out):
+    def _emit_cell(self, cell_idx, cell, is_fc2, out, cols):
         """Append GL_QUADS vertices (flat x,y,z floats) for one terrain tile's
-        water into `out`, clipped per sector and translated by the tile's world
-        offset (matching the terrain mesh, drawn with
+        water into `out`, and the matching per-vertex RGB (each sector's material
+        WaterColor) into `cols`, clipped per sector and translated by the tile's
+        world offset (matching the terrain mesh, drawn with
         glTranslatef(world_x, 0, -world_y)). Geometry is collected into a numpy
         array and uploaded to a VBO once — NOT submitted per frame."""
         wd = cell.get('water_data') or {}
@@ -323,6 +365,9 @@ class WaterPlaneRenderer:
             if geom == 'SKIP':
                 continue
 
+            # This sector's water tint = its material's WaterColor (from the xbm).
+            wc = _water_color_for(getattr(wdi, 'material_path', None))
+
             col = sector_num % sx
             row = sector_num // sx   # 0 = bottom of map
             # Tile-local position + tile world offset (mesh translate: x+wx, z-wy).
@@ -336,6 +381,7 @@ class WaterPlaneRenderer:
 
             if geom == 'FULL':
                 out.extend((x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1))
+                cols.extend(wc * 4)                       # 4 verts, same tint
             else:
                 # geom = normalized (u0,u1,v0,v1) submerged spans. u -> x across
                 # the sector, v -> z (south->north); no flip, matching the
@@ -346,6 +392,7 @@ class WaterPlaneRenderer:
                     za = z0 + v0 * dz
                     zb = z0 + v1 * dz
                     out.extend((xa, y, za, xb, y, za, xb, y, zb, xa, y, zb))
+                    cols.extend(wc * 4)
 
     def _bind_water_shader(self, canvas):
         """Compile (once) and bind the water shader with day/night-driven uniforms.
@@ -362,7 +409,7 @@ class WaterPlaneRenderer:
                 return False
             self._water_uloc = {n: glGetUniformLocation(prog, n) for n in (
                 'u_time', 'u_cam', 'u_sunDir', 'u_sunCol', 'u_day',
-                'u_deep', 'u_skyLo', 'u_skyHi', 'u_choppy')}
+                'u_skyLo', 'u_skyHi', 'u_choppy')}
 
         # ── Derive uniforms from the canvas' day/night state ──────────────────
         day = 1.0
@@ -387,9 +434,8 @@ class WaterPlaneRenderer:
             pass
         sky_lo = sky
         sky_hi = (sky[0] * 0.55, sky[1] * 0.72, min(1.0, sky[2] * 1.05))
-        # Deep-water tint (teal), darker + slightly bluer at night.
-        dscale = 0.35 + 0.65 * day
-        deep = (0.015 * dscale, 0.09 * dscale, 0.11 * dscale + (1.0 - day) * 0.02)
+        # (Deep-water tint is now per-sector, supplied via the colour array from
+        # each material's WaterColor — no single u_deep uniform.)
         sun_col = (1.0, 0.96, 0.88)
 
         glUseProgram(prog)
@@ -399,7 +445,6 @@ class WaterPlaneRenderer:
         glUniform3f(u['u_sunDir'], float(sun[0]), float(sun[1]), float(sun[2]))
         glUniform3f(u['u_sunCol'], *sun_col)
         glUniform1f(u['u_day'], float(day))
-        glUniform3f(u['u_deep'], *deep)
         glUniform3f(u['u_skyLo'], float(sky_lo[0]), float(sky_lo[1]), float(sky_lo[2]))
         glUniform3f(u['u_skyHi'], float(sky_hi[0]), float(sky_hi[1]), float(sky_hi[2]))
         # Ripple strength: how much the wave height tilts the surface normal. Low
@@ -449,6 +494,7 @@ class WaterPlaneRenderer:
             def _content_sig():
                 n = 0
                 s = 0.0
+                mats = 0
                 buckets = ([c.get('water_data') or {} for c in cells_ref]
                            if cells_ref else [terrain_renderer.water_data])
                 for wd in buckets:
@@ -456,15 +502,19 @@ class WaterPlaneRenderer:
                         if getattr(v, 'has_water', False):
                             n += 1
                             s += float(getattr(v, 'water_height', 0.0))
-                return (n, round(s, 2))
+                            mp = getattr(v, 'material_path', None)
+                            if mp:
+                                mats ^= hash(mp) & 0xffffffff   # rebuild on recolour
+                return (n, round(s, 2), mats)
 
             sig = (id(cells_ref) if cells_ref else id(terrain_renderer.water_data),
                    getattr(self, '_geom_version', 0), _content_sig())
             if getattr(self, '_water_vbo_sig', None) != sig or not getattr(self, '_water_vbo', None):
-                out = []
+                out, cols = [], []
                 for cell_idx, cell in self._iter_cells(terrain_renderer, canvas):
-                    self._emit_cell(cell_idx, cell, is_fc2, out)
+                    self._emit_cell(cell_idx, cell, is_fc2, out, cols)
                 verts = np.asarray(out, dtype=np.float32)
+                colarr = np.asarray(cols, dtype=np.float32)
                 self._water_vcount = len(verts) // 3
                 if not getattr(self, '_water_vbo', None):
                     self._water_vbo = int(glGenBuffers(1))
@@ -473,17 +523,34 @@ class WaterPlaneRenderer:
                              verts.nbytes if verts.size else 0,
                              verts if verts.size else None,
                              GL_STATIC_DRAW)
+                # Parallel per-vertex colour buffer (each sector's material WaterColor).
+                if not getattr(self, '_water_cvbo', None):
+                    self._water_cvbo = int(glGenBuffers(1))
+                glBindBuffer(GL_ARRAY_BUFFER, self._water_cvbo)
+                glBufferData(GL_ARRAY_BUFFER,
+                             colarr.nbytes if colarr.size else 0,
+                             colarr if colarr.size else None,
+                             GL_STATIC_DRAW)
                 glBindBuffer(GL_ARRAY_BUFFER, 0)
                 self._water_vbo_sig = sig
 
             if getattr(self, '_water_vcount', 0):
                 used_shader = self._bind_water_shader(canvas)
-                if not used_shader:
-                    glColor4f(0.09, 0.45, 0.95, 0.50)   # fallback flat blue
                 glBindBuffer(GL_ARRAY_BUFFER, self._water_vbo)
                 glEnableClientState(GL_VERTEX_ARRAY)
                 glVertexPointer(3, GL_FLOAT, 0, ctypes.c_void_p(0))
+                # Feed the per-sector WaterColor via the colour array (shader reads
+                # it as gl_Color). Fallback path uses a single flat blue instead.
+                use_colors = bool(used_shader and getattr(self, '_water_cvbo', None))
+                if use_colors:
+                    glBindBuffer(GL_ARRAY_BUFFER, self._water_cvbo)
+                    glEnableClientState(GL_COLOR_ARRAY)
+                    glColorPointer(3, GL_FLOAT, 0, ctypes.c_void_p(0))
+                else:
+                    glColor4f(0.09, 0.45, 0.95, 0.50)   # fallback flat blue
                 glDrawArrays(GL_QUADS, 0, self._water_vcount)
+                if use_colors:
+                    glDisableClientState(GL_COLOR_ARRAY)
                 glDisableClientState(GL_VERTEX_ARRAY)
                 glBindBuffer(GL_ARRAY_BUFFER, 0)
                 if used_shader:
