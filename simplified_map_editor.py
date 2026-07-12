@@ -1919,12 +1919,25 @@ class SimplifiedMapEditor(QMainWindow):
             _b.setToolTip("Step time by 1 minute")
             _b.setAutoRepeat(True)          # hold to scrub
             _b.setAutoRepeatInterval(60)
-        self._daynight_time_slider = QSlider(_Qt.Horizontal)
+        # Fine time slider: a full day is 1440 minutes, so dragging the handle on a
+        # normal-width slider snaps ~4-5 minutes per pixel. This subclass makes the
+        # mouse WHEEL step exactly 1 minute per notch (precise scrubbing), and with
+        # pageStep=1 a groove-click also moves 1 minute — so every interaction except
+        # a free drag is minute-accurate (matches the Battalion Wars FineTimeSlider).
+        class _FineTimeSlider(QSlider):
+            def wheelEvent(self, _ev):
+                _d = _ev.angleDelta().y()
+                _steps = _d // 120 if abs(_d) >= 120 else (1 if _d > 0 else -1)
+                self.setValue(self.value() + int(_steps))
+                _ev.accept()
+
+        self._daynight_time_slider = _FineTimeSlider(_Qt.Horizontal)
         self._daynight_time_slider.setRange(0, 1439)   # minutes in a day
         self._daynight_time_slider.setValue(720)        # noon
         self._daynight_time_slider.setSingleStep(1)     # keyboard arrows = 1 min
-        self._daynight_time_slider.setPageStep(15)      # page keys = 15 min
-        self._daynight_time_slider.setToolTip("Time of day (00:00–23:59)")
+        self._daynight_time_slider.setPageStep(1)       # groove click / page keys = 1 min
+        self._daynight_time_slider.setMinimumWidth(320)  # more pixels = finer drag
+        self._daynight_time_slider.setToolTip("Time of day (00:00–23:59) — wheel = 1 min")
         _slider_row.addWidget(self._daynight_time_prev)
         _slider_row.addWidget(self._daynight_time_slider, 1)
         _slider_row.addWidget(self._daynight_time_next)
