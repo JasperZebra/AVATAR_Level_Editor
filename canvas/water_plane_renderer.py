@@ -119,17 +119,16 @@ void main(){
         vec2 suv = gl_FragCoord.xy / u_viewport;
         vec2 off = N.xz * 0.07;                       // bigger ripple refraction wobble
         vec3 bg = texture2D(u_refractTex, clamp(suv + off, 0.001, 0.999)).rgb;
-        // Really light SKY-BLUE water. Ignore the murky material hue almost
-        // entirely — the user wants clear, light-blue water everywhere.
-        vec3 skyBlue = vec3(0.50, 0.78, 1.0);
-        // CLEAR + tinted: keep the bottom bright (see-through) but wash it with the
-        // sky-blue so the water itself is clearly light blue.
-        vec3 absorbed = bg * mix(vec3(1.0), skyBlue, 0.45) * 0.92;
-        // Light-blue tint of the water volume (kept low so it stays see-through).
-        body = mix(absorbed, skyBlue, 0.22);           // clear, but really light blue
-        // Ripple crests catch the sky — makes the wave pattern clearly visible.
+        // Really light SKY-BLUE water, kept CLEAR/see-through. The bottom is
+        // tinted by MULTIPLYING with a blue (keeps the terrain texture visible,
+        // just coloured blue) rather than washing it out with a flat colour.
+        vec3 skyBlue = vec3(0.40, 0.70, 1.0);          // more saturated light blue
+        vec3 absorbed = bg * skyBlue;                  // see-through, blue-tinted bottom
+        // Very small flat-blue volume tint so open water still reads blue.
+        body = mix(absorbed, skyBlue, 0.12);           // clearer (was 0.22)
+        // Ripple crests catch the sky — gentler so it stays see-through.
         float crest = clamp(N.y, 0.0, 1.0);
-        body += skyBlue * (1.0 - crest) * 0.6;         // brighten tilted ripple faces
+        body += skyBlue * (1.0 - crest) * 0.3;
     } else {
         // Fallback (no screen grab): lit WaterColor, the old look.
         body = v_deep * (lightCol * 0.55 + 0.35);
