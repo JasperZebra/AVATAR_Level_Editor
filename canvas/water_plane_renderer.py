@@ -123,12 +123,15 @@ void main(){
         // tinted by MULTIPLYING with a blue (keeps the terrain texture visible,
         // just coloured blue) rather than washing it out with a flat colour.
         vec3 skyBlue = vec3(0.40, 0.70, 1.0);          // more saturated light blue
-        vec3 absorbed = bg * skyBlue;                  // see-through, blue-tinted bottom
-        // Very small flat-blue volume tint so open water still reads blue.
-        body = mix(absorbed, skyBlue, 0.12);           // clearer (was 0.22)
-        // Ripple crests catch the sky — gentler so it stays see-through.
+        // Keep the tint but lighten it toward white so more of the bottom shows
+        // through — MORE SEE-THROUGH while keeping the blue colour.
+        vec3 tint = mix(vec3(1.0), skyBlue, 0.6);
+        vec3 absorbed = bg * tint;                     // clearer, blue-tinted bottom
+        // Barely-there flat-blue volume tint so open water still reads blue.
+        body = mix(absorbed, skyBlue, 0.06);           // clearer (was 0.12)
+        // Ripple crests catch the sky — gentle so it stays see-through.
         float crest = clamp(N.y, 0.0, 1.0);
-        body += skyBlue * (1.0 - crest) * 0.3;
+        body += skyBlue * (1.0 - crest) * 0.18;
     } else {
         // Fallback (no screen grab): lit WaterColor, the old look.
         body = v_deep * (lightCol * 0.55 + 0.35);
