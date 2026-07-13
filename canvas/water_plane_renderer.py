@@ -117,20 +117,19 @@ void main(){
     vec3 body;
     if (u_hasRefract > 0.5) {
         vec2 suv = gl_FragCoord.xy / u_viewport;
-        vec2 off = N.xz * 0.035;                      // ripple refraction wobble
+        vec2 off = N.xz * 0.07;                       // bigger ripple refraction wobble
         vec3 bg = texture2D(u_refractTex, clamp(suv + off, 0.001, 0.999)).rgb;
-        float mx = max(max(v_deep.r, v_deep.g), max(v_deep.b, 1e-4));
-        vec3 hue = v_deep / mx;                        // material hue, luminance ~1
-        // Push the tint strongly toward a LIGHT SKY-BLUE (the raw materials are
-        // murky-green; user wants clearly blue water).
-        vec3 skyBlue = vec3(0.45, 0.72, 1.0);
-        hue = mix(hue, skyBlue, 0.9);
-        // Absorbed bottom: hue tint + light absorption. Brighter + lighter tint =
-        // MORE SEE-THROUGH (you read the terrain below more clearly).
-        vec3 absorbed = bg * mix(vec3(1.0), hue, 0.6) * mix(0.55, 0.8, u_day);
-        // A light-blue veil so the surface itself reads sky-blue.
-        vec3 veil = skyBlue * (0.35 + u_skyLo * 0.4);
-        body = mix(absorbed, veil, 0.32);              // see-through, but clearly blue
+        // Really light SKY-BLUE water. Ignore the murky material hue almost
+        // entirely — the user wants clear, light-blue water everywhere.
+        vec3 skyBlue = vec3(0.50, 0.78, 1.0);
+        // CLEAR + tinted: keep the bottom bright (see-through) but wash it with the
+        // sky-blue so the water itself is clearly light blue.
+        vec3 absorbed = bg * mix(vec3(1.0), skyBlue, 0.45) * 0.92;
+        // Light-blue tint of the water volume (kept low so it stays see-through).
+        body = mix(absorbed, skyBlue, 0.22);           // clear, but really light blue
+        // Ripple crests catch the sky — makes the wave pattern clearly visible.
+        float crest = clamp(N.y, 0.0, 1.0);
+        body += skyBlue * (1.0 - crest) * 0.6;         // brighten tilted ripple faces
     } else {
         // Fallback (no screen grab): lit WaterColor, the old look.
         body = v_deep * (lightCol * 0.55 + 0.35);
@@ -143,7 +142,7 @@ void main(){
     // the models reflected on the water. Falls back to a dimmed sky gradient.
     vec3 refl;
     if (u_hasReflect > 0.5) {
-        vec2 ruv = gl_FragCoord.xy / u_viewport + N.xz * 0.045;
+        vec2 ruv = gl_FragCoord.xy / u_viewport + N.xz * 0.07;
         refl = texture2D(u_reflectTex, clamp(ruv, 0.001, 0.999)).rgb;
     } else {
         float up = clamp(R.y * 0.5 + 0.5, 0.0, 1.0);
@@ -615,10 +614,10 @@ class WaterPlaneRenderer:
         glUniform1f(u['u_day'], float(day))
         glUniform3f(u['u_skyLo'], float(sky_lo[0]), float(sky_lo[1]), float(sky_lo[2]))
         glUniform3f(u['u_skyHi'], float(sky_hi[0]), float(sky_hi[1]), float(sky_hi[2]))
-        # Ripple strength: how much the wave height tilts the surface normal. Low
-        # (0.45, was 2.2) = mostly FLAT, near-mirror water with only faint ripples —
-        # matching the calm look of the game's water. Raise for choppier seas.
-        glUniform1f(u['u_choppy'], 0.45)
+        # Ripple strength: how much the wave height tilts the surface normal.
+        # Raised (1.4) so the ripple pattern is clearly visible on the surface;
+        # lower toward 0.45 for calmer/flatter water.
+        glUniform1f(u['u_choppy'], 1.4)
 
         # ── Real game water normal map (watercloud_n.xbt) ─────────────────────
         # Bind the actual scrolling normal texture the game's water shader uses
