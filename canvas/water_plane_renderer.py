@@ -122,16 +122,17 @@ void main(){
         // Really light SKY-BLUE water, kept CLEAR/see-through. The bottom is
         // tinted by MULTIPLYING with a blue (keeps the terrain texture visible,
         // just coloured blue) rather than washing it out with a flat colour.
-        vec3 skyBlue = vec3(0.40, 0.70, 1.0);          // more saturated light blue
-        // Keep the tint but lighten it toward white so more of the bottom shows
-        // through — MORE SEE-THROUGH while keeping the blue colour.
-        vec3 tint = mix(vec3(1.0), skyBlue, 0.6);
-        vec3 absorbed = bg * tint;                     // clearer, blue-tinted bottom
-        // Barely-there flat-blue volume tint so open water still reads blue.
-        body = mix(absorbed, skyBlue, 0.06);           // clearer (was 0.12)
-        // Ripple crests catch the sky — gentle so it stays see-through.
+        // ── "Blue lagoon" water: bright, saturated blue, but crystal clear ──
+        // Tropical water is blue because light SCATTERS inside the water column
+        // (which brightens + colours it), NOT because it's an opaque blue sheet.
+        // So keep the bottom fully visible (a light tint) and ADD a luminous blue
+        // on top — the bottom shows through underneath the glow.
+        vec3 lagoon = vec3(0.10, 0.55, 0.95);          // vivid lagoon blue
+        vec3 bottom = bg * mix(vec3(1.0), lagoon, 0.30);   // see-through, faint tint
+        body = bottom + lagoon * 0.45;                 // additive scatter = bright blue
+        // Ripple crests scatter a touch more — keeps the waves readable.
         float crest = clamp(N.y, 0.0, 1.0);
-        body += skyBlue * (1.0 - crest) * 0.18;
+        body += lagoon * (1.0 - crest) * 0.25;
     } else {
         // Fallback (no screen grab): lit WaterColor, the old look.
         body = v_deep * (lightCol * 0.55 + 0.35);
