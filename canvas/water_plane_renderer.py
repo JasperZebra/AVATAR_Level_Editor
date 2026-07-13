@@ -121,12 +121,15 @@ void main(){
         vec3 bg = texture2D(u_refractTex, clamp(suv + off, 0.001, 0.999)).rgb;
         float mx = max(max(v_deep.r, v_deep.g), max(v_deep.b, 1e-4));
         vec3 hue = v_deep / mx;                        // material hue, luminance ~1
-        // Absorbed bottom: hue tint + DARKENED (water eats light) — darker, murky,
-        // but you still see the bottom through it.
-        vec3 absorbed = bg * mix(vec3(1.0), hue, 0.8) * mix(0.3, 0.55, u_day);
+        // Push the tint toward BLUE (the raw materials are murky-green; bluer water
+        // reads more like the game/real water).
+        hue = mix(hue, vec3(0.35, 0.62, 1.0), 0.5);
+        // Absorbed bottom: hue tint + light absorption. Brighter + lighter tint =
+        // MORE SEE-THROUGH (you read the terrain below more clearly).
+        vec3 absorbed = bg * mix(vec3(1.0), hue, 0.6) * mix(0.55, 0.8, u_day);
         // A faint coloured veil so it still reads as a body of water.
-        vec3 veil = hue * (u_skyLo * 0.4);
-        body = mix(absorbed, veil, 0.28);              // mostly see-through, dark tint
+        vec3 veil = hue * (u_skyLo * 0.5);
+        body = mix(absorbed, veil, 0.16);              // more see-through, bluer tint
     } else {
         // Fallback (no screen grab): lit WaterColor, the old look.
         body = v_deep * (lightCol * 0.55 + 0.35);
@@ -146,13 +149,14 @@ void main(){
         refl = mix(u_skyLo, u_skyHi, up) * 0.5;
     }
 
-    // Sun glint (game SpecularIntensity), day only.
-    float glint = pow(max(dot(R, normalize(u_sunDir)), 0.0), 220.0);
-    vec3  sun = u_sunCol * glint * 1.5 * u_day;
+    // Sun glint (game SpecularIntensity), day only — tightened + dimmer so the
+    // surface is less shiny.
+    float glint = pow(max(dot(R, normalize(u_sunDir)), 0.0), 260.0);
+    vec3  sun = u_sunCol * glint * 0.7 * u_day;
 
-    // Reflective, but dialed back: a small constant base keeps the scene faintly
-    // visible looking straight down, Fresnel ramps it up at grazing angles.
-    float reflAmt = clamp(0.10 + fres * 1.1, 0.0, 0.72);
+    // Reflective, but dialed back further: a faint constant base, gentle Fresnel
+    // ramp — much less shiny overall.
+    float reflAmt = clamp(0.05 + fres * 0.8, 0.0, 0.55);
     vec3 col = mix(body, refl, reflAmt) + sun;
     // With refraction we composite the bottom OURSELVES, so draw (near-)opaque and
     // let the shader own the whole look; without it, blend over the terrain.
