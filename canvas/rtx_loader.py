@@ -34,18 +34,19 @@ import os
 
 
 class RtxMesh:
-    __slots__ = ("positions", "triangles", "materials", "bbox", "source")
+    __slots__ = ("positions", "triangles", "materials", "bbox", "source", "kind")
 
-    def __init__(self, positions, triangles, materials, bbox, source=""):
+    def __init__(self, positions, triangles, materials, bbox, source="", kind="mesh"):
         self.positions = positions      # list of (x, y, z) in GAME space (Z-up)
         self.triangles = triangles      # list of (a, b, c) indices into positions
         self.materials = materials       # list of .mlm material paths (strings)
         self.bbox = bbox                # ((minx,miny,minz), (maxx,maxy,maxz))
         self.source = source
+        self.kind = kind                # "mesh" = real triangles ; "card" = billboard fallback
 
     def __repr__(self):
-        return "RtxMesh(%d verts, %d tris, %d mats)" % (
-            len(self.positions), len(self.triangles), len(self.materials))
+        return "RtxMesh(%d verts, %d tris, %d mats, %s)" % (
+            len(self.positions), len(self.triangles), len(self.materials), self.kind)
 
 
 def _decode_strip_run(recs):
@@ -137,6 +138,56 @@ def _find_vertex_buffer(data, n, min_count):
     return None, 0
 
 
+def _largest_vertex_buffer(data, n):
+    """Longest 32-byte-stride float-position run in the file (regardless of any
+    strip/index data). Used to size the billboard-card fallback for models whose
+    leaf geometry isn't a decodable triangle strip (grass/fern species that store
+    leaves as a quantised leaf-card system)."""
+    best = (None, 0)
+    o = 0x100
+    while o + 32 <= n:
+        if _is_pos(data, n, o):
+            cnt = 0
+            while _is_pos(data, n, o + cnt * 32):
+                cnt += 1
+            if cnt > best[1]:
+                best = (o, cnt)
+            o += max(cnt, 1) * 32
+        else:
+            o += 4
+    return best
+
+
+def _make_card(data, n, source):
+    """Build a crossed-quad billboard 'card' sized to the model's bounding box, as
+    a fallback when no triangle geometry can be decoded. Two perpendicular upright
+    quads (game space, Z-up) approximate a grass/fern tuft — which is exactly how
+    the engine draws these species. Returns an RtxMesh(kind='card') or None."""
+    base, cnt = _largest_vertex_buffer(data, n)
+    if not base or cnt < 3:
+        return None
+    f32 = lambda o: struct.unpack_from("<f", data, o)[0]
+    xs = []; ys = []; zs = []
+    for k in range(cnt):
+        o = base + k * 32
+        xs.append(f32(o)); ys.append(f32(o + 4)); zs.append(f32(o + 8))
+    ext_h = max(max(xs) - min(xs), max(ys) - min(ys))
+    ext_v = max(zs) - min(zs)
+    # sane clamps so a stray vertex can't produce a giant or invisible card
+    w = max(0.15, min(ext_h, 12.0)) * 0.5
+    h = max(0.20, min(ext_v, 14.0))
+    z0 = min(zs) if abs(min(zs)) < h else 0.0
+    z1 = z0 + h
+    # two crossed quads centred on the local origin (instance placement adds x,y,z)
+    positions = [
+        (-w, 0.0, z0), (w, 0.0, z0), (w, 0.0, z1), (-w, 0.0, z1),   # quad in X-Z plane
+        (0.0, -w, z0), (0.0, w, z0), (0.0, w, z1), (0.0, -w, z1),   # quad in Y-Z plane
+    ]
+    triangles = [(0, 1, 2), (0, 2, 3), (4, 5, 6), (4, 6, 7)]
+    bbox = ((-w, -w, z0), (w, w, z1))
+    return RtxMesh(positions, triangles, _materials(data, n), bbox, source, kind="card")
+
+
 def _materials(data, n):
     out = []
     low = data.lower()
@@ -171,29 +222,27 @@ def load_rtx(path):
         return None
 
     strips = _find_strip_arrays(data, n)
-    if not strips:
-        return None
-    max_idx = max(s + c for s, c in strips)
-
-    vb, vn = _find_vertex_buffer(data, n, max_idx)
-    if not vb:
-        return None
-
-    f32 = lambda o: struct.unpack_from("<f", data, o)[0]
-    positions = [(f32(vb + k * 32), f32(vb + k * 32 + 4), f32(vb + k * 32 + 8))
-                 for k in range(vn)]
-
     triangles = []
-    for s, c in strips:
-        for i in range(c - 2):
-            a, b, d = s + i, s + i + 1, s + i + 2
-            if a >= vn or b >= vn or d >= vn:
-                continue
-            # strip winding alternates each step
-            triangles.append((a, d, b) if (i & 1) else (a, b, d))
+    positions = []
+    if strips:
+        max_idx = max(s + c for s, c in strips)
+        vb, vn = _find_vertex_buffer(data, n, max_idx)
+        if vb:
+            f32 = lambda o: struct.unpack_from("<f", data, o)[0]
+            positions = [(f32(vb + k * 32), f32(vb + k * 32 + 4), f32(vb + k * 32 + 8))
+                         for k in range(vn)]
+            for s, c in strips:
+                for i in range(c - 2):
+                    a, b, d = s + i, s + i + 1, s + i + 2
+                    if a >= vn or b >= vn or d >= vn:
+                        continue
+                    # strip winding alternates each step
+                    triangles.append((a, d, b) if (i & 1) else (a, b, d))
 
     if not triangles:
-        return None
+        # No decodable triangle geometry (grass/fern leaf-card species) — fall
+        # back to a billboard card so the instance is still visible in-editor.
+        return _make_card(data, n, os.path.basename(path))
 
     xs = [p[0] for p in positions]; ys = [p[1] for p in positions]; zs = [p[2] for p in positions]
     bbox = ((min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs)))
