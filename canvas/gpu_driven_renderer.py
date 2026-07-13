@@ -622,15 +622,20 @@ class GPUDrivenRenderer:
         import OpenGL.GL as g
         return g
 
-    def render(self, anim_t, shadow_tex=0, light_vp=None, shadows_on=False, shadow_bias=0.0018):
-        """Returns True if it drew (caller skips the fallback), False to fall back."""
+    def render(self, anim_t, shadow_tex=0, light_vp=None, shadows_on=False, shadow_bias=0.0018,
+               flip_winding=False):
+        """Returns True if it drew (caller skips the fallback), False to fall back.
+
+        flip_winding: True when rendering into a MIRRORED pass (planar water
+        reflection). A reflection matrix flips handedness, so the front-face
+        winding must invert (CW -> CCW) or every model culls inside-out."""
         if self._failed:
             return False
         try:
             if not self._ensure_built():
                 self._failed = True
                 return False
-            return self._draw(anim_t, shadow_tex, light_vp, shadows_on, shadow_bias)
+            return self._draw(anim_t, shadow_tex, light_vp, shadows_on, shadow_bias, flip_winding)
         except Exception as e:
             import traceback
             print(f"[gpu-driven] runtime error -> fallback: {e}")
@@ -979,7 +984,8 @@ class GPUDrivenRenderer:
             self._frame = None
             return False
 
-    def _draw(self, anim_t=0.0, shadow_tex=0, light_vp=None, shadows_on=False, shadow_bias=0.0018):
+    def _draw(self, anim_t=0.0, shadow_tex=0, light_vp=None, shadows_on=False, shadow_bias=0.0018,
+              flip_winding=False):
         g = self._gl()
         import ctypes
         # Reuse the frame cast() just built (identical instance layout); else build.
@@ -1020,7 +1026,10 @@ class GPUDrivenRenderer:
         self._upload_instances(g, inst_arr)
         g.glBindBufferBase(g.GL_SHADER_STORAGE_BUFFER, 2, self.mat_ssbo)   # binding 2: material table
         g.glEnable(g.GL_DEPTH_TEST)
-        g.glFrontFace(g.GL_CW); g.glCullFace(g.GL_BACK)
+        # Models are wound CW-front; a mirrored (reflection) pass inverts handedness
+        # so front becomes CCW — flip to keep them solid instead of culling inside-out.
+        _front = g.GL_CCW if flip_winding else g.GL_CW
+        g.glFrontFace(_front); g.glCullFace(g.GL_BACK)
 
         def _pass(grp):
             cmd_arr, dm = groups[grp]

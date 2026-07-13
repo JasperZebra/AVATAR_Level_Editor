@@ -50,6 +50,8 @@ uniform float u_hasNormal; // 1 = sample the real normal map, 0 = procedural fal
 uniform sampler2D u_refractTex; // screen grab of the scene BEHIND the water (the bottom)
 uniform vec2  u_viewport;  // framebuffer size in px, to turn gl_FragCoord into a screen UV
 uniform float u_hasRefract; // 1 = show the terrain through the water (game refraction), 0 = off
+uniform sampler2D u_reflectTex; // planar reflection of the REAL scene (terrain + models)
+uniform float u_hasReflect; // 1 = mirror the actual scene, 0 = flat sky reflection
 
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p){
@@ -119,25 +121,40 @@ void main(){
         vec3 bg = texture2D(u_refractTex, clamp(suv + off, 0.001, 0.999)).rgb;
         float mx = max(max(v_deep.r, v_deep.g), max(v_deep.b, 1e-4));
         vec3 hue = v_deep / mx;                        // material hue, luminance ~1
-        // Absorbed bottom: strong hue tint + darkened (water eats light).
-        vec3 absorbed = bg * mix(vec3(1.0), hue, 0.85) * mix(0.4, 0.72, u_day);
-        // The water's own coloured surface veil (translucent sheet of water).
-        vec3 veil = hue * (u_skyLo * 0.55 + u_sunCol * ndl * 0.35 * u_day);
-        body = mix(absorbed, veil, 0.4);              // see the bottom, but clearly water
+        // Absorbed bottom: hue tint + DARKENED (water eats light) — darker, murky,
+        // but you still see the bottom through it.
+        vec3 absorbed = bg * mix(vec3(1.0), hue, 0.8) * mix(0.3, 0.55, u_day);
+        // A faint coloured veil so it still reads as a body of water.
+        vec3 veil = hue * (u_skyLo * 0.4);
+        body = mix(absorbed, veil, 0.28);              // mostly see-through, dark tint
     } else {
         // Fallback (no screen grab): lit WaterColor, the old look.
         body = v_deep * (lightCol * 0.55 + 0.35);
     }
 
-    // REFLECTION: dimmed sky (game: SkyColor*0.5) — NOT a bright mirror.
-    float up = clamp(R.y * 0.5 + 0.5, 0.0, 1.0);
-    vec3 refl = mix(u_skyLo, u_skyHi, up) * 0.5;
+    // ── REFLECTION — the real scene mirrored on the surface ───────────────────
+    // A planar-reflection pass renders terrain + models mirrored about the water
+    // plane into u_reflectTex from this same camera, so it lines up in screen
+    // space: sample it at this pixel + a ripple-normal wobble. That's how you see
+    // the models reflected on the water. Falls back to a dimmed sky gradient.
+    vec3 refl;
+    if (u_hasReflect > 0.5) {
+        vec2 ruv = gl_FragCoord.xy / u_viewport + N.xz * 0.045;
+        refl = texture2D(u_reflectTex, clamp(ruv, 0.001, 0.999)).rgb;
+    } else {
+        float up = clamp(R.y * 0.5 + 0.5, 0.0, 1.0);
+        refl = mix(u_skyLo, u_skyHi, up) * 0.5;
+    }
 
     // Sun glint (game SpecularIntensity), day only.
     float glint = pow(max(dot(R, normalize(u_sunDir)), 0.0), 220.0);
     vec3  sun = u_sunCol * glint * 1.5 * u_day;
 
-    vec3 col = mix(body, refl, fres) + sun;
+    // Strong, but not a full mirror: a constant base reflectivity keeps the scene
+    // visible on the surface even looking straight down, Fresnel ramps it up at
+    // grazing angles. Raise u_reflStr-side constants for an even glassier look.
+    float reflAmt = clamp(0.18 + fres * 1.5, 0.0, 0.9);
+    vec3 col = mix(body, refl, reflAmt) + sun;
     // With refraction we composite the bottom OURSELVES, so draw (near-)opaque and
     // let the shader own the whole look; without it, blend over the terrain.
     float alpha = (u_hasRefract > 0.5) ? 1.0 : mix(0.82, 0.96, fres);
@@ -555,7 +572,8 @@ class WaterPlaneRenderer:
             self._water_uloc = {n: glGetUniformLocation(prog, n) for n in (
                 'u_time', 'u_cam', 'u_sunDir', 'u_sunCol', 'u_day',
                 'u_skyLo', 'u_skyHi', 'u_choppy', 'u_normalTex', 'u_hasNormal',
-                'u_refractTex', 'u_viewport', 'u_hasRefract')}
+                'u_refractTex', 'u_viewport', 'u_hasRefract',
+                'u_reflectTex', 'u_hasReflect')}
 
         # ── Derive uniforms from the canvas' day/night state ──────────────────
         day = 1.0
@@ -613,6 +631,14 @@ class WaterPlaneRenderer:
         else:
             glUniform1f(u['u_hasNormal'], 0.0)
 
+        # Screen UV needs the true framebuffer size (both refraction + reflection
+        # sample by gl_FragCoord / u_viewport), so set it from the live viewport.
+        try:
+            vp = glGetIntegerv(GL_VIEWPORT)
+            glUniform2f(u['u_viewport'], float(vp[2]) or 1.0, float(vp[3]) or 1.0)
+        except Exception:
+            glUniform2f(u['u_viewport'], 1.0, 1.0)
+
         # ── Refraction (the terrain seen through the water) ───────────────────
         rtex = getattr(self, '_refract_tex', 0)
         rsize = getattr(self, '_refract_size', (0, 0))
@@ -620,11 +646,21 @@ class WaterPlaneRenderer:
             glActiveTexture(GL_TEXTURE1)
             glBindTexture(GL_TEXTURE_2D, rtex)
             glUniform1i(u['u_refractTex'], 1)
-            glUniform2f(u['u_viewport'], float(rsize[0]), float(rsize[1]))
             glUniform1f(u['u_hasRefract'], 1.0)
-            glActiveTexture(GL_TEXTURE0)          # leave unit 0 active for cleanliness
+            glActiveTexture(GL_TEXTURE0)
         else:
             glUniform1f(u['u_hasRefract'], 0.0)
+
+        # ── Reflection (the real scene mirrored on the surface) ───────────────
+        reftex = getattr(self, '_water_reflect_tex', 0)
+        if reftex:
+            glActiveTexture(GL_TEXTURE2)
+            glBindTexture(GL_TEXTURE_2D, reftex)
+            glUniform1i(u['u_reflectTex'], 2)
+            glUniform1f(u['u_hasReflect'], 1.0)
+            glActiveTexture(GL_TEXTURE0)
+        else:
+            glUniform1f(u['u_hasReflect'], 0.0)
         return True
 
     def render_water_planes(self, terrain_renderer, canvas=None, water_mesh_editor=None):
@@ -731,6 +767,9 @@ class WaterPlaneRenderer:
                 glDisableClientState(GL_VERTEX_ARRAY)
                 glBindBuffer(GL_ARRAY_BUFFER, 0)
                 if used_shader:
+                    if getattr(self, '_water_reflect_tex', 0):
+                        glActiveTexture(GL_TEXTURE2)
+                        glBindTexture(GL_TEXTURE_2D, 0)
                     if getattr(self, '_refract_tex', 0):
                         glActiveTexture(GL_TEXTURE1)
                         glBindTexture(GL_TEXTURE_2D, 0)

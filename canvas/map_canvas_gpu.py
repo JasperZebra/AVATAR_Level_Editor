@@ -4233,6 +4233,161 @@ class MapCanvas(QOpenGLWidget):
             mesh._terr_vbo = False
             return False
 
+    def _ensure_reflection_fbo(self, w, h):
+        """Create/resize the offscreen framebuffer the planar water reflection
+        renders into (a half-res colour texture + depth renderbuffer). Returns
+        (fbo, color_tex) or (0, 0) if unavailable (caller falls back to sky-only
+        reflection). Cached; only reallocated when the size changes."""
+        if getattr(self, '_refl_fbo_failed', False):
+            return 0, 0
+        try:
+            if (getattr(self, '_refl_fbo', 0) and self._refl_fbo_size == (w, h)):
+                return self._refl_fbo, self._refl_color_tex
+            # (Re)allocate.
+            if not getattr(self, '_refl_fbo', 0):
+                self._refl_fbo = int(glGenFramebuffers(1))
+                self._refl_color_tex = int(glGenTextures(1))
+                self._refl_depth_rbo = int(glGenRenderbuffers(1))
+            glBindTexture(GL_TEXTURE_2D, self._refl_color_tex)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, None)
+            glBindRenderbuffer(GL_RENDERBUFFER, self._refl_depth_rbo)
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, w, h)
+            glBindFramebuffer(GL_FRAMEBUFFER, self._refl_fbo)
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                   GL_TEXTURE_2D, self._refl_color_tex, 0)
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                                      GL_RENDERBUFFER, self._refl_depth_rbo)
+            ok = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE
+            glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
+            glBindTexture(GL_TEXTURE_2D, 0)
+            glBindRenderbuffer(GL_RENDERBUFFER, 0)
+            if not ok:
+                print("[water-reflect] FBO incomplete — sky-only reflection")
+                self._refl_fbo_failed = True
+                return 0, 0
+            self._refl_fbo_size = (w, h)
+            return self._refl_fbo, self._refl_color_tex
+        except Exception as e:
+            print(f"[water-reflect] FBO init failed ({e}) — sky-only reflection")
+            self._refl_fbo_failed = True
+            return 0, 0
+
+    def _water_plane_height(self):
+        """The single Y the planar reflection mirrors about: the most common
+        water_height across all watered sectors (nearly all share one level).
+        Returns None if there's no water."""
+        try:
+            from collections import Counter
+            heights = Counter()
+            tr = getattr(self, 'terrain_renderer', None)
+            if tr is None:
+                return None
+            cells = getattr(tr, 'water_cells', None)
+            buckets = ([c.get('water_data') or {} for c in cells]
+                       if cells else [getattr(tr, 'water_data', {}) or {}])
+            for wd in buckets:
+                for v in wd.values():
+                    if getattr(v, 'has_water', False):
+                        heights[round(float(getattr(v, 'water_height', 0.0)), 2)] += 1
+            if not heights:
+                return None
+            return heights.most_common(1)[0][0]
+        except Exception:
+            return None
+
+    def _render_water_reflection_pass(self, plane_y, render_terrain_model):
+        """Render terrain + models MIRRORED about y=plane_y into the reflection
+        FBO. The water shader then projects that texture onto the surface (screen-
+        space, since it's the same camera view) to reflect the real scene. Half-
+        res, fully guarded — on any failure the water keeps its sky reflection."""
+        try:
+            w = max(1, self.width()); h = max(1, self.height())
+            rw, rh = max(1, w // 2), max(1, h // 2)
+            fbo, tex = self._ensure_reflection_fbo(rw, rh)
+            if not fbo:
+                return
+            prev_fbo = self.defaultFramebufferObject()
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo)
+            glViewport(0, 0, rw, rh)
+            sky = self._sky_color() if hasattr(self, '_sky_color') else (0.5, 0.6, 0.8)
+            glClearColor(float(sky[0]), float(sky[1]), float(sky[2]), 1.0)
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+            # Same camera/projection as the main view (so the reflected image lines
+            # up in screen space), then a reflection about the water plane.
+            glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity()
+            gluPerspective(50, w / float(h), 0.1, 10000.0)
+            glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity()
+            cam = self.camera_3d
+            gluLookAt(cam.position[0], cam.position[1], cam.position[2],
+                      *cam.get_look_at(), 0, 1, 0)
+            # Mirror world about y = plane_y  (y -> 2*plane_y - y).
+            glTranslatef(0.0, float(plane_y), 0.0)
+            glScalef(1.0, -1.0, 1.0)
+            glTranslatef(0.0, -float(plane_y), 0.0)
+
+            glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LESS); glDepthMask(GL_TRUE)
+            glDisable(GL_BLEND)
+            glEnable(GL_CULL_FACE); glCullFace(GL_BACK)
+            # The mirror flips handedness: terrain (main pass CCW-front) becomes CW.
+            glFrontFace(GL_CW)
+
+            # Terrain (mirrored).
+            if getattr(self, 'terrain_models', []):
+                for t_model, t_wx, t_wy in self.terrain_models:
+                    render_terrain_model(t_model, t_wx, t_wy)
+            elif getattr(self, 'terrain_model', None):
+                tx = getattr(self, 'terrain_world_offset_x',
+                             getattr(self.terrain_renderer, 'terrain_offset_x', 0.0)
+                             if hasattr(self, 'terrain_renderer') else 0.0)
+                ty = getattr(self, 'terrain_world_offset_y',
+                             getattr(self.terrain_renderer, 'terrain_offset_y', 0.0)
+                             if hasattr(self, 'terrain_renderer') else 0.0)
+                render_terrain_model(self.terrain_model, tx, ty)
+
+            # Models (mirrored) — call the GPU-driven renderer directly with the
+            # winding flipped, so it doesn't cull them inside-out. Bypasses the
+            # render_batched_models() wrapper (which would consume the staged
+            # array frame the MAIN model pass still needs).
+            ml = getattr(self, 'model_loader', None)
+            gdr = getattr(ml, '_gpu_driven', None) if ml else None
+            if gdr:
+                import time as _t
+                anim_t = _t.monotonic() - getattr(ml, '_anim_t0', 0.0)
+                gdr.render(anim_t, getattr(ml, '_shadow_tex', 0),
+                           getattr(ml, '_shadow_light_vp', None),
+                           getattr(ml, '_shadows_on', False),
+                           getattr(ml, '_shadow_bias', 0.0018),
+                           flip_winding=True)
+
+            # Restore matrices + the state the rest of the frame expects.
+            glMatrixMode(GL_PROJECTION); glPopMatrix()
+            glMatrixMode(GL_MODELVIEW); glPopMatrix()
+            glFrontFace(GL_CCW)
+            glEnable(GL_CULL_FACE); glCullFace(GL_BACK)
+            glDepthMask(GL_TRUE); glDepthFunc(GL_LESS); glDisable(GL_BLEND)
+            glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo)
+            glViewport(0, 0, w, h)
+
+            # Hand the reflection texture to the water renderer for this frame.
+            self._water_reflect_tex = tex
+            self.water_plane_renderer._water_reflect_tex = tex
+            self.water_plane_renderer._water_reflect_size = (rw, rh)
+        except Exception as e:
+            print(f"[water-reflect] pass failed ({e}) — sky reflection")
+            try:
+                glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
+                glViewport(0, 0, max(1, self.width()), max(1, self.height()))
+            except Exception:
+                pass
+            self._water_reflect_tex = 0
+            if hasattr(self, 'water_plane_renderer'):
+                self.water_plane_renderer._water_reflect_tex = 0
+
     def _render_3d_opengl(self):
         """Render 3D scene using OpenGL with matching grid style"""
         try:
@@ -4510,6 +4665,24 @@ class MapCanvas(QOpenGLWidget):
                     glCallList(self._grid_display_list)
                 glPopAttrib()  # restores lighting, color, linewidth
             _ts = self._pf('grid', _ts)
+
+            # ── Planar water reflection pass ──────────────────────────────────
+            # Re-render terrain + models MIRRORED about the water plane into an
+            # offscreen texture, so the water shader can show the actual scene
+            # (models included) reflected on the surface — the game's
+            # ReflectionRealTexture. Guarded + half-res; any failure falls back to
+            # the flat sky reflection. Done BEFORE the water draws so the texture
+            # is ready, and BEFORE the main model pass (models draw after water).
+            self._water_reflect_tex = 0
+            if hasattr(self, 'water_plane_renderer'):
+                self.water_plane_renderer._water_reflect_tex = 0   # clear stale frame
+            if (getattr(self, 'reflections_enabled', True)
+                    and hasattr(self, 'water_plane_renderer')
+                    and hasattr(self, 'terrain_renderer')):
+                plane_y = self._water_plane_height()
+                if plane_y is not None:
+                    self._render_water_reflection_pass(plane_y, _render_terrain_model)
+            _ts = self._pf('reflect', _ts)
 
             # Render water planes
             if hasattr(self, 'water_plane_renderer') and hasattr(self, 'terrain_renderer'):
