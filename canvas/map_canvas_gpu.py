@@ -4336,6 +4336,19 @@ class MapCanvas(QOpenGLWidget):
             # The mirror flips handedness: terrain (main pass CCW-front) becomes CW.
             glFrontFace(GL_CW)
 
+            # Clip everything BELOW the water plane out of the reflection so
+            # underwater / duplicate geometry doesn't ghost as a second image that
+            # swims with the camera. World-space plane: keep y >= plane_y. The
+            # fixed-function plane (glClipPlane) is baked against object=world
+            # coords, so it holds even though the modelview is mirrored.
+            clip_plane = (0.0, 1.0, 0.0, -float(plane_y))
+            try:
+                glClipPlane(GL_CLIP_PLANE0, [clip_plane[0], clip_plane[1],
+                                            clip_plane[2], clip_plane[3]])
+                glEnable(GL_CLIP_PLANE0)
+            except Exception:
+                pass
+
             # Terrain (mirrored).
             if getattr(self, 'terrain_models', []):
                 for t_model, t_wx, t_wy in self.terrain_models:
@@ -4352,7 +4365,8 @@ class MapCanvas(QOpenGLWidget):
             # Models (mirrored) — call the GPU-driven renderer directly with the
             # winding flipped, so it doesn't cull them inside-out. Bypasses the
             # render_batched_models() wrapper (which would consume the staged
-            # array frame the MAIN model pass still needs).
+            # array frame the MAIN model pass still needs). clip_plane keeps only
+            # above-water geometry (via gl_ClipDistance in the model shader).
             ml = getattr(self, 'model_loader', None)
             gdr = getattr(ml, '_gpu_driven', None) if ml else None
             if gdr:
@@ -4362,9 +4376,13 @@ class MapCanvas(QOpenGLWidget):
                            getattr(ml, '_shadow_light_vp', None),
                            getattr(ml, '_shadows_on', False),
                            getattr(ml, '_shadow_bias', 0.0018),
-                           flip_winding=True)
+                           flip_winding=True, clip_plane=clip_plane)
 
             # Restore matrices + the state the rest of the frame expects.
+            try:
+                glDisable(GL_CLIP_PLANE0)
+            except Exception:
+                pass
             glMatrixMode(GL_PROJECTION); glPopMatrix()
             glMatrixMode(GL_MODELVIEW); glPopMatrix()
             glFrontFace(GL_CCW)

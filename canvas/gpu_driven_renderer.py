@@ -314,6 +314,7 @@ out vec2 v_uv;
 out float v_overlay;
 out vec3 v_wp;
 flat out uint v_mat;
+uniform vec4 u_clipPlane;   // world-space clip plane (planar water reflection); (0,0,0,1)=keep all
 invariant gl_Position;   // bit-identical depth vs the depth-prepass program (early-Z)
 vec3 rotX(vec3 p,float d){float a=radians(d),c=cos(a),s=sin(a);return vec3(p.x,c*p.y-s*p.z,s*p.y+c*p.z);}
 vec3 rotY(vec3 p,float d){float a=radians(d),c=cos(a),s=sin(a);return vec3(c*p.x+s*p.z,p.y,-s*p.x+c*p.z);}
@@ -330,6 +331,11 @@ void main(){
     v_overlay   = I.rotOverlay.w;
     v_mat       = drawMat[gl_DrawID];
     gl_Position = gl_ModelViewProjectionMatrix * vec4(wp, 1.0);
+    // Clip geometry below the water plane out of the reflection pass (so
+    // underwater/duplicate geometry doesn't create a false, camera-swimming
+    // mirror image). Only active when GL_CLIP_DISTANCE0 is enabled by the caller;
+    // the default plane (0,0,0,1) yields +1 everywhere = keep all.
+    gl_ClipDistance[0] = dot(vec4(wp, 1.0), u_clipPlane);
 }
 """
 
@@ -623,19 +629,23 @@ class GPUDrivenRenderer:
         return g
 
     def render(self, anim_t, shadow_tex=0, light_vp=None, shadows_on=False, shadow_bias=0.0018,
-               flip_winding=False):
+               flip_winding=False, clip_plane=None):
         """Returns True if it drew (caller skips the fallback), False to fall back.
 
         flip_winding: True when rendering into a MIRRORED pass (planar water
         reflection). A reflection matrix flips handedness, so the front-face
-        winding must invert (CW -> CCW) or every model culls inside-out."""
+        winding must invert (CW -> CCW) or every model culls inside-out.
+        clip_plane: world-space (a,b,c,d); when given, geometry where
+        dot(pos,plane)<0 is clipped (used to keep only above-water geometry in the
+        reflection so underwater parts don't ghost). None = no clipping."""
         if self._failed:
             return False
         try:
             if not self._ensure_built():
                 self._failed = True
                 return False
-            return self._draw(anim_t, shadow_tex, light_vp, shadows_on, shadow_bias, flip_winding)
+            return self._draw(anim_t, shadow_tex, light_vp, shadows_on, shadow_bias,
+                              flip_winding, clip_plane)
         except Exception as e:
             import traceback
             print(f"[gpu-driven] runtime error -> fallback: {e}")
@@ -664,7 +674,8 @@ class GPUDrivenRenderer:
             # Cache the rest once — glGetUniformLocation per frame is wasted CPU.
             self._uloc = {n: g.glGetUniformLocation(self.program, n) for n in
                           (b'u_flip_green', b'u_flip_normal', b'u_shadows_on',
-                           b'u_light_vp', b'u_shadow_tex', b'u_shadow_bias')}
+                           b'u_light_vp', b'u_shadow_tex', b'u_shadow_bias',
+                           b'u_clipPlane')}
         if self.depth_program == 0:
             # Non-fatal: if it fails, cast() no-ops and the scene renders unshadowed.
             self.depth_program = _compile_program(g, _GDR_DEPTH_VS, _GDR_DEPTH_FS)
@@ -985,7 +996,7 @@ class GPUDrivenRenderer:
             return False
 
     def _draw(self, anim_t=0.0, shadow_tex=0, light_vp=None, shadows_on=False, shadow_bias=0.0018,
-              flip_winding=False):
+              flip_winding=False, clip_plane=None):
         g = self._gl()
         import ctypes
         # Reuse the frame cast() just built (identical instance layout); else build.
@@ -1007,6 +1018,16 @@ class GPUDrivenRenderer:
                       1 if getattr(self.ml, 'dbg_flip_green', False) else 0)
         g.glUniform1i(self._uloc[b'u_flip_normal'],
                       1 if getattr(self.ml, 'dbg_flip_normal', False) else 0)
+        # Water-reflection clip plane: keep only above-water geometry in the mirror.
+        _cp = self._uloc.get(b'u_clipPlane', -1)
+        if _cp != -1:
+            if clip_plane is not None:
+                g.glUniform4f(_cp, float(clip_plane[0]), float(clip_plane[1]),
+                              float(clip_plane[2]), float(clip_plane[3]))
+                g.glEnable(g.GL_CLIP_DISTANCE0)
+            else:
+                g.glUniform4f(_cp, 0.0, 0.0, 0.0, 1.0)   # keep-all
+                g.glDisable(g.GL_CLIP_DISTANCE0)
         # Shadow receive (sun = light 0 only). Depth map → unit 4; material
         # textures are bindless so there's no texture-unit conflict.
         # shadows_on is a 0..1 STRENGTH (day/night synced), not just a flag.
@@ -1049,8 +1070,12 @@ class GPUDrivenRenderer:
         # color pass shades only visible fragments — objects hidden behind a wall
         # get early-Z-rejected before the (expensive) material shader, regardless
         # of MDI draw order. Skipped if its program failed or the toggle is off.
+        # Skip the depth prepass while clipping (reflection pass): its separate
+        # program doesn't write gl_ClipDistance, so it would lay depth for
+        # below-water geometry the color pass then clips → wrong occlusion.
         prepass = bool(self.camdepth_program
                        and getattr(self.ml, 'gpu_depth_prepass', True)
+                       and clip_plane is None
                        and (len(groups[0][0]) or len(groups[1][0])))
         if prepass:
             # _pass() binds the per-draw material ids (binding 1) the prepass FS
@@ -1089,6 +1114,7 @@ class GPUDrivenRenderer:
         g.glBindVertexArray(0)
         g.glUseProgram(0)
         g.glDisable(g.GL_CULL_FACE)
+        g.glDisable(g.GL_CLIP_DISTANCE0)   # never leak the reflection clip
         return True
 
     def _free_buffers(self, g):

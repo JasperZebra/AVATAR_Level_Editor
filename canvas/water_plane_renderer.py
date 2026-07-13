@@ -150,10 +150,9 @@ void main(){
     float glint = pow(max(dot(R, normalize(u_sunDir)), 0.0), 220.0);
     vec3  sun = u_sunCol * glint * 1.5 * u_day;
 
-    // Strong, but not a full mirror: a constant base reflectivity keeps the scene
-    // visible on the surface even looking straight down, Fresnel ramps it up at
-    // grazing angles. Raise u_reflStr-side constants for an even glassier look.
-    float reflAmt = clamp(0.18 + fres * 1.5, 0.0, 0.9);
+    // Reflective, but dialed back: a small constant base keeps the scene faintly
+    // visible looking straight down, Fresnel ramps it up at grazing angles.
+    float reflAmt = clamp(0.10 + fres * 1.1, 0.0, 0.72);
     vec3 col = mix(body, refl, reflAmt) + sun;
     // With refraction we composite the bottom OURSELVES, so draw (near-)opaque and
     // let the shader own the whole look; without it, blend over the terrain.
