@@ -121,15 +121,16 @@ void main(){
         vec3 bg = texture2D(u_refractTex, clamp(suv + off, 0.001, 0.999)).rgb;
         float mx = max(max(v_deep.r, v_deep.g), max(v_deep.b, 1e-4));
         vec3 hue = v_deep / mx;                        // material hue, luminance ~1
-        // Push the tint toward BLUE (the raw materials are murky-green; bluer water
-        // reads more like the game/real water).
-        hue = mix(hue, vec3(0.35, 0.62, 1.0), 0.5);
+        // Push the tint strongly toward a LIGHT SKY-BLUE (the raw materials are
+        // murky-green; user wants clearly blue water).
+        vec3 skyBlue = vec3(0.45, 0.72, 1.0);
+        hue = mix(hue, skyBlue, 0.9);
         // Absorbed bottom: hue tint + light absorption. Brighter + lighter tint =
         // MORE SEE-THROUGH (you read the terrain below more clearly).
         vec3 absorbed = bg * mix(vec3(1.0), hue, 0.6) * mix(0.55, 0.8, u_day);
-        // A faint coloured veil so it still reads as a body of water.
-        vec3 veil = hue * (u_skyLo * 0.5);
-        body = mix(absorbed, veil, 0.16);              // more see-through, bluer tint
+        // A light-blue veil so the surface itself reads sky-blue.
+        vec3 veil = skyBlue * (0.35 + u_skyLo * 0.4);
+        body = mix(absorbed, veil, 0.32);              // see-through, but clearly blue
     } else {
         // Fallback (no screen grab): lit WaterColor, the old look.
         body = v_deep * (lightCol * 0.55 + 0.35);
