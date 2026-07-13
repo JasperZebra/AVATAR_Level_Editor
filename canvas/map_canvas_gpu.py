@@ -48,6 +48,7 @@ from .model_loader import ModelLoader, entity_has_graphic_component
 from .undo_redo import UndoRedoManager, MoveCommand, RotateCommand
 from water_mesh_editor import ImprovedWaterMeshEditor
 from water_plane_renderer import WaterPlaneRenderer, strip_baked_water
+from vegetation_renderer import VegetationRenderer
 from .movie_renderer import draw_movie_paths_2d, render_movie_paths_3d
 
 """Enhanced 3D Camera with 2D-style smooth movement"""
@@ -3227,6 +3228,7 @@ class MapCanvas(QOpenGLWidget):
             self.terrain_renderer = TerrainRenderer(game_mode=getattr(self, 'game_mode', 'avatar'))
             self.water_mesh_editor = ImprovedWaterMeshEditor()
             self.water_plane_renderer = WaterPlaneRenderer()
+            self.vegetation_renderer = VegetationRenderer()
             self.camera_controller = CameraController()
             self.input_handler = InputHandler(self)
             self.undo_redo = UndoRedoManager()
@@ -4710,6 +4712,11 @@ class MapCanvas(QOpenGLWidget):
                     water_mesh_editor=getattr(self, 'water_mesh_editor', None),
                 )
             _ts = self._pf('water', _ts)
+
+            # Render vegetation (trees/bushes/grass from the landmarkfar .rtx models)
+            if getattr(self, 'show_vegetation', True) and hasattr(self, 'vegetation_renderer'):
+                self.vegetation_renderer.render(self)
+            _ts = self._pf('vegetation', _ts)
 
             # Draw entities (models always render, cubes conditional). Per-stage
             # timing goes into self._prof (printed by _accumulate_profile); the
