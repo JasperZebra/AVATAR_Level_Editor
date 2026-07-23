@@ -3313,3 +3313,104 @@ Follow-up feedback, still describing "some sectors tiled correctly, some not" an
 3. **Applied it, rendered the full map, and it was clearly wrong.** The previously smooth, continuous ridgelines flowing across sector boundaries fragmented into a hard, visible checkerboard — every sector became visibly disconnected from its neighbours. **Reverted immediately.** The per-sector correlation test had optimised something real but too narrow: how well ONE sector's crop aligns with ITS OWN heightmap in isolation — while completely ignoring whether ADJACENT sectors' crops stay mutually consistent with each other, which is what actually produces a coherent map. The untransformed crop is the one that tiles seamlessly across sector boundaries; that mutual consistency matters more than any single sector's local slope-correlation score.
 
 **Net result: the atlas orientation is correct as it was.** This was a real, rigorous test of the user's "we're not reading the mask/channels correctly" hypothesis, and it came back negative — changing the crop orientation makes the map visibly WORSE (fragmented/discontinuous), not better. Combined with the earlier finding (rock/cliff-heavy sectors show more of the `Tiling=6` low-repeat-count limitation, itself not a bug), there is currently no further concrete lead pointing at a data-reading defect — the remaining "some sectors look better than others" perception most likely continues to trace to how much low-Tiling layer (Rock) coverage each sector happens to have, an inherent property of the real terrain, not something to "read" differently.
+
+## XBG Importer addon (Quiet Joker's Blender addon) — format knowledge reference (July 2026)
+
+The user's collaborator ("Quiet Joker") maintains a Blender addon — **XBG Importer v3.0.0**
+(local copy studied at `C:\Users\sambe\Downloads\Github version`) — that fully cracked the
+Dunia formats this editor consumes. The editor's `texture_loader.py` was ALREADY ported from
+an older version of that addon ("V10 modules/materials.py"), so the material chain here is
+the same lineage. Three deep-dive studies were run against the v3 addon (Avatar + FC2
+modules) to extract everything portable. Key facts a future agent needs (full specs live in
+the addon source itself; per-file pointers below):
+
+### .xbg geometry decode (addon `modules/Avatar/import_mesh_avatar.py`, `binary_avatar.py`)
+
+- **Scope guard:** HSEM version `0x0006002A` = Avatar 2009 / FC2 2008. Later games
+  (FC3/4/5) are a DIFFERENT layout. Avatar and FC2 geometry decode are byte-identical.
+- **Endianness:** chunk count u32 @ file offset 28; try `<I`/`>I`, the one in [1,255] wins
+  (PS3 files are big-endian with byte-reversed FOURCCs; single-byte vertex fields are never
+  swapped; the u16 index buffer follows file endianness).
+- **Vertex layout is FLAG-DRIVEN**, not fixed-offset. SDOL's per-VB `vb_flags` is a bitmask;
+  components appear in this fixed order, each adding its size when present:
+  `POS_FLOAT 0x1(12B) | POS_INT16 0x2(8B) | POS_HALF 0x4(8B) → UV0 0x8(4B) → UV1 0x800 →
+  UV2 0x1000 → BONE_WTS1 0x10(8B) → BONE_WTS2 0x20(8B) → NORMAL 0x40(4B) → COLOR 0x80(4B)
+  → TANGENT 0x100(4B) → BINORMAL 0x200(4B) → UNK 0x400(4B)`.
+  Common: `0x0BCA` = 32B static (pos@0 uv0@8 uv1@12 nrm@16 col@20 tan@24 bin@28),
+  `0x0BDA` = 40B skinned (+8B bones@16, everything after shifts +8).
+- **Authored normals/tangents/binormals are D3DCOLOR: UNSIGNED-normalized, BGRA order.**
+  Decode per byte `b`: `v = b/255*2-1`, and XYZ come from bytes **(2,1,0)** (x=byte2!).
+  4th byte of tangent/binormal = handedness flag (usually 0x80). NEVER negate normals.
+  (Signed in-order decode — the obvious guess — scrambles axes; addon verified unsigned-BGRA
+  on 470k+ vertices, alignment 0.97 vs 0.37.)
+- **UV:** 2×int16, `U = uv_trans + raw*uv_scale`. The ADDON flips V (`1-(...)`) for Blender;
+  this editor keeps game-space V (shaders assume it) — do NOT copy the flip. UV1/UV2
+  sentinel `(-32768,-32768)` = channel unused for that vertex.
+- **Vertex color:** 4×u8 BGRA → RGBA = bytes (2,1,0,3).
+- **DNKS is read by BYTE BUDGET, not lod_count** (see the fix section below — this was a
+  real editor bug). `header_data[0]`=material id (LTMR index), `[1]`=triangle count,
+  `[5]`=per-submesh vertex count; `bone_data`=48×i16 palette (-1 unused).
+- **Index decode:** count = DNKS `face_count*3` (NOT SDOL's derived idx_count); byte offset
+  = `indice_section_offset + sdol_idx_offset*2`; drop triangles containing `0xFFFF`.
+- **Skin remap ordering gotcha (addon bug fix #16):** on multi-block DNKS files
+  (vehicles/destructible plants) the sequential shared-VB palette walk MUST process slices
+  sorted by ascending `idx_offset` (true buffer order), not part-number-grouped order —
+  `sub_idx` restarts per block, so part grouping interleaves blocks and drifts the walk.
+- **Winding:** the addon reverses triangle winding for Blender and never negates normals.
+  This editor keeps file-order winding (its `compute_face_normals` treats XBG as CW and
+  computes outward normals via `cross(e2,e1)` — consistent with the authored normals).
+
+### .xbm / .xbt material chain (addon `import_materials_avatar.py`, `import_xbt_avatar.py`)
+
+- Chain: submesh → DNKS `header_data[0]` → LTMR material table index → short name →
+  `<data>/graphics/_materials/<short_name>.xbm` (flat folder; the LTMR `.mat` dir path is
+  discarded). Deterministic — no filename guessing anywhere.
+- XBM: find `b'LTMD'`, skip +16 (chunk header) +9 (reserved); then materialName string,
+  shaderTemplate string, then SIX positional groups (textures / f1 / f2 / f3 / f4 / int).
+  Strings = u32 len + bytes + skip-one-NUL-if-present. Group 0 pairs are **(value, key)** —
+  path first. There is NO template inheritance — shaderTemplate is just a shader name.
+- Editor's `texture_loader.py` already matches this (same V10 lineage). v3 addon deltas
+  worth porting: `heighttexture1 → height` slot (FC2 Road parallax — the ONLY FC2-vs-Avatar
+  difference in the whole material chain), `alphatexture1[wrap] → alpha` slots, and the
+  lowercase-retry fallback when resolving texture paths on disk (extracted packs sometimes
+  flatten case).
+- XBT: `TBX` magic (3 bytes), headerSize u32 @8, DDS payload = `data[headerSize:]` if
+  32≤hs≤1024 else `data[32:]`; validate `DDS `; fallback scan offsets 64/128/256. Prefer
+  `_mip0.xbt` sibling (full-res top mip). Editor already identical.
+
+### .hkx collision (addon `hkx_native_avatar.py` — byte-identical to the FC2 copy)
+
+- Havok 5.5.0-r1 32-bit LE packfile, optional 16-byte game wrapper before the 8-byte magic
+  `57 E0 E0 57 10 C0 C0 10`. Sections table @64 (48B entries); `__data__` holds objects +
+  three fixup tables (virtual = object enumeration w/ classname, local = array/string
+  pointers, global = object-graph edges). Never dereference raw pointer bytes — always look
+  up fixups by field offset.
+- Shapes: box (halfExtents @+0x20), sphere (radius @+0x10), capsule/cylinder (A @+0x20,
+  B @+0x30, radius @+0x10), convex vertices (**FourVectors SoA**: 48B chunks = x[4]y[4]z[4];
+  vert j of chunk = `(v[j], v[4+j], v[8+j])` — easy to get wrong), triangle mesh (via
+  `*MeshSubpartStorage` child: hkVector4 AoS verts @+0x08/count @+0x0c, u16 stride-4 indices
+  (a,b,c,pad) @+0x14/count @+0x18), list (childInfo 16B entries via local fixup @+0x18,
+  child ptr per entry via global fixup), MOPP (transparent wrapper — ignore bytecode,
+  descend), translate/transform wrappers (compose into child transform).
+- Rigid body: rotation columns @+0xE0/+0xF0/+0x100, translation @+0x110 (column-major);
+  shape via global fixup @+0x10. `world_vertex = rb_xform @ shape_xform @ local_vertex`.
+- **No axis swap or scale anywhere** — data is native Havok space (right-handed Z-up meters),
+  which matches game space; the editor's usual -90°X render rotation applies as with models.
+- The addon's `HkxFile` class is bpy-free (os+struct only); `walk_shape`/`rigid_bodies` only
+  need their `mathutils.Matrix` uses swapped for numpy — i.e. it can be ported nearly
+  verbatim into a standalone viewer.
+
+### Also in the addon, not yet ported (future feature candidates)
+
+- **.mab skeletal animation** (`import_mab_avatar.py`, ~99KB): full Dunia compressed rotation
+  bitstream decode ("smallest-three" quaternion codec), constant + keyframed bone routing;
+  facial animation (.lfa poses / .lfe expression curves); full cinematic scene import
+  (cameras, anchors, timeline markers) in `mab_scene_avatar.py`.
+- **.skeleton (LKS) import/export** (`import_lks_avatar.py` / `export_lks_avatar.py`).
+- **HKX collision EXPORT with from-scratch MOPP bytecode compiler** (`mopp_avatar.py`) — the
+  Havok spatial-index VM re-implemented; would let the editor WRITE edited collision.
+- **Custom material/texture baking** (`export_materials_avatar.py`, `xbm_builder_avatar.py`,
+  `dds_writer_avatar.py`): writes game-ready .xbt (DXT1/5) + .xbm from scratch — the
+  authoritative reference for every LTMD field when the editor needs to WRITE materials.
+- **Jiggle/procedural bones** (`jiggle_avatar.py`) — reverse-engineered spring-damper
+  integrator; **LOD distance editor** (`lod_distance_avatar.py`); **bounds editors**.
