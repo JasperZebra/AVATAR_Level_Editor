@@ -65,6 +65,11 @@ _TEX_CATEGORY_EXACT = {
     'masktexturebroken':     'mask_broken',
     'printtexture':          'print',
     'fabrictexture':         'fabric',
+    # XBG Importer v3 addon deltas: FC2 Road parallax map (the only
+    # FC2-vs-Avatar slot difference in the whole material chain) + alpha maps.
+    'heighttexture1':        'height',
+    'alphatexture1':         'alpha',
+    'alphatexture1wrap':     'alpha',
 }
 
 
@@ -373,24 +378,28 @@ class TextureLoader:
         mat = self.load_material(material_name)
         if not mat or 'diffuse' not in mat.textures:
             return None
-        rel = mat.textures['diffuse']
-        xbm_path = self._find_material_file(self._clean_material_name(material_name))
-        if not xbm_path:
-            return None
-        full = self._resolve_texture_path(rel, xbm_path)
-        if not os.path.exists(full):
-            return None
-        return full
+        return self.resolve_xbt_full_path(mat.textures['diffuse'], material_name)
 
     # ── Texture path resolution ───────────────────────────────────────
 
     def resolve_xbt_full_path(self, rel_path: str, material_name: str) -> Optional[str]:
-        """Convert an engine-relative texture path to an absolute path."""
+        """Convert an engine-relative texture path to an absolute path.
+
+        Falls back to the fully-lowercased relative path when the mixed-case
+        engine path doesn't exist on disk (XBG Importer v3 addon behavior —
+        extracted packs sometimes flatten case while engine paths stay
+        mixed-case; only matters on case-sensitive mounts, harmless on NTFS).
+        """
         xbm_path = self._find_material_file(self._clean_material_name(material_name))
         if not xbm_path:
             return None
         full = self._resolve_texture_path(rel_path, xbm_path)
-        return full if os.path.exists(full) else None
+        if os.path.exists(full):
+            return full
+        low = self._resolve_texture_path(rel_path.lower(), xbm_path)
+        if os.path.exists(low):
+            return low
+        return None
 
     def _clean_material_name(self, name: str) -> str:
         if '\\' in name or '/' in name:

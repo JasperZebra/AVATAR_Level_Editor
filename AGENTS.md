@@ -148,6 +148,7 @@ reference: <reference to this change in the docs if applicable>
 | `cache_manager.py` | `tests/test_terrain_cache_key_fc2.py` | — | `generate_terrain_cache_key` includes `*.sdat` (FC2) — old `.csdat`-only glob pinned stale FC2 terrain images with a never-changing path key |
 | `canvas/map_canvas_gpu.py` | `tests/test_pick_landmark_priority.py` | — | 3D pick two-track resolution (**mirrored**): landmark LOD twins at the same spot lose to the real entity within a 3-unit tie tolerance; genuinely-closer landmarks still win; hidden sources unpickable — excluded from `--cov` |
 | `canvas/mesh.py` + `canvas/xbg_parser.py` | `tests/test_xbg_vertex_decode.py` | — | Flag-driven vertex decode (component offsets for 0x0BCA/0x0BDA, unsigned-BGRA authored normal/tangent/color decode vs synthetic buffer) + DNKS byte-budget multi-block parse (5 blocks survive a lod_count of 2); modules imported with `canvas/` on sys.path — excluded from `--cov` |
+| `canvas/texture_loader.py` | `tests/test_texture_slot_resolution.py` | — | Addon-delta slot mappings (heighttexture1→height, alphatexture1[wrap]→alpha) + `resolve_xbt_full_path` lowercase-retry fallback (case-sensitive extracted packs), via monkeypatched `os.path.exists` — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -3456,3 +3457,29 @@ shared Avatar+FC2 model pipeline (`canvas/mesh.py`, `canvas/xbg_parser.py`,
 **UV convention note:** the addon flips V (`1-v`) for Blender; this editor keeps game-space
 V — do NOT port the flip. Winding likewise stays file-order (editor convention; addon
 reverses for Blender and never negates normals — equivalent front-face outcome).
+
+## Material-chain deltas ported from the XBG Importer v3 addon (July 2026)
+
+Task 2 of the addon-port series. `canvas/texture_loader.py` was already the same lineage as
+the addon (ported from its V10 `modules/materials.py`), so a line-by-line comparison against
+v3 found only three real deltas, all now applied:
+
+1. New slot mappings in `_TEX_CATEGORY_EXACT`: `heighttexture1 → height` (FC2 Road parallax
+   — the ONLY FC2-vs-Avatar difference in the entire material chain) and
+   `alphatexture1` / `alphatexture1wrap → alpha`.
+2. `resolve_xbt_full_path` retries with the fully-lowercased relative path when the
+   mixed-case engine path is missing on disk (extracted packs sometimes flatten case;
+   only matters on case-sensitive mounts — harmless no-op on NTFS).
+3. `find_diffuse_texture` now routes through `resolve_xbt_full_path` (shared fallback logic
+   instead of a duplicate resolution path).
+
+Everything else already matched v3 exactly: LTMD structured parse (+16/+9 skip, 6
+positional groups, (value,key) pair order in group 0), heuristic regex fallback, TBX→DDS
+extraction (headerSize @8, 32-byte fallback, 64/128/256 scan), `_mip0` preference, and the
+sibling-slot disk synthesis. The per-submesh material KEYING was also already deterministic
+(DNKS `header_data[0]` → LTMR index) — the "wrong texture on parts of vehicles/plants"
+class of bug traces to the DNKS multi-block parse fixed in the previous section, not to the
+material chain.
+
+Verified end-to-end on real data: 20 random Avatar models → 42 referenced materials → 42
+.xbm found+parsed → 42 diffuse slots → 42 diffuse .xbt files resolved on disk (0 misses).
