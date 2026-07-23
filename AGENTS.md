@@ -150,6 +150,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/mesh.py` + `canvas/xbg_parser.py` | `tests/test_xbg_vertex_decode.py` | — | Flag-driven vertex decode (component offsets for 0x0BCA/0x0BDA, unsigned-BGRA authored normal/tangent/color decode vs synthetic buffer) + DNKS byte-budget multi-block parse (5 blocks survive a lod_count of 2); modules imported with `canvas/` on sys.path — excluded from `--cov` |
 | `canvas/texture_loader.py` | `tests/test_texture_slot_resolution.py` | — | Addon-delta slot mappings (heighttexture1→height, alphatexture1[wrap]→alpha) + `resolve_xbt_full_path` lowercase-retry fallback (case-sensitive extracted packs), via monkeypatched `os.path.exists` — excluded from `--cov` |
 | `canvas/hkx_parser.py` | `tests/test_hkx_parser.py` | — | Builds a minimal SYNTHETIC Havok 5.5 packfile (rigid body + box shape wired through real fixup tables, ± 16-byte game wrapper) and checks parse → wireframe end-to-end; plus sphere/capsule wire builders and the .xbg↔.hkx sibling lookup — excluded from `--cov` |
+| `canvas/cs_camera_preview.py` | `tests/test_cs_camera_preview.py` | — | Pose math only (no Qt/GL): quat rotation, +Y-forward / +Z-up camera conventions, game→GL mapping, pose from rest vs animated tracks, camera-node name filtering — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -3528,3 +3529,47 @@ in the sample); collision extents match the sibling model's vertex bounds at rat
 geometry decode and transform composition. FC2 ships no loose .hkx in the currently
 extracted MODDED folder, but the format/reader is identical (addon's FC2 module diffs
 empty vs Avatar's).
+
+## CS Camera preview — cutscene-camera POV in the right panel (July 2026)
+
+Modeled on the Battalion Wars level editor's camera previewer
+(`battalion-level-editor/widgets/camera_preview.py`, studied as the reference): a "CS
+Camera" tab in the RIGHT side panel (`right_tabs`, next to Level Information / Object
+Library) that renders the level THROUGH the selected sequence's cutscene camera, with a
+camera picker + play/scrub transport.
+
+**Camera conventions (empirical — do not "fix" without data).** moviedata camera NodeDefs
+(names like `CameraCinematic_5`, matched on `'cam' in name.lower()`) store a quaternion
+whose **forward axis is +Y in game space** and up is +Z. Determined by scoring all six
+axis candidates across 101 real Avatar cutscene cameras against the direction from each
+camera to its sequence's other nodes: +Y mean cos +0.58 (72% within 60° of the action),
+every other axis ≈ 0, −Y exactly opposite. FC2 moviedata (66 files) has too few
+camera-with-actor sequences to rescore (4 samples, no signal) — same engine/format, so the
+Avatar convention is used for both; revisit only with real FC2 visual evidence. moviedata
+has NO FOV track; `DEFAULT_FOV = 55°`.
+
+**Rendering (`map_canvas_gpu.render_camera_preview(eye, look, up, fov, w, h)`).** Offscreen
+QOpenGLFramebufferObject pass **in the main GL context** (no second context — every loaded
+resource reused; the BW editor needed AA_ShareOpenGLContexts for its separate-widget
+approach, we deliberately avoid that): scene only (terrain via the extracted
+`_draw_terrain_tile(..., allow_shadow=False)`, water with flat-sky reflection, vegetation,
+entity models via the classic `prepare_batches` path over a 1500-unit-radius subset) — no
+grid/overlays/gizmos/HUD. `self.camera_3d` is temporarily swapped for a posed clone so
+vegetation billboards + water follow the preview camera; restored in `finally`. Clobbering
+`instance_batches`/`_gdr_frame` is safe because the main paint re-prepares every frame; the
+call comes from a Qt timer, never inside paintGL. NOTE: `_render_terrain_model` inside
+`_render_3d_opengl` is now just an alias for the extracted `_draw_terrain_tile` method.
+
+**Widget (`canvas/cs_camera_preview.py`).** `CSCameraPreviewWidget`: camera combo, POV image
+label (16:9, FBO capped at 640px wide), ▶/■ + scrub slider + time label; 20 fps QTimer that
+skips work when hidden or nothing changed (render key = seq/cam/time/size). Play drives the
+existing Sequences-tab preview (`_movie_preview_start`) so entities animate in the main
+view on the SAME wall clock; if that preview is already playing, the tab just follows it.
+Scrubbing calls the new `editor._movie_apply_time(t)` — refactored out of
+`_movie_preview_tick` — which saves original entity positions on first use so Reset works
+from a scrub without ever pressing Play. Wired in `create_side_panel` (tab), and
+`_on_sequence_selected` calls `cs_camera_preview.set_sequence(...)` on select/clear.
+
+Verified headlessly: 239/239 camera nodes across all Avatar moviedata produce valid poses
+(165 animate over their sequence); pose math unit-tested. The GL preview pass itself needs
+a user click-test in the running editor (select a sequence → CS Camera tab).

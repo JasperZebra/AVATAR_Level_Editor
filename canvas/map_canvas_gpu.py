@@ -4470,6 +4470,307 @@ class MapCanvas(QOpenGLWidget):
             if hasattr(self, 'water_plane_renderer'):
                 self.water_plane_renderer._water_reflect_tex = 0
 
+    def _draw_terrain_tile(self, model, tx, ty, allow_shadow=True):
+        """Draw one terrain tile model at world offset (tx, ty).
+
+        Was a closure inside _render_3d_opengl; extracted so the CS camera
+        preview pass can reuse it (allow_shadow=False there — the preview
+        doesn't cast its own shadow map).
+        """
+        _ts_on = False
+        glPushMatrix()
+        try:
+            if tx or ty:
+                glTranslatef(float(tx), 0.0, float(-ty))
+
+            # FC2 terrain needs NO rotation (July 2026, proven empirically):
+            # scoring entity hidPos.z against the terrain heightmap at each
+            # entity's (x, y) across all 8 orientations shows the raw
+            # file mapping IS world space (identity — world x = heightmap
+            # column, world y = sector-number row). The mesh pipeline
+            # (flip-v assembly + PZ = row - height, rendered with y → -z)
+            # already composes to exactly that identity, so the old
+            # 180°/90° rotations were themselves the misalignment.
+            # Avatar terrain also needs no rotation. Keep BOTH unrotated.
+
+            # Terrain shadow RECEIVER (ported from the AM3D editor). When the
+            # sun shadow map is active (day/night on + sun up + models cast),
+            # draw the ground through a per-pixel shader that samples the depth
+            # map, so objects/hills cast real shadows onto the terrain — the
+            # piece Avatar/FC2 lacked (terrain was fixed-function, couldn't
+            # sample). The (tex, light_vp) pair is cast UP FRONT this frame by
+            # _precast_shadows (AM3D order), so terrain + models share one map.
+            # Any miss → fixed-function, unchanged look.
+            if allow_shadow and getattr(self, '_shadow_active', False):
+                _tsp, _tsl = self._ensure_terrain_shadow_shader()
+                _lvp = getattr(self, '_terrain_light_vp', None)
+                _stex = getattr(self, '_shadow_tex', 0)
+                if _tsp and _lvp is not None and _stex:
+                    glUseProgram(_tsp)
+                    _ts_on = True   # set NOW so finally always restores prog 0
+                    glUniform1i(_tsl['u_tex'], 0)
+                    glUniform1i(_tsl['u_shadow'], 1)
+                    # u_shadow_on carries the 0..1 day strength: fades the
+                    # ground shadow in/out in sync with the sun + models.
+                    glUniform1f(_tsl['u_shadow_on'], float(self._shadow_strength()))
+                    glUniform1f(_tsl['u_shadow_bias'], float(getattr(self, '_shadow_bias_terrain', 0.0006)))
+                    glUniform3f(_tsl['u_tile_offset'], float(tx), 0.0, float(-ty))
+                    glUniformMatrix4fv(_tsl['u_light_vp'], 1, GL_TRUE,
+                                       np.ascontiguousarray(_lvp, dtype=np.float32))
+                    glActiveTexture(GL_TEXTURE1)
+                    glBindTexture(GL_TEXTURE_2D, int(_stex))
+                    glActiveTexture(GL_TEXTURE0)
+
+            if hasattr(model, 'use_immediate_mode') and model.use_immediate_mode:
+                _z = ctypes.c_void_p(0)
+                for mesh in model.meshes:
+                    if mesh.vertices is None:
+                        continue
+                    has_uvs = mesh.uvs is not None and len(mesh.uvs) > 0
+                    has_texture = mesh.material_index is not None and mesh.material_index in model.textures
+                    if has_texture:
+                        glEnable(GL_TEXTURE_2D)
+                        glBindTexture(GL_TEXTURE_2D, model.textures[mesh.material_index])
+                        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
+                        glColor4f(1.0, 1.0, 1.0, 1.0)
+
+                    # Default on (big win). If the ground ever renders black,
+                    # set canvas._terrain_vbo_enabled = False to fall back to
+                    # the proven client-array path while we debug.
+                    tvbo = (self._ensure_terrain_vbo(mesh)
+                            if getattr(self, '_terrain_vbo_enabled', True) else False)
+                    if tvbo:
+                        # GPU-resident: bind buffers, draw with offsets — no
+                        # per-frame CPU→GPU transfer of the 1.5M-index mesh.
+                        glBindBuffer(GL_ARRAY_BUFFER, tvbo['pos'])
+                        glEnableClientState(GL_VERTEX_ARRAY)
+                        glVertexPointer(3, GL_FLOAT, 0, _z)
+                        if tvbo['nrm']:
+                            glBindBuffer(GL_ARRAY_BUFFER, tvbo['nrm'])
+                            glEnableClientState(GL_NORMAL_ARRAY)
+                            glNormalPointer(GL_FLOAT, 0, _z)
+                        if has_uvs and has_texture and tvbo['uv']:
+                            glBindBuffer(GL_ARRAY_BUFFER, tvbo['uv'])
+                            glEnableClientState(GL_TEXTURE_COORD_ARRAY)
+                            glTexCoordPointer(2, GL_FLOAT, 0, _z)
+                        if tvbo['ibo']:
+                            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, tvbo['ibo'])
+                            glDrawElements(GL_TRIANGLES, tvbo['count'], GL_UNSIGNED_INT, _z)
+                        else:
+                            glDrawArrays(GL_TRIANGLES, 0, tvbo['nverts'])
+                        glBindBuffer(GL_ARRAY_BUFFER, 0)
+                        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
+                        glDisableClientState(GL_VERTEX_ARRAY)
+                        if tvbo['nrm']:
+                            glDisableClientState(GL_NORMAL_ARRAY)
+                        if has_uvs and has_texture and tvbo['uv']:
+                            glDisableClientState(GL_TEXTURE_COORD_ARRAY)
+                    else:
+                        # Fallback: client arrays (re-sent from CPU each frame).
+                        glEnableClientState(GL_VERTEX_ARRAY)
+                        glVertexPointer(3, GL_FLOAT, 0, mesh.vertices)
+                        if mesh.normals is not None:
+                            glEnableClientState(GL_NORMAL_ARRAY)
+                            glNormalPointer(GL_FLOAT, 0, mesh.normals)
+                        if has_uvs and has_texture:
+                            glEnableClientState(GL_TEXTURE_COORD_ARRAY)
+                            glTexCoordPointer(2, GL_FLOAT, 0, mesh.uvs)
+                        if mesh.indices is not None:
+                            glDrawElements(GL_TRIANGLES, len(mesh.indices), GL_UNSIGNED_INT, mesh.indices)
+                        else:
+                            glDrawArrays(GL_TRIANGLES, 0, len(mesh.vertices))
+                        glDisableClientState(GL_VERTEX_ARRAY)
+                        if mesh.normals is not None:
+                            glDisableClientState(GL_NORMAL_ARRAY)
+                        if has_uvs and has_texture:
+                            glDisableClientState(GL_TEXTURE_COORD_ARRAY)
+
+                    if has_texture:
+                        glBindTexture(GL_TEXTURE_2D, 0)
+                        glDisable(GL_TEXTURE_2D)
+            else:
+                if model.display_list:
+                    glCallList(model.display_list)
+        except Exception as e:
+            print(f"Error rendering terrain: {e}")
+        finally:
+            if _ts_on:
+                glUseProgram(0)
+                glActiveTexture(GL_TEXTURE1)
+                glBindTexture(GL_TEXTURE_2D, 0)
+                glActiveTexture(GL_TEXTURE0)
+            glPopMatrix()
+
+    def render_camera_preview(self, eye, look, up, fov, width, height):
+        """Render the scene from an arbitrary camera into an offscreen FBO and
+        return a QImage — the CS camera preview pass (cutscene camera POV,
+        BW-editor style). eye/look/up are GL-space (x, z, -y of game space).
+
+        Draws the SCENE only (terrain + water + vegetation + entity models) —
+        no grid, overlays, gizmos, markers or HUD. Reuses the main context's
+        resources directly (same GL context — no sharing pitfalls). The
+        classic model path re-prepares instance batches for the preview
+        camera; the next main frame re-prepares its own, so nothing leaks.
+
+        Called from a Qt timer (never from inside paintGL). Returns None on
+        any failure.
+        """
+        try:
+            from PyQt5.QtGui import QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
+            width = max(int(width), 16)
+            height = max(int(height), 16)
+
+            self.makeCurrent()
+            fbo = getattr(self, '_cs_preview_fbo', None)
+            if fbo is None or fbo.width() != width or fbo.height() != height:
+                fmt = QOpenGLFramebufferObjectFormat()
+                fmt.setAttachment(QOpenGLFramebufferObject.CombinedDepthStencil)
+                fbo = QOpenGLFramebufferObject(width, height, fmt)
+                self._cs_preview_fbo = fbo
+            if not fbo.isValid() or not fbo.bind():
+                self.doneCurrent()
+                return None
+
+            # Swap in a preview camera so anything that reads self.camera_3d
+            # (vegetation billboards, water) follows the cutscene camera.
+            saved_cam = self.camera_3d
+            prev_cam = Camera3D.__new__(Camera3D)
+            prev_cam.__dict__.update(saved_cam.__dict__)
+            prev_cam.position = np.array(eye, dtype=float)
+            fwd = np.array(look, dtype=float) - prev_cam.position
+            fl = np.linalg.norm(fwd)
+            fwd = fwd / fl if fl > 1e-9 else np.array([0.0, 0.0, -1.0])
+            upv = np.array(up, dtype=float)
+            ul = np.linalg.norm(upv)
+            upv = upv / ul if ul > 1e-9 else np.array([0.0, 1.0, 0.0])
+            right = np.cross(fwd, upv)
+            rl = np.linalg.norm(right)
+            right = right / rl if rl > 1e-9 else np.array([1.0, 0.0, 0.0])
+            prev_cam.forward = fwd
+            prev_cam.up = np.cross(right, fwd)
+            prev_cam.right = right
+            prev_cam.yaw = math.degrees(math.atan2(fwd[2], fwd[0]))
+            prev_cam.pitch = math.degrees(math.asin(max(-1.0, min(1.0, fwd[1]))))
+            self.camera_3d = prev_cam
+            try:
+                glViewport(0, 0, width, height)
+                glClearColor(0.45, 0.62, 0.82, 1.0)   # sky
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+                glMatrixMode(GL_PROJECTION)
+                glLoadIdentity()
+                gluPerspective(float(fov), width / float(height), 0.1, 10000.0)
+                glMatrixMode(GL_MODELVIEW)
+                glLoadIdentity()
+                gluLookAt(eye[0], eye[1], eye[2], look[0], look[1], look[2],
+                          upv[0], upv[1], upv[2])
+
+                # Same world-space light rig as the main pass.
+                glEnable(GL_LIGHTING)
+                glEnable(GL_LIGHT0)
+                glEnable(GL_LIGHT1)
+                glDisable(GL_LIGHT2)
+                glEnable(GL_COLOR_MATERIAL)
+                glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
+                glEnable(GL_NORMALIZE)
+                glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE)
+                glLightfv(GL_LIGHT0, GL_POSITION, self._key_light_pos())
+                glLightfv(GL_LIGHT0, GL_DIFFUSE,  [0.90, 0.88, 0.82, 1.0])
+                glLightfv(GL_LIGHT0, GL_SPECULAR, [0.50, 0.48, 0.44, 1.0])
+                glLightfv(GL_LIGHT0, GL_AMBIENT,  [0.00, 0.00, 0.00, 1.0])
+                glLightfv(GL_LIGHT1, GL_POSITION, [0.0, 1.0, 0.0, 0.0])
+                glLightfv(GL_LIGHT1, GL_DIFFUSE,  [0.30, 0.33, 0.42, 1.0])
+                glLightfv(GL_LIGHT1, GL_SPECULAR, [0.00, 0.00, 0.00, 1.0])
+                glLightfv(GL_LIGHT1, GL_AMBIENT,  [0.00, 0.00, 0.00, 1.0])
+                glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.38, 0.38, 0.42, 1.0])
+                glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.15, 0.15, 0.15, 1.0])
+                glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 40.0)
+                if self.day_night_enabled:
+                    self._apply_day_night()
+
+                glEnable(GL_DEPTH_TEST)
+                glDepthFunc(GL_LESS)
+                glDepthMask(GL_TRUE)
+                glEnable(GL_CULL_FACE)
+                glCullFace(GL_BACK)
+                glFrontFace(GL_CCW)
+                glDisable(GL_BLEND)
+
+                # Terrain (no shadow shader — the preview casts no map of its own)
+                if getattr(self, 'terrain_models', []):
+                    for t_model, t_wx, t_wy in self.terrain_models:
+                        self._draw_terrain_tile(t_model, t_wx, t_wy, allow_shadow=False)
+                elif self.terrain_model:
+                    tx = getattr(self, 'terrain_world_offset_x',
+                                 getattr(self.terrain_renderer, 'terrain_offset_x', 0.0)
+                                 if hasattr(self, 'terrain_renderer') else 0.0)
+                    ty = getattr(self, 'terrain_world_offset_y',
+                                 getattr(self.terrain_renderer, 'terrain_offset_y', 0.0)
+                                 if hasattr(self, 'terrain_renderer') else 0.0)
+                    self._draw_terrain_tile(self.terrain_model, tx, ty, allow_shadow=False)
+
+                # Water planes (reflection texture stays 0 → flat sky fallback)
+                if hasattr(self, 'water_plane_renderer') and hasattr(self, 'terrain_renderer'):
+                    try:
+                        self.water_plane_renderer._water_reflect_tex = 0
+                        self.water_plane_renderer.render_water_planes(
+                            self.terrain_renderer, canvas=self,
+                            water_mesh_editor=getattr(self, 'water_mesh_editor', None))
+                    except Exception:
+                        pass
+
+                # Vegetation (billboards face the swapped-in preview camera)
+                if getattr(self, 'show_vegetation', True) and hasattr(self, 'vegetation_renderer'):
+                    try:
+                        self.vegetation_renderer.render(self)
+                    except Exception:
+                        pass
+
+                # Entity models near the preview camera, classic instanced path.
+                # prepare_batches is camera-independent; the main view re-prepares
+                # its own frame next paint, so clobbering per-frame state is safe.
+                if hasattr(self, 'model_loader') and self.entities:
+                    try:
+                        ex, ez = float(eye[0]), float(eye[2])
+                        max_d2 = 1500.0 * 1500.0
+                        subset = []
+                        for e in self.entities:
+                            try:
+                                dx = e.x - ex
+                                dz = -e.y - ez        # game y → GL -z
+                                if dx * dx + dz * dz <= max_d2:
+                                    subset.append(e)
+                            except Exception:
+                                continue
+                        self.model_loader.night_factor = (
+                            self._night_factor if self.day_night_enabled else 1.0)
+                        self.model_loader.prepare_batches(subset, [])
+                        self.model_loader.render_batched_models()
+                    except Exception as _e:
+                        print(f"[cs-preview] model pass failed: {_e}")
+
+                glDisable(GL_LIGHTING)
+                img = fbo.toImage()
+            finally:
+                self.camera_3d = saved_cam
+                fbo.release()
+                try:
+                    dpr = self.devicePixelRatioF() if hasattr(self, 'devicePixelRatioF') else 1.0
+                    glViewport(0, 0, int(self.width() * dpr), int(self.height() * dpr))
+                except Exception:
+                    pass
+                self.doneCurrent()
+            return img
+        except Exception as e:
+            print(f"[cs-preview] render failed: {e}")
+            import traceback
+            traceback.print_exc()
+            try:
+                self.doneCurrent()
+            except Exception:
+                pass
+            return None
+
     def _render_3d_opengl(self):
         """Render 3D scene using OpenGL with matching grid style"""
         try:
@@ -4577,133 +4878,10 @@ class MapCanvas(QOpenGLWidget):
             # --------------------------------------------------
             # DRAW TERRAIN (includes water - both in same display list)
             # --------------------------------------------------
-            def _render_terrain_model(model, tx, ty):
-                _ts_on = False
-                glPushMatrix()
-                try:
-                    if tx or ty:
-                        glTranslatef(float(tx), 0.0, float(-ty))
-
-                    # FC2 terrain needs NO rotation (July 2026, proven empirically):
-                    # scoring entity hidPos.z against the terrain heightmap at each
-                    # entity's (x, y) across all 8 orientations shows the raw
-                    # file mapping IS world space (identity — world x = heightmap
-                    # column, world y = sector-number row). The mesh pipeline
-                    # (flip-v assembly + PZ = row - height, rendered with y → -z)
-                    # already composes to exactly that identity, so the old
-                    # 180°/90° rotations were themselves the misalignment.
-                    # Avatar terrain also needs no rotation. Keep BOTH unrotated.
-
-                    # Terrain uses the same material as entities now that it has
-                    # correct per-vertex normals and responds to sun lighting properly.
-
-                    # Terrain shadow RECEIVER (ported from the AM3D editor). When the
-                    # sun shadow map is active (day/night on + sun up + models cast),
-                    # draw the ground through a per-pixel shader that samples the depth
-                    # map, so objects/hills cast real shadows onto the terrain — the
-                    # piece Avatar/FC2 lacked (terrain was fixed-function, couldn't
-                    # sample). The (tex, light_vp) pair is cast UP FRONT this frame by
-                    # _precast_shadows (AM3D order), so terrain + models share one map.
-                    # Any miss → fixed-function, unchanged look.
-                    if getattr(self, '_shadow_active', False):
-                        _tsp, _tsl = self._ensure_terrain_shadow_shader()
-                        _lvp = getattr(self, '_terrain_light_vp', None)
-                        _stex = getattr(self, '_shadow_tex', 0)
-                        if _tsp and _lvp is not None and _stex:
-                            glUseProgram(_tsp)
-                            _ts_on = True   # set NOW so finally always restores prog 0
-                            glUniform1i(_tsl['u_tex'], 0)
-                            glUniform1i(_tsl['u_shadow'], 1)
-                            # u_shadow_on carries the 0..1 day strength: fades the
-                            # ground shadow in/out in sync with the sun + models.
-                            glUniform1f(_tsl['u_shadow_on'], float(self._shadow_strength()))
-                            glUniform1f(_tsl['u_shadow_bias'], float(getattr(self, '_shadow_bias_terrain', 0.0006)))
-                            glUniform3f(_tsl['u_tile_offset'], float(tx), 0.0, float(-ty))
-                            glUniformMatrix4fv(_tsl['u_light_vp'], 1, GL_TRUE,
-                                               np.ascontiguousarray(_lvp, dtype=np.float32))
-                            glActiveTexture(GL_TEXTURE1)
-                            glBindTexture(GL_TEXTURE_2D, int(_stex))
-                            glActiveTexture(GL_TEXTURE0)
-
-                    if hasattr(model, 'use_immediate_mode') and model.use_immediate_mode:
-                        _z = ctypes.c_void_p(0)
-                        for mesh in model.meshes:
-                            if mesh.vertices is None:
-                                continue
-                            has_uvs = mesh.uvs is not None and len(mesh.uvs) > 0
-                            has_texture = mesh.material_index is not None and mesh.material_index in model.textures
-                            if has_texture:
-                                glEnable(GL_TEXTURE_2D)
-                                glBindTexture(GL_TEXTURE_2D, model.textures[mesh.material_index])
-                                glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
-                                glColor4f(1.0, 1.0, 1.0, 1.0)
-
-                            # Default on (big win). If the ground ever renders black,
-                            # set canvas._terrain_vbo_enabled = False to fall back to
-                            # the proven client-array path while we debug.
-                            tvbo = (self._ensure_terrain_vbo(mesh)
-                                    if getattr(self, '_terrain_vbo_enabled', True) else False)
-                            if tvbo:
-                                # GPU-resident: bind buffers, draw with offsets — no
-                                # per-frame CPU→GPU transfer of the 1.5M-index mesh.
-                                glBindBuffer(GL_ARRAY_BUFFER, tvbo['pos'])
-                                glEnableClientState(GL_VERTEX_ARRAY)
-                                glVertexPointer(3, GL_FLOAT, 0, _z)
-                                if tvbo['nrm']:
-                                    glBindBuffer(GL_ARRAY_BUFFER, tvbo['nrm'])
-                                    glEnableClientState(GL_NORMAL_ARRAY)
-                                    glNormalPointer(GL_FLOAT, 0, _z)
-                                if has_uvs and has_texture and tvbo['uv']:
-                                    glBindBuffer(GL_ARRAY_BUFFER, tvbo['uv'])
-                                    glEnableClientState(GL_TEXTURE_COORD_ARRAY)
-                                    glTexCoordPointer(2, GL_FLOAT, 0, _z)
-                                if tvbo['ibo']:
-                                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, tvbo['ibo'])
-                                    glDrawElements(GL_TRIANGLES, tvbo['count'], GL_UNSIGNED_INT, _z)
-                                else:
-                                    glDrawArrays(GL_TRIANGLES, 0, tvbo['nverts'])
-                                glBindBuffer(GL_ARRAY_BUFFER, 0)
-                                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
-                                glDisableClientState(GL_VERTEX_ARRAY)
-                                if tvbo['nrm']:
-                                    glDisableClientState(GL_NORMAL_ARRAY)
-                                if has_uvs and has_texture and tvbo['uv']:
-                                    glDisableClientState(GL_TEXTURE_COORD_ARRAY)
-                            else:
-                                # Fallback: client arrays (re-sent from CPU each frame).
-                                glEnableClientState(GL_VERTEX_ARRAY)
-                                glVertexPointer(3, GL_FLOAT, 0, mesh.vertices)
-                                if mesh.normals is not None:
-                                    glEnableClientState(GL_NORMAL_ARRAY)
-                                    glNormalPointer(GL_FLOAT, 0, mesh.normals)
-                                if has_uvs and has_texture:
-                                    glEnableClientState(GL_TEXTURE_COORD_ARRAY)
-                                    glTexCoordPointer(2, GL_FLOAT, 0, mesh.uvs)
-                                if mesh.indices is not None:
-                                    glDrawElements(GL_TRIANGLES, len(mesh.indices), GL_UNSIGNED_INT, mesh.indices)
-                                else:
-                                    glDrawArrays(GL_TRIANGLES, 0, len(mesh.vertices))
-                                glDisableClientState(GL_VERTEX_ARRAY)
-                                if mesh.normals is not None:
-                                    glDisableClientState(GL_NORMAL_ARRAY)
-                                if has_uvs and has_texture:
-                                    glDisableClientState(GL_TEXTURE_COORD_ARRAY)
-
-                            if has_texture:
-                                glBindTexture(GL_TEXTURE_2D, 0)
-                                glDisable(GL_TEXTURE_2D)
-                    else:
-                        if model.display_list:
-                            glCallList(model.display_list)
-                except Exception as e:
-                    print(f"Error rendering terrain: {e}")
-                finally:
-                    if _ts_on:
-                        glUseProgram(0)
-                        glActiveTexture(GL_TEXTURE1)
-                        glBindTexture(GL_TEXTURE_2D, 0)
-                        glActiveTexture(GL_TEXTURE0)
-                    glPopMatrix()
+            # Refactored into _draw_terrain_tile so the CS camera preview pass
+            # can reuse it; the local alias keeps the call sites below (and the
+            # reflection-pass callback) unchanged.
+            _render_terrain_model = self._draw_terrain_tile
 
             # AM3D parity: cast the shadow map (terrain + models) UP FRONT, before
             # drawing the terrain/objects, so both receivers sample the SAME

@@ -3068,6 +3068,17 @@ class SimplifiedMapEditor(QMainWindow):
             import traceback
             traceback.print_exc()
             print(f"Object Library tab failed to build: {_ol_e}")
+
+        # ── CS Camera tab: cutscene-camera POV preview (BW-editor style) ────
+        try:
+            from canvas.cs_camera_preview import CSCameraPreviewWidget
+            self.cs_camera_preview = CSCameraPreviewWidget(self)
+            right_tabs.addTab(self.cs_camera_preview, "CS Camera")
+        except Exception as _cs_e:
+            import traceback
+            traceback.print_exc()
+            print(f"CS Camera preview tab failed to build: {_cs_e}")
+
         self.right_tabs = right_tabs
 
         dock.setWidget(right_tabs)
@@ -11294,6 +11305,8 @@ class SimplifiedMapEditor(QMainWindow):
             self.selected_movie_sequence = None
             self.selected_movie_node_id = None
             self._seq_play_btn.setEnabled(False)
+            if hasattr(self, 'cs_camera_preview'):
+                self.cs_camera_preview.set_sequence(None)
             if hasattr(self, 'canvas'):
                 self.canvas.update()
             return
@@ -11316,6 +11329,8 @@ class SimplifiedMapEditor(QMainWindow):
         has_seq = self.selected_movie_sequence is not None and self.movie_data is not None
         self._seq_play_btn.setEnabled(has_seq)
         self._seq_reset_btn.setEnabled(has_seq)
+        if hasattr(self, 'cs_camera_preview'):
+            self.cs_camera_preview.set_sequence(self.selected_movie_sequence)
         if hasattr(self, 'canvas'):
             self.canvas.update()
 
@@ -11374,8 +11389,47 @@ class SimplifiedMapEditor(QMainWindow):
         if hasattr(self, 'canvas'):
             self.canvas.update()
 
+    def _movie_apply_time(self, t):
+        """Interpolate the selected sequence at time t and push entity
+        positions to the canvas. Shared by the preview tick and the CS camera
+        preview scrubber. Saves original positions on first use (so Reset
+        works even when scrubbing without ever pressing Play). Returns the
+        sequence, or None when nothing is selected."""
+        if not self.movie_data or not self.selected_movie_sequence:
+            return None
+        seq = self.movie_data.get_sequence(self.selected_movie_sequence)
+        if seq is None:
+            return None
+
+        entity_map = {e.id: e for e in (self.entities or [])}
+
+        if not self._movie_preview_saved:
+            for seq_node in seq.nodes:
+                nd = self.movie_data.node_defs.get(seq_node.node_id)
+                if nd and nd.entity_id in entity_map:
+                    ent = entity_map[nd.entity_id]
+                    self._movie_preview_saved[nd.entity_id] = (ent.x, ent.y, ent.z)
+            self._seq_reset_btn.setEnabled(True)
+
+        updates = {}
+        for seq_node in seq.nodes:
+            nd = self.movie_data.node_defs.get(seq_node.node_id)
+            if not nd or nd.entity_id not in entity_map:
+                continue
+            pos = seq_node.pos_at(t)
+            if pos:
+                ent = entity_map[nd.entity_id]
+                ent.x, ent.y, ent.z = pos[0], pos[1], pos[2]
+                updates[nd.entity_id] = pos
+
+        if hasattr(self, 'canvas') and updates:
+            # Patch only the moving entities in the cached arrays — no full rebuild
+            self.canvas.patch_preview_positions(updates)
+            self.canvas.update()
+        return seq
+
     def _movie_preview_tick(self):
-        """Called ~30 fps during preview — interpolate and push positions to entities."""
+        """Called ~60 fps during preview — interpolate and push positions to entities."""
         if not self.movie_data or not self.selected_movie_sequence:
             self._movie_preview_stop()
             return
@@ -11390,23 +11444,8 @@ class SimplifiedMapEditor(QMainWindow):
             self._movie_preview_stop(restore=True)
             return
 
-        entity_map = {e.id: e for e in (self.entities or [])}
-        updates = {}
-        for seq_node in seq.nodes:
-            nd = self.movie_data.node_defs.get(seq_node.node_id)
-            if not nd or nd.entity_id not in entity_map:
-                continue
-            pos = seq_node.pos_at(t)
-            if pos:
-                ent = entity_map[nd.entity_id]
-                ent.x, ent.y, ent.z = pos[0], pos[1], pos[2]
-                updates[nd.entity_id] = pos
-
+        self._movie_apply_time(t)
         self._seq_time_label.setText(f"{t:.1f} / {seq.end_time:.1f}s")
-        if hasattr(self, 'canvas') and updates:
-            # Patch only the moving entities in the cached arrays — no full rebuild
-            self.canvas.patch_preview_positions(updates)
-            self.canvas.update()
 
     def _movie_preview_reset(self):
         """Stop preview and restore entities to their original worldsector positions."""

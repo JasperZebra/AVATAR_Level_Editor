@@ -485,6 +485,7 @@ build_options = {
         'canvas.cube_batch',            # ← instanced marker-cube renderer (one draw for all cubes)
         'canvas.line_batch',            # ← batched wireframe-overlay renderer (prims/triggers/shape)
         'canvas.hkx_parser',            # ← native Havok 5.5 .hkx collision reader (wireframe overlay)
+        'canvas.cs_camera_preview',     # ← cutscene-camera POV preview (right-panel CS Camera tab)
 
         # ===================================================================
         # TOOLS PACKAGE

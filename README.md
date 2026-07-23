@@ -166,6 +166,10 @@ Both FCB (native game format) and XML (human-readable) formats are supported wit
   entities' real in-game collision shapes (.hkx — boxes, spheres, capsules,
   convex hulls, triangle meshes) as orange wireframes over the model in 3D.
   Works in both games.
+- **CS Camera Preview**: the right panel's *CS Camera* tab shows the level
+  through a cutscene camera's lens. Pick a sequence in the *Sequences* tab,
+  choose a camera, then play or scrub — the preview flies the camera along its
+  animation while the entities act out the sequence in the main view. Both games.
 
 ## Safety & Best Practices
 
