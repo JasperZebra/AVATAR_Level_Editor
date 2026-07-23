@@ -162,6 +162,10 @@ Both FCB (native game format) and XML (human-readable) formats are supported wit
 - **Grid System**: Multi-level grids that adapt to zoom level
 - **Sector Boundaries**: Visual boundaries with violation detection
 - **Entity Browser**: Searchable, filterable entity management
+- **Collision Viewer**: *View → Toggle Collision (Selected)* draws the selected
+  entities' real in-game collision shapes (.hkx — boxes, spheres, capsules,
+  convex hulls, triangle meshes) as orange wireframes over the model in 3D.
+  Works in both games.
 
 ## Safety & Best Practices
 

@@ -577,6 +577,7 @@ class MapCanvas(QOpenGLWidget):
         self.show_omnis_entities       = True
         self.show_landmark_entities    = True
         self.show_trigger_zones        = True
+        self.show_collision            = False   # .hkx wireframes for selected entities
 
         # *** NEW: 3D rendering toggles (independent from 2D toggles) ***
         self.show_3d_hud = True          # Toggle HUD overlay (camera info, controls)
@@ -1789,6 +1790,7 @@ class MapCanvas(QOpenGLWidget):
             self._render_triggers_3d(visible_entities)
             _ts = self._pf('triggers', _ts)
             self._render_shape_points_3d(visible_entities)
+            self._render_collision_3d(visible_entities)
             self._overlay_batch_flush()
             render_movie_paths_3d(self)
             self._pf('shape', _ts)
@@ -1798,7 +1800,8 @@ class MapCanvas(QOpenGLWidget):
         key = (getattr(self, '_pos_arrays_version', 0),
                id(self.entities), len(self.entities),
                frozenset(id(e) for e in (self.selected or [])),
-               bool(self.show_trigger_zones))
+               bool(self.show_trigger_zones),
+               bool(getattr(self, 'show_collision', False)))
         if key != getattr(self, '_ov_cache_key', None):
             full = self._get_map_filtered_entities()
             batch.begin()
@@ -1806,6 +1809,7 @@ class MapCanvas(QOpenGLWidget):
             self._render_primitives_3d(full)
             self._render_triggers_3d(full)
             self._render_shape_points_3d(full)
+            self._render_collision_3d(full)
             self._ov_cache_lines, self._ov_cache_points = batch.snapshot()
             self._ov_cache_spherecyl = getattr(self, '_ov_sphere_cyl_pending', []) or []
             self._ov_cache_key = key
@@ -1818,6 +1822,64 @@ class MapCanvas(QOpenGLWidget):
         self._draw_sphere_cyl_prims(getattr(self, '_ov_cache_spherecyl', None))
         render_movie_paths_3d(self)
         self._pf('overlay3d', _ts)
+
+    def _render_collision_3d(self, visible_entities=None):
+        """Draw .hkx collision wireframes for SELECTED entities (View-menu
+        toggle `show_collision`, default off).
+
+        Each selected entity's model (`entity.model_file`, foo.xbg) has its
+        collision in the sibling foo.hkx — parsed once via canvas/hkx_parser
+        (Havok 5.5 packfile reader ported from the XBG Importer v3 addon,
+        cached by path+mtime), then transformed with the SAME matrix sequence
+        the model render uses (overlay_matrix + _get_entity_rs) so the
+        wireframe sits exactly on the rendered model. Orange lines through
+        the shared LineBatch; immediate-mode fallback when it's unavailable."""
+        if not getattr(self, 'show_collision', False) or not self.selected:
+            return
+        ml = getattr(self, 'model_loader', None)
+        if ml is None:
+            return
+        try:
+            from hkx_parser import (find_collision_for_model,
+                                    load_collision_wireframe)
+            from line_batch import overlay_matrix, transform_points
+        except Exception as e:
+            print(f"[HKX] collision overlay unavailable: {e}")
+            return
+
+        batch = self._overlay_batch()
+        color = (1.0, 0.55, 0.1)   # orange — distinct from prims/triggers
+        for entity in self.selected:
+            model_path = getattr(entity, 'model_file', None)
+            if not model_path:
+                continue
+            if not all(hasattr(entity, a) for a in ('x', 'y', 'z')):
+                continue
+            hkx = find_collision_for_model(model_path)
+            if not hkx:
+                continue
+            segs = load_collision_wireframe(hkx)
+            if segs is None or not len(segs):
+                continue
+            try:
+                rx, ry, rz, scale = ml._get_entity_rs(entity)
+            except Exception:
+                rx = ry = rz = 0.0
+                scale = 1.0
+            M = overlay_matrix(entity.x, entity.z, -entity.y,
+                               rx, ry, rz, scale, scale, scale)
+            world = transform_points(segs, M)
+            if batch is not None:
+                batch.add_lines(world, color)
+            else:
+                gl.glDisable(gl.GL_LIGHTING)
+                gl.glDisable(gl.GL_TEXTURE_2D)
+                gl.glColor3f(*color)
+                gl.glLineWidth(1.5)
+                gl.glBegin(gl.GL_LINES)
+                for p in world:
+                    gl.glVertex3f(float(p[0]), float(p[1]), float(p[2]))
+                gl.glEnd()
 
     def _render_triggers_3d(self, visible_entities=None):
         """Render trigger volumes in 3D mode as yellow wireframe boxes"""

@@ -149,6 +149,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/map_canvas_gpu.py` | `tests/test_pick_landmark_priority.py` | — | 3D pick two-track resolution (**mirrored**): landmark LOD twins at the same spot lose to the real entity within a 3-unit tie tolerance; genuinely-closer landmarks still win; hidden sources unpickable — excluded from `--cov` |
 | `canvas/mesh.py` + `canvas/xbg_parser.py` | `tests/test_xbg_vertex_decode.py` | — | Flag-driven vertex decode (component offsets for 0x0BCA/0x0BDA, unsigned-BGRA authored normal/tangent/color decode vs synthetic buffer) + DNKS byte-budget multi-block parse (5 blocks survive a lod_count of 2); modules imported with `canvas/` on sys.path — excluded from `--cov` |
 | `canvas/texture_loader.py` | `tests/test_texture_slot_resolution.py` | — | Addon-delta slot mappings (heighttexture1→height, alphatexture1[wrap]→alpha) + `resolve_xbt_full_path` lowercase-retry fallback (case-sensitive extracted packs), via monkeypatched `os.path.exists` — excluded from `--cov` |
+| `canvas/hkx_parser.py` | `tests/test_hkx_parser.py` | — | Builds a minimal SYNTHETIC Havok 5.5 packfile (rigid body + box shape wired through real fixup tables, ± 16-byte game wrapper) and checks parse → wireframe end-to-end; plus sphere/capsule wire builders and the .xbg↔.hkx sibling lookup — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -3483,3 +3484,47 @@ material chain.
 
 Verified end-to-end on real data: 20 random Avatar models → 42 referenced materials → 42
 .xbm found+parsed → 42 diffuse slots → 42 diffuse .xbt files resolved on disk (0 misses).
+
+## Collision viewing — native .hkx reader + 3D overlay (July 2026)
+
+Task 3 of the addon-port series. The editor can now show real in-game collision shapes.
+
+**`canvas/hkx_parser.py` (new, GL-free).** Port of the addon's Havok 5.5 packfile reader
+(`hkx_native_avatar.py` read path; the FC2 copy is byte-identical so ONE module serves both
+games). `HkxFile` parses the packfile (16-byte game wrapper auto-detected, sections table,
+virtual/local/global fixup tables — never dereference raw pointer bytes, always resolve
+through the fixup dicts), `rigid_bodies()`/`walk_shape()` flatten the shape graph with numpy
+4×4 transforms (mathutils swapped out). All member offsets are documented in the module
+docstring. Supported: box, sphere, capsule/cylinder, convex vertices (FourVectors SoA — the
+48-byte x[4]y[4]z[4] chunk layout), triangle mesh (via *MeshSubpartStorage), list, MOPP
+(transparent), translate/transform wrappers. `load_collision_wireframe(path)` bakes
+rb_xform @ shape_xform and returns flat GL_LINES pairs (float32, capped at 120k segments,
+cached by path+mtime with negative caching). `find_collision_for_model(xbg)` maps
+`foo.xbg ↔ foo.hkx` (verified sibling convention in the game data).
+
+- **Coordinate space:** raw Havok = game space (same as .xbg vertices) — NO axis swap or
+  scale in the file; the entity's model transform applies unchanged.
+- **Convex hull edges use scipy** (`scipy.spatial.ConvexHull`) with an AABB-box fallback —
+  and setup.py EXCLUDES scipy from frozen builds, so release builds show convex shapes as
+  their bounding boxes while dev runs show true hulls. Acceptable degradation; if exact
+  hulls matter in frozen builds, remove 'scipy' from setup.py excludes (large size cost).
+
+**Overlay integration (`canvas/map_canvas_gpu.py`).** `show_collision` flag (default off) +
+`_render_collision_3d()`: draws SELECTED entities' collision as orange (1.0, 0.55, 0.1)
+wireframes through the shared LineBatch (immediate-mode fallback included). Transform =
+`overlay_matrix(entity.x, entity.z, -entity.y, *_get_entity_rs(entity), scale×3)` — the
+exact model render sequence, so wireframes sit ON the model. Wired into BOTH
+`_render_overlays_3d` paths; `show_collision` added to the overlay cache key (selection ids
+were already in it, so selecting a different entity rebuilds correctly).
+
+**UI (`simplified_map_editor.py`).** View → "Toggle Collision (Selected)" (checkable,
+default off) → `_set_collision_visibility`. README updated. `canvas.hkx_parser` added to
+setup.py packages (Rule 4).
+
+**Verified on real data:** 34/34 Avatar .hkx files parse (0 fail/0 empty) across all shape
+classes ({StorageExtendedMesh: 42, Box: 26, ConvexVertices: 34, Sphere: 1, Capsule: 1}
+in the sample); collision extents match the sibling model's vertex bounds at ratios
+0.87–1.02 on spot-checked pairs (atv, extraction tower, rock arch), confirming both
+geometry decode and transform composition. FC2 ships no loose .hkx in the currently
+extracted MODDED folder, but the format/reader is identical (addon's FC2 module diffs
+empty vs Avatar's).

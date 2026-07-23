@@ -1803,6 +1803,16 @@ class SimplifiedMapEditor(QMainWindow):
             lambda checked: self._set_trigger_zones_visibility(checked))
         view_menu.addAction(self.toggle_trigger_zones_action)
 
+        # Collision wireframe toggle (.hkx of the selected entity's model)
+        self.toggle_collision_action = QAction("Toggle Collision (Selected)", self)
+        self.toggle_collision_action.setCheckable(True)
+        self.toggle_collision_action.setChecked(False)
+        self.toggle_collision_action.setToolTip(
+            "Show the selected entities' .hkx collision shapes as orange wireframes in 3D")
+        self.toggle_collision_action.triggered.connect(
+            lambda checked: self._set_collision_visibility(checked))
+        view_menu.addAction(self.toggle_collision_action)
+
         view_menu.addSeparator()
 
         sector_menu_action = QAction("Toggle Sectors", self)
@@ -13437,6 +13447,13 @@ class SimplifiedMapEditor(QMainWindow):
         self.canvas.show_trigger_zones = visible
         self.canvas.update()
         self.status_bar.showMessage(f"Trigger zones: {'visible' if visible else 'hidden'}")
+
+    def _set_collision_visibility(self, visible):
+        """Show/hide .hkx collision wireframes for selected entities (3D)."""
+        self.canvas.show_collision = visible
+        self.canvas.update()
+        self.status_bar.showMessage(
+            f"Collision wireframes (selected): {'visible' if visible else 'hidden'}")
     
     def _on_light_angle_changed(self, angle):
         if hasattr(self, 'canvas'):

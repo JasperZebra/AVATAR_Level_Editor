@@ -484,6 +484,7 @@ build_options = {
         'canvas.shadow_map',            # ← sun shadow mapping (depth FBO + light-space matrix)
         'canvas.cube_batch',            # ← instanced marker-cube renderer (one draw for all cubes)
         'canvas.line_batch',            # ← batched wireframe-overlay renderer (prims/triggers/shape)
+        'canvas.hkx_parser',            # ← native Havok 5.5 .hkx collision reader (wireframe overlay)
 
         # ===================================================================
         # TOOLS PACKAGE
