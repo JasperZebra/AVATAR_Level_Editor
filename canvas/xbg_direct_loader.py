@@ -101,6 +101,13 @@ def build_xbg_model(xbg_path, GLTFModel, GLTFMesh, lod_level=0):
         elif src.vert_uv_list and len(src.vert_uv_list) == _nverts:
             uvs = np.asarray(src.vert_uv_list, dtype=np.float32)
 
+        # Authored tangents (decoded from the vertex buffer's D3DCOLOR TANGENT
+        # component) — preferred over the UV-derived computation when present.
+        tans = None
+        _tarr = getattr(src, 'vert_tangent_arr', None)
+        if _tarr is not None and len(_tarr) == _nverts:
+            tans = np.ascontiguousarray(_tarr, dtype=np.float32)
+
         # One GLTFMesh per primitive (material group), sharing the vertex arrays.
         primitives = list(getattr(src, 'primitives', []) or [])
         if primitives:
@@ -108,14 +115,14 @@ def build_xbg_model(xbg_path, GLTFModel, GLTFMesh, lod_level=0):
                 if not prim.indices:
                     continue
                 gm = _make_gltfmesh(GLTFMesh, verts, norms, uvs,
-                                    prim.indices, prim.material_index)
+                                    prim.indices, prim.material_index, tans)
                 model.meshes.append(gm)
         elif src.face_list:
             flat = []
             for face in src.face_list:
                 flat.extend(face)
             if flat:
-                gm = _make_gltfmesh(GLTFMesh, verts, norms, uvs, flat, 0)
+                gm = _make_gltfmesh(GLTFMesh, verts, norms, uvs, flat, 0, tans)
                 model.meshes.append(gm)
 
     if have_bounds:
@@ -125,7 +132,8 @@ def build_xbg_model(xbg_path, GLTFModel, GLTFMesh, lod_level=0):
     return model
 
 
-def _make_gltfmesh(GLTFMesh, verts, norms, uvs, indices, material_index):
+def _make_gltfmesh(GLTFMesh, verts, norms, uvs, indices, material_index,
+                   authored_tangents=None):
     gm = GLTFMesh()
     gm.vertices = verts
     gm.normals = norms
@@ -138,10 +146,14 @@ def _make_gltfmesh(GLTFMesh, verts, norms, uvs, indices, material_index):
     idx = np.asarray(indices, dtype=np.uint32)
     gm.indices = idx
     gm.material_index = int(material_index)
-    # Per-vertex tangents (for the GLSL normal-mapping pass). Needs UVs + normals;
-    # harmless when absent (the shader's u_has_normal flag gates normal mapping).
-    gm.tangents = (_compute_tangents(verts, uvs, idx)
-                   if (uvs is not None and norms is not None) else None)
+    # Per-vertex tangents (for the GLSL normal-mapping pass): authored ones
+    # decoded from the file when available, else derived from positions + UVs.
+    # Harmless when absent (the shader's u_has_normal flag gates normal mapping).
+    if authored_tangents is not None:
+        gm.tangents = authored_tangents
+    else:
+        gm.tangents = (_compute_tangents(verts, uvs, idx)
+                       if (uvs is not None and norms is not None) else None)
     return gm
 
 

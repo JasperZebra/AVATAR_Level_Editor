@@ -8,6 +8,58 @@ from typing import List, Tuple, Optional
 from math_utils import Vector
 
 
+# ── XBG vertex format flags (SDOL per-VB flags word) ─────────────────────────
+# Port of the XBG Importer v3 addon's VertexFlags. Components appear in the
+# vertex stride in the _VERTEX_COMPONENT_ORDER below, each contributing its
+# size only when its flag bit is set. Position flags are mutually exclusive.
+POS_FLOAT = 0x0001   # 12B: 3×float32
+POS_INT16 = 0x0002   # 8B:  3×int16 + 2 pad (dequantize by PMCP vert_pos_scale)
+POS_HALF  = 0x0004   # 8B:  3×float16 + pad
+UV0       = 0x0008   # 4B:  2×int16 (dequantize by PMCU)
+BONE_WTS1 = 0x0010   # 8B:  4×uint8 weights + 4×uint8 palette indices
+BONE_WTS2 = 0x0020   # 8B:  second influence set (not decoded)
+NORMAL    = 0x0040   # 4B:  3×uint8 D3DCOLOR (unsigned BGRA) + 1 byte
+COLOR     = 0x0080   # 4B:  4×uint8 BGRA
+TANGENT   = 0x0100   # 4B:  3×uint8 D3DCOLOR + handedness byte (usually 0x80)
+BINORMAL  = 0x0200   # 4B:  3×uint8 D3DCOLOR + handedness byte
+UNK_400   = 0x0400   # 4B:  unknown, skipped
+UV1       = 0x0800   # 4B:  2×int16; (-32768,-32768) = unused sentinel
+UV2       = 0x1000   # 4B:  2×int16; same sentinel
+
+_VERTEX_COMPONENT_ORDER = (
+    ('pos_float', POS_FLOAT, 12),
+    ('pos_int16', POS_INT16, 8),
+    ('pos_half',  POS_HALF,  8),
+    ('uv0',       UV0,       4),
+    ('uv1',       UV1,       4),
+    ('uv2',       UV2,       4),
+    ('bone1',     BONE_WTS1, 8),
+    ('bone2',     BONE_WTS2, 8),
+    ('normal',    NORMAL,    4),
+    ('color',     COLOR,     4),
+    ('tangent',   TANGENT,   4),
+    ('binormal',  BINORMAL,  4),
+    ('unk400',    UNK_400,   4),
+)
+
+
+def compute_component_offsets(flags: int) -> Tuple[dict, int]:
+    """Byte offset of each vertex component for an XBG format flags word.
+
+    Returns ({component_key: offset}, computed_stride). The caller should trust
+    the offsets only when computed_stride matches the SDOL stride — that's the
+    addon-verified validity check (known-good words: 0x0BCA=32B static,
+    0x0BDA=40B skinned).
+    """
+    offsets = {}
+    stride = 0
+    for key, bit, size in _VERTEX_COMPONENT_ORDER:
+        if flags & bit:
+            offsets[key] = stride
+            stride += size
+    return offsets, stride
+
+
 class MeshPrimitive:
     """A group of faces sharing a material"""
     def __init__(self):
@@ -30,6 +82,13 @@ class Mesh:
         self.vert_pos_arr = None      # (N,3) float32
         self.vert_uv_arr = None       # (N,2) float32
         self.vert_normal_arr = None   # (N,3) float32
+        # Authored (file-decoded) vertex attributes — filled when the vertex
+        # format flags say the component exists. has_authored_normals
+        # distinguishes decoded normals from compute_face_normals output.
+        self.has_authored_normals = False
+        self.vert_tangent_arr = None  # (N,3) float32 (handedness byte separate)
+        self.tangent_sign_arr = None  # (N,) uint8 raw handedness byte
+        self.vert_color_arr = None    # (N,4) uint8 RGBA
 
         # Replaced simple face_list with list of primitives
         self.primitives: List[MeshPrimitive] = []
@@ -49,7 +108,8 @@ class Mesh:
         self.lod_level: int = 0
         self.part_number: int = 0
         self.sub_part_index: int = -1
-        self.vb_index: int = 0 
+        self.vb_index: int = 0
+        self.name_index: int = 0   # flat positional index within the LOD (SDOL order)
 
     def add_vertex(self, position: List[float], uv: Optional[List[float]] = None):
         """Add a vertex to the mesh"""
@@ -161,13 +221,40 @@ def compute_face_normals(mesh: Mesh):
     mesh.vert_normal_list = normals
 
 
+def _decode_d3dcolor_vectors(arr, offset):
+    """Decode a 4-byte D3DCOLOR vector column (normal/tangent/binormal).
+
+    XBG Importer v3 addon fix: these are UNSIGNED-normalized bytes in BGRA
+    order — value = b/255*2-1, and XYZ come from bytes (2,1,0) (x = byte2).
+    The old obvious guesses (signed int8, in-order) scramble axes. Returns a
+    unit-normalized (N,3) float32 array (degenerates fall back to +Z).
+    """
+    import numpy as np
+    v = (arr[:, [offset + 2, offset + 1, offset + 0]].astype(np.float32)
+         / 255.0) * 2.0 - 1.0
+    ln = np.linalg.norm(v, axis=1)
+    good = ln > 1e-6
+    v[good] /= ln[good, None]
+    v[~good] = (0.0, 0.0, 1.0)
+    return v.astype(np.float32)
+
+
 def parse_mesh_vertices(g, mesh: Mesh, vert_pos_scale: float, uv_trans: float, uv_scale: float):
     """Parse vertex data for a mesh.
 
-    Vectorised: one bulk read of the whole vertex section, then numpy slicing at
-    fixed byte offsets (pos = 3×int16 @0, uv = 2×int16 @8, skin = 8×uint8 @16 for
-    stride-40). This replaces a Python per-vertex loop that was ~40× slower and
-    dominated model load time. Falls back to the per-vertex loop on any error.
+    Flag-driven (XBG Importer v3 addon port): component offsets are computed
+    from the SDOL vertex format flags (mesh.vert_format_flags), and trusted
+    only when the computed stride matches the SDOL stride. This decodes the
+    AUTHORED normals/tangents/colors (previously the editor recomputed normals
+    geometrically) using the addon's verified unsigned-BGRA D3DCOLOR formula.
+    When the flags don't validate, falls back to the legacy fixed offsets
+    (pos = 3×int16 @0, uv = 2×int16 @8, skin @16/20 for stride-40).
+
+    UV convention: the editor keeps game-space V (no 1-V flip — the shaders
+    and XBT decode assume it); do not copy the addon's Blender-side V flip.
+
+    Vectorised: one bulk read + numpy slicing. Falls back to the per-vertex
+    loop on any error.
     """
     count = mesh.vert_count
     stride = mesh.vert_stride
@@ -183,20 +270,57 @@ def parse_mesh_vertices(g, mesh: Mesh, vert_pos_scale: float, uv_trans: float, u
         if n <= 0:
             return
         arr = np.frombuffer(raw, dtype=np.uint8, count=n * stride).reshape(n, stride)
-        # Position: 3 little-endian int16 at byte 0 (4th int16 @6 is skipped).
-        # Keep the numpy array (no .tolist()) — build_xbg_model + compute_face_normals
-        # consume it directly, so we never round-trip through Python lists.
-        pos = (arr[:, 0:6].copy().view('<i2').reshape(n, 3).astype(np.float32)
-               * vert_pos_scale)
+
+        offs, computed_stride = compute_component_offsets(mesh.vert_format_flags)
+        flags_ok = bool(offs) and computed_stride == stride
+
+        # ── Position ──
+        if flags_ok and 'pos_float' in offs:
+            o = offs['pos_float']
+            pos = arr[:, o:o + 12].copy().view('<f4').reshape(n, 3).astype(np.float32)
+        elif flags_ok and 'pos_half' in offs:
+            # float16 positions carry real coordinates (no PMCP dequant — the
+            # int16 quantization scale doesn't apply to float storage).
+            o = offs['pos_half']
+            pos = arr[:, o:o + 6].copy().view('<f2').reshape(n, 3).astype(np.float32)
+        else:
+            # pos_int16, or legacy fallback layout (int16 @0).
+            o = offs.get('pos_int16', 0) if flags_ok else 0
+            pos = (arr[:, o:o + 6].copy().view('<i2').reshape(n, 3).astype(np.float32)
+                   * vert_pos_scale)
         mesh.vert_pos_arr = pos
-        if stride >= 12:
-            # UV: 2 int16 at byte 8.
-            uv = (arr[:, 8:12].copy().view('<i2').reshape(n, 2).astype(np.float32)
-                  * uv_scale + uv_trans)
+
+        # ── UV0 ──
+        if flags_ok:
+            uv_off = offs.get('uv0')
+        else:
+            uv_off = 8 if stride >= 12 else None
+        if uv_off is not None and uv_off + 4 <= stride:
+            uv = (arr[:, uv_off:uv_off + 4].copy().view('<i2').reshape(n, 2)
+                  .astype(np.float32) * uv_scale + uv_trans)
             mesh.vert_uv_arr = uv
-        if stride == 40:
-            mesh.skin_weight_list = [tuple(r) for r in arr[:, 16:20].tolist()]
-            mesh.skin_indice_list = [tuple(r) for r in arr[:, 20:24].tolist()]
+
+        # ── Authored normal / tangent / color (flag path only) ──
+        if flags_ok and 'normal' in offs:
+            mesh.vert_normal_arr = _decode_d3dcolor_vectors(arr, offs['normal'])
+            mesh.has_authored_normals = True
+        if flags_ok and 'tangent' in offs:
+            to = offs['tangent']
+            mesh.vert_tangent_arr = _decode_d3dcolor_vectors(arr, to)
+            mesh.tangent_sign_arr = arr[:, to + 3].copy()
+        if flags_ok and 'color' in offs:
+            co = offs['color']
+            # Stored BGRA → RGBA (bytes 2,1,0,3), kept uint8.
+            mesh.vert_color_arr = arr[:, [co + 2, co + 1, co + 0, co + 3]].copy()
+
+        # ── Skin weights / palette indices ──
+        if flags_ok:
+            bone_off = offs.get('bone1')
+        else:
+            bone_off = 16 if stride == 40 else None
+        if bone_off is not None and bone_off + 8 <= stride:
+            mesh.skin_weight_list = [tuple(r) for r in arr[:, bone_off:bone_off + 4].tolist()]
+            mesh.skin_indice_list = [tuple(r) for r in arr[:, bone_off + 4:bone_off + 8].tolist()]
         return
     except Exception as _e:
         print(f"  parse_mesh_vertices: vectorised path failed ({_e}); using slow loop")

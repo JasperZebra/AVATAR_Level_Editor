@@ -147,6 +147,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/model_loader.py` | `tests/test_vbo_build_budget.py` | — | `_ensure_mesh_vbo` per-frame build budget: exhausted budget defers (None + `_vbo_stream_pending`), built meshes bypass, unbuildable meshes fail permanently without consuming budget; module loaded by **file path** — excluded from `--cov` |
 | `cache_manager.py` | `tests/test_terrain_cache_key_fc2.py` | — | `generate_terrain_cache_key` includes `*.sdat` (FC2) — old `.csdat`-only glob pinned stale FC2 terrain images with a never-changing path key |
 | `canvas/map_canvas_gpu.py` | `tests/test_pick_landmark_priority.py` | — | 3D pick two-track resolution (**mirrored**): landmark LOD twins at the same spot lose to the real entity within a 3-unit tie tolerance; genuinely-closer landmarks still win; hidden sources unpickable — excluded from `--cov` |
+| `canvas/mesh.py` + `canvas/xbg_parser.py` | `tests/test_xbg_vertex_decode.py` | — | Flag-driven vertex decode (component offsets for 0x0BCA/0x0BDA, unsigned-BGRA authored normal/tangent/color decode vs synthetic buffer) + DNKS byte-budget multi-block parse (5 blocks survive a lod_count of 2); modules imported with `canvas/` on sys.path — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -3414,3 +3415,44 @@ the addon source itself; per-file pointers below):
   authoritative reference for every LTMD field when the editor needs to WRITE materials.
 - **Jiggle/procedural bones** (`jiggle_avatar.py`) — reverse-engineered spring-damper
   integrator; **LOD distance editor** (`lod_distance_avatar.py`); **bounds editors**.
+
+## Model rendering fixes ported from the XBG Importer v3 addon (July 2026)
+
+Task 1 of the addon-port series (see the format reference section above). Changes to the
+shared Avatar+FC2 model pipeline (`canvas/mesh.py`, `canvas/xbg_parser.py`,
+`canvas/xbg_direct_loader.py`):
+
+1. **Flag-driven vertex decode** (`mesh.py`). `parse_mesh_vertices` previously assumed a
+   fixed layout (pos int16 @0, uv @8, skin @16/20 at stride 40). Now
+   `compute_component_offsets(vert_format_flags)` derives each component's offset from the
+   SDOL format flags word and is trusted only when the computed stride matches the SDOL
+   stride (else legacy fallback — same behavior as before). This also handles POS_FLOAT /
+   POS_HALF position formats the old code would have silently mis-read.
+2. **Authored normals decoded and used** (`mesh.py`, `xbg_parser.py`). The editor used to
+   RECOMPUTE normals geometrically (`compute_face_normals`) for every model. It now decodes
+   the file's own per-vertex normals — unsigned-normalized BGRA D3DCOLOR, `v = b/255*2-1`,
+   xyz from bytes (2,1,0) — and only computes geometric normals when the vertex format has
+   no NORMAL component. Verified on 33 real models (30 Avatar + 3 FC2): decoded normals are
+   exactly unit-length (mean |len-1| = 0.0000) and align 0.94 mean with the geometric
+   reference — low-align files (organic/smoothed meshes) are precisely where authored
+   normals carry real smoothing information the recompute lost. Tangents (+ raw handedness
+   byte) and vertex colors (BGRA→RGBA) are decoded too; `xbg_direct_loader` prefers authored
+   tangents over the UV-derived computation. NOTE: the GLSL fragment shader builds its
+   normal-mapping TBN from screen-space derivatives, so tangents only feed the (legacy)
+   vertex attribute — the visible win is the lighting normals.
+3. **DNKS byte-budget block parse** (`xbg_parser.py`). `_parse_dnks` read exactly
+   `lod_count` (DIKS) blocks; the region is actually sized by `qq[2]` bytes and multi-block
+   files have one block per (part × damage-state × LOD) group. Every sampled retail file
+   happened to have DIKS lod_count == true block count (so no visible regression either
+   way), but re-injected/modded files and the addon-documented FC2 multi-block cases (e.g.
+   buggy: 85 blocks) would silently drop submesh materials/face counts past lod_count.
+   Block names (PART_STATEnn_LODk damage-state convention) are now captured in
+   `XBGData.dnks_block_names`. Also added the addon's `name_index` fallback when a SDOL
+   `sub_idx` exceeds its DNKS block (re-injected files), and the addon's bug-fix #16:
+   `_remap_skin_indices` sorts shared-VB slices by index offset (true buffer order) before
+   the sequential palette walk — part-grouped order interleaves blocks on multi-block files
+   and corrupts weights (skinned path only; static loads skip it).
+
+**UV convention note:** the addon flips V (`1-v`) for Blender; this editor keeps game-space
+V — do NOT port the flip. Winding likewise stays file-order (editor convention; addon
+reverses for Blender and never negates normals — equivalent front-face outcome).

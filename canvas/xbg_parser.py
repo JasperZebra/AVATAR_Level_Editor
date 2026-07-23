@@ -15,6 +15,7 @@ class XBGData:
         self.skeleton = Skeleton()
         self.meshes: List[Mesh] = []
         self.sub_mesh_list: List[List[SubMesh]] = []
+        self.dnks_block_names: List[str] = []  # one name per DNKS block (PART_STATEnn_LODk)
         self.materials: List[str] = []  # List of material names
         self.lod_count: int = 0
         self.vert_pos_scale: float = 1.0
@@ -73,8 +74,13 @@ class XBGParser:
             # Process mesh faces (Primitives splitting)
             self._process_mesh_faces(g)
 
-            # Compute smooth normals from triangle geometry
+            # Normals: prefer the AUTHORED per-vertex normals decoded from the
+            # vertex buffer (unsigned-BGRA D3DCOLOR — XBG Importer v3 addon
+            # fix); only fall back to computing smooth normals from triangle
+            # geometry when the vertex format has no NORMAL component.
             for mesh in self.data.meshes:
+                if getattr(mesh, 'has_authored_normals', False):
+                    continue
                 if getattr(mesh, 'vert_pos_arr', None) is not None or mesh.vert_pos_list:
                     compute_face_normals(mesh)
 
@@ -215,6 +221,7 @@ class XBGParser:
                 # Set LOD and part information
                 mesh.lod_level = current_lod
                 mesh.part_number = sub_idx  # sub_idx is the part number
+                mesh.name_index = sm_idx    # flat positional index within this LOD
                 mesh.vb_index = vb_idx
                 mesh.indice_section_offset = indice_section_offset
                 
@@ -290,38 +297,66 @@ class XBGParser:
         
     
     def _parse_dnks(self, g):
-        g.i(2)
-        g.word(4)
-        g.i(4)
-        
+        """Parse the DNKS chunk: per-submesh material id / face count / vertex
+        count / bone palette, grouped in BLOCKS.
+
+        XBG Importer v3 addon port — the block region is read by BYTE BUDGET
+        (qq[2]), not lod_count. Multi-block files (vehicles, destructible
+        plants — e.g. FC2's buggy has 85 blocks vs a lod_count of ~4) have one
+        block per (part × damage-state × LOD) group; the old lod_count loop
+        dropped every block past lod_count, losing material assignment and
+        face counts for those submeshes (they simply didn't render).
+        """
+        pp = g.i(2)          # pp[0] = trailing names-section size in bytes
+        g.word(4)            # constant sub-tag "SULC"
+        qq = g.i(4)          # qq[2] = submesh-block region size in bytes
+        blocks_bytes = qq[2]
+
         self.data.sub_mesh_list = []
-        
-        if not hasattr(self.data, 'lod_count') or self.data.lod_count == 0:
+        self.data.dnks_block_names = []
+
+        if not (0 < blocks_bytes <= (1 << 28)):
+            print(f"DNKS: implausible block region size {blocks_bytes}; skipping")
             return
-            
-        for n in range(self.data.lod_count):
-            lod_submeshes = []
-            mat_count = g.i(1)[0]
-            
-            for m in range(mat_count):
+
+        consumed = 0
+        while consumed < blocks_bytes:
+            cnt = g.i(1)[0]
+            consumed += 4
+            # 110 bytes per submesh: 7×u16 header + 48×i16 palette.
+            if cnt < 0 or cnt > 100000 or consumed + cnt * 110 > blocks_bytes:
+                print(f"DNKS: bad block count {cnt} at {consumed}/{blocks_bytes}; "
+                      f"keeping {len(self.data.sub_mesh_list)} parsed blocks")
+                return
+            block = []
+            for m in range(cnt):
                 submesh = SubMesh()
                 submesh.header_data = list(g.H(7))
-                submesh.bone_data = list(g.h(48)) 
+                submesh.bone_data = list(g.h(48))
                 submesh.face_count = submesh.get_face_count()
-                lod_submeshes.append(submesh)
-            
-            self.data.sub_mesh_list.append(lod_submeshes)
-        
-        # Skip the rest
-        count = g.i(1)[0]
-        for n in range(count):
-            g.f(11)
-            A, B = g.i(2)
-            word_len = g.i(1)[0]
-            if word_len > 0:
-                g.word(word_len)
-            g.B(1)
-        g.word(4)
+                block.append(submesh)
+            consumed += cnt * 110
+            self.data.sub_mesh_list.append(block)
+
+        # Names section: one 52-byte meta record (LOD metric + bbox + lod idx)
+        # + length-prefixed name per block. Names follow the PART_STATEnn_LODk
+        # damage-state convention; captured for future use.
+        try:
+            block_count = g.i(1)[0]
+            if block_count != len(self.data.sub_mesh_list):
+                print(f"DNKS: names count {block_count} != blocks "
+                      f"{len(self.data.sub_mesh_list)} (re-injected file?)")
+            for n in range(min(block_count, 100000)):
+                g.f(11)
+                A, B = g.i(2)
+                word_len = g.i(1)[0]
+                name = g.word(word_len) if word_len > 0 else ''
+                self.data.dnks_block_names.append(name.split('\x00')[0])
+                g.B(1)
+            g.word(4)
+        except Exception as e:
+            # Names are non-essential; the chunk loop re-seeks past us anyway.
+            print(f"DNKS: names section parse stopped early ({e})")
     
     def _filter_lod(self, lod_level: int):
         """Filter meshes to keep only the specified LOD level"""
@@ -403,8 +438,15 @@ class XBGParser:
             all_mat_info = []
             for mesh in meshes:
                 all_mat_info.extend(mesh.mat_list_info)
-            
-            # Sort by vertex range to process in order
+
+            # Addon bug fix #16: the sequential palette walk below slices the
+            # shared vertex buffer in order, so slices MUST be visited in true
+            # buffer layout order = ascending index offset. Mesh iteration
+            # order is part-number-grouped, which interleaves DNKS blocks on
+            # multi-block files (vehicles/plants) and drifts the walk,
+            # corrupting every later slice's weights.
+            all_mat_info.sort(key=lambda info: info[3])
+
             vert_id_start = 0
             for info in all_mat_info:
                 lod_grp, sub_idx = info[1], info[2]
@@ -438,9 +480,14 @@ class XBGParser:
         for info in mesh.mat_list_info:
             lod_group_idx = info[1]
             submesh_idx = info[2]
-            
+
             if lod_group_idx < len(self.data.sub_mesh_list):
                 lod_submeshes = self.data.sub_mesh_list[lod_group_idx]
+                if submesh_idx >= len(lod_submeshes):
+                    # Re-injected files can carry synthesized non-positional
+                    # sub_idx values; fall back to the flat SDOL position
+                    # (addon's name_index fallback).
+                    submesh_idx = getattr(mesh, 'name_index', submesh_idx)
                 if submesh_idx < len(lod_submeshes):
                     submesh = lod_submeshes[submesh_idx]
                     
