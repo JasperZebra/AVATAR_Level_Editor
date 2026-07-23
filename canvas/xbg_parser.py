@@ -3,9 +3,10 @@
 XBG file parser - Updated with Unsigned Integer Fixes for SDOL
 """
 
+import re
 from typing import List, Optional
 from binary_reader import BinaryReader
-from mesh import Mesh, SubMesh, parse_mesh_vertices, compute_face_normals
+from mesh import Mesh, SubMesh, parse_mesh_vertices, compute_face_normals, BONE_WTS1
 from skeleton import Skeleton, parse_skeleton_chunk
 
 
@@ -33,11 +34,12 @@ class XBGParser:
     def parse(self, lod_level: int = 0, skip_skeleton: bool = False) -> XBGData:
         """Parse the XBG file.
 
-        skip_skeleton=True (static-mesh loading): skip the EDON skeleton chunk
-        (avoids reading 100+ bones and computing their world transforms) and the
-        skin-index remap — neither is used when rendering static geometry. The
-        chunk loop's seek(back + chunk_info[1]) moves past the skipped skeleton
-        bytes, so the rest of the parse is unaffected.
+        skip_skeleton=True (static-mesh loading) skips the skin-index remap —
+        not needed when rendering static geometry. The EDON skeleton itself is
+        now ALWAYS parsed: rigid vehicle parts (wheels, rotors, steering
+        wheels…) are stored part-LOCAL and only the bone whose name matches
+        their DNKS block name places them in model space — without it every
+        wheel renders at the origin (see _apply_part_transforms).
         """
         self.skip_skeleton = skip_skeleton
         with BinaryReader(self.filename) as g:
@@ -74,6 +76,11 @@ class XBGParser:
             # Process mesh faces (Primitives splitting)
             self._process_mesh_faces(g)
 
+            # Assemble rigid parts: place wheels/rotors/etc. via their bones.
+            # Must run BEFORE the normal computation below so geometric
+            # normals are computed from assembled positions.
+            self._apply_part_transforms()
+
             # Normals: prefer the AUTHORED per-vertex normals decoded from the
             # vertex buffer (unsigned-BGRA D3DCOLOR — XBG Importer v3 addon
             # fix); only fall back to computing smooth normals from triangle
@@ -92,9 +99,9 @@ class XBGParser:
         elif chunk == 'PMCU':
             self._parse_pmcu(g)
         elif chunk == 'EDON':
-            if not getattr(self, 'skip_skeleton', False):
-                parse_skeleton_chunk(g, self.data.skeleton)
-            # else: skip skeleton — the chunk loop seeks past its bytes
+            # Always parsed — bone world transforms assemble rigid vehicle
+            # parts (skip_skeleton only skips the skin-index remap now).
+            parse_skeleton_chunk(g, self.data.skeleton)
         elif chunk == 'DIKS':
             self._parse_diks(g)
         elif chunk == 'SDOL':
@@ -467,6 +474,79 @@ class XBGParser:
             for mesh in meshes[1:]:
                 mesh.skin_indice_list = ref_mesh.skin_indice_list
                 mesh.skin_weight_list = ref_mesh.skin_weight_list
+
+    def _apply_part_transforms(self):
+        """Assemble rigid vehicle/prop parts: transform part-local vertices by
+        their bone's world (bind) matrix.
+
+        Vehicle .xbg files store each named part (WHEELBACK_L_STATE01,
+        ROTATOR_RIGHT_PIVOT, STEERINGWHEEL, …) around its OWN pivot; the EDON
+        skeleton carries a bone with the SAME name (minus the _LODn suffix)
+        whose world transform places it — e.g. the buggy's four wheels are all
+        modeled at the origin and its WheelBack_L/R / WheelFont_L/R bones sit
+        at the four corners. Without this, every wheel/rotor renders at the
+        origin ("vehicles not assembled"). This is the placement logic the
+        XBG Importer v3 addon applies through its armature.
+
+        Rules:
+        - Only UNSKINNED meshes (no BONE_WTS1 in the vertex format) — skinned
+          geometry (characters) is already in model space at bind pose.
+        - Bone matched by DNKS block name, case-insensitive, '_LODn' stripped;
+          bone names are truncated to their last 25 chars by the EDON parser,
+          so the lookup mirrors that truncation.
+        - Identity transforms are skipped (bodies match a near-identity bone).
+        - Positions get the full transform; authored normals/tangents rotate.
+        """
+        import numpy as np
+        bones = {}
+        for b in self.data.skeleton.bones:
+            if b.name and b.world_matrix is not None:
+                bones.setdefault(b.name.lower(), b)
+        names = self.data.dnks_block_names
+        if not bones or not names:
+            return
+
+        _mat_cache = {}
+        for mesh in self.data.meshes:
+            if mesh.vert_format_flags & BONE_WTS1:
+                continue
+            if getattr(mesh, 'vert_pos_arr', None) is None or not mesh.mat_list_info:
+                continue
+            lg = mesh.mat_list_info[0][1]
+            if not (0 <= lg < len(names)) or not names[lg]:
+                continue
+            base = re.sub(r'_LOD\d+$', '', names[lg], flags=re.IGNORECASE).lower()
+            bone = bones.get(base) or bones.get(base[-25:])
+            if bone is None:
+                continue
+
+            key = id(bone)
+            cached = _mat_cache.get(key)
+            if cached is None:
+                M = np.array(bone.world_matrix.matrix, dtype=np.float64)
+                R = M[:3, :3]
+                t = M[:3, 3]
+                is_ident = (np.allclose(R, np.eye(3), atol=1e-6)
+                            and np.allclose(t, 0.0, atol=1e-6))
+                cached = (R, t, is_ident)
+                _mat_cache[key] = cached
+            R, t, is_ident = cached
+            if is_ident:
+                continue
+
+            mesh.vert_pos_arr = (mesh.vert_pos_arr @ R.T + t).astype(np.float32)
+            if getattr(mesh, 'vert_normal_arr', None) is not None:
+                n = mesh.vert_normal_arr @ R.T
+                ln = np.linalg.norm(n, axis=1)
+                good = ln > 1e-6
+                n[good] /= ln[good, None]
+                mesh.vert_normal_arr = n.astype(np.float32)
+            if getattr(mesh, 'vert_tangent_arr', None) is not None:
+                tn = mesh.vert_tangent_arr @ R.T
+                ln = np.linalg.norm(tn, axis=1)
+                good = ln > 1e-6
+                tn[good] /= ln[good, None]
+                mesh.vert_tangent_arr = tn.astype(np.float32)
 
     def _process_mesh_faces(self, g):
         """Split mesh faces into primitives based on material info"""

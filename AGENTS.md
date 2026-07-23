@@ -151,6 +151,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/texture_loader.py` | `tests/test_texture_slot_resolution.py` | — | Addon-delta slot mappings (heighttexture1→height, alphatexture1[wrap]→alpha) + `resolve_xbt_full_path` lowercase-retry fallback (case-sensitive extracted packs), via monkeypatched `os.path.exists` — excluded from `--cov` |
 | `canvas/hkx_parser.py` | `tests/test_hkx_parser.py` | — | Builds a minimal SYNTHETIC Havok 5.5 packfile (rigid body + box shape wired through real fixup tables, ± 16-byte game wrapper) and checks parse → wireframe end-to-end; plus sphere/capsule wire builders and the .xbg↔.hkx sibling lookup — excluded from `--cov` |
 | `canvas/cs_camera_preview.py` | `tests/test_cs_camera_preview.py` | — | Pose math only (no Qt/GL): quat rotation, +Y-forward / +Z-up camera conventions, game→GL mapping, pose from rest vs animated tracks, camera-node name filtering — excluded from `--cov` |
+| `canvas/xbg_parser.py` | `tests/test_part_assembly.py` | — | Rigid vehicle-part assembly (`_apply_part_transforms`): part placed by name-matched bone; skinned / unmatched / identity-bone meshes untouched; built on synthetic Mesh+Bone objects, no file IO — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -3573,3 +3574,37 @@ from a scrub without ever pressing Play. Wired in `create_side_panel` (tab), and
 Verified headlessly: 239/239 camera nodes across all Avatar moviedata produce valid poses
 (165 animate over their sequence); pose math unit-tested. The GL preview pass itself needs
 a user click-test in the running editor (select a sequence → CS Camera tab).
+
+## Vehicle part assembly + selection-glow crash fix (July 2026)
+
+User report: "vehicles are not rendering correctly... not being assembled correctly", plus
+an access-violation crash in `_render_3d_selection_glow` when selecting. Two separate,
+PRE-EXISTING bugs (verified: the addon-port parser changes produce byte-identical geometry
+to the old parser on every vehicle tested — positions, indices, UVs all diffed equal).
+
+**1. Vehicle parts were never assembled (`xbg_parser._apply_part_transforms`, new).**
+Vehicle .xbg files store each named rigid part around its OWN pivot — proven on
+buggy_drivable: all four wheels' vertices are centered at the origin, and the EDON
+skeleton's `WheelBack_L_State01` / `WheelFont_R_State01` / … bones sit at the four wheel
+corners. The part↔bone link is BY NAME: DNKS block name minus the `_LODn` suffix equals
+the bone name (case-insensitive; EDON bone names are truncated to their last 25 chars —
+mirror that in the lookup). The editor loaded static models with the skeleton SKIPPED, so
+every wheel/rotor/steering wheel rendered at the origin inside the chassis. Now: EDON is
+always parsed (skip_skeleton only skips the skin-index remap), and after face processing
+each UNSKINNED mesh (no BONE_WTS1 — skinned characters are already in model space) with a
+name-matched, non-identity bone gets `v' = R·v + t` (authored normals/tangents rotated;
+runs BEFORE the geometric-normal fallback so those compute from assembled positions).
+Important non-findings: STATE01 parts are the REAL parts (the buggy has no state-00
+wheels) — do NOT hide damage states; and `Z_`-prefixed parts (rotor blades) are normal
+geometry. Verified: buggy wheels land on their bones (dist ≤ 0.18), samson/dragon/scorpion
+parse clean, characters + props byte-identical with the step disabled, repeat-parse
+deterministic, 40-file sweep 0 failures.
+
+**2. Selection-glow access violation (`model_loader._render_glow_geometry`).** The glow
+pass draws with CLIENT-side arrays. Two latent landmines: (a) a VAO / GL_ELEMENT_ARRAY_
+BUFFER left bound by earlier passes turns the client index POINTER into a GPU-buffer
+offset → access violation (glPushAttrib does NOT cover buffer bindings); (b) models from
+the old cached-gltf path store `mesh.indices` as float32 — reinterpreted as uint32 they're
+astronomical and the driver walks off the vertex array. Fixed: unbind VAO + both buffer
+targets before drawing, and sanitize indices once per mesh (cast to uint32, drop
+out-of-range, cache as `mesh._glow_indices`).

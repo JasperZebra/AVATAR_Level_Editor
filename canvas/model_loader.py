@@ -3360,7 +3360,17 @@ class ModelLoader:
             glPopAttrib()
 
     def _render_glow_geometry(self, model, instance_data):
-        """Render raw vertex geometry for the glow pass — no textures, no lighting."""
+        """Render raw vertex geometry for the glow pass — no textures, no lighting.
+
+        Draws with CLIENT-side arrays, which is only safe when no VAO or
+        element buffer is bound (a bound GL_ELEMENT_ARRAY_BUFFER makes the
+        index POINTER an offset into GPU memory → access violation) and when
+        indices are genuine uint32 in range (the old cached-gltf path stored
+        indices as float32 — reinterpreted as uint32 those are billions, and
+        the driver walks off the vertex array → access violation). Both
+        guards live here because this is the one path that feeds raw arrays
+        straight to glDrawElements.
+        """
         glPushMatrix()
         glTranslatef(instance_data[1], instance_data[2], instance_data[3])
         glRotatef(-90, 1, 0, 0)
@@ -3373,16 +3383,43 @@ class ModelLoader:
         if instance_data[7] != 1.0:
             glScalef(instance_data[7], instance_data[7], instance_data[7])
 
+        # Client-array state hygiene: the GDR/terrain paths may leave a VAO or
+        # buffers bound; glPushAttrib does NOT cover buffer bindings.
+        try:
+            glBindVertexArray(0)
+        except Exception:
+            pass
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
+
         for mesh in model.meshes:
             if mesh.vertices is None:
                 continue
-            glEnableClientState(GL_VERTEX_ARRAY)
-            glVertexPointer(3, GL_FLOAT, 0, mesh.vertices)
-            if mesh.indices is not None:
-                glDrawElements(GL_TRIANGLES, len(mesh.indices), GL_UNSIGNED_INT, mesh.indices)
+            idx = mesh.indices
+            if idx is not None:
+                safe = getattr(mesh, '_glow_indices', None)
+                if safe is None:
+                    try:
+                        arr = np.ascontiguousarray(idx, dtype=np.uint32)
+                        # Out-of-range indices crash the driver on client arrays.
+                        if arr.size and int(arr.max()) >= len(mesh.vertices):
+                            arr = arr[arr < len(mesh.vertices)]
+                            arr = arr[: (len(arr) // 3) * 3]
+                        safe = arr
+                    except Exception:
+                        safe = np.zeros(0, dtype=np.uint32)
+                    mesh._glow_indices = safe
+                if not len(safe):
+                    continue
+                glEnableClientState(GL_VERTEX_ARRAY)
+                glVertexPointer(3, GL_FLOAT, 0, mesh.vertices)
+                glDrawElements(GL_TRIANGLES, len(safe), GL_UNSIGNED_INT, safe)
+                glDisableClientState(GL_VERTEX_ARRAY)
             else:
+                glEnableClientState(GL_VERTEX_ARRAY)
+                glVertexPointer(3, GL_FLOAT, 0, mesh.vertices)
                 glDrawArrays(GL_TRIANGLES, 0, len(mesh.vertices))
-            glDisableClientState(GL_VERTEX_ARRAY)
+                glDisableClientState(GL_VERTEX_ARRAY)
 
         glPopMatrix()
 
