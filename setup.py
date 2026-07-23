@@ -486,6 +486,7 @@ build_options = {
         'canvas.line_batch',            # ← batched wireframe-overlay renderer (prims/triggers/shape)
         'canvas.hkx_parser',            # ← native Havok 5.5 .hkx collision reader (wireframe overlay)
         'canvas.cs_camera_preview',     # ← cutscene-camera POV preview (right-panel CS Camera tab)
+        'canvas.mab_parser',            # ← native .mab animation decoder (Dunia smallest-three codec)
 
         # ===================================================================
         # TOOLS PACKAGE

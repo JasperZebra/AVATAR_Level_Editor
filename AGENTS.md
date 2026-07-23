@@ -152,6 +152,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/hkx_parser.py` | `tests/test_hkx_parser.py` | — | Builds a minimal SYNTHETIC Havok 5.5 packfile (rigid body + box shape wired through real fixup tables, ± 16-byte game wrapper) and checks parse → wireframe end-to-end; plus sphere/capsule wire builders and the .xbg↔.hkx sibling lookup — excluded from `--cov` |
 | `canvas/cs_camera_preview.py` | `tests/test_cs_camera_preview.py` | — | Pose math only (no Qt/GL): quat rotation, +Y-forward / +Z-up camera conventions, game→GL mapping, pose from rest vs animated tracks, camera-node name filtering — excluded from `--cov` |
 | `canvas/xbg_parser.py` | `tests/test_part_assembly.py` | — | Rigid vehicle-part assembly (`_apply_part_transforms`): part placed by name-matched bone; skinned / unmatched / identity-bone meshes untouched; built on synthetic Mesh+Bone objects, no file IO — excluded from `--cov` |
+| `canvas/mab_parser.py` | `tests/test_mab_parser.py` | — | Smallest-three quat codec round-trip (all 4 permutation flags, SIGNED third word, s<0 sentinel) + synthetic clip: group/mask keyframe decode (primary @ sub-frame 0, flagged keys @ bit+1), anim-mask routing, derived fps, bone-name resolution — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -3608,6 +3609,38 @@ the old cached-gltf path store `mesh.indices` as float32 — reinterpreted as ui
 astronomical and the driver walks off the vertex array. Fixed: unbind VAO + both buffer
 targets before drawing, and sanitize indices once per mesh (cast to uint32, drop
 out-of-range, cache as `mesh._glow_indices`).
+
+## .mab animation decoder ported (July 2026)
+
+`canvas/mab_parser.py` (new, GL/bpy-free) — port of the addon's `import_mab` decode path.
+Avatar + FC2 clips share codec version byte **0x4C** (duration f32 @0x84, 9-entry section
+table @0x88; ALL stored section offsets are relative to byte 16). One module, both games.
+
+Key format facts (full spec in the addon source; load-bearing details here):
+- **Smallest-three quats, 6 bytes**: two 15-bit unsigned + one SIGNED 16-bit component
+  (scale 4.315969e-05, bias 1/√2); FW/SW bit-15 pick the dropped component
+  ((0,0)=x,(1,0)=y,(0,1)=z,(1,1)=w largest); s<0 → invalid/no-key. Reading the third word
+  unsigned is a known community-port bug — keep it signed.
+- **Routing is positional, no hashes**: 20-byte LSB-first masks @0x10 (constant bones) and
+  @0x24 (animated bones), one bit per animation-skeleton (LKS) bone; stream track t = t-th
+  set anim bit. `MabClip.resolve_bone_names(lks_names)` maps when names are available.
+- **Keyframes**: groups of 8 frames; per group `[N primaries][N mask bytes, even-padded]
+  [secondaries contiguous per bone]`; mask bit7 = sub-frame 0 (primary), flagged keys land
+  at bit-position+1 (the addon's timing fix). fps is DERIVED: max decoded frame / duration.
+- **Root motion**: UnkSec1 (dense 6-byte quats) + UnkSec2 (dense 3×f32 world translation)
+  + Offsets track 0 (local bob/sway) composed as `pos + R(rot) @ offset`.
+- **Spaces**: bone keys are ABSOLUTE bone-LOCAL rotations (not bind deltas) — pose via FK
+  (world = parent_world @ local) substituting decoded locals; twist/helper bones are in
+  NEITHER mask (engine-procedural, no data) — leave at rest.
+- **Pose clips are real**: aim poses / corpse poses have duration 0, Keyframes n=0/fc=0,
+  everything in the constants section — not a decode failure.
+
+Verified on 240 random real clips (120 Avatar + 120 FC2): 240/240 clean, 419,073 rotation
+keys decoded, all version 0x4C, unit quats, monotonic in-range frames. Not yet wired to
+any playback UI — that's the follow-up (skinned preview needs skinning in the renderer).
+Scene .mab extras (cameras/FOV cuts/timed events in Events/UnkSec4/UnkSec5) are NOT
+decoded yet; the addon's `mab_scene_avatar.py` is the reference when cinematic import is
+wanted.
 
 ### Global assembly audit + the mounted-weapons layer (July 2026)
 
