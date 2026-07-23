@@ -3608,3 +3608,29 @@ the old cached-gltf path store `mesh.indices` as float32 — reinterpreted as ui
 astronomical and the driver walks off the vertex array. Fixed: unbind VAO + both buffer
 targets before drawing, and sanitize indices once per mesh (cast to uint32, drop
 out-of-range, cache as `mesh._glow_indices`).
+
+### Global assembly audit + the mounted-weapons layer (July 2026)
+
+**Audit: part→bone assembly is complete.** All 2,357 .xbg files across both games parsed
+with 0 failures; of 2,980 unskinned named part meshes, 2,979 (100.0%) resolve to a bone.
+The single miss is `scorpion_obsolete.xbg`, whose part name is literally
+`SCORPION_BODY____…` (underscore-padded, bone equally mangled) — broken obsolete source
+data, not an assembly bug.
+
+**Mounted weapons (dove turret etc.) are a DIFFERENT layer — entity composition, not
+in-file parts.** The dove's turret gun is two separate models: `dove_turret.xbg` (mount +
+seat) and `dove_mounted_weapon.xbg` (the gun). The chain, recovered from a world's FULL
+`entitylibrary_full.fcb` (convert with the native FCB converter — the editor's shipped
+`entitylibrary_full.fcb.converted.xml` is a REDUCED extract that strips component data):
+vehicle prototype → `<object name="MountedWeapons"> <object name="MountedWeaponEntry">
+<field name="archMountedWeapon" value="weapons.Avatar_MountedWeapons.DoveTurret"/>` →
+DoveTurret prototype (GraphicComponent → dove_turret.xbg, `hidNodeName Dove_Turret`, and
+`archWeapon = …DoveTurretGun` → dove_mounted_weapon.xbg, plus FX bone bindings
+FX_FIRE01–04). What the data does NOT state textually is which VEHICLE bone the turret
+mounts to (the engine's runtime rule; plausibly the Turret_Arm bone on the dove — its
+geometry reads right there — but that's an inference, not data). Implementing mounted-
+weapon display needs either that rule (ask the addon author / dig the Ghidra decompile
+for CMountedWeapon attach) or a per-vehicle mapping table. Companion `<model>.xml` files
+in the graphics folders (e.g. `dove_mounted_weapon.xml`) are exporter descriptors (bones,
+LODs, materials, bboxes) — useful reference, but they don't carry the attach point
+either.
