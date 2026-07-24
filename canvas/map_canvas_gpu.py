@@ -4729,7 +4729,13 @@ class MapCanvas(QOpenGLWidget):
                 # Entity models near the preview camera, classic instanced path.
                 # prepare_batches is camera-independent; the main view re-prepares
                 # its own frame next paint, so clobbering per-frame state is safe.
+                # force_render_tier is temporarily cleared: in GPU-driven mode
+                # render_batched_models would otherwise take the GDR path, which
+                # draws the MAIN view's instance buffers (or nothing) and ignores
+                # the batches prepared here — a blank/wrong preview.
                 if hasattr(self, 'model_loader') and self.entities:
+                    ml = self.model_loader
+                    saved_tier = getattr(ml, 'force_render_tier', None)
                     try:
                         ex, ez = float(eye[0]), float(eye[2])
                         max_d2 = 1500.0 * 1500.0
@@ -4742,12 +4748,17 @@ class MapCanvas(QOpenGLWidget):
                                     subset.append(e)
                             except Exception:
                                 continue
-                        self.model_loader.night_factor = (
+                        ml.night_factor = (
                             self._night_factor if self.day_night_enabled else 1.0)
-                        self.model_loader.prepare_batches(subset, [])
-                        self.model_loader.render_batched_models()
+                        ml.force_render_tier = None
+                        ml.prepare_batches(subset, [])
+                        ml.render_batched_models()
                     except Exception as _e:
                         print(f"[cs-preview] model pass failed: {_e}")
+                        import traceback
+                        traceback.print_exc()
+                    finally:
+                        ml.force_render_tier = saved_tier
 
                 glDisable(GL_LIGHTING)
                 img = fbo.toImage()

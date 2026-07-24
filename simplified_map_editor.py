@@ -2341,6 +2341,25 @@ class SimplifiedMapEditor(QMainWindow):
         dock_layout.addWidget(level_info_group)
 
         # ════════════════════════════════════════════════════════════════════
+        # CS Camera Preview — between Level Info and Map Tools (BW-editor
+        # style: a section in the main right-panel tab, not its own tab)
+        # ════════════════════════════════════════════════════════════════════
+        try:
+            from canvas.cs_camera_preview import CSCameraPreviewWidget
+            cs_group = QGroupBox("CS Camera Preview")
+            cs_group.setStyleSheet(_section_style)
+            cs_lay = QVBoxLayout(cs_group)
+            cs_lay.setContentsMargins(4, 6, 4, 4)
+            cs_lay.setSpacing(2)
+            self.cs_camera_preview = CSCameraPreviewWidget(self)
+            cs_lay.addWidget(self.cs_camera_preview)
+            dock_layout.addWidget(cs_group)
+        except Exception as _cs_e:
+            import traceback
+            traceback.print_exc()
+            print(f"CS Camera preview section failed to build: {_cs_e}")
+
+        # ════════════════════════════════════════════════════════════════════
         # Map Tools  (3 tabs)
         # ════════════════════════════════════════════════════════════════════
         terrain_group = QGroupBox("Map Tools")
@@ -3068,17 +3087,6 @@ class SimplifiedMapEditor(QMainWindow):
             import traceback
             traceback.print_exc()
             print(f"Object Library tab failed to build: {_ol_e}")
-
-        # ── CS Camera tab: cutscene-camera POV preview (BW-editor style) ────
-        try:
-            from canvas.cs_camera_preview import CSCameraPreviewWidget
-            self.cs_camera_preview = CSCameraPreviewWidget(self)
-            right_tabs.addTab(self.cs_camera_preview, "CS Camera")
-        except Exception as _cs_e:
-            import traceback
-            traceback.print_exc()
-            print(f"CS Camera preview tab failed to build: {_cs_e}")
-
         self.right_tabs = right_tabs
 
         dock.setWidget(right_tabs)

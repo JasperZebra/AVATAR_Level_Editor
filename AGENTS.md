@@ -3524,6 +3524,29 @@ were already in it, so selecting a different entity rebuilds correctly).
 default off) → `_set_collision_visibility`. README updated. `canvas.hkx_parser` added to
 setup.py packages (Rule 4).
 
+### CS Camera preview fixes — placement + GDR-swallowed model pass (July 2026)
+
+User feedback: the preview "does not work" and was NOT wanted as its own right-panel tab —
+they wanted it as a SECTION in the main (Level Information) tab, between the two existing
+sections, like the BW editor's. Two changes:
+
+1. **Placement**: the widget now lives in a "CS Camera Preview" QGroupBox added to
+   `create_side_panel`'s `dock_layout` BETWEEN the Level Info group and the Map Tools
+   group (the former "CS Camera" tab in `right_tabs` is gone). Being always-visible in the
+   main tab also means `isVisible()` gating no longer hides renders behind an unopened tab.
+2. **Blank-preview root cause**: `render_camera_preview`'s model pass called
+   `prepare_batches` + `render_batched_models`, but in GPU-driven tiers
+   (`force_render_tier` set, e.g. render_tier=texarray) `render_batched_models` takes the
+   GDR path — which draws the MAIN view's persistent instance buffers (or nothing at all
+   in 2D mode) and IGNORES the classic batches the preview just prepared. Fix: temporarily
+   clear `model_loader.force_render_tier` around the preview's model pass (restored in
+   finally) so the universal per-instance path draws exactly the preview's subset.
+3. The widget also gained a status line (last render outcome / exception text) so
+   failures are visible instead of a silent black box.
+
+If the preview is still blank after this, check the console for `[cs-preview]` lines and
+the widget's status text — the failure will be named there.
+
 **Verified on real data:** 34/34 Avatar .hkx files parse (0 fail/0 empty) across all shape
 classes ({StorageExtendedMesh: 42, Box: 26, ConvexVertices: 34, Sphere: 1, Capsule: 1}
 in the sample); collision extents match the sibling model's vertex bounds at ratios

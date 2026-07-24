@@ -148,6 +148,13 @@ class CSCameraPreviewWidget(QWidget):
         transport.addWidget(self.time_label)
         layout.addLayout(transport)
 
+        # Status line: last render outcome / error — so failures are never
+        # silent (a blank preview with no explanation is undebuggable).
+        self.status = QLabel("")
+        self.status.setFont(QFont("Consolas", 7))
+        self.status.setStyleSheet("color: #7f8c99;")
+        layout.addWidget(self.status)
+
         self.timer = QTimer(self)
         self.timer.setInterval(TICK_MS)
         self.timer.timeout.connect(self._tick)
@@ -292,6 +299,7 @@ class CSCameraPreviewWidget(QWidget):
             return
         canvas = getattr(self.editor, 'canvas', None)
         if canvas is None or not hasattr(canvas, 'render_camera_preview'):
+            self.status.setText("3D canvas not ready")
             return
         w = min(max(self.image_label.width(), 160), PREVIEW_MAX_W)
         h = max(int(w * 9 / 16), 90)
@@ -302,13 +310,23 @@ class CSCameraPreviewWidget(QWidget):
             return   # nothing changed — skip the (relatively) expensive pass
         pose = camera_pose_at(md, seq, self._cam_node_id, self._t)
         if pose is None:
+            self.status.setText("camera node has no pose data")
             return
         eye, look, up = pose
-        img = canvas.render_camera_preview(eye, look, up, DEFAULT_FOV, w, h)
+        try:
+            img = canvas.render_camera_preview(eye, look, up, DEFAULT_FOV, w, h)
+        except Exception as e:
+            self.status.setText(f"render error: {e}")
+            import traceback
+            traceback.print_exc()
+            return
         if img is None or img.isNull():
+            self.status.setText("render failed — see console log")
             return
         self._last_render_key = key
         pm = QPixmap.fromImage(img).scaled(
             self.image_label.width(), self.image_label.height(),
             Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.image_label.setPixmap(pm)
+        self.status.setText(
+            f"cam ({eye[0]:.0f}, {eye[1]:.0f}, {eye[2]:.0f})  t={self._t:.1f}s  {w}x{h}")
