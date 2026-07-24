@@ -3075,6 +3075,11 @@ class SimplifiedMapEditor(QMainWindow):
         # inside a scroll area; the Object Library thumbnail grid is tab 1.
         _li_scroll = QScrollArea()
         _li_scroll.setWidgetResizable(True)
+        # Never scroll horizontally: with the bar off + widgetResizable, the
+        # content is forced to the viewport width and wide children (labels
+        # without word-wrap, pixmap labels) wrap/shrink instead of pushing a
+        # horizontal scrollbar onto the whole panel.
+        _li_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         _li_scroll.setWidget(dock_widget)
 
         right_tabs = QTabWidget()

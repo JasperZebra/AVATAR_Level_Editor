@@ -3547,6 +3547,22 @@ sections, like the BW editor's. Two changes:
 If the preview is still blank after this, check the console for `[cs-preview]` lines and
 the widget's status text — the failure will be named there.
 
+**Follow-up fixes (same day):**
+- **Sequences-tab link made self-syncing**: the user reported the tab "not linked" to the
+  previewer. The widget's 20 fps tick now compares `editor.selected_movie_sequence` to its
+  own state and calls `set_sequence` itself when they differ — the explicit hook in
+  `_on_sequence_selected` remains but is no longer load-bearing, so creation-order issues
+  or a swallowed exception can never sever the link. (Headless offscreen test confirmed
+  the widget-side path: combo populates from real moviedata via the tick alone.)
+- **Right-panel horizontal scrollbar killed**: a QLabel's minimum width follows its
+  pixmap/text, so the preview image (up to 640px) + long unwrapped status text forced
+  `dock_widget` wider than the dock → horizontal scrollbar on the whole Level Information
+  scroll area. Fix: `image_label`/`status` get `QSizePolicy.Ignored` horizontally +
+  word-wrap, and `_li_scroll.setHorizontalScrollBarPolicy(ScrollBarAlwaysOff)` — with
+  widgetResizable, content is forced to viewport width and wide children wrap instead of
+  pushing a scrollbar. Vertical scrolling remains as-needed (three stacked sections
+  legitimately exceed short windows).
+
 **Verified on real data:** 34/34 Avatar .hkx files parse (0 fail/0 empty) across all shape
 classes ({StorageExtendedMesh: 42, Box: 26, ConvexVertices: 34, Sphere: 1, Capsule: 1}
 in the sample); collision extents match the sibling model's vertex bounds at ratios

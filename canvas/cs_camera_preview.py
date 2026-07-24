@@ -25,7 +25,7 @@ import numpy as np
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QImage, QPixmap
 from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton,
-                             QSlider, QVBoxLayout, QWidget)
+                             QSizePolicy, QSlider, QVBoxLayout, QWidget)
 
 DEFAULT_FOV = 55.0        # moviedata carries no FOV track; game-plausible default
 PREVIEW_MAX_W = 640       # FBO cap — the label scales the image up if docked wide
@@ -125,7 +125,12 @@ class CSCameraPreviewWidget(QWidget):
 
         self.image_label = QLabel("Select a sequence in the Sequences tab")
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setMinimumHeight(170)
+        self.image_label.setWordWrap(True)
+        # Ignored horizontal policy: a QLabel's minimum width otherwise
+        # follows its pixmap/text width, which forced the whole right panel
+        # wider than the dock (= the horizontal scrollbar the user reported).
+        self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
+        self.image_label.setMinimumSize(120, 150)
         self.image_label.setStyleSheet(
             "background-color: #101418; color: #8899aa; border: 1px solid #2a3036;")
         layout.addWidget(self.image_label, 1)
@@ -153,6 +158,8 @@ class CSCameraPreviewWidget(QWidget):
         self.status = QLabel("")
         self.status.setFont(QFont("Consolas", 7))
         self.status.setStyleSheet("color: #7f8c99;")
+        self.status.setWordWrap(True)
+        self.status.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Minimum)
         layout.addWidget(self.status)
 
         self.timer = QTimer(self)
@@ -263,6 +270,12 @@ class CSCameraPreviewWidget(QWidget):
     # ── ticking / rendering ────────────────────────────────────────────────
 
     def _tick(self):
+        # Self-syncing link: follow the editor's Sequences-tab selection even
+        # if the explicit set_sequence hook never fired (creation-order or
+        # swallowed-exception proofing — the preview can't be "disconnected").
+        ed_seq = getattr(self.editor, 'selected_movie_sequence', None)
+        if ed_seq != self._seq_name:
+            self.set_sequence(ed_seq)
         if not self.isVisible() or self._cam_node_id is None:
             return
         md, seq = self._movie()
