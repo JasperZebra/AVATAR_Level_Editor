@@ -3562,6 +3562,17 @@ the widget's status text — the failure will be named there.
   widgetResizable, content is forced to viewport width and wide children wrap instead of
   pushing a scrollbar. Vertical scrolling remains as-needed (three stacked sections
   legitimately exceed short windows).
+- **Stats-tab labels were the remaining wideners** (user: content extended past the
+  border on level load): Type/Source/Map/X,Y,Z/Angles value labels had no word wrap —
+  long source-file paths set their minimum width. All stat value labels now wrap.
+- **Static-camera fallback in the previewer**: survey across all 106 moviedata files
+  (both games): only 156/568 sequences have a camera among their OWN animated nodes —
+  most cutscenes are filmed by STATIC cameras that exist in NodeData but are not
+  sequence nodes (no tracks). `camera_nodes()` now offers three tiers: sequence-animated
+  cameras → all other camera NodeDefs "(static)" (rest pose — `camera_pose_at` already
+  falls back to the NodeDef transform when the node has no tracks) → the sequence's own
+  nodes "(node)". "No camera in this sequence" is now effectively unreachable on real
+  data.
 
 **Verified on real data:** 34/34 Avatar .hkx files parse (0 fail/0 empty) across all shape
 classes ({StorageExtendedMesh: 42, Box: 26, ConvexVertices: 34, Sphere: 1, Capsule: 1}
