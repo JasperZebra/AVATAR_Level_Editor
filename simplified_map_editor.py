@@ -2297,16 +2297,24 @@ class SimplifiedMapEditor(QMainWindow):
         self.stat_id_label.setWordWrap(True)
         form.addRow("ID:", self.stat_id_label)
 
+        # Word wrap on EVERY value label: unwrapped long values (source file
+        # paths, type names) set the label's minimum width, which forced the
+        # whole right panel wider than the dock on level load (content
+        # clipped past the border once the horizontal scrollbar was removed).
         self.stat_type_label = QLabel("—")
+        self.stat_type_label.setWordWrap(True)
         form.addRow("Type:", self.stat_type_label)
 
         self.stat_source_label = QLabel("—")
+        self.stat_source_label.setWordWrap(True)
         form.addRow("Source:", self.stat_source_label)
 
         self.stat_map_label = QLabel("—")
+        self.stat_map_label.setWordWrap(True)
         form.addRow("Map:", self.stat_map_label)
 
         self.stat_pos_label = QLabel("—")
+        self.stat_pos_label.setWordWrap(True)
         form.addRow("X,Y,Z:", self.stat_pos_label)
 
         angles_row = QWidget()
@@ -2314,6 +2322,7 @@ class SimplifiedMapEditor(QMainWindow):
         angles_row_layout.setContentsMargins(0, 0, 0, 0)
         angles_row_layout.setSpacing(4)
         self.stat_angles_label = QLabel("—")
+        self.stat_angles_label.setWordWrap(True)
         angles_row_layout.addWidget(self.stat_angles_label, 1)
         self.stat_angles_add_btn = QPushButton("+ Add")
         self.stat_angles_add_btn.setFixedHeight(28)

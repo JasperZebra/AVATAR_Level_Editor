@@ -53,20 +53,42 @@ def game_to_gl_dir(d):
 
 
 def camera_nodes(movie_data, seq):
-    """[(node_id, display_name)] for the camera nodes of a sequence.
+    """[(node_id, display_name)] of viewable cameras for a sequence.
 
-    Cameras are NodeDefs named like 'CameraCinematic_5' / 'Camera.Cinematic_0'
-    — matched case-insensitively on 'cam'. Nodes without a NodeDef are skipped.
+    Three tiers (survey across all 106 moviedata files of both games: only
+    156 of 568 sequences have a camera among their OWN animated nodes —
+    many are filmed by STATIC cameras that live in NodeData but are not
+    sequence nodes, and object-only sequences have no camera at all):
+      1. camera-named nodes animated IN the sequence,
+      2. every other camera-named NodeDef in the whole moviedata (static —
+         rest pose; camera_pose_at already falls back to it),
+      3. if there are STILL none, the sequence's own nodes ("(node)") so
+         the user can at least view from a participant.
+    Camera naming: case-insensitive 'cam' in the NodeDef name.
     """
     out = []
     if movie_data is None or seq is None:
         return out
+    seen = set()
     for sn in seq.nodes:
         nd = movie_data.node_defs.get(sn.node_id)
         if nd is None:
             continue
         if 'cam' in (nd.name or '').lower():
             out.append((sn.node_id, nd.name or f'Camera {sn.node_id}'))
+            seen.add(sn.node_id)
+    for nid, nd in sorted(movie_data.node_defs.items(),
+                          key=lambda kv: (kv[1].name or '')):
+        if nid in seen:
+            continue
+        if 'cam' in (nd.name or '').lower():
+            out.append((nid, f"{nd.name or nid} (static)"))
+            seen.add(nid)
+    if not out:
+        for sn in seq.nodes:
+            nd = movie_data.node_defs.get(sn.node_id)
+            if nd is not None:
+                out.append((sn.node_id, f"{nd.name or sn.node_id} (node)"))
     return out
 
 
