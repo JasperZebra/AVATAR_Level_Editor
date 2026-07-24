@@ -154,6 +154,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/xbg_parser.py` | `tests/test_part_assembly.py` | — | Rigid vehicle-part assembly (`_apply_part_transforms`): part placed by name-matched bone; skinned / unmatched / identity-bone meshes untouched; built on synthetic Mesh+Bone objects, no file IO — excluded from `--cov` |
 | `canvas/mab_parser.py` | `tests/test_mab_parser.py` | — | Smallest-three quat codec round-trip (all 4 permutation flags, SIGNED third word, s<0 sentinel) + synthetic clip: group/mask keyframe decode (primary @ sub-frame 0, flagged keys @ bit+1), anim-mask routing, derived fps, bone-name resolution — excluded from `--cov` |
 | `canvas/xbg_direct_loader.py` | `tests/test_vehicle_attachments.py` | — | Mounted-weapon merge: baked matrix applied to verts (normals unrotated on pure translation), material indices offset, bounds widened; no-entry models untouched; `_resolve_attachment_path` data-root anchoring — monkeypatched table/builder, no game files — excluded from `--cov` |
+| `simplified_map_editor.py` | `tests/test_stats_softwrap.py` | — | `_softwrap`: short values untouched, ZWSP inserted after `.`/`_`/`/`/`\`/`:` in dotted archetype names and Windows paths, invisible when stripped back out — instantiated via `SimplifiedMapEditor.__new__` (plain `object.__new__` is blocked by real PyQt5's sip on a QMainWindow subclass) — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -3547,6 +3548,36 @@ sections, like the BW editor's. Two changes:
 
 If the preview is still blank after this, check the console for `[cs-preview]` lines and
 the widget's status text — the failure will be named there.
+
+### Two more right-panel bugs (July 2026)
+
+**1. 2D sector/landmark/omnis boundary squares vanished while an entity was selected**
+(user: "click on an object... squares go away, click off... they come back"). Root cause:
+`_render_2d_opengl` drew every 2D layer (terrain, entities, movie paths, gizmo, selection
+box, sector boundaries, mode indicator) inside ONE shared `try/finally` with no `except` —
+an exception raised by any earlier stage (entities/gizmo/selection-box are the stages that
+only run extra code paths once something is selected) aborted every draw call AFTER it for
+that frame, including the sector-boundary squares near the end. `paintGL`'s outer
+try/except caught it and printed a traceback, but the frame still rendered without the
+squares; the very next frame (nothing selected, the extra code path not hit) rendered
+clean again — exactly the flicker reported. Fix: each stage now runs through a local
+`_stage(name, fn)` wrapper with its own try/except + traceback, so a failure in one stage
+can never suppress the others — sector boundaries and the mode indicator now always
+attempt to draw regardless of what breaks elsewhere in the frame. The original per-stage
+exception (if one is still occurring) will now print as `[2d-render] <stage> failed: ...`
+instead of a bare `Error in paintGL`, which pinpoints it immediately if it recurs.
+
+**2. Stats-tab labels still forced a horizontal scrollbar despite `setWordWrap(True))`**
+(follow-up to the July 2026 wrap fix above). Root cause: Qt's word wrap only breaks
+BETWEEN words (at whitespace) — it cannot help with a long dotted archetype name
+(`weapons.Avatar_MountedWeapons.DoveTurret`) or a backslash file path
+(`graphics\av_vehicles_corp\dove_drivable\dove_turret.xbg`), since neither contains a
+single space. Those single "words" kept the label's natural width wide regardless of the
+wrap flag. Fix: new `SimplifiedMapEditor._softwrap(text)` inserts a U+200B (zero-width
+space — an unconditional Unicode line-break opportunity, invisible when rendered) after
+every `.`/`_`/`-`/`/`/`\`/`:` in values over 24 chars; applied to the Name/Type/Source/Map
+stat labels before `setText`. ID and Angles/Position labels were already bounded (ID is
+truncated to 22 chars + "..."; Angles/Position are `.2f`-formatted numbers) so left as-is.
 
 **Follow-up fixes (same day):**
 - **Sequences-tab link made self-syncing**: the user reported the tab "not linked" to the

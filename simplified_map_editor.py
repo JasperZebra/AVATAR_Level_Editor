@@ -14036,17 +14036,17 @@ class SimplifiedMapEditor(QMainWindow):
                                 relationships.append(f"  ... and {len(seated_npcs) - 3} more")
             
             # Populate structured stat labels
-            self.stat_name_label.setText(entity.name)
+            self.stat_name_label.setText(self._softwrap(entity.name))
             entity_id = entity.id
             self.stat_id_label.setText(entity_id[:22] + "..." if len(entity_id) > 22 else entity_id)
-            self.stat_type_label.setText(getattr(entity, 'entity_type', None) or "—")
-            self.stat_source_label.setText(getattr(entity, 'source_file', None) or "—")
+            self.stat_type_label.setText(self._softwrap(getattr(entity, 'entity_type', None) or "—"))
+            self.stat_source_label.setText(self._softwrap(getattr(entity, 'source_file', None) or "—"))
             if getattr(self.canvas, 'unified_mode', False):
                 sid = getattr(entity, 'source_sector_id', -1)
                 layer = getattr(entity, 'source_layer', 'main') or 'main'
-                self.stat_map_label.setText(f"Sector {sid} ({layer})" if sid >= 0 else "—")
+                self.stat_map_label.setText(self._softwrap(f"Sector {sid} ({layer})") if sid >= 0 else "—")
             else:
-                self.stat_map_label.setText(getattr(entity, 'map_name', None) or "—")
+                self.stat_map_label.setText(self._softwrap(getattr(entity, 'map_name', None) or "—"))
             self.stat_pos_label.setText(f"{entity.x:.2f}, {entity.y:.2f}, {entity.z:.2f}")
             self._update_stat_angles(entity)
 
@@ -14075,6 +14075,29 @@ class SimplifiedMapEditor(QMainWindow):
             mode_text = "2D Mode" if self.canvas.mode == 0 else "3D Mode"
             self._clear_entity_stats()
             self.status_bar.showMessage(f"No selection | {mode_text}")
+
+    def _softwrap(self, text):
+        """Insert invisible Unicode break points into a stats-panel value.
+
+        Values like dotted archetype names ('weapons.Avatar_MountedWeapons.
+        DoveTurret') or file paths ('graphics\\vehicles\\land\\rover.xbg')
+        have no whitespace, so Qt's word wrap (which only breaks between
+        words) has nowhere to break — setWordWrap(True) alone does nothing
+        and the label's single-line width forces the whole right panel
+        wider (the reported "stats tab causes a horizontal scrollbar" bug).
+        U+200B (zero-width space) is an unconditional Unicode line-break
+        opportunity, so inserting one after each separator lets the label
+        actually wrap without changing what's visibly displayed.
+        """
+        if not text or len(text) <= 24:
+            return text
+        ZWSP = chr(0x200B)   # zero-width space — see docstring
+        out = []
+        for ch in text:
+            out.append(ch)
+            if ch in '._-/\\:':
+                out.append(ZWSP)
+        return ''.join(out)
 
     def _clear_entity_stats(self):
         """Reset all structured stat labels to their default empty state."""

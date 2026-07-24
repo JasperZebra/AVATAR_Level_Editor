@@ -4221,7 +4221,18 @@ class MapCanvas(QOpenGLWidget):
             print(f"[gl-reset] {_e}")
 
     def _render_2d_opengl(self):
-        """Render 2D scene"""
+        """Render 2D scene.
+
+        Each stage is independently guarded: previously the whole block shared
+        one try/finally, so an exception raised while drawing entities/gizmo/
+        selection-box (e.g. triggered only once something is selected) aborted
+        every draw call AFTER it for that frame — the sector/landmark/omnis
+        boundary squares (drawn near the end) would vanish the instant an
+        object was selected and reappear on deselect, since a resumed
+        selection-free frame no longer hit the failing code path. Sector
+        boundaries are a persistent reference overlay the user always wants
+        visible, so a failure anywhere else must never suppress them.
+        """
         if self.show_grid:
             self.grid_renderer.render_2d_grid(self)
 
@@ -4229,25 +4240,35 @@ class MapCanvas(QOpenGLWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
+        def _stage(name, fn):
+            try:
+                fn()
+            except Exception as e:
+                print(f"[2d-render] {name} failed: {e}")
+                import traceback
+                traceback.print_exc()
+
         try:
             if hasattr(self, 'terrain_renderer'):
-                self.terrain_renderer.render_terrain_2d(painter, self)
+                _stage('terrain', lambda: self.terrain_renderer.render_terrain_2d(painter, self))
 
             if self.show_entities:
-                entities_to_draw = self._filter_entities_by_source(self._get_visible_entities())
-                if entities_to_draw:
-                    self.entity_renderer.render_entities_2d(painter, self, entities_to_draw)
+                def _draw_entities():
+                    entities_to_draw = self._filter_entities_by_source(self._get_visible_entities())
+                    if entities_to_draw:
+                        self.entity_renderer.render_entities_2d(painter, self, entities_to_draw)
+                _stage('entities', _draw_entities)
 
-            draw_movie_paths_2d(painter, self)
+            _stage('movie-paths', lambda: draw_movie_paths_2d(painter, self))
 
-            self.gizmo_renderer.render_rotation_gizmo_2d(painter, self)
+            _stage('gizmo', lambda: self.gizmo_renderer.render_rotation_gizmo_2d(painter, self))
 
-            self._render_selection_box(painter)
+            _stage('selection-box', lambda: self._render_selection_box(painter))
 
             if getattr(self, 'show_sector_boundaries', False):
-                self.draw_sector_boundaries(painter)
+                _stage('sector-boundaries', lambda: self.draw_sector_boundaries(painter))
 
-            self._draw_2d_mode_indicator(painter)
+            _stage('mode-indicator', lambda: self._draw_2d_mode_indicator(painter))
 
         finally:
             painter.end()
