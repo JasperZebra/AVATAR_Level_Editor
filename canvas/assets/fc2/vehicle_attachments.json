@@ -1,0 +1,194 @@
+{
+ "rover.xbg": [
+  {
+   "model": "graphics/Weapons/Turret/Vehicle_HummerMount/Turret_HummerMount.xbg",
+   "matrix": [
+    [
+     1.0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     1.0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     1.0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     1.0
+    ]
+   ],
+   "via": "Land.DLC_Vehicle2_DLC1 -> weapons.MountedWeapons.M249_HummerMount",
+   "kind": "mount"
+  },
+  {
+   "model": "graphics/Weapons/Special/M249SAW/TURRET_M249.xbg",
+   "matrix": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0006175699672894552
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.8052326170727611
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.4199678897857666
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "via": "MountedWeapons.M249_HummerMount -> MountedWeapons.M249_Mounted",
+   "kind": "gun"
+  }
+ ],
+ "fishing_boat.xbg": [
+  {
+   "model": "graphics/Weapons/Turret/Vehicule_FishingBoat/Turret_Tripod.xbg",
+   "matrix": [
+    [
+     1.0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     1.0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     1.0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     1.0
+    ]
+   ],
+   "via": "Sea.FishingBoat -> weapons.MountedWeapons.M249_FishingBoat",
+   "kind": "mount"
+  },
+  {
+   "model": "graphics/Weapons/Special/M249SAW/TURRET_M249.xbg",
+   "matrix": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0008224699558923021
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     1.0251838639378548
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.4425380676984787
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "via": "MountedWeapons.M249_FishingBoat -> MountedWeapons.M249_Mounted",
+   "kind": "gun"
+  }
+ ],
+ "swampboat.xbg": [
+  {
+   "model": "graphics/Weapons/Turret/Vehicule_FishingBoat/Turret_Tripod.xbg",
+   "matrix": [
+    [
+     1.0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     1.0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     1.0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     1.0
+    ]
+   ],
+   "via": "Sea.SwampBoat -> weapons.MountedWeapons.M249_SwampMount",
+   "kind": "mount"
+  },
+  {
+   "model": "graphics/Weapons/Special/M249SAW/TURRET_M249.xbg",
+   "matrix": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0008224699558923021
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     1.0251838639378548
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     1.4425380676984787
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "via": "MountedWeapons.M249_SwampMount -> MountedWeapons.M249_Mounted",
+   "kind": "gun"
+  }
+ ]
+}

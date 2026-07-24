@@ -22,14 +22,62 @@ Why this is geometry-identical to the old gltf path:
 Static geometry only — bone weights / skeleton are ignored (per project scope).
 """
 
+import json
 import os
 import numpy as np
 
 # canvas/ is on sys.path at runtime, so these resolve like the rest of the package
 from xbg_parser import XBGParser
 
+# ── Mounted-weapon attachments (dove turret, FC2 jeep .50cal, …) ─────────────
+# canvas/assets/<game>/vehicle_attachments.json maps a vehicle model basename
+# to child models (turret mount, gun) with a baked game-space 4x4 relative to
+# the vehicle origin (see bake_vehicle_attachments.py — data recovered from
+# the games' entity libraries + the engine's seat/mount attach rule). The
+# attachment meshes are merged straight into the vehicle's GLTFModel here, so
+# armed vehicles render complete on every path (GDR, classic, CS preview,
+# thumbnails) with no renderer changes.
+_attachments_table = None
 
-def build_xbg_model(xbg_path, GLTFModel, GLTFMesh, lod_level=0):
+
+def _get_attachments_table():
+    global _attachments_table
+    if _attachments_table is None:
+        table = {}
+        assets = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
+        for game in ('avatar', 'fc2'):
+            p = os.path.join(assets, game, 'vehicle_attachments.json')
+            try:
+                if os.path.exists(p):
+                    with open(p, 'r', encoding='utf-8') as f:
+                        table.update({k.lower(): v for k, v in json.load(f).items()})
+            except Exception as e:
+                print(f"[attachments] failed to read {p}: {e}")
+        _attachments_table = table
+    return _attachments_table
+
+
+def _resolve_attachment_path(vehicle_xbg_path, rel_model):
+    """Data-relative 'graphics/...' path → absolute, anchored at the data root
+    that contains the vehicle model (case-flattened fallback included)."""
+    norm = vehicle_xbg_path.replace('\\', '/')
+    i = norm.lower().rfind('/graphics/')
+    candidates = []
+    if i >= 0:
+        root = vehicle_xbg_path[:i]
+        candidates.append(os.path.join(root, rel_model.replace('/', os.sep)))
+        candidates.append(os.path.join(root, rel_model.lower().replace('/', os.sep)))
+    # same-folder fallback (dove keeps its turret next to the vehicle)
+    candidates.append(os.path.join(os.path.dirname(vehicle_xbg_path),
+                                   os.path.basename(rel_model)))
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return None
+
+
+def build_xbg_model(xbg_path, GLTFModel, GLTFMesh, lod_level=0,
+                    _no_attachments=False):
     """Parse an .xbg into a populated (but texture-less) GLTFModel.
 
     GL-free: fills model.meshes (vertices/normals/uvs/indices/material_index),
@@ -129,7 +177,66 @@ def build_xbg_model(xbg_path, GLTFModel, GLTFMesh, lod_level=0):
         model.bounds_min = bmin
         model.bounds_max = bmax
 
+    if not _no_attachments:
+        try:
+            _merge_attachments(xbg_path, model, GLTFModel, GLTFMesh, lod_level)
+        except Exception as e:
+            print(f"[attachments] merge failed for {os.path.basename(xbg_path)}: {e}")
+
     return model
+
+
+def _merge_attachments(xbg_path, model, GLTFModel, GLTFMesh, lod_level):
+    """Append mounted-weapon models (turret/gun) into a vehicle's GLTFModel,
+    transformed by their baked game-space attach matrices."""
+    entries = _get_attachments_table().get(os.path.basename(xbg_path).lower())
+    if not entries:
+        return
+    for entry in entries:
+        full = _resolve_attachment_path(xbg_path, entry['model'])
+        if not full:
+            print(f"[attachments] model not found on disk: {entry['model']}")
+            continue
+        sub = build_xbg_model(full, GLTFModel, GLTFMesh, lod_level,
+                              _no_attachments=True)
+        if not sub.meshes:
+            continue
+        M = np.asarray(entry['matrix'], dtype=np.float64)
+        R, t = M[:3, :3], M[:3, 3]
+        rotate = not np.allclose(R, np.eye(3), atol=1e-9)
+        mat_base = len(model.xbg_material_names)
+        model.xbg_material_names.extend(getattr(sub, 'xbg_material_names', []) or [])
+        transformed = {}   # id(arr) -> transformed copy (arrays are shared across prims)
+        for gm in sub.meshes:
+            key = id(gm.vertices)
+            if key not in transformed:
+                v = np.asarray(gm.vertices, dtype=np.float64)
+                v = (v @ R.T + t) if rotate else (v + t)
+                transformed[key] = np.ascontiguousarray(v, dtype=np.float32)
+            gm.vertices = transformed[key]
+            if gm.normals is not None and rotate:
+                nkey = ('n', id(gm.normals))
+                if nkey not in transformed:
+                    n = np.asarray(gm.normals, dtype=np.float64) @ R.T
+                    ln = np.linalg.norm(n, axis=1)
+                    n[ln > 1e-9] /= ln[ln > 1e-9, None]
+                    transformed[nkey] = np.ascontiguousarray(n, dtype=np.float32)
+                gm.normals = transformed[nkey]
+            if getattr(gm, 'tangents', None) is not None and rotate:
+                tkey = ('t', id(gm.tangents))
+                if tkey not in transformed:
+                    tn = np.asarray(gm.tangents, dtype=np.float64) @ R.T
+                    transformed[tkey] = np.ascontiguousarray(tn, dtype=np.float32)
+                gm.tangents = transformed[tkey]
+            gm.material_index = int(gm.material_index) + mat_base
+            model.meshes.append(gm)
+        # widen the vehicle bounds so picking/culling covers the attachment
+        allv = [v for k, v in transformed.items() if not isinstance(k, tuple)]
+        if allv and getattr(model, 'bounds_min', None) is not None:
+            av = np.concatenate(allv)
+            vmin, vmax = av.min(axis=0), av.max(axis=0)
+            model.bounds_min = [min(model.bounds_min[i], float(vmin[i])) for i in range(3)]
+            model.bounds_max = [max(model.bounds_max[i], float(vmax[i])) for i in range(3)]
 
 
 def _make_gltfmesh(GLTFMesh, verts, norms, uvs, indices, material_index,

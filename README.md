@@ -166,10 +166,14 @@ Both FCB (native game format) and XML (human-readable) formats are supported wit
   entities' real in-game collision shapes (.hkx — boxes, spheres, capsules,
   convex hulls, triangle meshes) as orange wireframes over the model in 3D.
   Works in both games.
-- **CS Camera Preview**: the right panel's *CS Camera* tab shows the level
-  through a cutscene camera's lens. Pick a sequence in the *Sequences* tab,
-  choose a camera, then play or scrub — the preview flies the camera along its
-  animation while the entities act out the sequence in the main view. Both games.
+- **CS Camera Preview**: the *CS Camera Preview* section in the right panel
+  shows the level through a cutscene camera's lens. Pick a sequence in the
+  *Sequences* tab, choose a camera, then play or scrub — the preview flies the
+  camera along its animation while the entities act out the sequence in the
+  main view. Both games.
+- **Armed vehicles render complete**: mounted weapons (the Dove's rear turret
+  gun, FC2's jeep/boat .50cals) are attached automatically from the games'
+  entity-library data, so vehicles no longer show up missing their guns.
 
 ## Safety & Best Practices
 

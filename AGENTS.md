@@ -153,6 +153,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/cs_camera_preview.py` | `tests/test_cs_camera_preview.py` | — | Pose math only (no Qt/GL): quat rotation, +Y-forward / +Z-up camera conventions, game→GL mapping, pose from rest vs animated tracks, camera-node name filtering — excluded from `--cov` |
 | `canvas/xbg_parser.py` | `tests/test_part_assembly.py` | — | Rigid vehicle-part assembly (`_apply_part_transforms`): part placed by name-matched bone; skinned / unmatched / identity-bone meshes untouched; built on synthetic Mesh+Bone objects, no file IO — excluded from `--cov` |
 | `canvas/mab_parser.py` | `tests/test_mab_parser.py` | — | Smallest-three quat codec round-trip (all 4 permutation flags, SIGNED third word, s<0 sentinel) + synthetic clip: group/mask keyframe decode (primary @ sub-frame 0, flagged keys @ bit+1), anim-mask routing, derived fps, bone-name resolution — excluded from `--cov` |
+| `canvas/xbg_direct_loader.py` | `tests/test_vehicle_attachments.py` | — | Mounted-weapon merge: baked matrix applied to verts (normals unrotated on pure translation), material indices offset, bounds widened; no-entry models untouched; `_resolve_attachment_path` data-root anchoring — monkeypatched table/builder, no game files — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -3693,6 +3694,29 @@ decoded yet; the addon's `mab_scene_avatar.py` is the reference when cinematic i
 wanted.
 
 ### Global assembly audit + the mounted-weapons layer (July 2026)
+
+**IMPLEMENTED (July 2026): mounted weapons now render.** `bake_vehicle_attachments.py`
+(repo root, DEV-TIME tool — deliberately not in setup.py root_files: the app never imports
+it; the runtime reads only the baked JSONs) streams a world's converted
+`entitylibrary_full.fcb.converted.xml` (ET.iterparse, flat memory on 246MB files) and
+writes `canvas/assets/<game>/vehicle_attachments.json`: vehicle model basename →
+[{model, matrix (4×4 row-major game-space, relative to vehicle origin), kind, via}].
+Rules encoded: gunner Seat (hidSeatType=2) BoneName = vehicle-side attach bone;
+MountedWeaponEntry.archMountedWeapon → mount model; its archWeapon → gun model, attached
+at the mount-skeleton bone matching the gun's root bone name, else the generic FC2 mount
+names ('GunMount', 'WeaponPos', 'WeaponPlacement'), else any 'weapon' bone. Gotchas
+learned: prototype Names COLLIDE across kinds (WeaponProperties.DoveTurretGun precedes
+the real entity — merge, prefer the side with a model); archetype VARIANTS (Rover.M249 /
+.Browning / .Mk19) mount different guns at the same point — dedupe per (kind, matrix) or
+jeeps get three stacked guns. Baked: Avatar dove (turret+gun); FC2 rover / fishing_boat /
+swampboat (mount+M249 each). Rendering: `xbg_direct_loader._merge_attachments` appends
+the attachment models' meshes into the vehicle's GLTFModel at load (verts/normals/
+tangents transformed by the baked matrix, material indices offset, bounds widened) — so
+armed vehicles are complete on EVERY path (GDR, classic, CS preview, thumbnails) with
+zero renderer changes. Verified: dove gun lands over the turret-arm end (the gunner seat
+bone carries a 180° z-rotation — gunner faces rearward — which the matrix composition
+reproduces); control props gain nothing. Re-bake when game data or the rule changes:
+`python bake_vehicle_attachments.py <converted xml> --game avatar|fc2 --data-root <root>`.
 
 **Audit: part→bone assembly is complete.** All 2,357 .xbg files across both games parsed
 with 0 failures; of 2,980 unskinned named part meshes, 2,979 (100.0%) resolve to a bone.
