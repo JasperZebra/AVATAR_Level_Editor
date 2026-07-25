@@ -235,6 +235,73 @@ is not yet established that the runtime `EntityId` matches. If it does not, the
 fallback is to locate the live camera entity by walking components with the
 `SafeCast<CCameraFreeComponent>` helper `FUN_1051bb30`.
 
+## LIVE TEST 2026-07-25 — call executed, no visible effect
+
+Game running, level loaded. `runtime/switch_camera.py free` executed
+`SwitchCamera(1, 262)` twice. Both times: remote thread returned exit code 0,
+**game did not crash**, and no visible camera change.
+
+Established during the session:
+
+- **Dunia.dll loads at its preferred base `0x10000000` — ASLR slide is zero.**
+  Every static address in this file is directly valid at runtime as-is.
+- **The DRM-stripped `bin/Dunia.dll` matches the analysed retail-decrypted DLL
+  byte-for-byte at `SwitchCamera`** (`a1 f8 61 1e 11 83 ec 08`). The two copies
+  are interchangeable for analysis.
+- **SwitchCamera does not bail at its first gate.** Both early-exit guards pass
+  live (`[0x111e61f8]+8` = 1, and the inner object is non-null), and
+  `FUN_10a86f50`'s condition — `[[[esi+4]+8]+0xc] != 0` — evaluates true. So
+  execution reaches the switch path. Why nothing happens is still unknown; the
+  next suspect is the post-resolve check `cmp [eax+0xc],0 / je` that skips the
+  switch when the entity handle fails to resolve.
+
+## [CONFIRMED] Component descriptor object layout
+
+`DAT_11221b30` and friends are the descriptor **objects themselves**, not
+pointers to them — the accessor returns `&DAT_...`. Layout:
+
+```
++0x00  char*  class name        -> "CCameraFreeComponent"
++0x04  uint32 hash count        = 5
++0x08  uint32[count] hierarchy hashes, last entry is the class's own hash
+```
+
+| Class | count | own hash |
+|---|---|---|
+| `CCameraFreeComponent` | 5 | `005A5087` |
+| `CCameraThirdComponent` | 5 | `54042A27` |
+| `CCameraPawnComponent` | 6 | `61449071` |
+
+Shared prefix `48AD6F22 F320EEF0 6D1A6418 496E8EE4` is the inherited chain;
+`496E8EE4` is common to all three and is therefore `CCameraComponent`.
+
+**`005A5087` is exactly the hash used in the entity library data** —
+`Camera.Free_1.xml` declares `<object hash="005A5087" name="CCameraFreeComponent">`.
+Runtime class identity and FCB data hash are the same value. This is strong
+evidence that a component authored into level data instantiates as the real
+runtime class, which is what the data route depends on.
+
+Descriptor objects are laid out contiguously: `CCameraEditorComponent`'s
+descriptor begins at `0x11221b30+0x1c`, immediately after Free's.
+
+## [FALSE LEAD, CAUGHT] Two wrong turns worth not repeating
+
+1. **The camera manager is NOT `[[[0x111e61f8]+4]]`.** Read live, that object's
+   `+0x1c` "entry count" came back as `0x7FFFFFC1` and `+0x10` as garbage. `esi`
+   in `SwitchCamera` is the script/game object, not the camera stack manager.
+   The manager `FUN_10249540` operates on is reached further along; re-derive it
+   before trusting any camera-stack read.
+
+2. **Scanning memory for descriptor pointers does not find component
+   instances.** `GetDescriptor()` is *virtual* (vtable slot 6), so instances
+   store a vtable pointer and never a descriptor pointer. Confirmed by control:
+   `CCameraThirdComponent` and `CCameraPawnComponent` — which must be live
+   during normal gameplay — scanned as zero heap references, identically to
+   `CCameraFreeComponent`. **A zero result from this technique proves nothing.**
+   `runtime/find_camera_components.py` retains the controls precisely so this
+   cannot be misread again. To find instances, scan for the *vtable* address —
+   which means Avatar's vtable must be located first (see open question 2).
+
 ## [CONFIRMED] A developer console exists in the binary
 
 `CDominoConsoleCommandManager`, `CFCXConsole`, `CConsoleService`,
