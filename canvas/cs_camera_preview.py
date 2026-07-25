@@ -65,11 +65,17 @@ def game_to_gl_dir(d):
 # OPENING SHOT of the Blue Lagoon Dragon cutscene — the preview opened on a
 # particle emitter's transform instead of a camera.
 #
-# Rule: 'camera' anywhere, or 'cam' NOT glued to a following lowercase letter
-# (so `MPCAM_NaviVictory` still matches, `NaviCamp` no longer does). Checked
+# Rule: 'camera' anywhere, or 'cam' NOT glued to a following LOWERCASE letter —
+# `MPCAM_NaviVictory` and `CamAnimated` match, `NaviCamp` does not. Checked
 # against all 576 node names in the Avatar data: drops exactly those 10 particle
 # effects and loses no real camera.
-_CAMERA_NAME_RE = re.compile(r'camera|cam(?![a-z])', re.IGNORECASE)
+#
+# The case classes are spelled out instead of using re.IGNORECASE on purpose:
+# under IGNORECASE the `[a-z]` lookahead also matches UPPERCASE, so `CamAlpha`
+# (a camelCase 'Cam' token) would be rejected along with `Camp`. The whole
+# distinction here is lowercase-continuation vs. new camelCase word, so the
+# lookahead has to stay case-sensitive.
+_CAMERA_NAME_RE = re.compile(r'[Cc][Aa][Mm]([Ee][Rr][Aa]|(?![a-z]))')
 
 
 def is_camera(nd):
@@ -162,8 +168,10 @@ def camera_shots(movie_data, seq):
     """
     if movie_data is None or seq is None:
         return []
-    shots = []
-    openers = []
+    t0 = float(getattr(seq, 'start_time', 0.0) or 0.0)
+    switches = []      # explicit 'Switch To' cuts
+    spans = []         # (first key time, node_id) for ANIMATED cameras
+    unswitched = []    # cameras with no 'Switch To' of their own
     for sn in seq.nodes:
         nd = movie_data.node_defs.get(sn.node_id)
         if not is_camera(nd):
@@ -172,14 +180,29 @@ def camera_shots(movie_data, seq):
         times = [k.time for k in (track.event_keys if track else [])
                  if (k.event or '').strip().lower() == 'switch to']
         if times:
-            shots.extend((float(t), sn.node_id) for t in times)
+            switches.extend((float(t), sn.node_id) for t in times)
         else:
-            openers.append(sn.node_id)
-    shots.sort(key=lambda r: r[0])
-    t0 = float(getattr(seq, 'start_time', 0.0) or 0.0)
-    if openers and (not shots or shots[0][0] > t0):
-        shots.insert(0, (t0, openers[0]))
-    return shots
+            unswitched.append(sn.node_id)
+        keys = [k.time for tr in sn.tracks.values()
+                for k in (list(tr.pos_keys) + list(tr.rot_keys))]
+        if keys:
+            spans.append((float(min(keys)), sn.node_id))
+
+    if switches:
+        # Explicit cuts win outright. They are the only way a STATIC camera
+        # (no keyframes, so no span of its own) can ever be cut to.
+        shots = sorted(switches, key=lambda r: r[0])
+        if unswitched and shots[0][0] > t0:
+            shots.insert(0, (t0, unswitched[0]))
+        return shots
+
+    # No explicit cuts: each ANIMATED camera is live over its own keyframe
+    # span, and consecutive cameras hand over at the span boundaries.
+    if spans:
+        return sorted(spans, key=lambda r: r[0])
+    # Cameras exist but none is animated and none is switched to — one static
+    # shot for the whole sequence.
+    return [(t0, unswitched[0])] if unswitched else []
 
 
 def active_camera_at(shots, t, default=None):

@@ -4208,3 +4208,48 @@ signal. Don't reach for Type.
   `Avatar.Dragon_Pilotable.Static_SP_BlueLagoon_16_ScriptedEvent` (5 shots at
   0/6/10/12/14s) and `SP_Corp_BlueLagoon_02_Samson_Leaves` (2 shots at 0/5s);
   `sp_dustbowl_hg_rb_01_l` → `…SE_IG_DustBowl_50_Investigation01` (5 shots).
+
+## Shots are camera KEY SPANS, not just 'Switch To' (July 2026)
+
+The `Switch To` model was a **secondary** mechanism. The primary one: **an
+animated camera is live over its own keyframe span**, and consecutive cameras
+hand over at the span boundaries. Ground truth —
+`sp_sebastien_rb_02_l/Samson_Short_Intro`, 30 s, four nodes, **zero** `Switch To`
+events anywhere:
+
+| node | key span | |
+|---|---|---|
+| `Avatar.Samson_Pilotable.Static_0` | 0 → 30 | the actor, spans the take |
+| `CameraCinematic_Cinematique_Intro_Camera01` | 0 → 5.5 | **shot 1, 5.5 s** |
+| `CameraCinematic_Cinematique_Intro_Camera02` | 5.5 → 21 | **shot 2, 15.5 s** |
+| `CameraCinematic_Cinematique_Intro_Camera03` | 21 → 30 | **shot 3, 9 s** |
+
+Switch-only logic saw ONE shot here and never cut.
+
+**Why both mechanisms exist:** a **static** camera has no keyframes, so it has no
+span and can only ever be reached by an explicit `Switch To`. An **animated**
+camera carries its own span and usually needs no event. So `camera_shots`:
+
+1. If the sequence has ANY `Switch To` → those are authoritative, used alone
+   (plus a synthesised opener at `start_time` from the first camera that has no
+   switch of its own). Adding span-starts on top would invent extra cuts.
+2. Otherwise → sort the animated cameras by their first key time; each is live
+   until the next one starts.
+3. Cameras but none animated or switched → one static shot for the whole take.
+
+Do **not** merge the two lists. Across the data, camera spans genuinely overlap
+in 18 sequences and only 32% tile cleanly end-to-start, so span-derived cuts are
+only trustworthy when there are no explicit ones. Result: 39 sequences now cut
+(was 36), and the ones that were wrong are right.
+
+**Regex gotcha (bit me writing the test):** `_CAMERA_NAME_RE` spells its case
+classes out instead of using `re.IGNORECASE`, because under IGNORECASE the
+`(?![a-z])` lookahead also matches UPPERCASE — so `CamAlpha` (a camelCase 'Cam'
+token) got rejected along with `Camp`. The distinction is
+lowercase-continuation vs. new camelCase word, so that lookahead must stay
+case-sensitive. Still verified against all 576 names: drops exactly the 10
+`NaviCamp` particle effects, matches every real camera.
+
+**Reference timings** (for eyeballing the previewer):
+`Samson_Short_Intro` 30 s = 5.5 + 15.5 + 9 · `SP_Corp_BlueLagoon_02_Samson_Leaves`
+10 s = 4.5 + 5.5 · `…BlueLagoon_16_ScriptedEvent` 16.8 s = 6 + 4 + 2 + 2 + 2.8.
