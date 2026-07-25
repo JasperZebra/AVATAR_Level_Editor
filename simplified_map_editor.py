@@ -2301,6 +2301,10 @@ class SimplifiedMapEditor(QMainWindow):
 
         self.entity_count_label = QLabel("Entities: 0")
         self.entity_count_label.setStyleSheet("font-weight:bold;")
+        # Holds a multi-line breakdown ("Objects: 120 Prop, 45 Vehicle, 30
+        # others" / "From 48 sectors"), which was the one label in this tab
+        # with no wrap at all.
+        self.entity_count_label.setWordWrap(True)
         stat_lay.addWidget(self.entity_count_label)
 
         form = QFormLayout()
@@ -14177,7 +14181,11 @@ class SimplifiedMapEditor(QMainWindow):
             # Populate structured stat labels
             self.stat_name_label.setText(self._softwrap(entity.name))
             entity_id = entity.id
-            self.stat_id_label.setText(entity_id[:22] + "..." if len(entity_id) > 22 else entity_id)
+            # Full ID, wrapped — it used to be truncated at 22 chars because a
+            # bare digit string has no separator for _softwrap to break on.
+            # _softwrap now also breaks long unbroken runs, so the whole value
+            # fits without cutting it off.
+            self.stat_id_label.setText(self._softwrap(entity_id))
             self.stat_type_label.setText(self._softwrap(getattr(entity, 'entity_type', None) or "—"))
             self.stat_source_label.setText(self._softwrap(getattr(entity, 'source_file', None) or "—"))
             if getattr(self.canvas, 'unified_mode', False):
@@ -14190,7 +14198,8 @@ class SimplifiedMapEditor(QMainWindow):
             self._update_stat_angles(entity)
 
             if relationships:
-                self.stat_relations_label.setText("\n".join(relationships))
+                self.stat_relations_label.setText(
+                    "\n".join(self._softwrap(r) for r in relationships))
                 self.stat_relations_label.show()
             else:
                 self.stat_relations_label.hide()
@@ -14227,15 +14236,37 @@ class SimplifiedMapEditor(QMainWindow):
         U+200B (zero-width space) is an unconditional Unicode line-break
         opportunity, so inserting one after each separator lets the label
         actually wrap without changing what's visibly displayed.
+
+        Separators alone are not enough, though: a value with NO separator at
+        all — a 19-digit disEntityId, a long run-together name — still has
+        nowhere to break. So any run of `max_run` characters without a break
+        opportunity gets one too. That makes EVERY value wrappable, which is
+        what lets the ID field show its full value instead of being truncated.
+
+        The labels this is used on are not user-selectable, so the invisible
+        characters can never end up in a copied string.
         """
-        if not text or len(text) <= 24:
+        if not text:
             return text
         ZWSP = chr(0x200B)   # zero-width space — see docstring
+        max_run = 12
+        last = len(text) - 1
         out = []
-        for ch in text:
+        run = 0
+        for i, ch in enumerate(text):
             out.append(ch)
-            if ch in '._-/\\:':
+            if i == last:
+                break                         # never trail a break point
+            if ch.isspace():
+                run = 0                       # real whitespace already breaks
+            elif ch in '._-/\\:':
                 out.append(ZWSP)
+                run = 0
+            else:
+                run += 1
+                if run >= max_run:
+                    out.append(ZWSP)
+                    run = 0
         return ''.join(out)
 
     def _clear_entity_stats(self):
@@ -14389,11 +14420,16 @@ class SimplifiedMapEditor(QMainWindow):
                 src_sid = getattr(entity, 'source_sector_id', -1)
                 layer = getattr(entity, 'source_layer', 'main') or 'main'
                 if cur_sid != src_sid and src_sid >= 0:
-                    self.stat_map_label.setText(f"Sector {src_sid} → {cur_sid} ({layer})")
+                    self.stat_map_label.setText(
+                        self._softwrap(f"Sector {src_sid} → {cur_sid} ({layer})"))
                 else:
-                    self.stat_map_label.setText(f"Sector {cur_sid} ({layer})")
+                    self.stat_map_label.setText(
+                        self._softwrap(f"Sector {cur_sid} ({layer})"))
             else:
-                self.stat_map_label.setText(getattr(entity, 'map_name', None) or "—")
+                # This drag-update path bypassed _softwrap, so a long map name
+                # would widen the panel again as soon as the entity was moved.
+                self.stat_map_label.setText(
+                    self._softwrap(getattr(entity, 'map_name', None) or "—"))
 
         # Entity browser position column
         if hasattr(self, 'entity_tree'):

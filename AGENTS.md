@@ -4132,3 +4132,41 @@ at its start time). Labels carry the distance: `Name (static, 63m)`.
 `CS_PREVIEW_MIN_H` (300) + stretch 1 in `dock_layout`, and the preview image's
 minimum height went 150 → 230. The per-tab scroll areas are what make the cap
 safe — without them a capped section clips its content.
+
+## Statistics tab: everything wraps now (July 2026)
+
+Follow-up to the earlier `_softwrap` work. Breaking only **after separators**
+left three holes, all fixed:
+
+1. **`entity_count_label` had no `setWordWrap` at all** — the one label in the
+   tab without it, and it carries the multi-line breakdown ("Objects: 120 Prop,
+   45 Vehicle, 30 others" / "From 48 sectors").
+2. **A value with NO separator could not break.** A `disEntityId` is 19 bare
+   digits — one unbroken token — which is why the ID field was **truncated to
+   22 chars + "..."** rather than wrapped. `_softwrap` now also inserts a break
+   after any run of **12** characters without a break opportunity, so the ID
+   field shows its full value.
+3. **Two setters bypassed `_softwrap`**: `stat_relations_label` (joined
+   relationship lines) and the `on_entity_position_updated` drag path's three
+   `stat_map_label` writes — so a long map name re-widened the panel the moment
+   an entity was dragged.
+
+**`_softwrap` invariants (a test covers each):**
+- Strips back to the original exactly — `out.replace(ZWSP, '') == text`. It is
+  purely invisible; it must never change the displayed value.
+- Real whitespace resets the run counter, so ordinary prose gains no run-based
+  breaks (only its separator breaks).
+- **Never emits a trailing break** — the loop breaks out at the last character.
+  Without that, a 12-char value like `worldsectors` picked up a pointless
+  trailing ZWSP and the "short strings untouched" test failed.
+- The old `len(text) <= 24` early-out was **removed**: it is exactly what kept a
+  19-digit ID from being broken. The loop is naturally a no-op for short text
+  (no separators, no 12-run), so the guard was doing nothing but harm.
+
+**Safe because these labels are not user-selectable** — no
+`setTextInteractionFlags` on them, so the zero-width spaces can never be copied
+into a pasted string. If any stats label is ever made selectable, strip ZWSP on
+copy or this becomes a data-corruption bug.
+
+Values that are plain formatted numbers (`X,Y,Z`, `Angles` — `.2f` with
+comma-space separators) wrap natively and need nothing.
