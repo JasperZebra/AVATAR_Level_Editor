@@ -5649,11 +5649,15 @@ class MapCanvas(QOpenGLWidget):
         # =========================
         # 2D MODE CULLING - VECTORISED (mirrors 3D frustum cull)
         # =========================
-        # Budget sized above the maximum entity count of any Avatar/FC2 level so
-        # the cap only triggers at extreme zoom-out (whole map visible at once).
+        # Budget cap. The 2D squares are now drawn by ONE instanced GL call
+        # (entity_renderer._render_2d_instanced), so the draw cost no longer
+        # scales with the count the way the old per-entity QRectF + drawRects
+        # path did — this exists only as a backstop against pathological data,
+        # not as a normal-operation limit. Every real Avatar/FC2 level, unified
+        # mode included, is far under it and now renders EVERY square.
         # When it does trigger, entities are subsampled uniformly instead of by
         # distance-to-centre — that avoids the circular render-zone boundary.
-        MAX_2D_BUDGET = 15000
+        MAX_2D_BUDGET = 250000
         margin_pixels = 50
 
         try:
@@ -5678,6 +5682,7 @@ class MapCanvas(QOpenGLWidget):
                 indices = np.where(mask)[0]
 
                 if len(indices) == 0:
+                    self._visible_idx_2d = indices
                     return []
 
                 # Budget cap: uniform stride subsample to preserve map-wide coverage.
@@ -5687,10 +5692,19 @@ class MapCanvas(QOpenGLWidget):
                     stride = len(indices) // MAX_2D_BUDGET + 1
                     indices = indices[::stride]
 
+                # Stash the index array for the instanced square renderer, which
+                # gathers colour/rotation straight out of the per-level style
+                # array instead of walking the entity objects again. Kept sorted
+                # ascending (np.where output) — the renderer's searchsorted
+                # lookups depend on that.
+                self._visible_idx_2d = indices
                 return [valid_2d[i] for i in indices]
 
             else:
-                # Fallback: Python loop (slow path, only before first level load)
+                # Fallback: Python loop (slow path, only before first level load).
+                # No index array to hand the instanced renderer — clear it so it
+                # can't reuse a stale one and draw the wrong entities.
+                self._visible_idx_2d = None
                 visible_entities = []
                 for entity in entities_to_check:
                     if hasattr(entity, 'x') and hasattr(entity, 'y'):
@@ -5701,6 +5715,7 @@ class MapCanvas(QOpenGLWidget):
 
         except Exception as e:
             print(f"Error in 2D spatial culling: {e}")
+            self._visible_idx_2d = None
             return entities_to_check
     
     def keyPressEvent(self, event):

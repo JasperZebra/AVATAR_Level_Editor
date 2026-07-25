@@ -495,6 +495,7 @@ build_options = {
         'canvas.shadow_map',            # ← sun shadow mapping (depth FBO + light-space matrix)
         'canvas.cube_batch',            # ← instanced marker-cube renderer (one draw for all cubes)
         'canvas.line_batch',            # ← batched wireframe-overlay renderer (prims/triggers/shape)
+        'canvas.quad_batch',            # ← instanced 2D entity squares (one draw call for all)
         'canvas.hkx_parser',            # ← native Havok 5.5 .hkx collision reader (wireframe overlay)
         'canvas.cs_camera_preview',     # ← cutscene-camera POV preview (right-panel CS Camera tab)
         'canvas.mab_parser',            # ← native .mab animation decoder (Dunia smallest-three codec)

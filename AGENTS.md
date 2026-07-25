@@ -155,6 +155,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/mab_parser.py` | `tests/test_mab_parser.py` | — | Smallest-three quat codec round-trip (all 4 permutation flags, SIGNED third word, s<0 sentinel) + synthetic clip: group/mask keyframe decode (primary @ sub-frame 0, flagged keys @ bit+1), anim-mask routing, derived fps, bone-name resolution — excluded from `--cov` |
 | `canvas/xbg_direct_loader.py` | `tests/test_vehicle_attachments.py` | — | Mounted-weapon merge: baked matrix applied to verts (normals unrotated on pure translation), material indices offset, bounds widened; no-entry models untouched; `_resolve_attachment_path` data-root anchoring — monkeypatched table/builder, no game files — excluded from `--cov` |
 | `simplified_map_editor.py` | `tests/test_stats_softwrap.py` | — | `_softwrap`: short values untouched, ZWSP inserted after `.`/`_`/`/`/`\`/`:` in dotted archetype names and Windows paths, invisible when stripped back out — instantiated via `SimplifiedMapEditor.__new__` (plain `object.__new__` is blocked by real PyQt5's sip on a QMainWindow subclass) — excluded from `--cov` |
+| `canvas/quad_batch.py` + `canvas/entity_renderer.py` | `tests/test_quad_batch_2d.py` | — | Instanced 2D squares: `build_instances` (N,8) column layout the shader's attribute pointers read; `classify_source`/`source_mask` parity with `_filter_entities_by_source` across all 16 toggle combinations; searchsorted visible-row lookup — excluded from `--cov` |
 | `setup.py` | `tests/test_setup_packages.py` | — | Rule-4 guard: every `canvas/*.py` is in `packages`, every root app module is in BOTH `packages` and `root_files`; setup.py scanned as **text** (importing it runs PyQt5/PIL discovery). `DEV_ONLY` exempts standalone scripts — excluded from `--cov` |
 | `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
 
@@ -3898,3 +3899,62 @@ copy + a per-instance transform buffer) before wiring it into the frame.
 
 **Not related:** the `avatar_vegetation_*` keys in `entity_renderer.py` /
 `map_canvas_gpu.py` are entity-type name mappings for props and stay.
+
+## 2D mode: instanced squares + fence indicator removed (July 2026)
+
+**Fence indicator gone (user request).** The red line + red endpoint circles drawn
+for `SO.corp_fence_security_*` entities are removed: `draw_fence_indicator_optimized`,
+`is_fence_object`, the `is_fence` cache field, the `fence_list` accumulator and its
+draw loop. `any_extra` is now `is_primitive or is_trigger or has_shape`. The
+`"fence"` keywords in `type_patterns` / `determine_entity_type` are UNRELATED —
+they classify such entities as `Structure` for colouring and stay.
+
+**Every 2D square is now ONE instanced draw call.** `canvas/quad_batch.py`
+(`QuadBatch`, modelled on `cube_batch.py`) draws all entity squares with a single
+`glDrawArraysInstanced`: a static 4-vertex unit quad plus a per-frame instance
+buffer of `[cx, cy, half, rot, r, g, b, border_px]` (8 floats, `INSTANCE_FLOATS`).
+The black outline is computed in the fragment shader from the quad's local
+coordinates — no second pass, no extra geometry. Called between
+`QPainter.beginNativePainting()` / `endNativePainting()` so it composites over the
+QPainter-drawn terrain and under the gizmo/overlays.
+
+**The per-frame Python loop is gone.** `EntityRenderer._ensure_style_array(canvas)`
+builds an `(N,5)` float32 array `[r, g, b, rot_rad, source_class]` aligned to
+`canvas._valid_entities_2d`, ONCE per level, and `_get_visible_entities`'s 2D branch
+stashes its cull result as `canvas._visible_idx_2d`. A frame is then a numpy gather
+plus one draw. Measured per-frame CPU for the instance build vs the old
+per-entity `QRectF` + style-group loop (which did not even include the
+`drawRects` calls):
+
+| entities | instance build | old QRectF loop | |
+|---|---|---|---|
+| 5,000 | 0.25 ms | 8.33 ms | 33× |
+| 15,000 | 0.49 ms | 23.72 ms | 49× |
+| 50,000 | 2.47 ms | 107.04 ms | 43× |
+
+`MAX_2D_BUDGET` was raised 15,000 → 250,000 accordingly; it is now a
+pathological-data backstop, not a normal-operation limit, so every real level
+renders **all** its squares.
+
+**Things that will break this if you touch them:**
+- `_visible_idx_2d` MUST stay sorted ascending — the selection and extras lookups
+  use `np.searchsorted` against it. `np.where` output already is; keep it that way.
+- `classify_source` / `source_mask` mirror `_filter_entities_by_source`'s branch
+  order — **landmark is tested FIRST** because a landmark file also carries
+  `source_file == 'worldsectors'`. `tests/test_quad_batch_2d.py` checks all 16
+  toggle combinations against a copy of the list filter; keep them in sync.
+- `_render_2d_instanced` validates everything BEFORE drawing and returns False
+  without painting, so the QPainter fallback (still intact below it) can run
+  cleanly. Don't add a draw call above those guards.
+- `invalidate_entity_cache` does NOT bump `cache_version`, so it marks the
+  entity's ROW dirty (`_style_dirty`) instead. Bumping `_style_epoch` there would
+  rebuild all N rows on every mouse-move frame of a 2D drag. A full rebuild only
+  happens for an entity that has no row yet.
+- Positions come from `canvas._positions_2d`, not live `entity.x/.y`. That is safe
+  because `_get_visible_entities` calls `_get_map_filtered_entities` first and the
+  2D drag path calls `invalidate_position_cache()` (input_handler ~line 373), so
+  the array is rebuilt before the cull. If a new drag path skips that call, squares
+  will freeze mid-drag.
+- The instance layout is read by two `glVertexAttribPointer` calls at a 32-byte
+  stride (floats 0-3 and 4-7). Changing `build_instances`' column order without
+  changing the shader draws garbage — that's what the layout test guards.

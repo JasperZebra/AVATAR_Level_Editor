@@ -6,7 +6,49 @@ from time import time
 from PyQt5.QtCore import Qt, QPoint, QPointF, QRectF
 from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QVector3D, QPolygon, QPolygonF, QPixmap
 from .opengl_utils import OpenGLUtils
+from .quad_batch import QuadBatch, build_instances
 import os
+
+# Source-class codes stored in the cached style array's column 4. Kept in sync
+# with map_canvas_gpu._filter_entities_by_source's branches so the per-source
+# View toggles can be applied as a numpy mask instead of a Python list filter.
+SRC_WORLDSECTORS = 0
+SRC_MAPSDATA     = 1
+SRC_OMNIS        = 2
+SRC_LANDMARK     = 3
+SRC_OTHER        = 4      # managers, sectorsdep, … — always visible
+
+
+def classify_source(entity):
+    """Per-entity source class for the style array. Mirrors the branch order in
+    _filter_entities_by_source — landmark is tested FIRST (a landmark file can
+    also carry source_file 'worldsectors')."""
+    srcp = getattr(entity, 'source_file_path', '') or ''
+    if 'landmark' in srcp.lower():
+        return SRC_LANDMARK
+    src = getattr(entity, 'source_file', '') or ''
+    if src == 'worldsectors':
+        return SRC_WORLDSECTORS
+    if src == 'mapsdata':
+        return SRC_MAPSDATA
+    if src == 'omnis':
+        return SRC_OMNIS
+    return SRC_OTHER
+
+
+def source_mask(src_col, show_ws, show_md, show_om, show_lm):
+    """Boolean keep-mask for the source-class column under the View toggles."""
+    keep = src_col == SRC_OTHER
+    if show_ws:
+        keep |= src_col == SRC_WORLDSECTORS
+    if show_md:
+        keep |= src_col == SRC_MAPSDATA
+    if show_om:
+        keep |= src_col == SRC_OMNIS
+    if show_lm:
+        keep |= src_col == SRC_LANDMARK
+    return keep
+
 
 class EntityRenderer:
     """Handles rendering of entities in 2D mode - 2D ONLY"""
@@ -297,6 +339,20 @@ class EntityRenderer:
         # Entity cache system
         self.entity_cache = {}
         self.cache_version = 0
+
+        # Instanced 2D squares: one glDrawArraysInstanced for every entity.
+        # _style_* is a per-LEVEL array (colour/rotation/source-class per entity,
+        # aligned to canvas._valid_entities_2d) so a frame costs a numpy gather
+        # instead of an O(N) Python loop. _style_epoch is bumped by every cache
+        # invalidation path, including the per-entity one that does NOT bump
+        # cache_version.
+        self.quad_batch = QuadBatch()
+        self._style_epoch = 0
+        self._style_cache = None
+        self._style_key = None
+        self._style_row_of = None       # id(entity) -> row
+        self._style_extra_rows = None   # rows needing primitive/trigger/shape passes
+        self._style_dirty = set()       # entity ids whose row needs re-filling
         
         # PERFORMANCE OPTIMIZATION: Batch rendering data
         self._batch_circles = []
@@ -628,7 +684,6 @@ class EntityRenderer:
         # Compute all entity data once
         entity_type = self.determine_entity_type(entity)
         size_multiplier = self.get_entity_size_by_type(entity)
-        is_fence = self.is_fence_object(entity)
         is_primitive = self.is_primitive_object(entity)
         is_trigger = self.is_trigger_entity(entity)
         has_shape = self.has_shape_points(entity)
@@ -638,13 +693,12 @@ class EntityRenderer:
             'cache_version': self.cache_version,
             'entity_type': entity_type,
             'size_multiplier': size_multiplier,
-            'is_fence': is_fence,
             'is_primitive': is_primitive,
             'is_trigger': is_trigger,
             'has_shape_points': has_shape,
             # True only if this entity needs any of the extra indicator passes — lets the
-            # per-frame draw loop skip four dict lookups for the ~99% plain entities.
-            'any_extra': bool(is_fence or is_primitive or is_trigger or has_shape),
+            # per-frame draw loop skip three dict lookups for the ~99% plain entities.
+            'any_extra': bool(is_primitive or is_trigger or has_shape),
             'name': getattr(entity, 'name', 'unknown'),
             'normal_color': normal_color,
             'normal_rgb': normal_color.rgb(),   # precomputed style-group key part
@@ -693,6 +747,201 @@ class EntityRenderer:
             pass
         return 0.0
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Instanced 2D squares
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _ensure_style_array(self, canvas):
+        """(N,5) float32 [r, g, b, rot_rad, source_class] aligned to
+        canvas._valid_entities_2d, built ONCE per level (not per frame).
+
+        Everything the square draw needs that isn't position lives here, so a
+        frame is a numpy gather rather than N dict lookups + N QRectF
+        allocations. Rebuilt only when the position arrays are rebuilt or an
+        entity cache is invalidated.
+        """
+        valid = getattr(canvas, '_valid_entities_2d', None)
+        if not valid:
+            return None
+        key = (getattr(canvas, '_pos_arrays_version', None), self.cache_version,
+               self._style_epoch, len(valid), id(valid))
+        if self._style_key == key and self._style_cache is not None:
+            if self._style_dirty:
+                self._apply_dirty_rows(valid)
+            return self._style_cache
+
+        n = len(valid)
+        style = np.empty((n, 5), dtype=np.float32)
+        row_of = {}
+        extra_rows = []
+        for i, e in enumerate(valid):
+            row_of[id(e)] = i
+            if self._fill_style_row(style, i, e):
+                extra_rows.append(i)
+
+        self._style_cache = style
+        self._style_row_of = row_of
+        self._style_extra_rows = np.asarray(extra_rows, dtype=np.int64)
+        self._style_key = key
+        self._style_dirty.clear()
+        return style
+
+    def _fill_style_row(self, style, i, entity):
+        """Write one entity's style row. Returns True if it needs an extra pass."""
+        ed = self.get_or_cache_entity_data(entity)
+        c = ed['normal_color']
+        style[i, 0] = c.redF()
+        style[i, 1] = c.greenF()
+        style[i, 2] = c.blueF()
+        # Qt rotates clockwise in its y-down space; the shader's rotation matrix
+        # in the same y-down pixel space matches, so no sign flip.
+        style[i, 3] = math.radians(ed['rotation2d'])
+        style[i, 4] = classify_source(entity)
+        return bool(ed['any_extra'])
+
+    def _apply_dirty_rows(self, valid):
+        """Re-fill only the rows marked by invalidate_entity_cache.
+
+        An entity that GAINED or LOST an extra pass also has to move in/out of
+        _style_extra_rows, which is why that array is recomputed here rather
+        than only on a full rebuild.
+        """
+        style = self._style_cache
+        extra = set(self._style_extra_rows.tolist()
+                    if self._style_extra_rows is not None else ())
+        changed = False
+        for eid in self._style_dirty:
+            row = self._style_row_of.get(eid)
+            if row is None or row >= len(valid):
+                continue
+            if self._fill_style_row(style, row, valid[row]):
+                if row not in extra:
+                    extra.add(row); changed = True
+            elif row in extra:
+                extra.discard(row); changed = True
+        self._style_dirty.clear()
+        if changed:
+            self._style_extra_rows = np.asarray(sorted(extra), dtype=np.int64)
+
+    def _render_2d_instanced(self, painter, canvas, entities):
+        """Draw every entity square in ONE instanced GL call.
+
+        Returns True if it fully handled the frame. Every precondition is
+        checked BEFORE anything is drawn, so a False return always means
+        nothing was painted and the QPainter path can run cleanly.
+        """
+        qb = getattr(self, 'quad_batch', None)
+        if qb is None or qb._failed:
+            return False
+        idx = getattr(canvas, '_visible_idx_2d', None)
+        pos = getattr(canvas, '_positions_2d', None)
+        if idx is None or pos is None or len(idx) == 0:
+            return False
+        style = self._ensure_style_array(canvas)
+        if style is None or style.shape[0] != len(pos):
+            return False
+
+        # Per-source View toggles as a numpy mask (the list-filter equivalent)
+        keep = source_mask(style[idx, 4],
+                           getattr(canvas, 'show_worldsector_entities', True),
+                           getattr(canvas, 'show_mapsdata_entities', True),
+                           getattr(canvas, 'show_omnis_entities', True),
+                           getattr(canvas, 'show_landmark_entities', True))
+        if not keep.all():
+            idx = idx[keep]
+        # Guard: the caller's already-filtered list must agree with what we're
+        # about to draw. If the two paths ever diverge, fall back rather than
+        # render a different set than the rest of the frame assumes.
+        if idx.size != len(entities):
+            return False
+
+        n = idx.size
+        scale = canvas.scale_factor
+        ox = canvas.offset_x
+        oy = canvas.offset_y
+        h = canvas.height()
+        p = pos[idx]
+        sx = np.rint(p[:, 0] * scale + ox)
+        sy = np.rint(h - (p[:, 1] * scale + oy))
+
+        SQUARE_SIZE = 6
+        SELECTED_SIZE = 8
+        half = np.full(n, float(SQUARE_SIZE), dtype=np.float32)
+        border = np.ones(n, dtype=np.float32)
+        rgb = style[idx, 0:3].copy()
+
+        has_gizmo = (hasattr(canvas, 'gizmo_renderer') and
+                     canvas.gizmo_renderer.rotation_gizmo is not None)
+        rot = style[idx, 3] if has_gizmo else 0.0
+
+        # Selection: tiny set, resolved through the row map then located inside
+        # idx with searchsorted (idx is sorted ascending from np.where).
+        row_of = self._style_row_of or {}
+        sel_rows = sorted({r for r in (row_of.get(id(e))
+                                       for e in (getattr(canvas, 'selected', None) or []))
+                           if r is not None})
+        sel_at = np.empty(0, dtype=np.int64)
+        if sel_rows:
+            want = np.asarray(sel_rows, dtype=np.int64)
+            ins = np.searchsorted(idx, want)
+            ok = ins < n
+            ins, want = ins[ok], want[ok]
+            sel_at = ins[idx[ins] == want]
+            if sel_at.size:
+                half[sel_at] = float(SELECTED_SIZE)
+                border[sel_at] = 2.0
+                rgb[sel_at] = (0.0, 0.0, 1.0)     # blue selection
+
+        inst = build_instances(sx, sy, half, rot, rgb, border)
+
+        # One draw for every square, whatever N is.
+        painter.beginNativePainting()
+        try:
+            drew = qb.render(inst, canvas.width(), canvas.height())
+        finally:
+            painter.endNativePainting()
+        if not drew:
+            return False
+
+        # ── Overlays that are NOT plain squares ────────────────────────────
+        # Driven off the precomputed extras rows, so this stays proportional to
+        # the handful of entities that actually need an extra pass, not to N.
+        canvas._shape_add_btn_rect = None
+        canvas._shape_remove_btn_rect = None
+        canvas._shape_btn_entity = None
+
+        valid = canvas._valid_entities_2d
+        cache = self.entity_cache
+        show_triggers = getattr(canvas, 'show_trigger_zones', True)
+        extra = self._style_extra_rows
+        if extra is not None and extra.size:
+            ins = np.searchsorted(idx, extra)
+            ok = ins < n
+            ins, want = ins[ok], extra[ok]
+            hit_at = ins[idx[ins] == want]
+            for at in hit_at.tolist():
+                entity = valid[idx[at]]
+                ed = cache.get(id(entity))
+                if ed is None:
+                    continue
+                ex, ey = float(sx[at]), float(sy[at])
+                is_sel = bool(sel_at.size) and bool((sel_at == at).any())
+                if ed.get('is_primitive'):
+                    self.draw_primitive_indicator_2d(painter, entity, ex, ey, canvas, is_sel)
+                if ed.get('is_trigger') and show_triggers:
+                    self.draw_trigger_indicator_2d(painter, entity, ex, ey, canvas, is_sel)
+                if ed.get('has_shape_points'):
+                    edit_mode = getattr(getattr(canvas, 'input_handler', None),
+                                        'edit_mode_2d', False)
+                    self.draw_shape_outline_2d(painter, entity, canvas, is_sel, edit_mode)
+
+        # Labels for the (few) selected entities
+        for at in sel_at.tolist():
+            self._draw_entity_label_2d_optimized(
+                painter, valid[idx[at]], float(sx[at]), float(sy[at]),
+                SELECTED_SIZE, False)
+        return True
+
     def render_entities_2d(self, painter, canvas, entities):
         """2D rendering — GPU-style: vectorised cull + style-batched draw.
 
@@ -712,6 +961,22 @@ class EntityRenderer:
         if should_log:
             print(f"Rendering {len(entities)} entities in 2D mode (GPU-style batch)")
             self._last_2d_log_time = current_time
+
+        # Preferred path: one instanced GL draw for every square (no per-entity
+        # QRectF, no per-group pen/brush). Falls through to the QPainter batch
+        # below if the GL path is unavailable or its preconditions don't hold.
+        try:
+            if self._render_2d_instanced(painter, canvas, entities):
+                if should_log:
+                    print(f"Drew {len(entities)} entities | 1 instanced draw call")
+                return
+        except Exception as e:
+            print(f"[2d-instanced] failed ({e}) — using QPainter path")
+            import traceback
+            traceback.print_exc()
+            qb = getattr(self, 'quad_batch', None)
+            if qb is not None:
+                qb._failed = True
 
         painter.setRenderHint(QPainter.Antialiasing, True)
 
@@ -734,7 +999,6 @@ class EntityRenderer:
         #               'rects': [QRectF],            <- rotation == 0 fast path
         #               'rotated': [(sx,sy,size,rot)]} <- rotation != 0 slow path
         style_groups   = {}
-        fence_list     = []
         primitive_list = []
         trigger_list   = []
         shape_list     = []
@@ -811,8 +1075,6 @@ class EntityRenderer:
                 # Extra indicator passes are needed by very few entities — skip the
                 # four checks entirely for the common plain square.
                 if ed['any_extra']:
-                    if ed['is_fence']:
-                        fence_list.append((entity, sx, sy))
                     if ed['is_primitive']:
                         primitive_list.append((entity, sx, sy, is_selected))
                     if ed['is_trigger'] and show_triggers:
@@ -851,9 +1113,7 @@ class EntityRenderer:
         if _aa_was_on:
             painter.setRenderHint(QPainter.Antialiasing, True)
 
-        # --- Fences, primitives, labels drawn after all squares ---
-        for entity, x, y in fence_list:
-            self.draw_fence_indicator_optimized(painter, entity, x, y, canvas)
+        # --- Primitives, triggers, shapes, labels drawn after all squares ---
         for entity, x, y, is_sel in primitive_list:
             self.draw_primitive_indicator_2d(painter, entity, x, y, canvas, is_sel)
         for entity, x, y, is_sel in trigger_list:
@@ -980,49 +1240,6 @@ class EntityRenderer:
                 radius = circle['size']
                 self.draw_square(painter, circle['x'], circle['y'], radius)
 
-    def draw_fence_indicator_optimized(self, painter, entity, screen_x, screen_y, canvas):
-        """Draw fence line with static-size endpoint circles"""
-        if not self.is_fence_object(entity):
-            return False
-
-        # Get Z rotation from hidAngles
-        rotation = 0.0
-        hid_angles = getattr(entity, 'hidAngles', None)
-        if hid_angles:
-            rotation = hid_angles[2]  # Z-axis rotation
-
-        # Adjust to match game orientation
-        rotation += 90
-
-        # Cache for performance
-        entity_data = self.get_or_cache_entity_data(entity)
-        entity_data['rotation'] = rotation
-
-        # Fence line calculation
-        fence_width_world = 24
-        half_width_screen = (fence_width_world * canvas.scale_factor) / 2
-        angle_rad = math.radians(rotation)
-        dx = half_width_screen * math.cos(angle_rad)
-        dy = half_width_screen * math.sin(angle_rad)
-
-        start_x = int(screen_x - dx)
-        start_y = int(screen_y - dy)
-        end_x = int(screen_x + dx)
-        end_y = int(screen_y + dy)
-
-        # Draw the main fence line
-        painter.setPen(QPen(QColor(255, 0, 0), 3))
-        painter.drawLine(start_x, start_y, end_x, end_y)
-
-        # Draw static-size endpoint circles (same size as squares)
-        painter.setBrush(QBrush(QColor(255, 0, 0)))
-        painter.setPen(QPen(Qt.black, 1))
-        radius = 8  # static pixel radius
-        painter.drawEllipse(start_x - radius, start_y - radius, radius * 2, radius * 2)
-        painter.drawEllipse(end_x - radius, end_y - radius, radius * 2, radius * 2)
-
-        return True
-
     def draw_primitive_indicator_2d(self, painter, entity, screen_x, screen_y, canvas, is_selected=False):
         """Draw 2D box representation of primitive blocking volume"""
         if not self.is_primitive_object(entity):
@@ -1134,24 +1351,6 @@ class EntityRenderer:
         painter.setPen(QPen(QColor(255, 255, 255), 1))
         painter.drawText(text_x, text_y, entity_name)
 
-    def is_fence_object(self, entity):
-        """Check if entity is a fence object - CACHED"""
-        entity_id = id(entity)
-        if entity_id in self.entity_cache:
-            cached_data = self.entity_cache[entity_id]
-            if 'is_fence' in cached_data:
-                return cached_data['is_fence']
-        
-        entity_name = getattr(entity, 'name', '')
-        is_fence = "SO.corp_fence_security_" in entity_name
-        
-        # Cache the result
-        if entity_id not in self.entity_cache:
-            self.entity_cache[entity_id] = {}
-        self.entity_cache[entity_id]['is_fence'] = is_fence
-        
-        return is_fence
-    
     def is_primitive_object(self, entity):
         """Check if entity is a Primitive object (invisible blocking volume) - CACHED"""
         entity_id = id(entity)
@@ -1570,13 +1769,25 @@ class EntityRenderer:
         entity_id = id(entity)
         if entity_id in self.entity_cache:
             del self.entity_cache[entity_id]
+        # This path deliberately does NOT bump cache_version, so the instanced
+        # style array has to be refreshed explicitly or a colour/rotation edit
+        # would keep drawing the old value. Mark just this entity's ROW dirty —
+        # a 2D drag calls this once per moved entity per mouse-move event, and
+        # bumping _style_epoch instead would rebuild all N rows every frame of
+        # the drag. Only an entity we've never seen forces a full rebuild.
+        if self._style_row_of is not None and entity_id in self._style_row_of:
+            self._style_dirty.add(entity_id)
+        else:
+            self._style_epoch += 1
 
     def invalidate_all_caches(self):
         """Invalidate all entity caches by bumping version"""
         self.cache_version += 1
+        self._style_epoch += 1
         print(f"Cache version bumped to {self.cache_version}")
 
     def invalidate_all_entity_caches(self):
         """Invalidate cached data for ALL entities"""
         self.entity_cache.clear()
         self.cache_version += 1
+        self._style_epoch += 1
