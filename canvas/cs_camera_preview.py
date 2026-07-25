@@ -29,7 +29,12 @@ from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton,
 
 DEFAULT_FOV = 55.0        # moviedata carries no FOV track; game-plausible default
 PREVIEW_MAX_W = 640       # FBO cap — the label scales the image up if docked wide
-TICK_MS = 50              # 20 fps playback/refresh
+TICK_MS = 50              # 20 fps transport/slider refresh
+# Cap on POV re-renders WHILE something is animating. Each one is a full second
+# scene pass (terrain + water + vegetation + models) ending in fbo.toImage() — a
+# glReadPixels that stalls the pipeline the main view is filling. At 20 fps that
+# roughly doubled the render cost of playback; 10 fps still reads as motion.
+PLAY_RENDER_MIN_S = 0.1
 
 
 # ── Pose math (pure, unit-testable) ───────────────────────────────────────────
@@ -135,6 +140,7 @@ class CSCameraPreviewWidget(QWidget):
         self._playing = False
         self._play_wall = None
         self._last_render_key = None
+        self._last_render_wall = 0.0
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -319,6 +325,13 @@ class CSCameraPreviewWidget(QWidget):
             if wall is not None:
                 self._t = min(time.time() - wall, seq.end_time)
         self._update_transport(seq)
+        # Transport/slider keep the 20 fps tick; the expensive POV pass is
+        # throttled while animating (see PLAY_RENDER_MIN_S).
+        if self._playing or self._editor_preview_active():
+            now = time.time()
+            if now - self._last_render_wall < PLAY_RENDER_MIN_S:
+                return
+            self._last_render_wall = now
         self._render_frame()
 
     def _update_transport(self, seq):

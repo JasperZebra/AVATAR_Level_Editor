@@ -28,6 +28,22 @@ _GL_EVENT  = (1.0,  0.63, 0.16, 1.0)
 _GL_GHOST  = (0.5,  0.5,  0.5,  0.7)   # unmatched NodeDef cubes
 
 
+def _loaded_entity_ids(canvas):
+    """{entity.id} for the canvas's entity list — cached on the canvas.
+
+    Both ghost-node passes rebuilt this set from scratch on EVERY paint, an
+    O(N) cost per frame that only bit while a sequence was selected (~0.4 ms
+    per frame on a 5,600-entity level, several ms on big ones). The entity
+    list only changes on load/add/delete, so key it on identity + length.
+    """
+    ents = getattr(canvas, 'entities', None) or []
+    key = (id(ents), len(ents))
+    if getattr(canvas, '_movie_loaded_ids_key', None) != key:
+        canvas._movie_loaded_ids = {e.id for e in ents}
+        canvas._movie_loaded_ids_key = key
+    return canvas._movie_loaded_ids
+
+
 # ── 2D rendering ───────────────────────────────────────────────────────────────
 
 def draw_movie_paths_2d(painter, canvas):
@@ -105,7 +121,7 @@ def _draw_diamond_2d(painter, cx, cy, r, color):
 
 def _draw_ghost_nodes_2d(painter, canvas, movie_data, seq, selected_node_id=None):
     """Draw a small grey square for nodes whose EntityId isn't in the loaded entity list."""
-    loaded_ids = {e.id for e in (canvas.entities or [])}
+    loaded_ids = _loaded_entity_ids(canvas)
     for seq_node in seq.nodes:
         if selected_node_id is not None and seq_node.node_id != selected_node_id:
             continue
@@ -215,7 +231,7 @@ def _draw_diamond_3d(gx, gy, gz, size):
 
 def _draw_ghost_nodes_3d(canvas, movie_data, seq, selected_node_id=None):
     """Render a small grey wireframe cube at the rest position of unmatched NodeDef entries."""
-    loaded_ids = {e.id for e in (canvas.entities or [])}
+    loaded_ids = _loaded_entity_ids(canvas)
     gl.glColor4f(*_GL_GHOST)
     gl.glLineWidth(1.5)
     for seq_node in seq.nodes:

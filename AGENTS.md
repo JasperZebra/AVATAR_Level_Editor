@@ -155,6 +155,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/mab_parser.py` | `tests/test_mab_parser.py` | — | Smallest-three quat codec round-trip (all 4 permutation flags, SIGNED third word, s<0 sentinel) + synthetic clip: group/mask keyframe decode (primary @ sub-frame 0, flagged keys @ bit+1), anim-mask routing, derived fps, bone-name resolution — excluded from `--cov` |
 | `canvas/xbg_direct_loader.py` | `tests/test_vehicle_attachments.py` | — | Mounted-weapon merge: baked matrix applied to verts (normals unrotated on pure translation), material indices offset, bounds widened; no-entry models untouched; `_resolve_attachment_path` data-root anchoring — monkeypatched table/builder, no game files — excluded from `--cov` |
 | `simplified_map_editor.py` | `tests/test_stats_softwrap.py` | — | `_softwrap`: short values untouched, ZWSP inserted after `.`/`_`/`/`/`\`/`:` in dotted archetype names and Windows paths, invisible when stripped back out — instantiated via `SimplifiedMapEditor.__new__` (plain `object.__new__` is blocked by real PyQt5's sip on a QMainWindow subclass) — excluded from `--cov` |
+| `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -3772,3 +3773,62 @@ for CMountedWeapon attach) or a per-vehicle mapping table. Companion `<model>.xm
 in the graphics folders (e.g. `dove_mounted_weapon.xml`) are exporter descriptors (bones,
 LODs, materials, bboxes) — useful reference, but they don't carry the attach point
 either.
+
+## Sequence-playback lag — root causes + fix (July 2026)
+
+User report: "the playing of the sequences causes massive amounts of lag". Four
+independent costs stacked; all four are now fixed.
+
+**1. The 3D overlay cache was killed by SELECTION, not by playback (the dominant one).**
+`_render_overlays_3d`'s gate was literally `movie_active = bool(mw.selected_movie_sequence)`
+— so clicking any row in the Sequences tab dropped the whole level back to the classic
+per-frame prims/triggers/shape rebuild. Cost, from this repo's own June 2026 perf
+validation (same 5,642-entity level): **CPU 3.4–5.5 ms/frame cached vs 11–19.4 ms
+uncached** (`shape=4-6 prims=3-5 triggers=1-3`). Now the gate is `self._movie_overlay_stale`,
+set by the new `canvas.set_preview_entities(entities)`: the cached wireframes only go
+stale if a MOVING entity actually owns overlay geometry (`is_primitive_object` /
+`is_trigger_entity` / `has_shape_points`). Cutscene actors are characters, cameras and
+props and normally own none → the cache stays on for the whole preview. `show_collision`
+(off by default, draws only for SELECTED entities) is OR'd in at the gate rather than
+baked into the flag, because it can be toggled after registration.
+
+**2. The preview timer out-ran paintGL.** The tick was 16 ms and every tick ended in
+`canvas.update()`; on a heavy level a frame can't retire in 16 ms, so repaints queued
+faster than they were served and the event loop backed up (that's why it reads as
+whole-UI lag, not just a lower FPS). Now: 33 ms tick, plus back-pressure —
+`paintGL` bumps a monotonic `canvas._paint_seq` (**before** its `use_gpu_rendering`
+early-out, so a non-GPU canvas still reports progress), and `_movie_preview_tick` skips
+a tick while `_paint_seq` hasn't moved since its last `update()`. Bounded at 3
+consecutive skips so a canvas that never paints can't freeze playback.
+
+**3. The CS Camera tab rendered the scene a second time at 20 fps.**
+`render_camera_preview` is a full pass (terrain + water + vegetation + `prepare_batches`
+over every entity within 1500 units) ending in `fbo.toImage()` — a `glReadPixels` that
+stalls the pipeline the main view is filling. The 20 fps tick still updates the
+transport/slider; the POV re-render is now throttled to `PLAY_RENDER_MIN_S = 0.1`
+(10 fps) *while animating only*. Scrub / camera-change / sequence-change still render
+immediately.
+
+**4. Three O(N) Python scans per tick.** Measured on synthetic entities (5,642 / 25k /
+50k): 2.9 / 12.5 / 25.7 ms **per tick**. All three are now O(k) or cached:
+- `_movie_apply_time` rebuilt the `id -> entity` dict every tick → `_movie_entity_map()`
+  caches it, keyed on `(id(entities), len(entities))`.
+- `patch_preview_positions` scanned BOTH full position arrays → `set_preview_entities`
+  precomputes row indices (`_preview_rows_3d/_2d`, keyed to `_pos_arrays_version` so an
+  array rebuild invalidates them) and the fast path patches by index. The old full-scan
+  code is kept as the fallback for callers that never registered.
+- `movie_renderer._draw_ghost_nodes_2d/3d` rebuilt `{e.id for e in entities}` on every
+  paint → `_loaded_entity_ids(canvas)`, cached on the canvas by list identity + length.
+
+**Gotcha — registration must follow the moving set.** The fast patch path silently skips
+ids with no registered row, so `_movie_apply_time` re-registers every tick with
+`saved | updates` (a set compare over the handful of sequence nodes, no-op when
+unchanged). Without that, switching sequences mid-scrub leaves the new actors' culling
+positions frozen while `entity.x/y/z` moves. `_movie_preview_stop` deregisters
+(`set_preview_entities(None)`) **after** its restore patch — deregistering first would
+drop the rows that patch needs.
+
+**Validating a change here:** press **F1** in the 3D canvas (cycles to `PROFILE`) and
+watch the `⏱️ FRAME …ms CPU | overlay3d=… shape=… prims=…` line printed every 60 frames.
+`overlay3d≈0.1` means the cache is live; `shape`/`prims`/`triggers` appearing at all means
+something knocked it out.

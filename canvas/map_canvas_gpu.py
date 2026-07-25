@@ -1764,9 +1764,17 @@ class MapCanvas(QOpenGLWidget):
         replacing the 8-14 ms/frame Python rebuild (the 'shape/prims/triggers'
         profiler stages) with one cheap draw.
 
-        Classic per-frame path runs when: the LineBatch is unavailable, a movie
-        sequence is selected (preview animates entity positions without bumping
-        the position version), or the cache was disabled by a GL failure.
+        Classic per-frame path runs when: the LineBatch is unavailable, a
+        moviedata preview is animating an entity that OWNS overlay geometry
+        (`_movie_overlay_stale`, set by set_preview_entities — preview moves
+        entities without bumping the position version, so cached wireframes for
+        those entities would lag behind), or the cache was disabled by a GL
+        failure.
+
+        Previously the gate was simply "a sequence is selected", which dropped
+        every level with a selected sequence back to the 11-19 ms/frame rebuild
+        even when nothing was playing and no moving entity had any overlay
+        geometry to go stale — the main cause of sequence-playback lag.
 
         Cache invalidation: key fields below, plus mark_entity_modified clears
         _ov_cache_key directly (rotation/scale edits don't bump the position
@@ -1775,8 +1783,12 @@ class MapCanvas(QOpenGLWidget):
         clips off-screen ones for free."""
         from time import perf_counter as _pc
         batch = self._overlay_batch()
-        mw = getattr(self, 'main_window', None)
-        movie_active = bool(mw is not None and getattr(mw, 'selected_movie_sequence', None))
+        # show_collision draws .hkx wireframes for SELECTED entities and can be
+        # toggled after the preview registered, so it's checked here rather than
+        # baked into _movie_overlay_stale. Default off → no cost normally.
+        movie_active = bool(getattr(self, '_movie_overlay_stale', False)
+                            or (getattr(self, '_preview_entity_ids', None)
+                                and getattr(self, 'show_collision', False)))
         use_cache = (batch is not None and not movie_active
                      and getattr(self, '_use_overlay_cache', True))
 
@@ -4050,6 +4062,14 @@ class MapCanvas(QOpenGLWidget):
 
     def paintGL(self):
         """Main OpenGL rendering"""
+        # Monotonic paint counter — lets timer-driven animation (the moviedata
+        # sequence preview) tell whether the repaint it last asked for has
+        # actually happened, instead of queueing update() faster than frames
+        # can retire and saturating the event loop. Bumped BEFORE the early-out
+        # so a canvas that isn't GPU-rendering still reports progress and never
+        # stalls the preview's back-pressure check.
+        self._paint_seq = getattr(self, '_paint_seq', 0) + 1
+
         if not self.use_gpu_rendering or not self.opengl_initialized:
             return
 
@@ -7670,6 +7690,69 @@ class MapCanvas(QOpenGLWidget):
         self._map_filter_cache_key = None
         self._interior_aabb_cache_key = None
 
+    def set_preview_entities(self, entities):
+        """Register the entities a moviedata preview is about to animate.
+
+        Pass None/empty when the preview ends. Two jobs:
+
+        1. Precompute each entity's ROW in the cached position arrays, so
+           patch_preview_positions is O(k) in the moving entities instead of a
+           full scan of both arrays (which ran twice per 16 ms tick — ~1.2 ms
+           per tick on a 5,600-entity level, ~8 ms at 50k).
+        2. Decide whether the 3D overlay cache must be bypassed while the
+           preview runs. The cached wireframes only go stale if a MOVING entity
+           actually contributes overlay geometry (primitive volume, trigger box
+           or shape-point polygon). Cutscene actors are characters/cameras/props
+           and normally have none, so the cache stays on — see
+           _render_overlays_3d.
+        """
+        self._preview_rows_3d = None
+        self._preview_rows_2d = None
+        self._preview_rows_version = None
+        self._movie_overlay_stale = False
+        ids = {e.id for e in (entities or []) if getattr(e, 'id', None) is not None}
+        self._preview_entity_ids = ids
+        # Overlay geometry built at the OLD positions is now wrong either way
+        # (start) or right again (stop) — one rebuild on each transition.
+        self._ov_cache_key = None
+        if not ids:
+            return
+
+        er = getattr(self, 'entity_renderer', None)
+        if er is None:
+            self._movie_overlay_stale = True     # can't tell — stay correct
+        else:
+            for e in entities:
+                try:
+                    if (er.is_primitive_object(e) or er.is_trigger_entity(e)
+                            or er.has_shape_points(e)):
+                        self._movie_overlay_stale = True
+                        break
+                except Exception:
+                    self._movie_overlay_stale = True
+                    break
+        self._build_preview_rows()
+
+    def _build_preview_rows(self):
+        """Map registered preview entity ids → row index in the position arrays.
+
+        Keyed to _pos_arrays_version so a rebuild of those arrays (level load,
+        invalidate_position_cache) invalidates the rows instead of silently
+        patching the wrong entities.
+        """
+        ids = getattr(self, '_preview_entity_ids', None)
+        version = getattr(self, '_pos_arrays_version', None)
+        if not ids or version is None:
+            return False
+        self._preview_rows_3d = {
+            ent.id: i for i, ent in enumerate(getattr(self, '_valid_entities_3d', None) or [])
+            if ent.id in ids}
+        self._preview_rows_2d = {
+            ent.id: i for i, ent in enumerate(getattr(self, '_valid_entities_2d', None) or [])
+            if ent.id in ids}
+        self._preview_rows_version = version
+        return True
+
     def patch_preview_positions(self, updates: dict):
         """
         Directly patch cached position arrays for a small set of preview entities.
@@ -7677,6 +7760,38 @@ class MapCanvas(QOpenGLWidget):
 
         updates: dict[entity_id_str -> (x, y, z)]
         """
+        pos_3d = getattr(self, '_positions_3d', None)
+        pos_2d = getattr(self, '_positions_2d', None)
+
+        # Fast path — rows precomputed by set_preview_entities. Rebuild them if
+        # the position arrays were rebuilt since (version mismatch).
+        version = getattr(self, '_pos_arrays_version', None)
+        if getattr(self, '_preview_entity_ids', None) and \
+                getattr(self, '_preview_rows_version', None) != version:
+            self._build_preview_rows()
+        rows_3d = getattr(self, '_preview_rows_3d', None)
+        if rows_3d is not None and getattr(self, '_preview_rows_version', None) == version:
+            if pos_3d is not None:
+                n = len(pos_3d)
+                for eid, (x, y, z) in updates.items():
+                    i = rows_3d.get(eid)
+                    if i is not None and i < n:
+                        pos_3d[i, 0] =  x
+                        pos_3d[i, 1] =  z
+                        pos_3d[i, 2] = -y
+                self._positions_centered_3d = pos_3d
+            rows_2d = getattr(self, '_preview_rows_2d', None) or {}
+            if pos_2d is not None:
+                n = len(pos_2d)
+                for eid, (x, y, _z) in updates.items():
+                    i = rows_2d.get(eid)
+                    if i is not None and i < n:
+                        pos_2d[i, 0] = x
+                        pos_2d[i, 1] = y
+            return
+
+        # Fallback — no registration (e.g. a caller that never called
+        # set_preview_entities): the original full scan.
         # 3D arrays — world(x,y,z) → gl(x, z, -y)
         valid_3d = getattr(self, '_valid_entities_3d', None)
         pos_3d   = getattr(self, '_positions_3d', None)

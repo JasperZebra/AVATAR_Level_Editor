@@ -1014,10 +1014,19 @@ class SimplifiedMapEditor(QMainWindow):
         self.selected_movie_sequence = None     # str sequence name | None
         self.selected_movie_node_id = None      # int node_id | None (None = show all nodes in seq)
         self._movie_preview_timer = QTimer()
-        self._movie_preview_timer.setInterval(16)  # ~60 fps
+        # ~30 fps. At 16 ms the tick could out-run paintGL on heavy levels — the
+        # timer kept queueing repaints faster than frames retired and saturated
+        # the event loop (the "playback lag"). _movie_preview_tick additionally
+        # skips a tick while the previously requested repaint is still pending.
+        self._movie_preview_timer.setInterval(33)
         self._movie_preview_timer.timeout.connect(self._movie_preview_tick)
         self._movie_preview_start_wall = None   # time.time() when preview started
         self._movie_preview_saved = {}          # entity_id -> (orig_x, orig_y, orig_z)
+        self._movie_entity_map_cache = None     # id -> entity, rebuilt on list change
+        self._movie_entity_map_key = None
+        self._movie_last_paint_seq = None       # canvas._paint_seq at our last update()
+        self._movie_skipped_ticks = 0
+        self._movie_registered_ids = None       # ids last sent to set_preview_entities
 
         # SDAT support
         self.sdat_path = None
@@ -11358,6 +11367,51 @@ class SimplifiedMapEditor(QMainWindow):
 
     # ── Preview playback ───────────────────────────────────────────────────────
 
+    def _movie_entity_map(self):
+        """id -> entity lookup for preview code, cached across ticks.
+
+        This dict used to be rebuilt from scratch on every 16 ms tick (and
+        again on every stop) — an O(N) cost per frame: ~1.3 ms on a 5,600-entity
+        level, ~10 ms at 50k. The entity list only changes on load/add/delete,
+        so key the cache on its identity + length; _movie_preview_start also
+        drops it so each preview session starts from a fresh map.
+        """
+        ents = getattr(self, 'entities', None) or []
+        key = (id(ents), len(ents))
+        if (getattr(self, '_movie_entity_map_key', None) != key
+                or getattr(self, '_movie_entity_map_cache', None) is None):
+            self._movie_entity_map_cache = {e.id: e for e in ents}
+            self._movie_entity_map_key = key
+        return self._movie_entity_map_cache
+
+    def _movie_register_preview_entities(self, ids=None):
+        """Tell the canvas which entities the preview animates.
+
+        Lets patch_preview_positions patch by row index instead of scanning
+        every entity twice per tick, and lets the 3D overlay cache stay on
+        unless a moving entity actually owns overlay geometry.
+
+        Called every tick with the current moving set: an entity with no row
+        registered is silently skipped by the fast patch path, so the set must
+        follow the sequence (the user can switch sequences mid-scrub without a
+        stop). The set comparison is over the handful of sequence nodes, and a
+        no-op when nothing changed.
+        """
+        if not hasattr(self, 'canvas'):
+            return
+        setter = getattr(self.canvas, 'set_preview_entities', None)
+        if setter is None:
+            return
+        ids = set(self._movie_preview_saved) if ids is None else set(ids)
+        if ids == getattr(self, '_movie_registered_ids', None):
+            return
+        emap = self._movie_entity_map()
+        try:
+            setter([emap[eid] for eid in ids if eid in emap])
+            self._movie_registered_ids = ids
+        except Exception:
+            self._movie_registered_ids = None
+
     def _movie_preview_start(self):
         """Start animating the selected sequence."""
         if not self.movie_data or not self.selected_movie_sequence:
@@ -11370,7 +11424,8 @@ class SimplifiedMapEditor(QMainWindow):
         self._movie_preview_stop(restore=False)
 
         # Build entity lookup: entity_id (str) -> entity
-        entity_map = {e.id: e for e in (self.entities or [])}
+        self._movie_entity_map_key = None          # force a fresh map per session
+        entity_map = self._movie_entity_map()
 
         # Save original positions for every entity involved in this sequence
         self._movie_preview_saved = {}
@@ -11379,7 +11434,10 @@ class SimplifiedMapEditor(QMainWindow):
             if nd and nd.entity_id in entity_map:
                 ent = entity_map[nd.entity_id]
                 self._movie_preview_saved[nd.entity_id] = (ent.x, ent.y, ent.z)
+        self._movie_register_preview_entities()
 
+        self._movie_last_paint_seq = None
+        self._movie_skipped_ticks = 0
         self._movie_preview_start_wall = time.time()
         self._seq_play_btn.setEnabled(False)
         self._seq_stop_btn.setEnabled(True)
@@ -11395,7 +11453,7 @@ class SimplifiedMapEditor(QMainWindow):
         self._seq_time_label.setText("")
 
         if restore and self._movie_preview_saved:
-            entity_map = {e.id: e for e in (self.entities or [])}
+            entity_map = self._movie_entity_map()
             for eid, (ox, oy, oz) in self._movie_preview_saved.items():
                 if eid in entity_map:
                     ent = entity_map[eid]
@@ -11408,7 +11466,18 @@ class SimplifiedMapEditor(QMainWindow):
 
         self._movie_preview_saved = {}
         self._movie_preview_start_wall = None
+        self._movie_last_paint_seq = None
+        self._movie_skipped_ticks = 0
         if hasattr(self, 'canvas'):
+            # Deregister AFTER the restore patch above — set_preview_entities
+            # drops the row map the patch needs, and re-enables the overlay cache.
+            setter = getattr(self.canvas, 'set_preview_entities', None)
+            if setter is not None:
+                try:
+                    setter(None)
+                except Exception:
+                    pass
+            self._movie_registered_ids = None
             self.canvas.update()
 
     def _movie_apply_time(self, t):
@@ -11423,7 +11492,7 @@ class SimplifiedMapEditor(QMainWindow):
         if seq is None:
             return None
 
-        entity_map = {e.id: e for e in (self.entities or [])}
+        entity_map = self._movie_entity_map()
 
         if not self._movie_preview_saved:
             for seq_node in seq.nodes:
@@ -11445,13 +11514,17 @@ class SimplifiedMapEditor(QMainWindow):
                 updates[nd.entity_id] = pos
 
         if hasattr(self, 'canvas') and updates:
+            # Rows must cover everything we patch here AND everything the
+            # restore-on-stop patch will touch.
+            self._movie_register_preview_entities(
+                set(self._movie_preview_saved) | set(updates))
             # Patch only the moving entities in the cached arrays — no full rebuild
             self.canvas.patch_preview_positions(updates)
             self.canvas.update()
         return seq
 
     def _movie_preview_tick(self):
-        """Called ~60 fps during preview — interpolate and push positions to entities."""
+        """Called ~30 fps during preview — interpolate and push positions to entities."""
         if not self.movie_data or not self.selected_movie_sequence:
             self._movie_preview_stop()
             return
@@ -11466,7 +11539,22 @@ class SimplifiedMapEditor(QMainWindow):
             self._movie_preview_stop(restore=True)
             return
 
+        # Back-pressure: skip this tick if the repaint we asked for last tick
+        # hasn't been served yet. Without this the timer queues update() faster
+        # than paintGL can retire frames on a heavy level and the whole event
+        # loop backs up — the "massive lag" symptom. Bounded at 3 consecutive
+        # skips so a canvas that never paints (hidden/minimised) can't freeze
+        # playback outright.
+        if self._movie_last_paint_seq is not None and self._movie_skipped_ticks < 3:
+            paint_seq = getattr(getattr(self, 'canvas', None), '_paint_seq', None)
+            if paint_seq is not None and paint_seq == self._movie_last_paint_seq:
+                self._movie_skipped_ticks += 1
+                return
+        self._movie_skipped_ticks = 0
+
         self._movie_apply_time(t)
+        self._movie_last_paint_seq = getattr(
+            getattr(self, 'canvas', None), '_paint_seq', None)
         self._seq_time_label.setText(f"{t:.1f} / {seq.end_time:.1f}s")
 
     def _movie_preview_reset(self):
