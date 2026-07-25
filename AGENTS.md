@@ -4445,3 +4445,38 @@ overlay that reconstructs the world view ray from the current GL matrices.
 `time` is the FUNCTION there. `time.time()` at module scope raises
 AttributeError; call `time()`. (The one `time.time()` at ~line 1181 is fine
 because that function has a local `import math, time`.)
+
+## Hide-models (`) actually hides them + god rays broken by clouds (July 2026)
+
+**1. The ` toggle left ghosts and shadows.** `show_entities = False` skipped
+`_render_entities_3d` / `_render_overlays_3d`, but three other passes still drew
+model geometry:
+
+- **`_render_3d_selection_glow`** re-draws the SELECTED entity's mesh, so a
+  glowing "ghost" of the selection floated in an otherwise empty scene. Now
+  returns early when `show_entities` is False.
+- **`_precast_shadows`** skipped preparing the frame but still called
+  `_cast_sun_shadows()`, which re-cast whatever instance data was staged from
+  the last visible frame — hidden models kept casting shadows. Now clears
+  `ml._gdr_frame` and `ml.instance_batches` first, so only terrain casts.
+- **`_render_water_reflection_pass`** drew models unconditionally, so hidden
+  models still reflected in the water. Now gated on `show_entities`.
+
+Selection BEACON LINES are deliberately still drawn (they're a locator, not
+geometry — the existing comment says "always drawn, independent of
+show_entities"). The CS camera preview is also deliberately unaffected: it is a
+separate POV of the cutscene, not the viewport being decluttered.
+
+**2. God rays are now broken up by clouds** (`GodRays.occlude_with_clouds`).
+Ported in spirit from the SDF tool, which bakes `cloud_density` into its occluder
+mask. Our architecture differs — theirs is a mask shader, ours is an FBO with real
+scene depth plus the sun disc drawn into it — so a straight file copy would have
+regressed us (their `god_rays.py` is NOT a superset: different uniforms, buffer
+size and method signatures). The equivalent here is a **multiplicative fullscreen
+pass over the occlusion buffer** (`glBlendFunc(GL_ZERO, GL_SRC_COLOR)`) writing
+cloud transmittance, called between `draw_sun_source` and `end_occlusion` while
+the occlusion FBO is still bound.
+
+It samples `cloud_common.CLOUD_GLSL` — the SAME function the sky draws — so a
+cloud overhead breaks exactly the shafts it casts. Guarded: any failure sets
+`_cloud_failed` and the rays simply stay unbroken.

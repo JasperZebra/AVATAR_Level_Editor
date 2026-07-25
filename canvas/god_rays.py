@@ -288,6 +288,100 @@ class GodRays:
                        center[2] + right[2] * ca + up[2] * sa)
         glEnd()
 
+    _CLOUD_VS = """
+#version 330
+layout(location = 0) in vec2 vert;
+void main(void){ gl_Position = vec4(vert, 0.0, 1.0); }
+"""
+    _CLOUD_FS_TEMPLATE = """
+#version 330
+out vec4 frag;
+uniform mat4  u_view;
+uniform mat4  u_proj;
+uniform vec2  u_res;
+uniform float u_time;
+uniform float u_cover;
+//__CLOUD_GLSL__//
+void main(void)
+{
+    vec2 ndc = (gl_FragCoord.xy / u_res) * 2.0 - 1.0;
+    mat4 invVP = inverse(u_proj * u_view);
+    vec4 pn = invVP * vec4(ndc, -1.0, 1.0);
+    vec4 pf = invVP * vec4(ndc,  1.0, 1.0);
+    vec3 ray = normalize(pf.xyz / pf.w - pn.xyz / pn.w);
+    // Transmittance: 1 where the sky is clear, →0 under thick cloud. Multiplied
+    // into the occlusion buffer so the shafts stream through cloud GAPS.
+    float d = cloud_density(ray, u_time, u_cover);
+    float tr = clamp(1.0 - d * 0.92, 0.0, 1.0);
+    frag = vec4(tr, tr, tr, 1.0);
+}
+"""
+
+    def occlude_with_clouds(self, t, cover):
+        """Multiply the occlusion buffer by cloud transmittance.
+
+        Ported from the SDF tool's god_rays, which bakes `cloud_density` straight
+        into its occluder mask so shafts stream through cloud gaps. Our occluder
+        is an FBO with real scene depth + the sun disc drawn into it, so the
+        equivalent is a multiplicative fullscreen pass over that buffer using the
+        SAME shared cloud function (cloud_common.CLOUD_GLSL) the sky samples — a
+        cloud overhead therefore breaks the same shafts it casts.
+
+        Must be called with the occlusion FBO still bound (between
+        draw_sun_source and end_occlusion) and the camera matrices current.
+        """
+        if cover <= 0.001 or getattr(self, '_cloud_failed', False):
+            return
+        try:
+            if getattr(self, '_cloud_prog', None) is None:
+                try:
+                    from cloud_common import CLOUD_GLSL
+                except Exception:
+                    CLOUD_GLSL = ""
+                if not CLOUD_GLSL:
+                    self._cloud_failed = True
+                    return
+                fs = self._CLOUD_FS_TEMPLATE.replace("//__CLOUD_GLSL__//", CLOUD_GLSL)
+                self._cloud_prog = _link(self._CLOUD_VS, fs)
+                if not self._cloud_prog:
+                    self._cloud_failed = True
+                    return
+                self._cloud_vao = int(glGenVertexArrays(1))
+                glBindVertexArray(self._cloud_vao)
+                vbo = glGenBuffers(1)
+                glBindBuffer(GL_ARRAY_BUFFER, vbo)
+                tri = np.array([-1.0, -1.0, 3.0, -1.0, -1.0, 3.0], dtype=np.float32)
+                glBufferData(GL_ARRAY_BUFFER, tri.nbytes, tri, GL_STATIC_DRAW)
+                glEnableVertexAttribArray(0)
+                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, None)
+                glBindVertexArray(0)
+                glBindBuffer(GL_ARRAY_BUFFER, 0)
+                print("[god-rays] cloud occluder ready")
+
+            mv = np.ascontiguousarray(glGetFloatv(GL_MODELVIEW_MATRIX), dtype=np.float32)
+            proj = np.ascontiguousarray(glGetFloatv(GL_PROJECTION_MATRIX), dtype=np.float32)
+            p = self._cloud_prog
+            glUseProgram(p)
+            glUniformMatrix4fv(glGetUniformLocation(p, b'u_view'), 1, GL_FALSE, mv)
+            glUniformMatrix4fv(glGetUniformLocation(p, b'u_proj'), 1, GL_FALSE, proj)
+            glUniform2f(glGetUniformLocation(p, b'u_res'), float(self.SIZE), float(self.SIZE))
+            glUniform1f(glGetUniformLocation(p, b'u_time'), float(t))
+            glUniform1f(glGetUniformLocation(p, b'u_cover'), float(cover))
+            glDisable(GL_DEPTH_TEST)
+            glDepthMask(GL_FALSE)
+            glEnable(GL_BLEND)
+            glBlendFunc(GL_ZERO, GL_SRC_COLOR)     # dst *= transmittance
+            glBindVertexArray(self._cloud_vao)
+            glDrawArrays(GL_TRIANGLES, 0, 3)
+            glBindVertexArray(0)
+            glUseProgram(0)
+            glDisable(GL_BLEND)
+            glDepthMask(GL_TRUE)
+            glEnable(GL_DEPTH_TEST)
+        except Exception as e:
+            print(f"[god-rays] cloud occluder failed ({e}) — rays unbroken by clouds")
+            self._cloud_failed = True
+
     def end_occlusion(self, default_fbo, vw, vh):
         glDepthMask(GL_TRUE)
         glDepthFunc(GL_LESS)

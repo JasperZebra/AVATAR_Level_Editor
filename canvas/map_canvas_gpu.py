@@ -1175,6 +1175,11 @@ class MapCanvas(QOpenGLWidget):
         import math, time
         if not self.selected_entity:
             return
+        # This pass re-draws the selected entity's MESH. With models hidden
+        # (` toggle) that left a glowing "ghost" of the selection floating in an
+        # otherwise empty scene — the models were meant to be gone.
+        if not self.show_entities:
+            return
         if not hasattr(self, 'model_loader') or self.model_loader is None:
             return
 
@@ -3719,6 +3724,16 @@ class MapCanvas(QOpenGLWidget):
                 if not ml.prepare_gpu_frame(self, visible):
                     ml.prepare_batches(visible, self.selected)
                 self._shadow_precast_done = True
+            else:
+                # Models hidden (` toggle): drop any staged frame so the cast
+                # below draws NO model geometry. Without this the shadow pass
+                # re-cast whatever instance data was left over from the last
+                # visible frame, so hidden models kept casting shadows.
+                try:
+                    ml._gdr_frame = None
+                    ml.instance_batches.clear()
+                except Exception:
+                    pass
             # Casts models (from the frame just prepared) + terrain into the map and
             # stashes the CURRENT-frame (tex, light_vp) for both receivers.
             self._cast_sun_shadows()
@@ -3946,6 +3961,10 @@ class MapCanvas(QOpenGLWidget):
         except Exception as _e:
             print(f"[god-rays] model occluder pass skipped: {_e}")
         gr.draw_sun_source(cam_pos, sd, horizon)
+        # Clouds occlude the sun too — shafts stream through cloud GAPS instead
+        # of ignoring an overcast sky. Same shared cloud function the sky uses.
+        gr.occlude_with_clouds(time() - getattr(self, '_cloud_t0', 0.0),
+                               float(getattr(self, 'cloud_cover', 0.0) or 0.0))
         gr.end_occlusion(default_fbo, vw, vh)
 
         # 2) Composite the radial shafts. Warmer near the horizon; strongest at a
@@ -4511,7 +4530,9 @@ class MapCanvas(QOpenGLWidget):
             # above-water geometry (via gl_ClipDistance in the model shader).
             ml = getattr(self, 'model_loader', None)
             gdr = getattr(ml, '_gpu_driven', None) if ml else None
-            if gdr:
+            # Respect the ` hide-models toggle here too — otherwise hidden models
+            # still showed up as reflections on the water surface.
+            if gdr and self.show_entities:
                 import time as _t
                 anim_t = _t.monotonic() - getattr(ml, '_anim_t0', 0.0)
                 gdr.render(anim_t, getattr(ml, '_shadow_tex', 0),
