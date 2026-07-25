@@ -302,6 +302,57 @@ descriptor begins at `0x11221b30+0x1c`, immediately after Free's.
    cannot be misread again. To find instances, scan for the *vtable* address —
    which means Avatar's vtable must be located first (see open question 2).
 
+## [CONFIRMED] Why SwitchCamera(1, 262) did nothing — no Camera.Free instance
+
+Found with `runtime/memscan.py`, which was first validated against four
+searches whose answers were already known (descriptor read, class-name string
+location, `SwitchCamera` prologue AOB, and pointers-to the name string — all
+landed exactly on the predicted addresses).
+
+Searching the heap for `cameras.Camera` finds the **live** camera entities:
+
+| Live on heap | Address |
+|---|---|
+| `cameras.Camera.ThirdCorp` | `0x18dbfae0` |
+| `cameras.Camera.First` | `0x191afa60` |
+| `cameras.Camera.AnimatedCameraToken` | ×4, `0x18f10ea0` … |
+
+**`cameras.Camera.Free` is absent from the heap.** Its only matches are in the
+`0x3275xxxx` region, which is not live objects — it is the entity library
+itself, parsed in memory. The FCB field hashes are visible inline there:
+
+```
+38 d1 11 fe  0c  "Camera.Free\0"           <- FE11D138 = "Name"
+c7 5c 29 b9  14  "cameras.Camera.Free\0"   <- B9295CC7 = "hidName"
+```
+
+which matches `Camera.Free_1.xml` field-for-field.
+
+**Conclusion:** the level instantiates only the cameras gameplay needs
+(Third/First/AnimatedCameraToken). `Camera.Free` exists as a *prototype* —
+loaded, parsed and resident — but is never turned into an entity. So
+`SwitchCamera(1, 262)` resolves entity 262, finds nothing, and takes the
+`cmp [eax+0xc],0 / je` branch that skips the switch. The function worked
+correctly; there was simply nothing to switch to.
+
+This supersedes the withdrawn scan result above — same conclusion, but now
+with evidence rather than a technique that couldn't distinguish "absent" from
+"undetectable".
+
+### Consequence for the plan
+
+Route 3 (inject and call `SwitchCamera`) cannot work on its own. The camera
+entity has to exist first. That leaves:
+
+- **Instantiate the prototype at runtime** — find the engine's spawn-from-
+  prototype path and call it with `Camera.Free`, then `SwitchCamera` to the
+  resulting entity. Needs more RE but is self-contained.
+- **Author it into level data** — place a `Camera.Free` entity into a
+  worldsector so the level instantiates it on load. The matching hashes
+  (`005A5087` in both the live descriptor and the FCB) mean it should
+  instantiate as the genuine runtime class. This is the level editor's home
+  turf and needs no injection.
+
 ## [CONFIRMED] A developer console exists in the binary
 
 `CDominoConsoleCommandManager`, `CFCXConsole`, `CConsoleService`,
