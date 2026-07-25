@@ -497,6 +497,7 @@ build_options = {
         'canvas.line_batch',            # ← batched wireframe-overlay renderer (prims/triggers/shape)
         'canvas.quad_batch',            # ← instanced 2D entity squares (one draw call for all)
         'canvas.cloud_sky',            # ← procedural cloud layer (ported from the SDF tool)
+        'canvas.fbx_mesh',             # ← minimal binary-FBX reader (camera marker model)
         'canvas.cloud_common',         # ← shared cloud GLSL (sky + reflection + god rays)
         'canvas.hkx_parser',            # ← native Havok 5.5 .hkx collision reader (wireframe overlay)
         'canvas.cs_camera_preview',     # ← cutscene-camera POV preview (right-panel CS Camera tab)

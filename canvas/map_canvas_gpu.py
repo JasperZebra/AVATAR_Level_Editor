@@ -8088,10 +8088,15 @@ class MapCanvas(QOpenGLWidget):
                 touched = True
             except Exception:
                 continue
-        if touched:
-            # Rotation feeds the cached wireframe overlays too (primitive boxes,
-            # trigger volumes), and rotation edits don't bump the position
-            # version — same hook mark_entity_modified uses.
+        # Rotation feeds the cached wireframe overlays (primitive boxes, trigger
+        # volumes) and rotation edits don't bump the position version. BUT this
+        # runs every playback tick, and clearing the key unconditionally forced a
+        # full prims/triggers/shape rebuild EVERY FRAME — the 11-19 ms/frame path
+        # the overlay cache exists to avoid, i.e. the cutscene playback lag.
+        # _movie_overlay_stale already says whether any MOVING entity actually
+        # owns overlay geometry; when it doesn't, the cached overlays cannot be
+        # affected by rotating them, so leave the cache alone.
+        if touched and getattr(self, '_movie_overlay_stale', False):
             self._ov_cache_key = None
 
     def clear_preview_rotations(self, entities):

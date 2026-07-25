@@ -11,6 +11,7 @@ Only renders the currently selected sequence (canvas.main_window.selected_movie_
 """
 
 import math
+import os
 
 import OpenGL.GL as gl
 from PyQt5.QtCore import Qt, QRectF, QPointF
@@ -29,18 +30,102 @@ _GL_DIAM   = (0.78, 0.47, 1.0, 1.0)
 _GL_EVENT  = (1.0,  0.63, 0.16, 1.0)
 _GL_GHOST  = (0.5,  0.5,  0.5,  0.7)   # unmatched NodeDef cubes
 
-# Cutscene-camera colours, mirroring the AM3D editor's cineractive display so the
-# two editors read the same way: YELLOW = the camera's flight path, GREEN = where
-# it is aiming, and a camera marker that flies the path during playback.
-_GL_CAM_PATH = (1.0,  0.85, 0.2,  1.0)   # 🟡 camera flight path
-_GL_CAM_KEY  = (1.0,  0.7,  0.1,  1.0)   # 🟡 camera keyframe cube
-_GL_AIM      = (0.4,  0.95, 0.45, 0.9)   # 🟢 aim arrow (camera -> look-at)
-_GL_AIM_PATH = (0.35, 0.85, 0.45, 0.9)   # 🟢 look-at path
-_GL_CAM_LIVE = (1.0,  1.0,  0.55, 1.0)   # ▶ the camera that is live right now
+# Cutscene-camera colours — taken from the AM3D editor's cineractive display
+# (src/map_canvas.py::_render_coords) so the two editors read identically.
+_GL_CAM_PATH = (1.0,  0.85, 0.2,  1.0)   # 🟡 camera flight path      (AM3D 1.0,0.85,0.2)
+_GL_CAM_KEY  = (1.0,  0.85, 0.2,  1.0)   # 🟡 camera keyframe cube    (AM3D Bookmark colour)
+_GL_AIM_PATH = (0.35, 0.85, 0.45, 1.0)   # 🟢 look-at path            (AM3D 0.35,0.85,0.45)
+_GL_AIM_KEY  = (0.37, 0.90, 0.43, 1.0)   # 🟢 look-at target cube     (AM3D 95,230,110)
+_GL_SIGHT    = (0.95, 0.85, 0.3,  1.0)   # the live sight line        (AM3D 0.95,0.85,0.3)
+_GL_CAM_BODY = (0.80, 0.83, 0.92, 1.0)   # camera model, idle         (AM3D 0.80,0.83,0.92)
+_GL_CAM_SEL  = (1.0,  0.92, 0.35, 1.0)   # camera model, live/selected(AM3D 1.0,0.92,0.35)
 
 # How far in front of a camera to place its look-at point when the sequence has
 # no actors to aim at (moviedata has no explicit focus target — see aim_point).
 _AIM_FALLBACK = 25.0
+
+_CAM_MODEL_SIZE = 6.0     # world height of the camera marker
+
+# Lazily-built display list for the film-camera marker (canvas/assets/camera).
+_cam_dl = None
+_cam_h = 1.0
+_cam_tried = False
+
+
+def _camera_display_list():
+    """(display_list, model_height) for the film-camera marker, built once.
+
+    The model is the AM3D editor's `filmCamera.fbx`, copied into
+    canvas/assets/camera and read by the ported canvas/fbx_mesh.py. Its LENS
+    looks down local +X and it stands on Y=0, matching AM3D's placement basis.
+    Returns (None, 1.0) if the asset or the parse is unavailable — the caller
+    then falls back to the wireframe frustum.
+    """
+    global _cam_dl, _cam_h, _cam_tried
+    if _cam_tried:
+        return _cam_dl, _cam_h
+    _cam_tried = True
+    try:
+        import numpy as np
+        from fbx_mesh import load_fbx_mesh
+        path = os.path.join(os.path.dirname(__file__), 'assets', 'camera',
+                            'filmCamera.fbx')
+        V, T, N = load_fbx_mesh(path)
+        mn, mx = V.min(0), V.max(0)
+        # Centre on X/Z, sit on Y=0 — same normalisation AM3D uses.
+        Vc = (V - np.array([(mn[0] + mx[0]) / 2, mn[1], (mn[2] + mx[2]) / 2])).astype('f4')
+        _cam_h = float(mx[1] - mn[1]) or 1.0
+        dl = gl.glGenLists(1)
+        gl.glNewList(dl, gl.GL_COMPILE)
+        gl.glBegin(gl.GL_TRIANGLES)
+        for t in T:
+            for j in t:
+                gl.glNormal3fv(N[j])
+                gl.glVertex3fv(Vc[j])
+        gl.glEnd()
+        gl.glEndList()
+        _cam_dl = dl
+        print(f"[movie] camera marker model ready ({len(V)} verts)")
+    except Exception as e:
+        print(f"[movie] camera model unavailable ({e}) — using wireframe marker")
+        _cam_dl = None
+    return _cam_dl, _cam_h
+
+
+def _draw_camera_model(pos_gl, look_gl, live):
+    """Place the film-camera model at pos_gl with its lens aimed at look_gl.
+
+    Mirrors AM3D's `_camera_basis`: local +X is the lens (points at the look-at
+    target), +Y is up, +Z is the side; all three columns scaled so the model
+    stands `_CAM_MODEL_SIZE` tall. Both points are already in editor GL space.
+    """
+    dl, h = _camera_display_list()
+    if not dl:
+        return False
+    import numpy as np
+    p = np.asarray(pos_gl, dtype=float)
+    f = np.asarray(look_gl, dtype=float) - p
+    n = np.linalg.norm(f)
+    f = f / n if n > 1e-6 else np.array([0.0, 0.0, 1.0])
+    wup = np.array([0.0, 1.0, 0.0])
+    side = np.cross(f, wup)
+    sn = np.linalg.norm(side)
+    side = side / sn if sn > 1e-6 else np.array([0.0, 0.0, 1.0])
+    tup = np.cross(side, f)
+    s = _CAM_MODEL_SIZE / (h or 1.0)
+    cx, cy, cz = f * s, tup * s, side * s
+    M = [cx[0], cx[1], cx[2], 0.0,
+         cy[0], cy[1], cy[2], 0.0,
+         cz[0], cz[1], cz[2], 0.0,
+         p[0],  p[1],  p[2],  1.0]
+    gl.glPushMatrix()
+    gl.glMultMatrixf(M)
+    gl.glEnable(gl.GL_LIGHTING)
+    gl.glColor3f(*( _GL_CAM_SEL[:3] if live else _GL_CAM_BODY[:3]))
+    gl.glCallList(dl)
+    gl.glDisable(gl.GL_LIGHTING)
+    gl.glPopMatrix()
+    return True
 
 
 def _loaded_entity_ids(canvas):
@@ -235,18 +320,37 @@ def _draw_camera_marker(pos, quat, reach, size):
     gl.glEnd()
 
 
-def _draw_camera_track(canvas, movie_data, seq, seq_node, nd, live_t):
-    """Yellow flight path + green aim lines for ONE cutscene camera, plus a
-    frustum marker: flying the path at `live_t` when the sequence is playing,
-    otherwise parked at its first keyframe."""
+def _camera_curves(movie_data, seq, seq_node, nd):
+    """(flight_pts, aim_pts, reach) for one cutscene camera, in GAME space.
+
+    aim_pts[i] is where the camera is looking at keyframe i — the look-at target
+    curve. Both lists are parallel, and the same `reach` is used for the live
+    sight line, so that line always ENDS exactly on this curve.
+    """
     keys = seq_node.all_pos_keys()
     pts = [(k.x, k.y, k.z) for k in keys] or ([tuple(nd.pos)] if nd else [])
     if not pts:
-        return
+        return [], [], _AIM_FALLBACK
     reach = _seq_reach(movie_data, seq, pts[0])
+    rest = nd.rotate if nd else (1.0, 0.0, 0.0, 0.0)
+    aims = [aim_point((k.x, k.y, k.z), seq_node.rot_at(k.time) or rest, reach)
+            for k in keys]
+    if not aims:
+        aims = [aim_point(pts[0], rest, reach)]
+    return pts, aims, reach
 
-    # 🟡 flight path
-    if len(pts) >= 2:
+
+def _draw_camera_curves(movie_data, seq, seq_node, nd):
+    """The two curves for one camera: 🟡 flight path and 🟢 look-at target path,
+    with a small cube at each keyframe of both. No per-keyframe aim arrows —
+    those are what made a thicket of green lines shooting past the look-at
+    curve. The single sight line is drawn once, by the caller, from the LIVE
+    camera position (AM3D draws exactly one, only while playing)."""
+    pts, aims, _ = _camera_curves(movie_data, seq, seq_node, nd)
+    if not pts:
+        return
+
+    if len(pts) >= 2:                                   # 🟡 flight path
         gl.glColor4f(*_GL_CAM_PATH)
         gl.glLineWidth(2.5)
         gl.glBegin(gl.GL_LINE_STRIP)
@@ -254,52 +358,53 @@ def _draw_camera_track(canvas, movie_data, seq, seq_node, nd, live_t):
             gl.glVertex3f(p[0], p[2], -p[1])
         gl.glEnd()
 
-    # 🟢 aim arrow at each keyframe + the look-at path connecting them
-    aims = []
-    for k in keys:
-        q = seq_node.rot_at(k.time) or (nd.rotate if nd else (1.0, 0.0, 0.0, 0.0))
-        aims.append(aim_point((k.x, k.y, k.z), q, reach))
-    if aims:
-        gl.glColor4f(*_GL_AIM)
-        gl.glLineWidth(1.3)
-        gl.glBegin(gl.GL_LINES)
-        for p, a in zip(pts, aims):
-            gl.glVertex3f(p[0], p[2], -p[1])
+    if len(aims) >= 2:                                  # 🟢 look-at path
+        gl.glColor4f(*_GL_AIM_PATH)
+        gl.glLineWidth(1.7)
+        gl.glBegin(gl.GL_LINE_STRIP)
+        for a in aims:
             gl.glVertex3f(a[0], a[2], -a[1])
         gl.glEnd()
-        if len(aims) >= 2:
-            gl.glColor4f(*_GL_AIM_PATH)
-            gl.glLineWidth(1.7)
-            gl.glBegin(gl.GL_LINE_STRIP)
-            for a in aims:
-                gl.glVertex3f(a[0], a[2], -a[1])
-            gl.glEnd()
 
-    # 🟡 keyframe cubes
-    gl.glColor4f(*_GL_CAM_KEY)
+    gl.glColor4f(*_GL_CAM_KEY)                          # 🟡 camera keyframes
     gl.glLineWidth(1.4)
     for p in pts:
         _draw_wireframe_cube_3d(p[0], p[2], -p[1], 1.2)
 
-    # camera marker: flies the path while playing, else parked at key 0
-    if live_t is not None:
-        pos = seq_node.pos_at(live_t) or pts[0]
-        quat = seq_node.rot_at(live_t) or (nd.rotate if nd else (1.0, 0.0, 0.0, 0.0))
-        gl.glColor4f(*_GL_CAM_LIVE)
-        gl.glLineWidth(2.2)
-        # live facing line all the way to what it's looking at
-        a = aim_point(pos, quat, reach)
-        gl.glBegin(gl.GL_LINES)
-        gl.glVertex3f(pos[0], pos[2], -pos[1])
-        gl.glVertex3f(a[0], a[2], -a[1])
-        gl.glEnd()
-    else:
-        pos = pts[0]
-        quat = seq_node.rot_at(keys[0].time) if keys else None
-        quat = quat or (nd.rotate if nd else (1.0, 0.0, 0.0, 0.0))
-        gl.glColor4f(*_GL_CAM_PATH)
-        gl.glLineWidth(1.6)
-    _draw_camera_marker(pos, quat, reach, 1.5)
+    gl.glColor4f(*_GL_AIM_KEY)                          # 🟢 look-at targets
+    gl.glLineWidth(1.2)
+    for a in aims:
+        _draw_wireframe_cube_3d(a[0], a[2], -a[1], 1.0)
+
+
+def _draw_live_camera(movie_data, seq, cam_node, nd, t):
+    """The ONE camera marker + the ONE sight line, at sequence time `t`.
+
+    AM3D shows a single film camera sliding along the path, not one per
+    keyframe. The sight line runs from the camera to its look-at target and
+    STOPS there — it must not shoot past the look-at curve.
+    """
+    pts, aims, reach = _camera_curves(movie_data, seq, cam_node, nd)
+    if not pts:
+        return
+    rest = nd.rotate if nd else (1.0, 0.0, 0.0, 0.0)
+    pos = cam_node.pos_at(t) or pts[0]
+    quat = cam_node.rot_at(t) or rest
+    look = aim_point(pos, quat, reach)      # lands ON the look-at curve
+
+    gl.glColor4f(*_GL_SIGHT)                # the single sight line
+    gl.glLineWidth(1.6)
+    gl.glBegin(gl.GL_LINES)
+    gl.glVertex3f(pos[0], pos[2], -pos[1])
+    gl.glVertex3f(look[0], look[2], -look[1])
+    gl.glEnd()
+
+    pos_gl = (pos[0], pos[2], -pos[1])
+    look_gl = (look[0], look[2], -look[1])
+    if not _draw_camera_model(pos_gl, look_gl, live=True):
+        gl.glColor4f(*_GL_CAM_SEL)          # fallback: wireframe frustum
+        gl.glLineWidth(2.0)
+        _draw_camera_marker(pos, quat, reach, 1.5)
 
 
 # ── 3D rendering ───────────────────────────────────────────────────────────────
@@ -332,21 +437,36 @@ def render_movie_paths_3d(canvas):
     gl.glDisable(gl.GL_DEPTH_TEST)   # always on top like shape points
 
     try:
-        from cs_camera_preview import is_camera
+        from cs_camera_preview import is_camera, camera_shots, active_camera_at
     except Exception:
         is_camera = lambda nd: False
+        camera_shots = lambda *a: []
+        active_camera_at = lambda *a, **k: None
+
+    # ONE live camera for the whole sequence, not one per node: resolve which
+    # camera is on air at `live_t` from the shot list, exactly like the CS
+    # preview does, and only that one gets a model + sight line. Parked (not
+    # playing) it sits at the opening shot's first keyframe.
+    live_cam_id = None
+    try:
+        shots = camera_shots(movie_data, seq)
+        if shots:
+            live_cam_id = active_camera_at(shots, live_t if live_t is not None
+                                           else float(getattr(seq, 'start_time', 0.0) or 0.0))
+    except Exception:
+        shots = []
 
     for seq_node in seq.nodes:
         if selected_node_id is not None and seq_node.node_id != selected_node_id:
             continue
         nd = movie_data.node_defs.get(seq_node.node_id)
-        # Cutscene cameras get the AM3D-style treatment (flight path + aim lines
-        # + a frustum marker) instead of the generic purple actor path.
+        # Cutscene cameras get the AM3D treatment: 🟡 flight path + 🟢 look-at
+        # path, instead of the generic purple actor path.
         if is_camera(nd):
             try:
-                _draw_camera_track(canvas, movie_data, seq, seq_node, nd, live_t)
+                _draw_camera_curves(movie_data, seq, seq_node, nd)
             except Exception as e:
-                print(f"[movie] camera track draw failed: {e}")
+                print(f"[movie] camera curve draw failed: {e}")
             continue
         keys = seq_node.all_pos_keys()
         if not keys:
@@ -380,6 +500,21 @@ def render_movie_paths_3d(canvas):
                     gl.glVertex3f(pos[0], pos[2], -pos[1])
             gl.glEnd()
             gl.glPointSize(1.0)
+
+    # THE camera — exactly one for the whole sequence, sliding along whichever
+    # shot is live. Drawn last so it sits over the curves.
+    if live_cam_id is not None and (selected_node_id is None
+                                    or selected_node_id == live_cam_id):
+        cam_node = seq.node_by_id(live_cam_id)
+        cam_nd = movie_data.node_defs.get(live_cam_id)
+        if cam_node is not None:
+            try:
+                _draw_live_camera(
+                    movie_data, seq, cam_node, cam_nd,
+                    live_t if live_t is not None
+                    else float(getattr(seq, 'start_time', 0.0) or 0.0))
+            except Exception as e:
+                print(f"[movie] live camera draw failed: {e}")
 
     # Ghost cubes for unmatched NodeDef entries
     _draw_ghost_nodes_3d(canvas, movie_data, seq, selected_node_id)

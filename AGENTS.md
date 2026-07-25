@@ -4480,3 +4480,51 @@ the occlusion FBO is still bound.
 It samples `cloud_common.CLOUD_GLSL` — the SAME function the sky draws — so a
 cloud overhead breaks exactly the shafts it casts. Guarded: any failure sets
 `_cloud_failed` and the rays simply stay unbroken.
+
+## Cutscene camera display rebuilt to match AM3D exactly (July 2026)
+
+Third pass at this; the first two got the idea but not the form. What AM3D
+actually draws, and what we now draw:
+
+- 🟡 **flight path** per camera + a cube at each of its position keys
+- 🟢 **look-at path** per camera + a cube at each look-at target
+- **ONE camera model** for the whole sequence, sliding along whichever shot is
+  live — **not one per node**. Resolved through `camera_shots` /
+  `active_camera_at`, the same shot list the CS preview uses, so the marker cuts
+  between cameras exactly when the preview does.
+- **ONE sight line**, from the LIVE camera position to its look-at target, and
+  it **STOPS at the target**.
+
+**What was wrong before:** a green aim arrow was drawn at EVERY keyframe of
+EVERY camera, each extending `reach` past its key — a thicket of green lines
+shooting past the look-at curve. And every camera node got its own frustum
+marker, so a 3-camera sequence showed 3 cameras at once.
+
+**Why the sight line lands exactly on the curve:** `_camera_curves` computes the
+look-at points with ONE `reach` per camera (distance to `sequence_action_centre`,
+clamped 2..400) and `_draw_live_camera` reuses that same `reach`, so
+`aim_point(pos_at(t), rot_at(t), reach)` is by construction a point on the same
+curve the green polyline interpolates. Change one, change the other.
+
+**Colours are AM3D's** (`src/map_canvas.py::_render_coords`), not invented:
+path/keys `1.0,0.85,0.2` · look-at path `0.35,0.85,0.45` · look-at cubes
+`95,230,110` · sight line `0.95,0.85,0.3` · camera body `0.80,0.83,0.92` ·
+live/selected camera `1.0,0.92,0.35`.
+
+**Camera model.** `assets/Camera/filmCamera.fbx` copied to
+`canvas/assets/camera/` (shared by both games) and read by `canvas/fbx_mesh.py`
+— AM3D's 159-line binary-FBX reader, ported unchanged (stdlib + numpy, no
+dependency). 2,146 verts / 4,156 tris, baked into a display list once.
+Placement mirrors AM3D's `_camera_basis`: **local +X is the lens** and aims at
+the look-at target, +Y up, +Z side, scaled so the model stands
+`_CAM_MODEL_SIZE` tall; the mesh is centred on X/Z and sits on Y=0. Missing
+asset or a parse failure → falls back to the wireframe frustum.
+
+### The playback lag was the overlay cache thrashing
+
+`patch_preview_rotations` cleared `_ov_cache_key` **unconditionally**, and it
+runs every playback tick — so every frame of a cutscene rebuilt all the
+prims/triggers/shape wireframes, the exact 11-19 ms/frame path the overlay cache
+exists to avoid. It now only clears when `_movie_overlay_stale` says a MOVING
+entity actually owns overlay geometry (the flag `set_preview_entities` already
+computes). Cutscene actors normally own none, so the cache now survives playback.
