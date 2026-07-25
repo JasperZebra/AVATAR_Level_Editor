@@ -166,6 +166,75 @@ unusually well:
    any component pointer, so a runtime walk of entity components can locate one
    if the level already spawns it.
 
+## [CONFIRMED] The camera entities ship as authored data — with fixed IDs
+
+The decisive find. Avatar's own `entitylibrary.fcb` (2,733 prototypes, already
+converted at `__GameFilesPC/xml_cracking_test/fcb_file/entitylibrary.fcb.converted/`)
+contains a complete, contiguous block of **camera entity prototypes**:
+
+| Entity | ID | Component |
+|---|---|---|
+| `Camera.AnimatedCameraToken` | 255 | — |
+| `Camera.Bone` | 256 | `CCameraBoneComponent` |
+| `Camera.Cinematic` | 257 | `CCameraBoneComponent` |
+| `Camera.Editor` | 258 | `CCameraEditorComponent` |
+| `Camera.First` | 259 | `CCameraPawnComponent` |
+| `Camera.FirstAvatar` | 260 | `CCameraPawnComponent` |
+| `Camera.FirstCorp` | 261 | `CCameraPawnComponent` |
+| **`Camera.Free`** | **262** | **`CCameraFreeComponent`** |
+| `Camera.FreeOrbital` | 263 | `CCameraFreeOrbitalComponent` |
+| `Camera.Ghost` | 264 | `CCameraGhostComponent` |
+| `Camera.Marketing` | 265 | `CCameraMarketingComponent` |
+| `Camera.Planet` | 266 | `CCameraPlanetComponent` |
+| `Camera.Spectator` | 267 | `CCameraSpectatorComponent` |
+| `Camera.Third` | 268 | `CCameraThirdComponent` |
+| `Camera.ThirdAvatar` | 269 | `CCameraThirdComponent` |
+| `Camera.ThirdCorp` | 270 | `CCameraThirdComponent` |
+
+`Camera.Third*` being in this list is the important corroboration — that's the
+*normal gameplay camera*. The game switches between all of these by entity, so
+the free camera is not a special case; it sits in the same table as the camera
+you look through every second of play.
+
+`Camera.Free` in full (`hidName` = `cameras.Camera.Free`, class `CEntity`):
+
+```xml
+<object name="CCameraFreeComponent">
+  <field name="fCameraBlendTime" value-Float32="0"    />
+  <field name="fNearDistance"    value-Float32="0.1"  />
+  <field name="fFarDistance"     value-Float32="5000" />
+  <field name="fFOV"             value-Float32="70"   />
+  <field name="fSpeed"           value-Float32="5"    />   <!-- flight speed -->
+</object>
+<object name="CPersistComponent"> ... </object>
+```
+
+The developers' own free camera, with tunable flight speed, FOV and clip planes,
+shipped in the retail data.
+
+## [DERIVED] SwitchCamera calling convention
+
+`disEntityId` is `Id64`, so `EntityId` is 64-bit. Tracing the stack through the
+prologue at `0x10a88680` (`sub esp,8` → `push esi` → `push edi` → … → `pop edi`)
+puts the arguments at `[esp+0x10]` = `cameraType` and `[esp+0x14]`/`[esp+0x18]`
+= the low/high dwords of `EntityId`. So, cdecl:
+
+```asm
+push entityId_hi
+push entityId_lo
+push cameraType
+call 0x10a88680
+add  esp, 0xC
+```
+
+**Working hypothesis, not yet tested:** `SwitchCamera(1, 262)` activates the
+free camera. Implemented in `runtime/switch_camera.py`.
+
+Caveat to settle by experiment: 255–270 are *entity library prototype* IDs. It
+is not yet established that the runtime `EntityId` matches. If it does not, the
+fallback is to locate the live camera entity by walking components with the
+`SafeCast<CCameraFreeComponent>` helper `FUN_1051bb30`.
+
 ## [CONFIRMED] A developer console exists in the binary
 
 `CDominoConsoleCommandManager`, `CFCXConsole`, `CConsoleService`,
