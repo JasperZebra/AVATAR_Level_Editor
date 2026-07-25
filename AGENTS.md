@@ -4079,3 +4079,56 @@ and would otherwise never trigger a repaint.
 **Not done:** 2D-mode squares still use their XML rotation during playback. 2D
 only draws rotation at all when a rotation gizmo is active, so it is cosmetic
 there; the style array's rotation column would need patching to match.
+
+## CS camera: shot cuts, camera pick, panel height (July 2026)
+
+**1. Camera conventions RE-CONFIRMED with exact math.** The original +Y-forward /
++Z-up finding rested on a weak look-at correlation (mean cos 0.58). Re-scored
+using the now-validated quaternion→matrix path over 237 camera NodeDefs and
+2,482 animated samples, with two independent signals:
+
+| axis | R·axis vs world +Z (level-horizon) | vs camera velocity | vs actors |
+|---|---|---|---|
+| +Z | **+0.936, 94.9% within 45°** | +0.037 | +0.084 |
+| +Y | −0.044 | **+0.202, best of six** | **+0.556, 70.6% within 60°** |
+
+All three agree: **forward = +Y, up = +Z**. The horizon test is the strong one —
+cameras are essentially never rolled, so the true up axis must track world +Z,
+and only +Z does. No code change needed; the convention was right.
+
+**2. Shot cuts — 'Switch To' (the actual fix for "shots aren't switching").**
+Cut points live in the camera nodes' **ParamId-4 event track** as an event named
+literally **`'Switch To'`**: a key at time t on camera C means the cutscene cuts
+TO C at t. 73 such events across all Avatar moviedata, **none outside its
+sequence's time range**; 40 of the 149 camera-bearing sequences use more than one
+camera (max seen: 5 cameras cutting at 6/9/12/15s in
+`sp_dustbowl_hg_rb_01_l/…SE_IG_DustBowl_50_Investigation01`).
+
+`camera_shots(movie_data, seq)` → sorted `[(start_time, node_id)]`;
+`active_camera_at(shots, t, default)` → the live camera. The OPENING shot is the
+camera with no `'Switch To'` of its own (first in node order if several); when
+every camera has one — usually with a key at t=0 — that key already is the
+opener and nothing is synthesised. **Track `StartTime`/`EndTime` are None on
+pos/rot tracks and do NOT delimit shots — don't try to use them.**
+
+Widget: an **"🎬 Auto — follow N shots"** entry leads the camera combo whenever
+`len(shots) > 1`, and is the default. `_cam_node_id is None` means Auto — the
+`_tick` guard tests `_resolved_cam()`, NOT `_cam_node_id`, or Auto would look
+like "no camera". The resolved camera is part of `_last_render_key` so a cut
+always forces a re-render. The status line shows `shot n/N — CameraName`.
+
+**3. Static-camera fallback is ranked, not alphabetical.** Only 149 of 532
+sequences own an animated camera; **62% (330) fall back** to a camera elsewhere
+in the file. Sorting those by NAME put the default a median of **535 units** from
+the action (nearest available: median 63.5) and was the nearest camera only
+**8.3%** of the time — so the preview usually opened on a camera aimed at
+nothing. `rank_static_cameras` now orders by *(faces the action, then distance)*
+using `sequence_action_centre` (mean position of the sequence's NON-camera nodes,
+at its start time). Labels carry the distance: `Name (static, 63m)`.
+
+**4. Right-panel budget.** Level Info's three tabs are each wrapped in their own
+`QScrollArea` and the tab widget is capped at `SimplifiedMapEditor.LEVEL_INFO_MAX_H`
+(300) with `QSizePolicy.Maximum`; the CS group gets `Expanding` +
+`CS_PREVIEW_MIN_H` (300) + stretch 1 in `dock_layout`, and the preview image's
+minimum height went 150 → 230. The per-tab scroll areas are what make the cap
+safe — without them a capped section clips its content.

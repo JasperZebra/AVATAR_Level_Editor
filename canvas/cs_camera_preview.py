@@ -57,19 +57,141 @@ def game_to_gl_dir(d):
     return (float(d[0]), float(d[2]), float(-d[1]))
 
 
+def is_camera(nd):
+    """Camera naming: case-insensitive 'cam' in the NodeDef name."""
+    return nd is not None and 'cam' in (nd.name or '').lower()
+
+
+def sequence_action_centre(movie_data, seq):
+    """Mean position of the sequence's NON-camera nodes — i.e. where the action
+    it films actually happens. Uses each node's own animated position at the
+    sequence start, falling back to its NodeDef rest position. None when the
+    sequence has no usable non-camera node."""
+    if movie_data is None or seq is None:
+        return None
+    t0 = float(getattr(seq, 'start_time', 0.0) or 0.0)
+    pts = []
+    for sn in seq.nodes:
+        nd = movie_data.node_defs.get(sn.node_id)
+        if nd is None or is_camera(nd):
+            continue
+        p = None
+        try:
+            p = sn.pos_at(t0)
+        except Exception:
+            p = None
+        if p is None:
+            p = getattr(nd, 'pos', None)
+        if p is not None:
+            pts.append(np.asarray(p, dtype=float))
+    if not pts:
+        return None
+    return np.mean(pts, axis=0)
+
+
+def rank_static_cameras(movie_data, seq, candidates):
+    """Order static-camera candidates [(node_id, nodedef)] by how plausibly each
+    one FILMS this sequence: cameras facing the action first, then nearest.
+
+    Why this matters: only 149 of 532 Avatar sequences own an animated camera —
+    62% fall back to a camera that lives elsewhere in the file. Picking those
+    alphabetically put the default a median of 535 units from the action (the
+    nearest camera in the file was a median of 63), and was the nearest one only
+    8.3% of the time. So the preview usually opened on a camera from a different
+    part of the level, aimed at nothing.
+
+    Returns [(node_id, nodedef, distance_or_None)] — distance is None when the
+    sequence has no action centre to measure against, in which case name order
+    is preserved.
+    """
+    centre = sequence_action_centre(movie_data, seq)
+    if centre is None:
+        return [(nid, nd, None) for nid, nd in candidates]
+
+    scored = []
+    for nid, nd in candidates:
+        try:
+            d = centre - np.asarray(nd.pos, dtype=float)
+            dist = float(np.linalg.norm(d))
+            faces = False
+            if dist > 1e-6:
+                fwd = quat_rotate(nd.rotate, (0.0, 1.0, 0.0))
+                n = np.linalg.norm(fwd)
+                if n > 1e-9:
+                    # +Y forward / +Z up — re-confirmed against 237 camera
+                    # NodeDefs and 2,016 animated samples: the up axis lands
+                    # within 45 deg of world +Z for 94.9% of shots.
+                    faces = float((fwd / n) @ (d / dist)) > 0.2
+        except Exception:
+            dist, faces = float('inf'), False
+        scored.append((0 if faces else 1, dist, nd.name or '', nid, nd))
+    scored.sort(key=lambda r: (r[0], r[1], r[2]))
+    return [(nid, nd, dist) for _f, dist, _n, nid, nd in scored]
+
+
+def camera_shots(movie_data, seq):
+    """The sequence's SHOT LIST as sorted [(start_time, node_id)].
+
+    A multi-camera cutscene cuts between cameras, and the cut points live in the
+    camera nodes' ParamId-4 event track as an event literally named
+    **'Switch To'**: a key at time t on camera C means the cutscene cuts TO C at
+    t. Confirmed across every Avatar moviedata — 73 such events, and not one
+    falls outside its sequence's time range. 40 of the 149 camera-bearing
+    sequences use more than one camera; the record is 5 cameras cutting at
+    6/9/12/15s (sp_dustbowl_hg_rb_01_l SE_IG_DustBowl_50_Investigation01).
+
+    The OPENING shot is the camera that has no 'Switch To' of its own (first in
+    node order when several qualify). Some sequences give every camera a switch,
+    usually with one at t=0 — then that key is the opening shot and nothing
+    needs synthesising. Returns [] when the sequence has no cameras.
+    """
+    if movie_data is None or seq is None:
+        return []
+    shots = []
+    openers = []
+    for sn in seq.nodes:
+        nd = movie_data.node_defs.get(sn.node_id)
+        if not is_camera(nd):
+            continue
+        track = sn.tracks.get(4)
+        times = [k.time for k in (track.event_keys if track else [])
+                 if (k.event or '').strip().lower() == 'switch to']
+        if times:
+            shots.extend((float(t), sn.node_id) for t in times)
+        else:
+            openers.append(sn.node_id)
+    shots.sort(key=lambda r: r[0])
+    t0 = float(getattr(seq, 'start_time', 0.0) or 0.0)
+    if openers and (not shots or shots[0][0] > t0):
+        shots.insert(0, (t0, openers[0]))
+    return shots
+
+
+def active_camera_at(shots, t, default=None):
+    """Which camera is live at time t — the last shot that has started."""
+    node_id = default
+    for start, nid in shots:
+        if t + 1e-6 >= start:
+            node_id = nid
+        else:
+            break
+    return node_id
+
+
 def camera_nodes(movie_data, seq):
     """[(node_id, display_name)] of viewable cameras for a sequence.
 
     Three tiers (survey across all 106 moviedata files of both games: only
-    156 of 568 sequences have a camera among their OWN animated nodes —
+    149 of 532 Avatar sequences have a camera among their OWN animated nodes —
     many are filmed by STATIC cameras that live in NodeData but are not
     sequence nodes, and object-only sequences have no camera at all):
       1. camera-named nodes animated IN the sequence,
       2. every other camera-named NodeDef in the whole moviedata (static —
-         rest pose; camera_pose_at already falls back to it),
+         rest pose; camera_pose_at already falls back to it), RANKED by how
+         plausibly each films this sequence (see rank_static_cameras) instead
+         of alphabetically, and labelled with its distance to the action,
       3. if there are STILL none, the sequence's own nodes ("(node)") so
          the user can at least view from a participant.
-    Camera naming: case-insensitive 'cam' in the NodeDef name.
     """
     out = []
     if movie_data is None or seq is None:
@@ -79,16 +201,19 @@ def camera_nodes(movie_data, seq):
         nd = movie_data.node_defs.get(sn.node_id)
         if nd is None:
             continue
-        if 'cam' in (nd.name or '').lower():
+        if is_camera(nd):
             out.append((sn.node_id, nd.name or f'Camera {sn.node_id}'))
             seen.add(sn.node_id)
-    for nid, nd in sorted(movie_data.node_defs.items(),
-                          key=lambda kv: (kv[1].name or '')):
-        if nid in seen:
-            continue
-        if 'cam' in (nd.name or '').lower():
-            out.append((nid, f"{nd.name or nid} (static)"))
-            seen.add(nid)
+
+    statics = [(nid, nd) for nid, nd in
+               sorted(movie_data.node_defs.items(), key=lambda kv: (kv[1].name or ''))
+               if nid not in seen and is_camera(nd)]
+    for nid, nd, dist in rank_static_cameras(movie_data, seq, statics):
+        label = f"{nd.name or nid} (static)" if dist is None \
+            else f"{nd.name or nid} (static, {dist:.0f}m)"
+        out.append((nid, label))
+        seen.add(nid)
+
     if not out:
         for sn in seq.nodes:
             nd = movie_data.node_defs.get(sn.node_id)
@@ -141,6 +266,8 @@ class CSCameraPreviewWidget(QWidget):
         self._play_wall = None
         self._last_render_key = None
         self._last_render_wall = 0.0
+        self._shots = []            # [(start_time, node_id)] cut list
+        self._fallback_cam = None   # camera used before the first cut
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -158,7 +285,7 @@ class CSCameraPreviewWidget(QWidget):
         # follows its pixmap/text width, which forced the whole right panel
         # wider than the dock (= the horizontal scrollbar the user reported).
         self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
-        self.image_label.setMinimumSize(120, 150)
+        self.image_label.setMinimumSize(120, 230)
         self.image_label.setStyleSheet(
             "background-color: #101418; color: #8899aa; border: 1px solid #2a3036;")
         layout.addWidget(self.image_label, 1)
@@ -209,6 +336,17 @@ class CSCameraPreviewWidget(QWidget):
         self.slider.setEnabled(on)
         self.camera_box.setEnabled(on)
 
+    def _resolved_cam(self):
+        """The camera to render THIS frame.
+
+        `_cam_node_id is None` means the combo is on "Auto" — follow the
+        sequence's own shot cuts, so a multi-camera cutscene switches shots as
+        it plays instead of sitting on one angle for the whole take.
+        """
+        if self._cam_node_id is not None:
+            return self._cam_node_id
+        return active_camera_at(self._shots, self._t, self._fallback_cam)
+
     def set_sequence(self, seq_name):
         """Called by the editor when the Sequences-tab selection changes."""
         self.stop_play()
@@ -219,11 +357,17 @@ class CSCameraPreviewWidget(QWidget):
         self.camera_box.clear()
         md, seq = self._movie()
         cams = camera_nodes(md, seq)
+        self._shots = camera_shots(md, seq)
+        self._fallback_cam = cams[0][0] if cams else None
+        # "Auto" leads the list whenever the sequence actually cuts, and is the
+        # default — that's what the cutscene really looks like.
+        if len(self._shots) > 1:
+            self.camera_box.addItem(f"🎬 Auto — follow {len(self._shots)} shots", None)
         for node_id, name in cams:
             self.camera_box.addItem(name, node_id)
         self.camera_box.blockSignals(False)
         if cams:
-            self._cam_node_id = cams[0][0]
+            self._cam_node_id = None if len(self._shots) > 1 else cams[0][0]
             self._set_enabled(True)
             self._render_frame()
         else:
@@ -304,7 +448,9 @@ class CSCameraPreviewWidget(QWidget):
         ed_seq = getattr(self.editor, 'selected_movie_sequence', None)
         if ed_seq != self._seq_name:
             self.set_sequence(ed_seq)
-        if not self.isVisible() or self._cam_node_id is None:
+        # NB: _cam_node_id None means "Auto", which is a valid selection — test
+        # the RESOLVED camera, not the combo value.
+        if not self.isVisible() or self._resolved_cam() is None:
             return
         md, seq = self._movie()
         if seq is None:
@@ -343,7 +489,8 @@ class CSCameraPreviewWidget(QWidget):
 
     def _render_frame(self):
         md, seq = self._movie()
-        if seq is None or self._cam_node_id is None:
+        cam_id = self._resolved_cam()
+        if seq is None or cam_id is None:
             return
         canvas = getattr(self.editor, 'canvas', None)
         if canvas is None or not hasattr(canvas, 'render_camera_preview'):
@@ -351,12 +498,14 @@ class CSCameraPreviewWidget(QWidget):
             return
         w = min(max(self.image_label.width(), 160), PREVIEW_MAX_W)
         h = max(int(w * 9 / 16), 90)
-        key = (self._seq_name, self._cam_node_id, round(self._t, 3), w, h,
+        # The RESOLVED camera is part of the key, so a shot cut always forces a
+        # re-render even when the widget is otherwise idle (e.g. scrubbing).
+        key = (self._seq_name, cam_id, round(self._t, 3), w, h,
                id(getattr(self.editor, 'entities', None)))
         if key == self._last_render_key and not self._playing \
                 and not self._editor_preview_active():
             return   # nothing changed — skip the (relatively) expensive pass
-        pose = camera_pose_at(md, seq, self._cam_node_id, self._t)
+        pose = camera_pose_at(md, seq, cam_id, self._t)
         if pose is None:
             self.status.setText("camera node has no pose data")
             return
@@ -376,5 +525,10 @@ class CSCameraPreviewWidget(QWidget):
             self.image_label.width(), self.image_label.height(),
             Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.image_label.setPixmap(pm)
+        shot = ""
+        if self._cam_node_id is None and len(self._shots) > 1:
+            n = sum(1 for s, _ in self._shots if self._t + 1e-6 >= s)
+            nd = md.node_defs.get(cam_id) if md else None
+            shot = f"  shot {n}/{len(self._shots)} — {(nd.name if nd else cam_id)}"
         self.status.setText(
-            f"cam ({eye[0]:.0f}, {eye[1]:.0f}, {eye[2]:.0f})  t={self._t:.1f}s  {w}x{h}")
+            f"cam ({eye[0]:.0f}, {eye[1]:.0f}, {eye[2]:.0f})  t={self._t:.1f}s  {w}x{h}{shot}")

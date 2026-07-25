@@ -2209,9 +2209,17 @@ class SimplifiedMapEditor(QMainWindow):
         toggle_btn.clicked.connect(_toggle)
         return outer, content_layout
 
+    # Right-panel vertical budget. The Level Info tabs are reference data that
+    # scroll happily; the CS Camera preview is an image that needs real estate,
+    # so the former is capped and the latter takes what's left.
+    LEVEL_INFO_MAX_H = 300
+    CS_PREVIEW_MIN_H = 300
+
     def create_side_panel(self):
         """Create a dock widget for the side panel controls - 2D Editor"""
-        from PyQt5.QtWidgets import QTabWidget, QScrollArea
+        from PyQt5.QtWidgets import QTabWidget, QScrollArea, QSizePolicy, QFrame
+        LEVEL_INFO_MAX_H = self.LEVEL_INFO_MAX_H
+        CS_PREVIEW_MIN_H = self.CS_PREVIEW_MIN_H
         dock = QDockWidget("Level Information", self)
         dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
 
@@ -2351,12 +2359,28 @@ class SimplifiedMapEditor(QMainWindow):
         self.stat_relations_label.hide()
         stat_lay.addWidget(self.stat_relations_label)
         stat_lay.addStretch()
-        level_info_tabs.addTab(stat_tab, "Statistics")
-        level_info_tabs.addTab(sec_tab, "Sector Colors")
-        level_info_tabs.addTab(ent_tab, "Entity Colors")
+        # Each tab scrolls INSIDE the section, so the section can be height-capped
+        # below without ever clipping its content (user asked for a smaller stats
+        # area so the CS Camera preview can be taller).
+        def _scrollable(inner):
+            sa = QScrollArea()
+            sa.setWidgetResizable(True)
+            sa.setFrameShape(QFrame.NoFrame)
+            sa.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            sa.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+            sa.setWidget(inner)
+            return sa
+
+        level_info_tabs.addTab(_scrollable(stat_tab), "Statistics")
+        level_info_tabs.addTab(_scrollable(sec_tab), "Sector Colors")
+        level_info_tabs.addTab(_scrollable(ent_tab), "Entity Colors")
 
         level_info_tabs.setCurrentIndex(0)  # default to Statistics tab
+        # Cap the Level Info section: it's reference data that's fine to scroll,
+        # whereas the CS preview is an image that needs real estate.
+        level_info_tabs.setMaximumHeight(LEVEL_INFO_MAX_H)
         level_info_vlay.addWidget(level_info_tabs)
+        level_info_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         dock_layout.addWidget(level_info_group)
 
         # ════════════════════════════════════════════════════════════════════
@@ -2372,7 +2396,11 @@ class SimplifiedMapEditor(QMainWindow):
             cs_lay.setSpacing(2)
             self.cs_camera_preview = CSCameraPreviewWidget(self)
             cs_lay.addWidget(self.cs_camera_preview)
-            dock_layout.addWidget(cs_group)
+            # Stretch 1 + an Expanding policy: the CS preview takes whatever
+            # vertical space the (now height-capped) Level Info section gives up.
+            cs_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+            cs_group.setMinimumHeight(CS_PREVIEW_MIN_H)
+            dock_layout.addWidget(cs_group, 1)
         except Exception as _cs_e:
             import traceback
             traceback.print_exc()
