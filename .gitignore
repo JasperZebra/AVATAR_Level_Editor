@@ -1,5 +1,10 @@
 __pycache__/
-tools/
+# tools/ stays untracked (it holds multi-GB game rips and 68MB decompile dumps),
+# but camera_tool_project is real source and must be version-controlled.
+# Note: this has to be "tools/*" not "tools/" -- git will not descend into an
+# excluded directory, so a negation under "tools/" would never take effect.
+tools/*
+!tools/camera_tool_project/
 mass_exported_objects/
 objects/
 patch_config.json
