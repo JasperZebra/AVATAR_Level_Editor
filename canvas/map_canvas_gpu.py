@@ -7857,6 +7857,56 @@ class MapCanvas(QOpenGLWidget):
                     break
         self._build_preview_rows()
 
+    def patch_preview_rotations(self, items):
+        """Override cached rotation for moviedata-preview entities.
+
+        items: iterable of (entity, rx, ry, rz) in the editor's degree
+        convention (see movie_data.quat_to_editor_angles).
+
+        Both render paths take rotation from `model_loader._get_entity_rs`,
+        which caches per entity from the XML. Writing the override straight into
+        that cache rotates the entity for the classic path AND — via
+        `gdr_refresh_entity`, which re-reads through the same cache — for the
+        GPU-driven row tables, with NO XML write, so a preview can never dirty
+        the level. `clear_preview_rotations` pops the entries to restore.
+
+        The scale component is preserved from whatever the entity already had.
+        """
+        ml = getattr(self, 'model_loader', None)
+        if ml is None:
+            return
+        touched = False
+        for entity, rx, ry, rz in items:
+            try:
+                eid = id(entity)
+                prev = ml._entity_rs_cache.get(eid)
+                if prev is None:
+                    prev = ml._get_entity_rs(entity)
+                ml._entity_rs_cache[eid] = (float(rx), float(ry), float(rz), prev[3])
+                ml.gdr_refresh_entity(entity)
+                touched = True
+            except Exception:
+                continue
+        if touched:
+            # Rotation feeds the cached wireframe overlays too (primitive boxes,
+            # trigger volumes), and rotation edits don't bump the position
+            # version — same hook mark_entity_modified uses.
+            self._ov_cache_key = None
+
+    def clear_preview_rotations(self, entities):
+        """Drop preview rotation overrides so the entities read their real XML
+        angles again. Safe to call for entities that were never overridden."""
+        ml = getattr(self, 'model_loader', None)
+        if ml is None:
+            return
+        for entity in (entities or []):
+            try:
+                ml._entity_rs_cache.pop(id(entity), None)
+                ml.gdr_refresh_entity(entity)
+            except Exception:
+                continue
+        self._ov_cache_key = None
+
     def _build_preview_rows(self):
         """Map registered preview entity ids → row index in the position arrays.
 

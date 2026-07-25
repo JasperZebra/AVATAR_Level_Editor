@@ -47,7 +47,7 @@ else:
     from canvas.model_loader import GLTFModel
     from canvas.water_editor_dialog import show_water_editor
     from ui_style_utils import apply_checkbox_style
-    from movie_data import MovieData, find_moviedata_xml
+    from movie_data import MovieData, find_moviedata_xml, quat_to_editor_angles
 
 
     # Standard library
@@ -1027,6 +1027,7 @@ class SimplifiedMapEditor(QMainWindow):
         self._movie_last_paint_seq = None       # canvas._paint_seq at our last update()
         self._movie_skipped_ticks = 0
         self._movie_registered_ids = None       # ids last sent to set_preview_entities
+        self._movie_rot_entities = []           # entities with a rotation override active
 
         # SDAT support
         self.sdat_path = None
@@ -11455,6 +11456,17 @@ class SimplifiedMapEditor(QMainWindow):
             updates = {eid: pos for eid, pos in self._movie_preview_saved.items()}
             self.canvas.patch_preview_positions(updates)
 
+        # Rotation overrides live in the model_loader's rotation cache, not on
+        # the entity, so they're dropped rather than restored — the entities go
+        # back to reading their real XML angles. Done unconditionally (even for
+        # restore=False) so a preview can never leave an object mis-rotated.
+        if self._movie_rot_entities and hasattr(self, 'canvas'):
+            try:
+                self.canvas.clear_preview_rotations(self._movie_rot_entities)
+            except Exception:
+                pass
+        self._movie_rot_entities = []
+
         self._movie_preview_saved = {}
         self._movie_preview_start_wall = None
         self._movie_last_paint_seq = None
@@ -11494,15 +11506,32 @@ class SimplifiedMapEditor(QMainWindow):
             self._seq_reset_btn.setEnabled(True)
 
         updates = {}
+        rot_updates = []
         for seq_node in seq.nodes:
             nd = self.movie_data.node_defs.get(seq_node.node_id)
             if not nd or nd.entity_id not in entity_map:
                 continue
+            ent = entity_map[nd.entity_id]
             pos = seq_node.pos_at(t)
             if pos:
-                ent = entity_map[nd.entity_id]
                 ent.x, ent.y, ent.z = pos[0], pos[1], pos[2]
                 updates[nd.entity_id] = pos
+            # ParamId 2 — quaternion rotation track. 291 of 532 Avatar sequences
+            # animate rotation (helicopters banking, doors swinging, the Samson
+            # intros); it was parsed but never applied, so objects slid around
+            # frozen at their authored angle. Falls back to the NodeDef rest
+            # pose so a node with only position keys still uses its scene
+            # orientation rather than the entity's current XML angles.
+            quat = seq_node.rot_at(t)
+            if quat is None:
+                quat = getattr(nd, 'rotate', None)
+            if quat:
+                rx, ry, rz = quat_to_editor_angles(quat)
+                rot_updates.append((ent, rx, ry, rz))
+
+        if rot_updates and hasattr(self, 'canvas'):
+            self._movie_rot_entities = [it[0] for it in rot_updates]
+            self.canvas.patch_preview_rotations(rot_updates)
 
         if hasattr(self, 'canvas') and updates:
             # Rows must cover everything we patch here AND everything the
@@ -11511,6 +11540,9 @@ class SimplifiedMapEditor(QMainWindow):
                 set(self._movie_preview_saved) | set(updates))
             # Patch only the moving entities in the cached arrays — no full rebuild
             self.canvas.patch_preview_positions(updates)
+        if hasattr(self, 'canvas') and (updates or rot_updates):
+            # A node can carry rotation keys with NO position track (a door that
+            # only swings) — repaint for those too.
             self.canvas.update()
         return seq
 

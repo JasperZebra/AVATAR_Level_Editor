@@ -319,6 +319,61 @@ def _slerp(q1: tuple, q2: tuple, t: float) -> tuple:
     return tuple(s1 * a + s2 * b for a, b in zip(q1, q2))
 
 
+def quat_to_editor_angles(q: tuple) -> tuple:
+    """moviedata rotation quaternion (w, x, y, z) → the editor's per-entity
+    (rotation_x, rotation_y, rotation_z) in DEGREES.
+
+    Both renderer paths compose an entity's transform identically — the GDR
+    shader's `modelRot` and the classic glRotatef sequence in model_loader:
+
+        p' = Rx(-90) · Rz(-rz) · Rx(rx) · Ry(ry) · p
+
+    `Rx(-90)` is only the game(Z-up) → GL(Y-up) flip, so the GAME-space rotation
+    is `Rz(az) · Rx(ax) · Ry(ay)` — a ZXY euler decomposition — where the editor
+    feeds `rx = ax`, `ry = ay`, `rz = (360 - az) % 360` (the same negation
+    `model_loader._get_entity_rs` applies when reading `hidAngles`).
+
+    So: decompose the quaternion as ZXY, then negate Z the way the editor does.
+
+    Verified against 333 moviedata NodeDef ↔ world-entity pairs: recomposing the
+    returned angles reproduces the quaternion's rotation matrix to 1e-15.
+    Euler triples are not unique (ZXY also admits (180-a, b+180, c+180)); this
+    returns the |pitch| ≤ 90 branch, which is equivalent as a rotation.
+    """
+    w, x, y, z = (float(q[0]), float(q[1]), float(q[2]), float(q[3]))
+    n = math.sqrt(w * w + x * x + y * y + z * z)
+    if n < 1e-12:
+        return (0.0, 0.0, 0.0)
+    w, x, y, z = w / n, x / n, y / n, z / n
+
+    # Rotation-matrix entries needed for the ZXY extraction.
+    m01 = 2.0 * (x * y - z * w)
+    m11 = 1.0 - 2.0 * (x * x + z * z)
+    m20 = 2.0 * (x * z - y * w)
+    m21 = 2.0 * (y * z + x * w)
+    m22 = 1.0 - 2.0 * (x * x + y * y)
+    m00 = 1.0 - 2.0 * (y * y + z * z)
+    m02 = 2.0 * (x * z + y * w)
+
+    sa = max(-1.0, min(1.0, m21))
+    ax = math.asin(sa)
+    if abs(sa) > 0.99999:
+        # Gimbal lock (pitch at ±90): Y and Z are degenerate — fold into Z.
+        # The sign DEPENDS on which pole: at +90 the matrix gives cos/sin(c+b),
+        # at -90 it gives cos/sin(c-b). Using the -90 form at +90 mirrors the
+        # object's yaw (6 real keys in sp_pascal_fm_01_l hit exactly this).
+        az = math.atan2(m02 if sa > 0.0 else -m02, m00)
+        ay = 0.0
+    else:
+        az = math.atan2(-m01, m11)
+        ay = math.atan2(-m20, m22)
+
+    rx = math.degrees(ax)
+    ry = math.degrees(ay)
+    rz = (360.0 - math.degrees(az)) % 360.0
+    return (rx, ry, rz)
+
+
 def find_moviedata_xml(level_info: dict,
                        resource_folder: str = None) -> Optional[str]:
     """

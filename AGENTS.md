@@ -4012,3 +4012,70 @@ silent default. The depth prepass (F8) still defaults OFF — it is an
 exact-same-image optimisation but a real trade (a cheap depth pass to cut
 overdraw in the expensive shading pass), so it needs measuring per-scene before
 being flipped, not guessing.
+
+## moviedata sequences now ROTATE, not just move (July 2026)
+
+User report: previewed cutscene objects slid along their path frozen at their
+authored angle — "they move, but they don't rotate, the pitch/yaw doesn't do
+anything". Cause: `_movie_apply_time` only applied `pos_at(t)`. The ParamId-2
+quaternion track was fully parsed (`rot_at` even slerps it) and then thrown
+away. **291 of 532 Avatar sequences and 550 of 747 nodes animate rotation**
+(3,730 RotKeys) — including the Samson intro/outro sequences.
+
+**`movie_data.quat_to_editor_angles(q)`** (pure stdlib, unit-tested) converts a
+track quaternion `(w, x, y, z)` to the `(rotation_x, rotation_y, rotation_z)`
+degrees that `model_loader._get_entity_rs` feeds both render paths.
+
+Derivation — both paths compose the SAME transform (the GDR shader's `modelRot`
+and the classic `glRotatef` sequence, which the shader comment says must stay
+identical):
+
+    p' = Rx(-90) · Rz(-rz) · Rx(rx) · Ry(ry) · p
+
+`Rx(-90)` maps (x,y,z)→(x,z,-y), i.e. it is ONLY the game(Z-up)→GL(Y-up) flip.
+So the game-space rotation is `Rz(az)·Rx(ax)·Ry(ay)` — a **ZXY** euler
+decomposition — and the editor's convention is `rx = ax`, `ry = ay`,
+`rz = (360 - az) % 360` (the same Z negation `_get_entity_rs` applies to
+`hidAngles`).
+
+**Quaternion component order is (w, x, y, z)** — confirmed on 333 moviedata
+NodeDef ↔ world-entity pairs: 84.7% of decoded eulers match the entity's stored
+`hidAngles` within 0.5° under (w,x,y,z) versus **0%** under (x,y,z,w). The
+non-matching 15% are equivalent euler branches or NodeDef rest poses that
+genuinely differ from the entity's current world angles — comparing MATRICES,
+the decode round-trips at 1e-15.
+
+**GOTCHA — the gimbal-lock branch is sign-dependent.** At pitch ±90 the Y and Z
+axes are degenerate and Y folds into Z, but the matrix gives `cos/sin(c+b)` at
+**+90** and `cos/sin(c−b)` at **−90**. Using the −90 form at +90 mirrors the
+object's yaw. Six real keys in `sp_pascal_fm_01_l/FM01_Plateforme_SkyAttack_1`
+hit exactly this and were wrong by 1.9 in matrix terms until fixed:
+`az = atan2(m02 if sa > 0 else -m02, m00)`. There is a regression test.
+
+**Verified on real data:** across every Avatar level — 3,730 raw RotKeys plus 21
+interpolated slerp samples per node, 15,280 rotations total — the worst angular
+error between what the editor renders and the authored quaternion is
+**0.000153°** (the 6-significant-digit floor of the XML itself).
+
+**Applying it without dirtying the level:** `canvas.patch_preview_rotations(
+[(entity, rx, ry, rz), …])` writes the override straight into
+`model_loader._entity_rs_cache` and calls `gdr_refresh_entity` (which re-reads
+through that same cache, so the GDR row tables pick it up too). **No XML is
+touched**, so a preview can never dirty the file — the same guarantee the
+position preview has. `clear_preview_rotations(entities)` pops the entries so
+the entities read their real angles again, and `_movie_preview_stop` calls it
+**unconditionally** (even for `restore=False`) so a preview can't leave an
+object mis-rotated. Both also clear `_ov_cache_key`, because rotation feeds the
+cached wireframe overlays and rotation edits don't bump the position version.
+
+**Fallback:** a node whose rotation track has no keys falls back to its NodeDef
+`Rotate` rest pose, so it uses its scene orientation rather than whatever the
+entity's XML currently says.
+
+**Repaint:** `_movie_apply_time` now calls `canvas.update()` when EITHER
+positions or rotations changed — a door that only swings has no position track
+and would otherwise never trigger a repaint.
+
+**Not done:** 2D-mode squares still use their XML rotation during playback. 2D
+only draws rotation at all when a rotation gizmo is active, so it is cosmetic
+there; the style array's rotation column would need patching to match.
