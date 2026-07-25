@@ -4170,3 +4170,41 @@ copy or this becomes a data-corruption bug.
 
 Values that are plain formatted numbers (`X,Y,Z`, `Angles` — `.2f` with
 comma-space separators) wrap natively and need nothing.
+
+## Camera detection: 'cam' matched "NaviCamp" (July 2026)
+
+User: "shots still aren't switching for the Blue Lagoon Samson intro". The shot
+machinery was fine — camera DETECTION was wrong.
+
+`is_camera` was `'cam' in name.lower()`, which matches
+`ParticleEffect_SP_BlueLagoon_16_NaviCamp_Explosion_*` — "Navi**Cam**p". Those
+particle nodes carry no `'Switch To'`, so `camera_shots` treated one as the
+sequence's **opening shot** and the Blue Lagoon Dragon cutscene opened on a
+particle emitter's transform. Fixed rule (`_CAMERA_NAME_RE`):
+
+    re.compile(r'camera|cam(?![a-z])', re.IGNORECASE)
+
+'camera' anywhere, or 'cam' not glued to a following lowercase letter — keeps
+`MPCAM_NaviVictory`, drops `NaviCamp`. Verified against **all 576 node names** in
+the Avatar data: drops exactly those 10 particle effects, loses no real camera.
+
+**moviedata cannot identify cameras any other way.** `Node Type` is `1` for 671
+of 672 nodes — cameras, vehicles, particles alike — so the name is the only
+signal. Don't reach for Type.
+
+### Where the cutscenes actually live (data-location gotchas)
+
+- **`mp_bluelagoon_rb_01_l/generated/moviedata.xml` is EMPTY** — 57 bytes,
+  literally `<NodeData /><SequenceData />`. The Blue Lagoon *cutscenes* are in
+  **`sp_sebastien_rb_02_l`** (chapter 02 = Blue Lagoon, matching
+  `animations/scripted_event/02_bluelagoon`). Loading the mp_ level and
+  expecting cutscenes finds nothing.
+- `sp_coualthighlands_of_rf_01_l/SP_CoualtHighlands_Samson_Intro` has **one
+  node, and it is the Samson itself** (`Vehicle_Samson_Pilotable.Static_Intro`),
+  not a camera — nothing to cut between. 18 of that level's 20 sequences are
+  `<Nodes />` empty placeholders.
+- **36 sequences across the Avatar data actually cut between cameras.** Good
+  ones to test with: `sp_sebastien_rb_02_l` →
+  `Avatar.Dragon_Pilotable.Static_SP_BlueLagoon_16_ScriptedEvent` (5 shots at
+  0/6/10/12/14s) and `SP_Corp_BlueLagoon_02_Samson_Leaves` (2 shots at 0/5s);
+  `sp_dustbowl_hg_rb_01_l` → `…SE_IG_DustBowl_50_Investigation01` (5 shots).

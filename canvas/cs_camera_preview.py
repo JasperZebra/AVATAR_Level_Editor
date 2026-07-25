@@ -19,6 +19,7 @@ textures) is reused directly.
 """
 
 import math
+import re
 import time
 
 import numpy as np
@@ -57,9 +58,23 @@ def game_to_gl_dir(d):
     return (float(d[0]), float(d[2]), float(-d[1]))
 
 
+# moviedata gives every node Type="1" — cameras included — so the NAME is the
+# only signal the format offers. A bare 'cam' substring is too loose: it matches
+# `ParticleEffect_SP_BlueLagoon_16_NaviCamp_Explosion_*` ("Navi**Cam**p"), and
+# because those particle nodes carry no 'Switch To' they were picked as the
+# OPENING SHOT of the Blue Lagoon Dragon cutscene — the preview opened on a
+# particle emitter's transform instead of a camera.
+#
+# Rule: 'camera' anywhere, or 'cam' NOT glued to a following lowercase letter
+# (so `MPCAM_NaviVictory` still matches, `NaviCamp` no longer does). Checked
+# against all 576 node names in the Avatar data: drops exactly those 10 particle
+# effects and loses no real camera.
+_CAMERA_NAME_RE = re.compile(r'camera|cam(?![a-z])', re.IGNORECASE)
+
+
 def is_camera(nd):
-    """Camera naming: case-insensitive 'cam' in the NodeDef name."""
-    return nd is not None and 'cam' in (nd.name or '').lower()
+    """Is this NodeDef a cutscene camera? Name-based — see _CAMERA_NAME_RE."""
+    return nd is not None and bool(_CAMERA_NAME_RE.search(nd.name or ''))
 
 
 def sequence_action_centre(movie_data, seq):
