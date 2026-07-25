@@ -4253,3 +4253,43 @@ case-sensitive. Still verified against all 576 names: drops exactly the 10
 **Reference timings** (for eyeballing the previewer):
 `Samson_Short_Intro` 30 s = 5.5 + 15.5 + 9 · `SP_Corp_BlueLagoon_02_Samson_Leaves`
 10 s = 4.5 + 5.5 · `…BlueLagoon_16_ScriptedEvent` 16.8 s = 6 + 4 + 2 + 2 + 2.8.
+
+## CS preview at 60 fps: async PBO readback (July 2026)
+
+The preview was capped at 10 fps (`PLAY_RENDER_MIN_S = 0.1`) because each frame
+ended in `QOpenGLFramebufferObject.toImage()` — a **synchronous glReadPixels**
+that blocks until every queued GL command retires, draining the pipeline the
+main view is filling. That cap is now removed; the tick is **16 ms (~60 fps)**.
+
+**`map_canvas_gpu._cs_readback(width, height, fbo)`** replaces `toImage()` with
+ping-pong pixel-pack buffers — the same frame-latent trick the GPU timer query
+already uses:
+
+- issue THIS frame's `glReadPixels` into PBO *i* with a **bound
+  `GL_PIXEL_PACK_BUFFER`**, so it returns immediately and the driver fills it
+  asynchronously;
+- `glMapBuffer` PBO *j*, whose read was issued LAST frame and is therefore
+  already complete — the map returns without waiting.
+
+The image is one frame behind. Nothing blocks.
+
+Details that matter if you touch it:
+- **`GL_BGRA` + `GL_UNSIGNED_BYTE` pairs with `QImage.Format_ARGB32`** on
+  little-endian. Change one, change the other.
+- **`.mirrored(False, True)` is required** — glReadPixels returns rows
+  bottom-up, QImage wants top-down (`toImage()` did this internally). It also
+  conveniently returns an INDEPENDENT QImage, so the buffer is safe to unmap
+  immediately after.
+- The first call has no previous frame, so it falls back to `toImage()` once.
+  Buffers are recreated (and the primed flags reset) whenever the size changes.
+- Any failure sets `_cs_pbo_failed` and reverts permanently to `toImage()`.
+
+Also: `QPixmap.scaled` uses **FastTransformation while animating** and
+SmoothTransformation only for a still frame — the smooth filter is a full CPU
+resample per frame and is invisible on moving footage. The status line now
+reports a smoothed preview fps, so regressions here are self-evident.
+
+This only became safe because the scene itself got much cheaper first
+(vegetation removed, terrain tiles frustum-culled, reflection pass skipped when
+no water is on screen). `PLAY_RENDER_MIN_S` is kept as a knob — set it non-zero
+to peg the preview back if some future scene needs it.

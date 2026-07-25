@@ -30,12 +30,14 @@ from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton,
 
 DEFAULT_FOV = 55.0        # moviedata carries no FOV track; game-plausible default
 PREVIEW_MAX_W = 640       # FBO cap — the label scales the image up if docked wide
-TICK_MS = 50              # 20 fps transport/slider refresh
-# Cap on POV re-renders WHILE something is animating. Each one is a full second
-# scene pass (terrain + water + models) ending in fbo.toImage() — a
-# glReadPixels that stalls the pipeline the main view is filling. At 20 fps that
-# roughly doubled the render cost of playback; 10 fps still reads as motion.
-PLAY_RENDER_MIN_S = 0.1
+TICK_MS = 16              # ~60 fps
+# Minimum gap between POV re-renders while animating. This used to be 0.1 (10
+# fps) because the pass ended in fbo.toImage() — a synchronous glReadPixels that
+# drained the pipeline every frame. The readback is now asynchronous
+# (map_canvas_gpu._cs_readback, ping-pong PBOs), and the scene itself got much
+# cheaper (vegetation removed, terrain tiles frustum-culled, reflection pass
+# skipped when no water is visible), so the preview can run at the tick rate.
+PLAY_RENDER_MIN_S = 0.0
 
 
 # ── Pose math (pure, unit-testable) ───────────────────────────────────────────
@@ -306,6 +308,7 @@ class CSCameraPreviewWidget(QWidget):
         self._last_render_wall = 0.0
         self._shots = []            # [(start_time, node_id)] cut list
         self._fallback_cam = None   # camera used before the first cut
+        self._fps_ema = None        # smoothed preview frame rate, shown in status
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -509,9 +512,9 @@ class CSCameraPreviewWidget(QWidget):
             if wall is not None:
                 self._t = min(time.time() - wall, seq.end_time)
         self._update_transport(seq)
-        # Transport/slider keep the 20 fps tick; the expensive POV pass is
-        # throttled while animating (see PLAY_RENDER_MIN_S).
-        if self._playing or self._editor_preview_active():
+        # PLAY_RENDER_MIN_S is 0 now (see the constant) — kept as a knob in case
+        # a scene ever needs the preview pegged back again.
+        if PLAY_RENDER_MIN_S and (self._playing or self._editor_preview_active()):
             now = time.time()
             if now - self._last_render_wall < PLAY_RENDER_MIN_S:
                 return
@@ -559,14 +562,31 @@ class CSCameraPreviewWidget(QWidget):
             self.status.setText("render failed — see console log")
             return
         self._last_render_key = key
+        # SmoothTransformation is a CPU resample of the whole image every frame.
+        # While animating use the cheap filter — at 60 fps nobody sees the
+        # difference on a moving image — and keep the nice one for the still
+        # frame you actually study.
+        animating = self._playing or self._editor_preview_active()
         pm = QPixmap.fromImage(img).scaled(
             self.image_label.width(), self.image_label.height(),
-            Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            Qt.KeepAspectRatio,
+            Qt.FastTransformation if animating else Qt.SmoothTransformation)
         self.image_label.setPixmap(pm)
         shot = ""
         if self._cam_node_id is None and len(self._shots) > 1:
             n = sum(1 for s, _ in self._shots if self._t + 1e-6 >= s)
             nd = md.node_defs.get(cam_id) if md else None
             shot = f"  shot {n}/{len(self._shots)} — {(nd.name if nd else cam_id)}"
+        fps = ""
+        now = time.time()
+        prev = self._last_render_wall
+        self._last_render_wall = now
+        if animating and prev:
+            dt = now - prev
+            if dt > 0:
+                self._fps_ema = (1.0 / dt if self._fps_ema is None
+                                 else self._fps_ema * 0.9 + (1.0 / dt) * 0.1)
+                fps = f"  {self._fps_ema:.0f} fps"
         self.status.setText(
-            f"cam ({eye[0]:.0f}, {eye[1]:.0f}, {eye[2]:.0f})  t={self._t:.1f}s  {w}x{h}{shot}")
+            f"cam ({eye[0]:.0f}, {eye[1]:.0f}, {eye[2]:.0f})  t={self._t:.1f}s  "
+            f"{w}x{h}{shot}{fps}")

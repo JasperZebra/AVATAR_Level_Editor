@@ -4913,7 +4913,7 @@ class MapCanvas(QOpenGLWidget):
                         ml.force_render_tier = saved_tier
 
                 glDisable(GL_LIGHTING)
-                img = fbo.toImage()
+                img = self._cs_readback(width, height, fbo)
             finally:
                 self.camera_3d = saved_cam
                 fbo.release()
@@ -4933,6 +4933,75 @@ class MapCanvas(QOpenGLWidget):
             except Exception:
                 pass
             return None
+
+    def _cs_readback(self, width, height, fbo):
+        """Pull the CS-preview FBO back as a QImage WITHOUT stalling the GPU.
+
+        `QOpenGLFramebufferObject.toImage()` is a synchronous glReadPixels: it
+        blocks until every queued command has finished, which at 20-60 fps
+        drains the pipeline the main view is filling and was the single biggest
+        cost of the preview. Instead, ping-pong two pixel-pack buffers (same
+        frame-latent trick as the GPU timer query): issue this frame's read into
+        PBO A — which returns immediately, the driver fills it asynchronously —
+        and map PBO B, whose read was issued LAST frame and is therefore already
+        complete. The preview is one frame behind; nothing blocks.
+
+        Any failure (no PBO support, map returns null, size change) falls back
+        to toImage() for that frame and permanently after a hard error.
+        """
+        if getattr(self, '_cs_pbo_failed', False):
+            return fbo.toImage()
+        try:
+            from PyQt5.QtGui import QImage
+            nbytes = width * height * 4
+            pbos = getattr(self, '_cs_pbos', None)
+            if pbos is None or getattr(self, '_cs_pbo_size', None) != (width, height):
+                if pbos:
+                    glDeleteBuffers(2, pbos)
+                ids = glGenBuffers(2)
+                pbos = [int(ids[0]), int(ids[1])]
+                for p in pbos:
+                    glBindBuffer(GL_PIXEL_PACK_BUFFER, p)
+                    glBufferData(GL_PIXEL_PACK_BUFFER, nbytes, None, GL_STREAM_READ)
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0)
+                self._cs_pbos = pbos
+                self._cs_pbo_size = (width, height)
+                self._cs_pbo_n = 0
+                self._cs_pbo_primed = [False, False]
+
+            i = self._cs_pbo_n % 2
+            j = (self._cs_pbo_n + 1) % 2
+
+            # Issue THIS frame's read — asynchronous, returns immediately.
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[i])
+            glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, ctypes.c_void_p(0))
+            self._cs_pbo_primed[i] = True
+
+            # Map the OTHER buffer — its read was issued last frame, so it is
+            # ready and glMapBuffer returns without waiting.
+            img = None
+            if self._cs_pbo_primed[j]:
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[j])
+                ptr = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY)
+                if ptr:
+                    buf = (ctypes.c_ubyte * nbytes).from_address(int(ptr))
+                    # copy() because the mapped memory is unmapped right below
+                    img = QImage(bytes(buf), width, height,
+                                 QImage.Format_ARGB32).mirrored(False, True)
+                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER)
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0)
+            self._cs_pbo_n += 1
+            # First call has no previous frame yet — fall back once so the
+            # preview isn't blank on the very first render.
+            return img if img is not None else fbo.toImage()
+        except Exception as e:
+            print(f"[cs-preview] async readback unavailable ({e}) — using toImage()")
+            self._cs_pbo_failed = True
+            try:
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0)
+            except Exception:
+                pass
+            return fbo.toImage()
 
     def _render_3d_opengl(self):
         """Render 3D scene using OpenGL with matching grid style"""
