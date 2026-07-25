@@ -3638,10 +3638,10 @@ has NO FOV track; `DEFAULT_FOV = 55°`.
 QOpenGLFramebufferObject pass **in the main GL context** (no second context — every loaded
 resource reused; the BW editor needed AA_ShareOpenGLContexts for its separate-widget
 approach, we deliberately avoid that): scene only (terrain via the extracted
-`_draw_terrain_tile(..., allow_shadow=False)`, water with flat-sky reflection, vegetation,
+`_draw_terrain_tile(..., allow_shadow=False)`, water with flat-sky reflection,
 entity models via the classic `prepare_batches` path over a 1500-unit-radius subset) — no
 grid/overlays/gizmos/HUD. `self.camera_3d` is temporarily swapped for a posed clone so
-vegetation billboards + water follow the preview camera; restored in `finally`. Clobbering
+water follows the preview camera; restored in `finally`. Clobbering
 `instance_batches`/`_gdr_frame` is safe because the main paint re-prepares every frame; the
 call comes from a Qt timer, never inside paintGL. NOTE: `_render_terrain_model` inside
 `_render_3d_opengl` is now just an alias for the extracted `_draw_terrain_tile` method.
@@ -3803,7 +3803,7 @@ a tick while `_paint_seq` hasn't moved since its last `update()`. Bounded at 3
 consecutive skips so a canvas that never paints can't freeze playback.
 
 **3. The CS Camera tab rendered the scene a second time at 20 fps.**
-`render_camera_preview` is a full pass (terrain + water + vegetation + `prepare_batches`
+`render_camera_preview` is a full pass (terrain + water + `prepare_batches`
 over every entity within 1500 units) ending in `fbo.toImage()` — a `glReadPixels` that
 stalls the pipeline the main view is filling. The 20 fps tick still updates the
 transport/slider; the POV re-render is now throttled to `PLAY_RENDER_MIN_S = 0.1`
@@ -3842,6 +3842,7 @@ have raised ImportError at runtime:
 
 - `packages`, canvas: `god_rays`, `rtx_loader`, `terrain_blend`,
   `terrain_shadow_shader`, `vegetation_renderer`, `volumetric_rays`
+  (`rtx_loader` + `vegetation_renderer` have since been deleted — see below)
 - `packages`, root: `archetype_library`, `entity_library_browser`,
   `env_preset_copy`, `movie_data`, `object_library`, `ui_style_utils`,
   `world_editor`
@@ -3856,3 +3857,44 @@ still copied via `root_files`).
 audit command in rule 4 is a fallback rather than the only line of defence. New
 standalone scripts that genuinely aren't part of the app go in that test's
 `DEV_ONLY` set.
+
+## .rtx vegetation rendering REMOVED (July 2026)
+
+`canvas/rtx_loader.py` and `canvas/vegetation_renderer.py` are **deleted**. Do not
+re-add a vegetation draw without solving the perf problem below first.
+
+**Why.** The renderer drew every vegetation instance in the level, every frame,
+with no frustum cull, no distance cull, no LOD and no hardware instancing —
+`_ensure_batch` baked each instance's full geometry into the VBO, so 13,465 palm
+ferns became 13,465 duplicated copies of one 8-triangle mesh. Measured on real
+Avatar data by replaying the parse + `load_rtx` decode offline:
+
+| level | instances | tris/frame | verts/frame | VBO |
+|---|---|---|---|---|
+| `sp_hellsgate_01_l` | 69,893 | 998,098 | 2,994,294 | 71.9 MB |
+| `sp_hometree_l` | 33,611 | 698,528 | 2,095,584 | 50.3 MB |
+| `sp_gravesbog_rb_of_01_l` | 0 | 0 | 0 | 0 |
+
+For scale, the whole entity-model scene is ~3.09M verts and was already GPU-bound
+at 40 FPS on the iGPU machine — vegetation roughly DOUBLED the vertex load. It was
+drawn twice per frame once the CS camera preview existed (main pass + FBO pass),
+and `show_vegetation` was read as `getattr(self, 'show_vegetation', True)` with no
+initializer and no menu item, so there was no way to turn it off.
+`_build_crc_table` also walked the entire data root at every level load (1.7 s,
+149 `.rtx` files) to build the reverse-CRC lookup.
+
+**What was removed:** both modules, the `VegetationRenderer` import + construction
+in `map_canvas_gpu`, both `render()` call sites (main `_render_3d_opengl` and
+`render_camera_preview`), the `_pf('vegetation')` profiler stage, the
+`parse_level` hook at the end of level load in `simplified_map_editor`, and the
+two `setup.py` entries.
+
+**The decoder worked — the draw strategy didn't.** `rtx_loader` decoded all 18
+models referenced by hellsgate into real triangle meshes with zero billboard-card
+fallbacks. If vegetation is ever revived, recover that file from git history
+(`git show <commit>^:canvas/rtx_loader.py`) rather than re-deriving the format,
+and give the renderer frustum + distance culling and real instancing (one mesh
+copy + a per-instance transform buffer) before wiring it into the frame.
+
+**Not related:** the `avatar_vegetation_*` keys in `entity_renderer.py` /
+`map_canvas_gpu.py` are entity-type name mappings for props and stay.

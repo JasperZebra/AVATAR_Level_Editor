@@ -48,7 +48,6 @@ from .model_loader import ModelLoader, entity_has_graphic_component
 from .undo_redo import UndoRedoManager, MoveCommand, RotateCommand
 from water_mesh_editor import ImprovedWaterMeshEditor
 from water_plane_renderer import WaterPlaneRenderer, strip_baked_water
-from vegetation_renderer import VegetationRenderer
 from .movie_renderer import draw_movie_paths_2d, render_movie_paths_3d
 
 """Enhanced 3D Camera with 2D-style smooth movement"""
@@ -3302,7 +3301,6 @@ class MapCanvas(QOpenGLWidget):
             self.terrain_renderer = TerrainRenderer(game_mode=getattr(self, 'game_mode', 'avatar'))
             self.water_mesh_editor = ImprovedWaterMeshEditor()
             self.water_plane_renderer = WaterPlaneRenderer()
-            self.vegetation_renderer = VegetationRenderer()
             self.camera_controller = CameraController()
             self.input_handler = InputHandler(self)
             self.undo_redo = UndoRedoManager()
@@ -4647,7 +4645,7 @@ class MapCanvas(QOpenGLWidget):
         return a QImage — the CS camera preview pass (cutscene camera POV,
         BW-editor style). eye/look/up are GL-space (x, z, -y of game space).
 
-        Draws the SCENE only (terrain + water + vegetation + entity models) —
+        Draws the SCENE only (terrain + water + entity models) —
         no grid, overlays, gizmos, markers or HUD. Reuses the main context's
         resources directly (same GL context — no sharing pitfalls). The
         classic model path re-prepares instance batches for the preview
@@ -4673,7 +4671,7 @@ class MapCanvas(QOpenGLWidget):
                 return None
 
             # Swap in a preview camera so anything that reads self.camera_3d
-            # (vegetation billboards, water) follows the cutscene camera.
+            # (water) follows the cutscene camera.
             saved_cam = self.camera_3d
             prev_cam = Camera3D.__new__(Camera3D)
             prev_cam.__dict__.update(saved_cam.__dict__)
@@ -4757,13 +4755,6 @@ class MapCanvas(QOpenGLWidget):
                         self.water_plane_renderer.render_water_planes(
                             self.terrain_renderer, canvas=self,
                             water_mesh_editor=getattr(self, 'water_mesh_editor', None))
-                    except Exception:
-                        pass
-
-                # Vegetation (billboards face the swapped-in preview camera)
-                if getattr(self, 'show_vegetation', True) and hasattr(self, 'vegetation_renderer'):
-                    try:
-                        self.vegetation_renderer.render(self)
                     except Exception:
                         pass
 
@@ -5004,11 +4995,6 @@ class MapCanvas(QOpenGLWidget):
                     water_mesh_editor=getattr(self, 'water_mesh_editor', None),
                 )
             _ts = self._pf('water', _ts)
-
-            # Render vegetation (trees/bushes/grass from the landmarkfar .rtx models)
-            if getattr(self, 'show_vegetation', True) and hasattr(self, 'vegetation_renderer'):
-                self.vegetation_renderer.render(self)
-            _ts = self._pf('vegetation', _ts)
 
             # Draw entities (models always render, cubes conditional). Per-stage
             # timing goes into self._prof (printed by _accumulate_profile); the

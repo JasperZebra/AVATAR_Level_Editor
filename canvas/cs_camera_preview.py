@@ -31,7 +31,7 @@ DEFAULT_FOV = 55.0        # moviedata carries no FOV track; game-plausible defau
 PREVIEW_MAX_W = 640       # FBO cap — the label scales the image up if docked wide
 TICK_MS = 50              # 20 fps transport/slider refresh
 # Cap on POV re-renders WHILE something is animating. Each one is a full second
-# scene pass (terrain + water + vegetation + models) ending in fbo.toImage() — a
+# scene pass (terrain + water + models) ending in fbo.toImage() — a
 # glReadPixels that stalls the pipeline the main view is filling. At 20 fps that
 # roughly doubled the render cost of playback; 10 fps still reads as motion.
 PLAY_RENDER_MIN_S = 0.1

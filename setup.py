@@ -498,8 +498,6 @@ build_options = {
         'canvas.hkx_parser',            # ← native Havok 5.5 .hkx collision reader (wireframe overlay)
         'canvas.cs_camera_preview',     # ← cutscene-camera POV preview (right-panel CS Camera tab)
         'canvas.mab_parser',            # ← native .mab animation decoder (Dunia smallest-three codec)
-        'canvas.vegetation_renderer',   # ← level vegetation (trees/bushes/grass) from landmarkfar_*.fcb
-        'canvas.rtx_loader',            # ← RealTree .rtx vegetation-mesh loader (feeds vegetation_renderer)
         'canvas.terrain_blend',         # ← terrain splat compositor (mask+diffuse), shared by 2D and 3D
         'canvas.terrain_shadow_shader', # ← per-pixel terrain shader that RECEIVES the sun shadow map
         'canvas.god_rays',              # ← screen-space crepuscular light shafts (day/night cycle)

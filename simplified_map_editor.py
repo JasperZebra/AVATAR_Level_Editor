@@ -6331,15 +6331,6 @@ class SimplifiedMapEditor(QMainWindow):
             if hasattr(self, 'worldsectors_modified'):
                 self.worldsectors_modified.clear()
             
-            # Parse vegetation (trees/bushes/grass) from the landmarkfar .rtx
-            # models — the normal sector loader skips those files. CPU/file only,
-            # so it's safe here; GL meshes upload lazily on the first 3D frame.
-            try:
-                if hasattr(self, 'canvas') and hasattr(self.canvas, 'vegetation_renderer'):
-                    self.canvas.vegetation_renderer.parse_level(self)
-            except Exception as _veg_e:
-                print(f"[Vegetation] parse failed: {_veg_e}")
-
             print(f"=== COMPLETE LEVEL LOADING FINISHED ===\n")
 
         except Exception as e:
