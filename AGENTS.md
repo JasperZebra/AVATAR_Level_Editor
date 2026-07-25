@@ -155,6 +155,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/mab_parser.py` | `tests/test_mab_parser.py` | — | Smallest-three quat codec round-trip (all 4 permutation flags, SIGNED third word, s<0 sentinel) + synthetic clip: group/mask keyframe decode (primary @ sub-frame 0, flagged keys @ bit+1), anim-mask routing, derived fps, bone-name resolution — excluded from `--cov` |
 | `canvas/xbg_direct_loader.py` | `tests/test_vehicle_attachments.py` | — | Mounted-weapon merge: baked matrix applied to verts (normals unrotated on pure translation), material indices offset, bounds widened; no-entry models untouched; `_resolve_attachment_path` data-root anchoring — monkeypatched table/builder, no game files — excluded from `--cov` |
 | `simplified_map_editor.py` | `tests/test_stats_softwrap.py` | — | `_softwrap`: short values untouched, ZWSP inserted after `.`/`_`/`/`/`\`/`:` in dotted archetype names and Windows paths, invisible when stripped back out — instantiated via `SimplifiedMapEditor.__new__` (plain `object.__new__` is blocked by real PyQt5's sip on a QMainWindow subclass) — excluded from `--cov` |
+| `canvas/map_canvas_gpu.py` | `tests/test_terrain_tile_cull.py` | — | Terrain-tile frustum culling (**mirrored** `_tile_sphere` / `_sphere_in_view`): tile ahead drawn, tile behind culled, off-to-the-side culled, big-radius-behind-eye rescued, distance alone never culls, unknown bounds drawn — excluded from `--cov` |
 | `canvas/quad_batch.py` + `canvas/entity_renderer.py` | `tests/test_quad_batch_2d.py` | — | Instanced 2D squares: `build_instances` (N,8) column layout the shader's attribute pointers read; `classify_source`/`source_mask` parity with `_filter_entities_by_source` across all 16 toggle combinations; searchsorted visible-row lookup — excluded from `--cov` |
 | `setup.py` | `tests/test_setup_packages.py` | — | Rule-4 guard: every `canvas/*.py` is in `packages`, every root app module is in BOTH `packages` and `root_files`; setup.py scanned as **text** (importing it runs PyQt5/PIL discovery). `DEV_ONLY` exempts standalone scripts — excluded from `--cov` |
 | `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
@@ -3958,3 +3959,56 @@ renders **all** its squares.
 - The instance layout is read by two `glVertexAttribPointer` calls at a 32-byte
   stride (floats 0-3 and 4-7). Changing `build_instances`' column order without
   changing the shader draws garbage — that's what the layout test guards.
+
+## Free GPU wins: terrain tile culling + reflection early-out (July 2026)
+
+User asked for more performance with NO new settings or sliders, so these are
+all same-output optimisations — nothing here changes what the frame looks like.
+
+**1. Terrain tiles are frustum-culled (`_visible_terrain_tiles`).** Terrain drew
+tile-by-tile with no culling whatsoever: every tile's full mesh (often 1.5M+
+indices) went down every frame in the MAIN pass and again in the mirrored
+water-reflection pass. On FC2's 5x5 grid that is 25 full tiles per pass no matter
+where the camera points. Now each tile gets a world bounding sphere
+(`_tile_sphere`, computed once from the mesh vertices and cached on the model as
+`_tile_sphere_local`, offset per frame) tested by `_sphere_in_view`.
+
+- `_sphere_in_view` deliberately reuses the ENTITY cull's near/vertical/
+  horizontal sphere-expanded tests at VFOV 50 (the `gluPerspective` the main pass
+  sets), so terrain and entities agree about what is on screen.
+- **No FAR test** — terrain must stay visible to the projection's own far plane.
+- `pad=1.35` widens the frustum; a tile is drawn unless provably off-screen. A
+  false cull is a hole in the world, so every failure path returns True.
+- The reflection pass culls against MIRRORED centres (`mirror_y=plane_y`).
+- **Single-tile levels are skipped entirely** (`len(tiles) <= 1` returns the list
+  unchanged), and the separate `self.terrain_model` singular path is untouched —
+  one tile spans the whole level, so the camera is nearly always inside it and
+  the test would never pay off. **This means Avatar single-cell levels get no
+  benefit from this change; it is an FC2 multi-cell win.**
+- `_cast_terrain_depth` (shadow map) is deliberately NOT culled this way — it
+  renders from the LIGHT's frustum, and off-screen geometry legitimately casts
+  shadows into view. Don't "fix" that.
+
+**2. The reflection pass is skipped when no water is on screen
+(`_water_on_screen`).** It is a complete mirrored re-render of terrain + models,
+and it ran whenever the level contained water ANYWHERE — look away from a lake,
+or stand above it, and you still paid a whole extra scene pass whose texture
+nothing sampled. `water_plane_renderer` now caches the world bounding sphere of
+all its quads as `_water_bounds` alongside the water VBO (same rebuild
+signature), and the canvas frustum-tests it. Returns True when bounds are unknown
+(first frame, before the water VBO exists) so the reflection is never wrongly
+withheld; levels with no water at all are still short-circuited by
+`_water_plane_height() is None` as before.
+
+**3. `_water_plane_height()` is cached.** It walked every sector of every cell
+and built a `Counter` EVERY frame to find one float. Now keyed on
+`(id(terrain_renderer), water_plane_renderer._water_vbo_sig)` — the answer only
+changes when the water geometry does.
+
+**Still on the table, deliberately NOT done:** a render-scale option (render the
+scene at 50-85% into an FBO and upscale) is by far the biggest remaining GPU
+lever, but it trades image quality, so it needs to be a user choice rather than a
+silent default. The depth prepass (F8) still defaults OFF — it is an
+exact-same-image optimisation but a real trade (a cheap depth pass to cut
+overdraw in the expensive shading pass), so it needs measuring per-scene before
+being flipped, not guessing.

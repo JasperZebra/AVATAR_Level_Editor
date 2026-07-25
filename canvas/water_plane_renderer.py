@@ -732,6 +732,17 @@ class WaterPlaneRenderer:
                 verts = np.asarray(out, dtype=np.float32)
                 colarr = np.asarray(cols, dtype=np.float32)
                 self._water_vcount = len(verts) // 3
+                # World-space bounding sphere of ALL water geometry, cached with
+                # the VBO. The canvas tests it before running the (expensive,
+                # full-scene) planar reflection pass: if no water can be on
+                # screen, nothing will ever sample the reflection texture.
+                if verts.size >= 3:
+                    p = verts.reshape(-1, 3).astype(np.float64)
+                    lo, hi = p.min(axis=0), p.max(axis=0)
+                    c = (lo + hi) * 0.5
+                    self._water_bounds = (c, float(np.linalg.norm(hi - c)))
+                else:
+                    self._water_bounds = None
                 if not getattr(self, '_water_vbo', None):
                     self._water_vbo = int(glGenBuffers(1))
                 glBindBuffer(GL_ARRAY_BUFFER, self._water_vbo)

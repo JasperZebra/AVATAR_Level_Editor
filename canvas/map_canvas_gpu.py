@@ -4379,16 +4379,47 @@ class MapCanvas(QOpenGLWidget):
             self._refl_fbo_failed = True
             return 0, 0
 
+    def _water_on_screen(self):
+        """Can any water pixel be on screen this frame?
+
+        The reflection pass is a full mirrored re-render of terrain + models. It
+        used to run whenever the LEVEL contained water anywhere — so looking away
+        from a lake, or standing far above it, still paid for a whole extra scene
+        pass whose texture nothing sampled. The water renderer caches the world
+        bounding sphere of all its quads alongside its VBO; if that sphere isn't
+        in the frustum, no water can be visible and the pass is pure waste.
+
+        Returns True when the bounds aren't known yet (first frame, before the
+        water VBO is built) so the reflection is never wrongly withheld.
+        """
+        wpr = getattr(self, 'water_plane_renderer', None)
+        if wpr is None:
+            return False
+        bounds = getattr(wpr, '_water_bounds', None)
+        if bounds is None:
+            return True
+        centre, radius = bounds
+        return self._sphere_in_view(centre, radius)
+
     def _water_plane_height(self):
         """The single Y the planar reflection mirrors about: the most common
         water_height across all watered sectors (nearly all share one level).
-        Returns None if there's no water."""
+        Returns None if there's no water.
+
+        Cached against the water renderer's own VBO signature — this walked
+        every sector of every cell and built a Counter EVERY frame, and the
+        answer only changes when the water geometry does.
+        """
         try:
-            from collections import Counter
-            heights = Counter()
             tr = getattr(self, 'terrain_renderer', None)
             if tr is None:
                 return None
+            wpr = getattr(self, 'water_plane_renderer', None)
+            sig = (id(tr), getattr(wpr, '_water_vbo_sig', None))
+            if getattr(self, '_water_plane_h_sig', None) == sig:
+                return self._water_plane_h
+            from collections import Counter
+            heights = Counter()
             cells = getattr(tr, 'water_cells', None)
             buckets = ([c.get('water_data') or {} for c in cells]
                        if cells else [getattr(tr, 'water_data', {}) or {}])
@@ -4396,9 +4427,10 @@ class MapCanvas(QOpenGLWidget):
                 for v in wd.values():
                     if getattr(v, 'has_water', False):
                         heights[round(float(getattr(v, 'water_height', 0.0)), 2)] += 1
-            if not heights:
-                return None
-            return heights.most_common(1)[0][0]
+            h = heights.most_common(1)[0][0] if heights else None
+            self._water_plane_h = h
+            self._water_plane_h_sig = sig
+            return h
         except Exception:
             return None
 
@@ -4452,9 +4484,10 @@ class MapCanvas(QOpenGLWidget):
             except Exception:
                 pass
 
-            # Terrain (mirrored).
+            # Terrain (mirrored) — culled against the MIRRORED tile centres, so a
+            # cell only draws here if its reflection can actually be on screen.
             if getattr(self, 'terrain_models', []):
-                for t_model, t_wx, t_wy in self.terrain_models:
+                for t_model, t_wx, t_wy in self._visible_terrain_tiles(mirror_y=plane_y):
                     render_terrain_model(t_model, t_wx, t_wy)
             elif getattr(self, 'terrain_model', None):
                 tx = getattr(self, 'terrain_world_offset_x',
@@ -4508,6 +4541,93 @@ class MapCanvas(QOpenGLWidget):
             self._water_reflect_tex = 0
             if hasattr(self, 'water_plane_renderer'):
                 self.water_plane_renderer._water_reflect_tex = 0
+
+    def _tile_sphere(self, model, tx, ty):
+        """World-space bounding sphere (centre_xyz, radius) for a terrain tile.
+
+        The local sphere is computed once from the model's mesh vertices and
+        cached on the model; only the world offset is applied per frame. The
+        tile draw does glTranslatef(tx, 0, -ty), so world = local + (tx, 0, -ty).
+        Returns (None, 0.0) when the model has no usable vertex data.
+        """
+        sph = getattr(model, '_tile_sphere_local', None)
+        if sph is None:
+            lo = None
+            hi = None
+            for mesh in (getattr(model, 'meshes', None) or []):
+                v = getattr(mesh, 'vertices', None)
+                if v is None or len(v) == 0:
+                    continue
+                a = np.asarray(v, dtype=np.float32).reshape(-1, 3)
+                mn, mx = a.min(axis=0), a.max(axis=0)
+                lo = mn if lo is None else np.minimum(lo, mn)
+                hi = mx if hi is None else np.maximum(hi, mx)
+            if lo is None:
+                model._tile_sphere_local = False
+                return None, 0.0
+            centre = (lo + hi) * 0.5
+            radius = float(np.linalg.norm(hi - centre))
+            sph = model._tile_sphere_local = (centre.astype(np.float64), radius)
+        if sph is False:
+            return None, 0.0
+        centre, radius = sph
+        return centre + np.array([tx, 0.0, -ty], dtype=np.float64), radius
+
+    def _sphere_in_view(self, centre, radius, pad=1.35):
+        """Is a world-space sphere inside the CURRENT 3D camera frustum?
+
+        Deliberately the same near/vertical/horizontal sphere-expanded tests the
+        entity cull uses (VFOV 50 = the gluPerspective the main pass sets), so
+        terrain and entities agree about what is on screen. No FAR test —
+        terrain must stay visible to the projection's own far plane. Conservative
+        by design: `pad` widens the frustum so a tile can never pop at the edge.
+        Any failure returns True (draw it) rather than risking a hole.
+        """
+        if centre is None:
+            return True
+        try:
+            cam = self.camera_3d
+            to = np.asarray(centre, dtype=np.float64) - cam.position
+            depth = float(to @ cam.forward)
+            if depth + radius < 0.1:          # fully behind the eye
+                return False
+            d_safe = max(depth, 0.5)
+            half_tan = math.tan(math.radians(50.0) * 0.5) * pad
+            v_half = d_safe * half_tan
+            if abs(float(to @ cam.up)) > v_half + radius:
+                return False
+            aspect = self.width() / self.height() if self.height() > 0 else 1.0
+            if abs(float(to @ cam.right)) > v_half * aspect + radius:
+                return False
+            return True
+        except Exception:
+            return True
+
+    def _visible_terrain_tiles(self, mirror_y=None):
+        """[(model, tx, ty)] for the terrain tiles actually on screen.
+
+        Terrain was drawn tile-by-tile with NO culling at all — every tile's full
+        mesh (often 1.5M+ indices) went down every frame, in the main pass AND
+        the mirrored reflection pass. On FC2's 5x5 grid that is 25 full tiles per
+        pass regardless of where the camera looks.
+
+        mirror_y: when culling for the water-reflection pass, the world is
+        mirrored about that plane, so each tile's sphere centre is mirrored
+        before being tested against the (unmirrored) camera.
+        """
+        tiles = getattr(self, 'terrain_models', None) or []
+        if len(tiles) <= 1:
+            return list(tiles)
+        out = []
+        for entry in tiles:
+            model, tx, ty = entry
+            centre, radius = self._tile_sphere(model, tx, ty)
+            if centre is not None and mirror_y is not None:
+                centre = centre.copy()
+                centre[1] = 2.0 * float(mirror_y) - centre[1]
+            if self._sphere_in_view(centre, radius):
+                out.append(entry)
+        return out
 
     def _draw_terrain_tile(self, model, tx, ty, allow_shadow=True):
         """Draw one terrain tile model at world offset (tx, ty).
@@ -4934,8 +5054,10 @@ class MapCanvas(QOpenGLWidget):
             self._precast_shadows()
             _ts = self._pf('shadowcast', _ts)
             if getattr(self, 'terrain_models', []):
-                # Multi-cell mode (FC2 5×5 grid): each entry has its own world offset.
-                for t_model, t_wx, t_wy in self.terrain_models:
+                # Multi-cell mode (FC2 5×5 grid): each entry has its own world
+                # offset. Frustum-culled per tile — off-screen cells used to draw
+                # their full mesh every frame.
+                for t_model, t_wx, t_wy in self._visible_terrain_tiles():
                     _render_terrain_model(t_model, t_wx, t_wy)
             elif self.terrain_model:
                 # Single-cell mode (Avatar / single FC2 cell).
@@ -4981,7 +5103,8 @@ class MapCanvas(QOpenGLWidget):
                 self.water_plane_renderer._water_reflect_tex = 0   # clear stale frame
             if (getattr(self, 'reflections_enabled', True)
                     and hasattr(self, 'water_plane_renderer')
-                    and hasattr(self, 'terrain_renderer')):
+                    and hasattr(self, 'terrain_renderer')
+                    and self._water_on_screen()):
                 plane_y = self._water_plane_height()
                 if plane_y is not None:
                     self._render_water_reflection_pass(plane_y, _render_terrain_model)
