@@ -55,6 +55,10 @@ root_files = [
     'game_selector.py',
     'hash_parser.py',
     'movie_data.py',
+    'entity_library_browser.py',
+    'env_preset_copy.py',
+    'ui_style_utils.py',
+    'world_editor.py',
     'init.py',
     'loading_logo2.png',
     'loading_logo3.png',
@@ -430,19 +434,26 @@ build_options = {
         # ROOT LEVEL MODULES (your application modules)
         # ===================================================================
         'all_in_one_copy_paste',
+        'archetype_library',            # ← entity archetype lookup (imported by 5 modules)
         'cache_manager',
         'data_models',
         'entity_editor',
         'entity_export_import',
+        'entity_library_browser',       # ← Object Library right-panel tab
+        'env_preset_copy',              # ← environment-preset copy tool
         'file_converter',
         'fix_frozen_paths',
         'game_selector',
         'hash_parser',
         'init',
         'main',
+        'movie_data',                   # ← moviedata.xml cutscene parser (Sequences tab)
+        'object_library',
         'set_patch_folder',
         'simplified_map_editor',
         'theme_settings',
+        'ui_style_utils',               # ← shared widget styling (imported by 4 modules)
+        'world_editor',
         
         # ===================================================================
         # CANVAS PACKAGE - ALL SUBMODULES
@@ -487,6 +498,12 @@ build_options = {
         'canvas.hkx_parser',            # ← native Havok 5.5 .hkx collision reader (wireframe overlay)
         'canvas.cs_camera_preview',     # ← cutscene-camera POV preview (right-panel CS Camera tab)
         'canvas.mab_parser',            # ← native .mab animation decoder (Dunia smallest-three codec)
+        'canvas.vegetation_renderer',   # ← level vegetation (trees/bushes/grass) from landmarkfar_*.fcb
+        'canvas.rtx_loader',            # ← RealTree .rtx vegetation-mesh loader (feeds vegetation_renderer)
+        'canvas.terrain_blend',         # ← terrain splat compositor (mask+diffuse), shared by 2D and 3D
+        'canvas.terrain_shadow_shader', # ← per-pixel terrain shader that RECEIVES the sun shadow map
+        'canvas.god_rays',              # ← screen-space crepuscular light shafts (day/night cycle)
+        'canvas.volumetric_rays',       # ← volumetric sun rays, visible from any camera angle
 
         # ===================================================================
         # TOOLS PACKAGE

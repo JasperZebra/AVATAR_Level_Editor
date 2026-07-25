@@ -155,6 +155,7 @@ reference: <reference to this change in the docs if applicable>
 | `canvas/mab_parser.py` | `tests/test_mab_parser.py` | — | Smallest-three quat codec round-trip (all 4 permutation flags, SIGNED third word, s<0 sentinel) + synthetic clip: group/mask keyframe decode (primary @ sub-frame 0, flagged keys @ bit+1), anim-mask routing, derived fps, bone-name resolution — excluded from `--cov` |
 | `canvas/xbg_direct_loader.py` | `tests/test_vehicle_attachments.py` | — | Mounted-weapon merge: baked matrix applied to verts (normals unrotated on pure translation), material indices offset, bounds widened; no-entry models untouched; `_resolve_attachment_path` data-root anchoring — monkeypatched table/builder, no game files — excluded from `--cov` |
 | `simplified_map_editor.py` | `tests/test_stats_softwrap.py` | — | `_softwrap`: short values untouched, ZWSP inserted after `.`/`_`/`/`/`\`/`:` in dotted archetype names and Windows paths, invisible when stripped back out — instantiated via `SimplifiedMapEditor.__new__` (plain `object.__new__` is blocked by real PyQt5's sip on a QMainWindow subclass) — excluded from `--cov` |
+| `setup.py` | `tests/test_setup_packages.py` | — | Rule-4 guard: every `canvas/*.py` is in `packages`, every root app module is in BOTH `packages` and `root_files`; setup.py scanned as **text** (importing it runs PyQt5/PIL discovery). `DEV_ONLY` exempts standalone scripts — excluded from `--cov` |
 | `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
 
 ### Key patterns used
@@ -3832,3 +3833,26 @@ drop the rows that patch needs.
 watch the `⏱️ FRAME …ms CPU | overlay3d=… shape=… prims=…` line printed every 60 frames.
 `overlay3d≈0.1` means the cache is live; `shape`/`prims`/`triggers` appearing at all means
 something knocked it out.
+
+## setup.py packaging debt cleared (July 2026)
+
+A rule-4 audit during the sequence-lag task found **13 modules missing from
+`setup.py`** — none of which produce a build-time error, so frozen builds would
+have raised ImportError at runtime:
+
+- `packages`, canvas: `god_rays`, `rtx_loader`, `terrain_blend`,
+  `terrain_shadow_shader`, `vegetation_renderer`, `volumetric_rays`
+- `packages`, root: `archetype_library`, `entity_library_browser`,
+  `env_preset_copy`, `movie_data`, `object_library`, `ui_style_utils`,
+  `world_editor`
+- `root_files` (the include_files copy list): `entity_library_browser.py`,
+  `env_preset_copy.py`, `ui_style_utils.py`, `world_editor.py`
+
+All added. `bake_vehicle_attachments.py` and `check_exe_arch.py` are standalone
+dev scripts the app never imports and stay unpackaged (`check_exe_arch.py` is
+still copied via `root_files`).
+
+`tests/test_setup_packages.py` now enforces this automatically, so the manual
+audit command in rule 4 is a fallback rather than the only line of defence. New
+standalone scripts that genuinely aren't part of the app go in that test's
+`DEV_ONLY` set.
