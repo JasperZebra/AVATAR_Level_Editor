@@ -4404,3 +4404,44 @@ preview image and the stats values.
 
 Nothing indexes these tabs by position (`terrain_tabs.widget(i)` etc. is unused),
 which is why wrapping them was safe.
+
+## Environment shared with the CS preview + clouds ported (July 2026)
+
+Two halves, both from the user's ask that the cutscene previewer show "the sky,
+the sun, the clouds" the level does.
+
+**1. `_draw_sky_stack(width, height, target_fbo, fov_deg)` — one environment,
+two viewports.** The main view's inline sky block is extracted into this method
+and the CS preview now calls it too. Order: daytime spectral atmosphere → night
+star dome → cloud layer. Previously `render_camera_preview` just did
+`glClearColor(0.45, 0.62, 0.82, 1.0)` — a hardcoded daytime blue — so a cutscene
+had no sun, no horizon, no stars and no clouds regardless of time of day.
+
+- **`target_fbo` is load-bearing.** `AtmosphereSky.render` rebinds it after its
+  small LUT passes. Pass the widget's `defaultFramebufferObject()` for the main
+  view and **`fbo.handle()`** for the preview — passing 0 renders to nowhere
+  under Qt.
+- The preview also passes its own `fov_deg` (the cutscene FOV, 55) rather than
+  the main view's 50, and clears to `_sky_color()` so a night cutscene doesn't
+  flash daytime blue before the sky draws.
+- `self.camera_3d` is already the swapped-in preview camera at that point, which
+  is what makes the same call work for both.
+
+**2. Clouds ported from the SDF tool** (`sdf_tool/cloud_common.py` +
+`cloud_sky.py` → `canvas/`, **copied verbatim**). They needed no edits: they
+import `from god_rays import _link`, and our `canvas/god_rays.py` has the same
+guarded compile/link helper at the same name. `cloud_common.CLOUD_GLSL` is the
+single source of truth for the cloud function so the sky, water reflection and
+god-ray occlusion can all sample the SAME clouds; `CloudSky` is a fullscreen
+overlay that reconstructs the world view ray from the current GL matrices.
+
+- Drawn day AND night — the shader dims to a moonlit blue-grey via the `day`
+  factor instead of vanishing with the atmosphere.
+- No depth write, so scene geometry draws over it (clouds are a backdrop).
+- `canvas.cloud_cover` (0..1, default 0.45) drives it; **View ▸ lighting ▸
+  Clouds** slider sets it. 0 skips the pass entirely.
+
+**Gotcha — `map_canvas_gpu` does `from time import time`, not `import time`.**
+`time` is the FUNCTION there. `time.time()` at module scope raises
+AttributeError; call `time()`. (The one `time.time()` at ~line 1181 is fine
+because that function has a local `import math, time`.)

@@ -616,7 +616,13 @@ class MapCanvas(QOpenGLWidget):
         self._god_rays = None           # lazily-built screen-space god rays (canvas/god_rays.py)
         self._volumetric_rays = None    # lazily-built volumetric shafts (canvas/volumetric_rays.py)
         self._godrays_enabled = True    # crepuscular light shafts (only when day/night + sun up)
-        
+        # Procedural cloud layer (canvas/cloud_sky.py, ported from the SDF tool).
+        # 0 = clear sky, ~0.5 = scattered, 1 = overcast. Drawn day AND night, and
+        # shared with the CS camera preview via _draw_sky_stack.
+        self._cloud_sky = None
+        self.cloud_cover = 0.45
+        self._cloud_t0 = time()         # NB: module does `from time import time`
+
         # Sector display
         self.show_sector_boundaries = False
         self.sector_data = []
@@ -4813,7 +4819,11 @@ class MapCanvas(QOpenGLWidget):
             self.camera_3d = prev_cam
             try:
                 glViewport(0, 0, width, height)
-                glClearColor(0.45, 0.62, 0.82, 1.0)   # sky
+                # Clear to the day/night sky colour so a cutscene at dusk/night
+                # doesn't start from a hardcoded daytime blue. The real sky is
+                # drawn below once the camera matrices are set.
+                _sky = self._sky_color() if self.day_night_enabled else (0.45, 0.62, 0.82)
+                glClearColor(float(_sky[0]), float(_sky[1]), float(_sky[2]), 1.0)
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
                 glMatrixMode(GL_PROJECTION)
@@ -4823,6 +4833,12 @@ class MapCanvas(QOpenGLWidget):
                 glLoadIdentity()
                 gluLookAt(eye[0], eye[1], eye[2], look[0], look[1], look[2],
                           upv[0], upv[1], upv[2])
+
+                # The SAME environment backdrop the main viewport draws —
+                # atmosphere + sun, night star dome, clouds. self.camera_3d is
+                # the swapped-in preview camera at this point, and the target
+                # FBO is the preview's, not the widget's.
+                self._draw_sky_stack(width, height, fbo.handle(), fov_deg=float(fov))
 
                 # Same world-space light rig as the main pass.
                 glEnable(GL_LIGHTING)
@@ -4936,6 +4952,80 @@ class MapCanvas(QOpenGLWidget):
             except Exception:
                 pass
             return None
+
+    def _draw_sky_stack(self, width, height, target_fbo, fov_deg=50.0):
+        """Draw the full environment backdrop: daytime atmosphere → night star
+        dome → cloud layer, in that order, for whatever camera is currently in
+        `self.camera_3d`.
+
+        Extracted so the CS camera preview renders the SAME sky as the main
+        viewport. The preview used to just `glClearColor` a flat blue, so a
+        cutscene looked nothing like the level — no sun, no horizon, no stars,
+        no clouds.
+
+        `target_fbo` must be the framebuffer being drawn into (the widget's
+        `defaultFramebufferObject()` for the main view, the preview FBO for the
+        POV pass) — AtmosphereSky rebinds it after its own small LUT passes, and
+        binding 0 there would render to nowhere under Qt.
+        """
+        if not self.day_night_enabled:
+            return
+        try:
+            if self._sky_atmosphere is None:
+                from sky_atmosphere import AtmosphereSky
+                self._sky_atmosphere = AtmosphereSky()
+            self._sky_atmosphere.render(
+                self.camera_3d, self._sun_elev_sin, self._sun_az,
+                width, height, default_fbo=target_fbo,
+                sun_world=getattr(self, '_sun_dir_world', (0.0, 1.0, 0.0)),
+                fov_deg=fov_deg)
+        except Exception as _e:
+            print(f"[atmosphere] render error: {_e}")
+
+        if self._night_factor > 0.01:
+            try:
+                if self._night_sky is None:
+                    from night_sky import NightSky
+                    # Per-game skybox; fall back to the Avatar dome when the
+                    # current game (e.g. FC2) doesn't ship its own asset.
+                    _assets = os.path.join(os.path.dirname(__file__), 'assets')
+                    _game_folder = ('fc2' if getattr(self, 'game_mode', 'avatar') == 'farcry2'
+                                    else 'avatar')
+                    _sky_glb = os.path.join(_assets, _game_folder, 'skybox', 'Night Sky.glb')
+                    if not os.path.isfile(_sky_glb):
+                        _sky_glb = os.path.join(_assets, 'avatar', 'skybox', 'Night Sky.glb')
+                    self._night_sky = NightSky(_sky_glb)
+                self._night_sky.render(self.camera_3d.position, self._night_factor)
+            except Exception as _e:
+                print(f"[night-sky] render error: {_e}")
+
+        self._draw_clouds(width, height)
+
+    def _draw_clouds(self, width, height):
+        """Procedural cloud layer over whatever sky is behind it.
+
+        Ported from the SDF tool (`cloud_sky.py` + `cloud_common.py`, copied
+        verbatim — our `god_rays._link` has the same guarded compile helper it
+        expects). Drawn for BOTH day and night so clouds don't vanish when the
+        atmosphere fades out; the shader dims them to a moonlit blue-grey using
+        the day factor instead. No depth write, so scene geometry draws over it.
+        """
+        cover = float(getattr(self, 'cloud_cover', 0.0) or 0.0)
+        if cover <= 0.001:
+            return
+        try:
+            if getattr(self, '_cloud_sky', None) is None:
+                from cloud_sky import CloudSky
+                self._cloud_sky = CloudSky()
+            day = max(0.0, min(1.0, 1.0 - float(self._night_factor)))
+            self._cloud_sky.render(
+                (width, height),
+                getattr(self, '_sun_dir_world', (0.0, 1.0, 0.0)),
+                time() - getattr(self, '_cloud_t0', 0.0),
+                cover, day)
+        except Exception as _e:
+            print(f"[clouds] render error: {_e}")
+            self._cloud_sky = None
 
     def _frustum_subset(self, eye, fwd, up, right, fov_deg, aspect, far):
         """Entities inside an ARBITRARY camera's view frustum, vectorised.
@@ -5109,38 +5199,11 @@ class MapCanvas(QOpenGLWidget):
                 self._night_factor = 0.0
             # ────────────────────────────────────────────────────────────────
 
-            # Daytime atmosphere — fullscreen spectral sky (replaces the flat blue),
-            # with a real sun + horizon gradient; darkens itself as the sun sets.
-            if self.day_night_enabled:
-                try:
-                    if self._sky_atmosphere is None:
-                        from sky_atmosphere import AtmosphereSky
-                        self._sky_atmosphere = AtmosphereSky()
-                    self._sky_atmosphere.render(
-                        self.camera_3d, self._sun_elev_sin, self._sun_az,
-                        self.width(), self.height(),
-                        default_fbo=self.defaultFramebufferObject(),
-                        sun_world=getattr(self, '_sun_dir_world', (0.0, 1.0, 0.0)))
-                except Exception as _e:
-                    print(f"[atmosphere] render error: {_e}")
-
-            # Night-sky star dome — drawn as background (over the atmosphere), glows
-            # in at night. Camera-centered + huge, additive (black→transparent).
-            if self.day_night_enabled and self._night_factor > 0.01:
-                try:
-                    if self._night_sky is None:
-                        from night_sky import NightSky
-                        # Per-game skybox; fall back to the Avatar dome when the
-                        # current game (e.g. FC2) doesn't ship its own asset.
-                        _assets = os.path.join(os.path.dirname(__file__), 'assets')
-                        _game_folder = 'fc2' if getattr(self, 'game_mode', 'avatar') == 'farcry2' else 'avatar'
-                        _sky_glb = os.path.join(_assets, _game_folder, 'skybox', 'Night Sky.glb')
-                        if not os.path.isfile(_sky_glb):
-                            _sky_glb = os.path.join(_assets, 'avatar', 'skybox', 'Night Sky.glb')
-                        self._night_sky = NightSky(_sky_glb)
-                    self._night_sky.render(self.camera_3d.position, self._night_factor)
-                except Exception as _e:
-                    print(f"[night-sky] render error: {_e}")
+            # Environment backdrop: daytime spectral atmosphere → night star dome
+            # → cloud layer. Shared with the CS camera preview so a cutscene sees
+            # exactly the same sky (see _draw_sky_stack).
+            self._draw_sky_stack(self.width(), self.height(),
+                                 self.defaultFramebufferObject(), fov_deg=50.0)
 
             # Enable proper depth testing for solid rendering
             glEnable(GL_DEPTH_TEST)

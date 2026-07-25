@@ -2041,6 +2041,32 @@ class SimplifiedMapEditor(QMainWindow):
 
         self._daynight_godrays_cb.stateChanged.connect(_on_dn_godrays)
 
+        # Cloud cover — the procedural cloud layer (canvas/cloud_sky.py, ported
+        # from the SDF tool). Drawn over whatever sky is behind it, day AND
+        # night, and shared with the CS camera preview.
+        _cl_row = QHBoxLayout(); _cl_row.setSpacing(6)
+        _cl_row.addWidget(QLabel("Clouds:"))
+        self._cloud_cover_slider = QSlider(_Qt.Horizontal)
+        self._cloud_cover_slider.setRange(0, 100)
+        self._cloud_cover_slider.setValue(45)
+        self._cloud_cover_slider.setMinimumWidth(200)
+        self._cloud_cover_slider.setToolTip(
+            "Cloud cover — 0 = clear sky, 100 = overcast. Also appears in the "
+            "CS Camera preview.")
+        self._cloud_cover_label = QLabel("45%")
+        self._cloud_cover_label.setMinimumWidth(38)
+        _cl_row.addWidget(self._cloud_cover_slider, 1)
+        _cl_row.addWidget(self._cloud_cover_label)
+        _light_vbox.addLayout(_cl_row)
+
+        def _on_cloud_cover(v):
+            self._cloud_cover_label.setText(f"{int(v)}%")
+            if hasattr(self, 'canvas'):
+                self.canvas.cloud_cover = float(v) / 100.0
+                self.canvas.update()
+
+        self._cloud_cover_slider.valueChanged.connect(_on_cloud_cover)
+
         self._daynight_enable_cb.stateChanged.connect(_on_dn_enable)
         self._daynight_play_btn.toggled.connect(_on_dn_play)
         self._daynight_time_slider.valueChanged.connect(_on_dn_time)
