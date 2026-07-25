@@ -4373,3 +4373,34 @@ Notes:
   keeps the entity.
 - Returns None when the position arrays aren't built yet → caller falls back to
   the old radius filter, so a pre-load preview still draws something.
+
+## Right-panel sizing (July 2026)
+
+All four numbers are class constants on `SimplifiedMapEditor` — tune there, not
+at the call sites:
+
+| constant | value | |
+|---|---|---|
+| `LEVEL_INFO_MAX_H` | 250 | was 300 |
+| `MAP_TOOLS_MAX_H` | 300 | previously uncapped |
+| `CS_PREVIEW_MIN_H` | 420 | was 300 |
+| `RIGHT_PANEL_MIN_W` | 430 | was unconstrained (Qt size hint) |
+
+**The cap-plus-scroll rule.** A height cap CLIPS its content unless every tab
+inside is wrapped in a `QScrollArea`. `SimplifiedMapEditor._scroll_wrap(widget)`
+does that wrapping (borderless, `widgetResizable`, horizontal bar OFF so wide
+children wrap instead of pushing a horizontal scrollbar onto the whole panel).
+It is now used by **all five** capped tabs — Level Info's Statistics / Sector
+Colors / Entity Colors and Map Tools' Terrain Editing / Terrain Painting. If you
+add a tab to either section, wrap it, or it will be clipped.
+
+Capped sections also get `QSizePolicy.Maximum` vertically so they don't fight
+for the leftover space; the CS group gets `Expanding` + stretch 1 in
+`dock_layout`, so it absorbs everything the two capped sections give up.
+
+Width is a MINIMUM plus a one-shot `resizeDocks` at construction — the user can
+still drag the splitter, this only stops the panel opening too narrow for the
+preview image and the stats values.
+
+Nothing indexes these tabs by position (`terrain_tabs.widget(i)` etc. is unused),
+which is why wrapping them was safe.

@@ -2210,16 +2210,38 @@ class SimplifiedMapEditor(QMainWindow):
         toggle_btn.clicked.connect(_toggle)
         return outer, content_layout
 
-    # Right-panel vertical budget. The Level Info tabs are reference data that
-    # scroll happily; the CS Camera preview is an image that needs real estate,
-    # so the former is capped and the latter takes what's left.
-    LEVEL_INFO_MAX_H = 300
-    CS_PREVIEW_MIN_H = 300
+    # Right-panel budget. Level Info and Map Tools are reference/controls that
+    # scroll happily inside their own tabs; the CS Camera preview is an image
+    # that needs real estate. So both of those are height-capped and the preview
+    # takes everything they give up. Every tab inside a capped section is
+    # wrapped in a QScrollArea — without that, a cap CLIPS its content.
+    LEVEL_INFO_MAX_H = 250    # was 300
+    MAP_TOOLS_MAX_H  = 300    # previously uncapped
+    CS_PREVIEW_MIN_H = 420    # was 300
+    RIGHT_PANEL_MIN_W = 430   # a little wider than Qt's size hint gave us
+
+    def _scroll_wrap(self, inner):
+        """Put a panel tab inside its own borderless QScrollArea.
+
+        Every tab in a height-capped section must be wrapped, or the cap clips
+        the content instead of scrolling it. Horizontal scrolling stays OFF so
+        wide children wrap/shrink to the viewport rather than pushing a
+        horizontal scrollbar onto the whole right panel.
+        """
+        from PyQt5.QtWidgets import QScrollArea, QFrame
+        sa = QScrollArea()
+        sa.setWidgetResizable(True)
+        sa.setFrameShape(QFrame.NoFrame)
+        sa.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        sa.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        sa.setWidget(inner)
+        return sa
 
     def create_side_panel(self):
         """Create a dock widget for the side panel controls - 2D Editor"""
         from PyQt5.QtWidgets import QTabWidget, QScrollArea, QSizePolicy, QFrame
         LEVEL_INFO_MAX_H = self.LEVEL_INFO_MAX_H
+        MAP_TOOLS_MAX_H = self.MAP_TOOLS_MAX_H
         CS_PREVIEW_MIN_H = self.CS_PREVIEW_MIN_H
         dock = QDockWidget("Level Information", self)
         dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
@@ -2367,15 +2389,7 @@ class SimplifiedMapEditor(QMainWindow):
         # Each tab scrolls INSIDE the section, so the section can be height-capped
         # below without ever clipping its content (user asked for a smaller stats
         # area so the CS Camera preview can be taller).
-        def _scrollable(inner):
-            sa = QScrollArea()
-            sa.setWidgetResizable(True)
-            sa.setFrameShape(QFrame.NoFrame)
-            sa.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            sa.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-            sa.setWidget(inner)
-            return sa
-
+        _scrollable = self._scroll_wrap
         level_info_tabs.addTab(_scrollable(stat_tab), "Statistics")
         level_info_tabs.addTab(_scrollable(sec_tab), "Sector Colors")
         level_info_tabs.addTab(_scrollable(ent_tab), "Entity Colors")
@@ -2666,7 +2680,7 @@ class SimplifiedMapEditor(QMainWindow):
         self._te_panel_save_btn.clicked.connect(_te_save_clicked)
         self._te_panel_refresh_btn.clicked.connect(_te_refresh_clicked)
         te_lay.addStretch()
-        terrain_tabs.addTab(edit_tab, "Terrain Editing")
+        terrain_tabs.addTab(self._scroll_wrap(edit_tab), "Terrain Editing")
 
         # ── Tab 1: Terrain Painting ──────────────────────────────────────────
         paint_tab = QWidget()
@@ -3077,7 +3091,7 @@ class SimplifiedMapEditor(QMainWindow):
         tex_btn_row.addWidget(refresh_tex_btn)
         paint_lay.addLayout(tex_btn_row)
 
-        terrain_tabs.addTab(paint_tab, "Terrain Painting (experimental)")
+        terrain_tabs.addTab(self._scroll_wrap(paint_tab), "Terrain Painting (experimental)")
 
 
         # Callbacks
@@ -3117,6 +3131,10 @@ class SimplifiedMapEditor(QMainWindow):
         refresh_tex_btn.clicked.connect(_refresh_tex_clicked)
 
         terrain_vlay.addWidget(terrain_tabs)
+        # Capped like Level Info so the CS preview gets the height. Both tabs
+        # above are scroll-wrapped, so nothing is clipped by this.
+        terrain_tabs.setMaximumHeight(MAP_TOOLS_MAX_H)
+        terrain_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         dock_layout.addWidget(terrain_group)
 
         # ── Stretch ──────────────────────────────────────────────────────────
@@ -3147,7 +3165,15 @@ class SimplifiedMapEditor(QMainWindow):
         self.right_tabs = right_tabs
 
         dock.setWidget(right_tabs)
+        # A little wider than Qt's size hint. Minimum only — the user can still
+        # drag the splitter; this just stops the panel opening too narrow for the
+        # CS preview image and the stats values.
+        dock.setMinimumWidth(self.RIGHT_PANEL_MIN_W)
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
+        try:
+            self.resizeDocks([dock], [self.RIGHT_PANEL_MIN_W], Qt.Horizontal)
+        except Exception:
+            pass
         self.controls_dock = dock
         dock.setVisible(True)
         dock.show()
