@@ -1028,6 +1028,7 @@ class SimplifiedMapEditor(QMainWindow):
         self._movie_skipped_ticks = 0
         self._movie_registered_ids = None       # ids last sent to set_preview_entities
         self._movie_rot_entities = []           # entities with a rotation override active
+        self._movie_preview_t = None            # live playback time for the 3D camera marker
 
         # SDAT support
         self.sdat_path = None
@@ -11498,6 +11499,7 @@ class SimplifiedMapEditor(QMainWindow):
             except Exception:
                 pass
         self._movie_rot_entities = []
+        self._movie_preview_t = None    # camera markers park at their first key
 
         self._movie_preview_saved = {}
         self._movie_preview_start_wall = None
@@ -11526,6 +11528,10 @@ class SimplifiedMapEditor(QMainWindow):
         seq = self.movie_data.get_sequence(self.selected_movie_sequence)
         if seq is None:
             return None
+
+        # Published for movie_renderer: drives the flying camera marker + live
+        # facing line in the main 3D view (AM3D-style cutscene display).
+        self._movie_preview_t = t
 
         entity_map = self._movie_entity_map()
 

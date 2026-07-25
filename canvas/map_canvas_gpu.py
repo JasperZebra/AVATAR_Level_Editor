@@ -4891,15 +4891,25 @@ class MapCanvas(QOpenGLWidget):
                     try:
                         ex, ez = float(eye[0]), float(eye[2])
                         max_d2 = 1500.0 * 1500.0
-                        subset = []
-                        for e in self.entities:
-                            try:
-                                dx = e.x - ex
-                                dz = -e.y - ez        # game y → GL -z
-                                if dx * dx + dz * dz <= max_d2:
-                                    subset.append(e)
-                            except Exception:
-                                continue
+                        # Vectorised radius filter. This was a Python loop over
+                        # EVERY entity in the level with a try/except per
+                        # iteration, re-run for each preview frame — at 60 fps on
+                        # a 5,600-entity level that is ~336k guarded iterations a
+                        # second, and it was the preview's dominant CPU cost.
+                        # _positions_3d is already GL-space [x, z, -y], so the
+                        # test is a direct numpy compare against eye x/z.
+                        valid = getattr(self, '_valid_entities_3d', None)
+                        pos = getattr(self, '_positions_3d', None)
+                        if valid and pos is not None and len(pos) == len(valid):
+                            dx = pos[:, 0] - ex
+                            dz = pos[:, 2] - ez
+                            hit = np.where(dx * dx + dz * dz <= max_d2)[0]
+                            subset = [valid[i] for i in hit]
+                        else:
+                            subset = [
+                                e for e in self.entities
+                                if (e.x - ex) ** 2 + (-e.y - ez) ** 2 <= max_d2
+                                and hasattr(e, 'x') and hasattr(e, 'y')]
                         ml.night_factor = (
                             self._night_factor if self.day_night_enabled else 1.0)
                         ml.force_render_tier = None

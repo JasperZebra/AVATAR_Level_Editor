@@ -309,6 +309,7 @@ class CSCameraPreviewWidget(QWidget):
         self._shots = []            # [(start_time, node_id)] cut list
         self._fallback_cam = None   # camera used before the first cut
         self._fps_ema = None        # smoothed preview frame rate, shown in status
+        self._last_paint_seq = None  # canvas._paint_seq at our last POV render
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -546,6 +547,17 @@ class CSCameraPreviewWidget(QWidget):
         if key == self._last_render_key and not self._playing \
                 and not self._editor_preview_active():
             return   # nothing changed — skip the (relatively) expensive pass
+
+        # Back-pressure against the MAIN view. The POV pass re-prepares model
+        # batches over every entity near the cutscene camera, and it shares
+        # model_loader.instance_batches with the main view — so a preview frame
+        # also forces the main view to redo its own prepare. Ticking at 60 fps
+        # regardless of whether the main view got a frame in between is what
+        # made the editor feel laggy. Render at most once per main-view paint.
+        paint_seq = getattr(canvas, '_paint_seq', None)
+        if paint_seq is not None and paint_seq == self._last_paint_seq:
+            return
+        self._last_paint_seq = paint_seq
         pose = camera_pose_at(md, seq, cam_id, self._t)
         if pose is None:
             self.status.setText("camera node has no pose data")

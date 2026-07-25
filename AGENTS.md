@@ -4293,3 +4293,51 @@ This only became safe because the scene itself got much cheaper first
 (vegetation removed, terrain tiles frustum-culled, reflection pass skipped when
 no water is on screen). `PLAY_RENDER_MIN_S` is kept as a knob — set it non-zero
 to peg the preview back if some future scene needs it.
+
+## Cutscene display in the MAIN 3D view, AM3D-style (July 2026)
+
+Modelled on the AM3D level editor (`PS1_AMRYMEN_3D/AM3D_level_editor`,
+`src/map_canvas.py::_render_coords` + `src/data_models.py` Bookmark). That editor
+draws its cineractives **in the main viewport** — yellow camera flight path, cyan
+curve handles, green aim cubes/arrows/spline, and a camera model that flies the
+path while playing — rather than relying on an offscreen POV render. That is both
+far cheaper and easier to read, so `movie_renderer` now does the same.
+
+**Cutscene cameras get their own display** (`_draw_camera_track`), actors keep
+the old purple path:
+- 🟡 **flight path** through the camera's position keys + a wireframe cube at each
+- 🟢 **aim arrow** from every keyframe to its look-at point, plus a 🟢 polyline
+  joining those points — the "where is it pointing" line AM3D gets from its
+  explicit Focus curve
+- a wireframe **view frustum** at the camera, oriented by its quaternion: parked
+  at key 0 normally, **flying the path** during playback with a live facing line
+
+**moviedata has NO look-at target.** AM3D bookmarks store a Focus curve; Avatar
+stores only a rotation quaternion. `aim_point()` reconstructs the target by
+projecting the camera's +Y forward axis, and `_seq_reach()` sets the distance
+from the camera to `sequence_action_centre` (clamped 2..400) so the aim line
+lands ON the subject instead of an arbitrary distance out.
+
+`SimplifiedMapEditor._movie_preview_t` publishes the live playback time
+(`_movie_apply_time` sets it, `_movie_preview_stop` clears it to None). None
+means "not playing" → markers park at their first keyframe.
+
+### Preview cost (why it felt laggy)
+
+Two fixes, both about the POV pass, not the drawing above:
+
+1. **The entity subset was a Python loop over EVERY entity with a try/except per
+   iteration, re-run per preview frame** — ~336k guarded iterations/second at
+   60 fps on a 5,600-entity level. Now a numpy compare against `_positions_3d`
+   (already GL-space `[x, z, -y]`): **1.52 ms → 0.52 ms** per frame.
+2. **Back-pressure on `_paint_seq`.** The POV pass re-prepares model batches and
+   shares `model_loader.instance_batches` with the main view, so every preview
+   frame also forces the main view to redo its own prepare. The preview now
+   renders **at most once per main-view paint** — it can never starve the view
+   it is competing with.
+
+**The remaining cost is `prepare_batches` over the subset, once per preview
+frame** (~8 ms at 5,600 entities). It is camera-independent, so it is cacheable
+in principle — but the main view clobbers `instance_batches` every frame, so a
+cache needs the preview to own its own batch storage. That is the next real
+lever if the POV still isn't free enough.
