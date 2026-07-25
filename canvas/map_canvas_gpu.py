@@ -4889,27 +4889,20 @@ class MapCanvas(QOpenGLWidget):
                     ml = self.model_loader
                     saved_tier = getattr(ml, 'force_render_tier', None)
                     try:
-                        ex, ez = float(eye[0]), float(eye[2])
-                        max_d2 = 1500.0 * 1500.0
-                        # Vectorised radius filter. This was a Python loop over
-                        # EVERY entity in the level with a try/except per
-                        # iteration, re-run for each preview frame — at 60 fps on
-                        # a 5,600-entity level that is ~336k guarded iterations a
-                        # second, and it was the preview's dominant CPU cost.
-                        # _positions_3d is already GL-space [x, z, -y], so the
-                        # test is a direct numpy compare against eye x/z.
-                        valid = getattr(self, '_valid_entities_3d', None)
-                        pos = getattr(self, '_positions_3d', None)
-                        if valid and pos is not None and len(pos) == len(valid):
-                            dx = pos[:, 0] - ex
-                            dz = pos[:, 2] - ez
-                            hit = np.where(dx * dx + dz * dz <= max_d2)[0]
-                            subset = [valid[i] for i in hit]
-                        else:
+                        # Cull to the cutscene camera's actual FRUSTUM, not a
+                        # sphere around it — nothing behind the camera can ever
+                        # be in the shot, and the old 1500-unit radius submitted
+                        # all of it every frame.
+                        subset = self._frustum_subset(
+                            prev_cam.position, fwd, prev_cam.up, right,
+                            fov, width / float(height), 1500.0)
+                        if subset is None:
+                            ex, ez = float(eye[0]), float(eye[2])
+                            max_d2 = 1500.0 * 1500.0
                             subset = [
                                 e for e in self.entities
-                                if (e.x - ex) ** 2 + (-e.y - ez) ** 2 <= max_d2
-                                and hasattr(e, 'x') and hasattr(e, 'y')]
+                                if hasattr(e, 'x') and hasattr(e, 'y')
+                                and (e.x - ex) ** 2 + (-e.y - ez) ** 2 <= max_d2]
                         ml.night_factor = (
                             self._night_factor if self.day_night_enabled else 1.0)
                         ml.force_render_tier = None
@@ -4942,6 +4935,51 @@ class MapCanvas(QOpenGLWidget):
                 self.doneCurrent()
             except Exception:
                 pass
+            return None
+
+    def _frustum_subset(self, eye, fwd, up, right, fov_deg, aspect, far):
+        """Entities inside an ARBITRARY camera's view frustum, vectorised.
+
+        The CS preview used to take everything inside a 1500-unit SPHERE around
+        the cutscene camera — which includes everything BEHIND it. A 55° frustum
+        is a small fraction of that sphere, so most of what was submitted could
+        never appear in the shot. This is the same sphere-expanded near/vertical/
+        horizontal test `_get_visible_entities` runs for the main view, just
+        driven by a supplied basis instead of self.camera_3d.
+
+        Returns a list of entities, or None when the position arrays aren't
+        available (caller falls back).
+        """
+        valid = getattr(self, '_valid_entities_3d', None)
+        pos = getattr(self, '_positions_centered_3d', None)
+        if pos is None:
+            pos = getattr(self, '_positions_3d', None)
+        if not valid or pos is None or len(pos) != len(valid):
+            return None
+        try:
+            eye = np.asarray(eye, dtype=np.float64)
+            to = pos - eye
+            dist2 = np.einsum('ij,ij->i', to, to)
+            radii = getattr(self, '_radii_3d', None)
+            if radii is None or len(radii) != len(valid):
+                radii = np.zeros(len(valid), dtype=np.float32)
+
+            depth = to @ np.asarray(fwd, dtype=np.float64)
+            # BEHIND the camera (beyond its own bounding sphere) → never drawn.
+            keep = (depth + radii >= 0.1) & (depth - radii <= far)
+            keep &= dist2 <= (far * far)
+            if not keep.any():
+                return []
+
+            half_tan = math.tan(math.radians(float(fov_deg)) * 0.5) * 1.15
+            d_safe = np.maximum(depth, 0.5)
+            v_half = d_safe * half_tan
+            keep &= np.abs(to @ np.asarray(up, dtype=np.float64)) <= v_half + radii
+            keep &= np.abs(to @ np.asarray(right, dtype=np.float64)) <= v_half * aspect + radii
+            # Camera inside an entity's bounding sphere ⇒ always keep it.
+            keep |= dist2 <= (radii * radii)
+            return [valid[i] for i in np.where(keep)[0]]
+        except Exception:
             return None
 
     def _cs_readback(self, width, height, fbo):

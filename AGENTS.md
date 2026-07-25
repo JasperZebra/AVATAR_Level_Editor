@@ -4341,3 +4341,35 @@ frame** (~8 ms at 5,600 entities). It is camera-independent, so it is cacheable
 in principle — but the main view clobbers `instance_batches` every frame, so a
 cache needs the preview to own its own batch storage. That is the next real
 lever if the POV still isn't free enough.
+
+## CS preview culls to the camera's FRUSTUM, not a sphere (July 2026)
+
+User: "whatever's behind the cutscene camera doesn't need to get rendered — only
+what's in front of it." Correct, and it was the preview's dominant cost.
+
+`render_camera_preview` selected its model subset with a **1500-unit sphere**
+around the cutscene camera, so everything BEHIND the camera was submitted to
+`prepare_batches` and the draw every frame despite being unable to appear in the
+shot. New `_frustum_subset(eye, fwd, up, right, fov_deg, aspect, far)` runs the
+same sphere-expanded near / vertical / horizontal test `_get_visible_entities`
+uses for the main view, driven by a supplied basis instead of `self.camera_3d`.
+
+Measured on a synthetic 5,600-entity spread at 55° / 16:9 / far 1500:
+
+| | entities submitted |
+|---|---|
+| old sphere | 4,421 |
+| frustum | **1,130** (26%, 3.9× fewer) |
+
+**2,772 of the 5,600 sat behind the camera** and were all being submitted. The
+frustum test itself costs 0.25 ms/frame, and `prepare_batches` — the preview's
+dominant term — now walks ~4× fewer entities.
+
+Notes:
+- Uses `_positions_centered_3d` when present (bounding-box centres, same as the
+  main cull) and falls back to `_positions_3d`.
+- 1.15 padding on the half-tangent plus the per-entity bounding radius, so large
+  objects straddling the frustum edge don't pop; camera-inside-sphere always
+  keeps the entity.
+- Returns None when the position arrays aren't built yet → caller falls back to
+  the old radius filter, so a pre-load preview still draws something.
