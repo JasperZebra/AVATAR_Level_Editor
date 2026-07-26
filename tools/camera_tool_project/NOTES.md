@@ -803,7 +803,89 @@ up in scans.
   `CCameraComponent` registers no vec3 and why `CCameraComponent::OnEntityMove()`
   exists in the symbol table. Moving a camera entity is the same call.
 
-### Entity rotation — NOT yet found, and the obvious guess is wrong
+## [SOLVED] The complete CEntity transform API
+
+Rotation is **not stored** — `CEntity` holds a `Matrix44` and derives Euler
+angles on demand. The FC2 symbols say so by size alone:
+
+```
+CEntity::GetMatrix const()                            11 bytes  <- lea eax,[ecx+X]; ret
+CEntity::GetWorldMatrix const()                       11 bytes
+CEntity::GetPos const()                               35 bytes
+CEntity::GetAngles const()                           352 bytes  <- trig, COMPUTED
+CEntity::SetMatrix(Matrix44_tpl<float> const&, ...)  335 bytes
+CEntity::SetPos(ndVec_tpl<float,3>)                   42 bytes  <- BY VALUE
+CEntity::SetAngles(ndAngle3<float>)                   42 bytes  <- BY VALUE
+```
+
+An 11-byte getter returns a reference to an embedded member; a 352-byte
+"getter" computes. **Function size alone distinguishes stored from computed** —
+this is the cheapest discriminator available and it should be the first thing
+consulted, before writing any scanner.
+
+### CEntity memory layout — fully accounted for
+
+```
++0x40   Matrix44 begins  ────┐
++0x70     translation row 3  │  (row-major, translation in row 3 => base+0x30)
++0x7c   Matrix44 ends    ────┘
++0x80   hidScale
+```
+
+This resolves the earlier "no room for hidAngles" puzzle completely: `hidAngles`
+is **authoring data baked into the matrix at load**, never a runtime field. And
+`GetPos` reading `[ecx+0x70]` and `GetMatrix` returning `[ecx+0x40]` are the
+same memory. It independently corroborates the row-major / translation-in-row-3
+convention measured earlier on the live heap matrices.
+
+It also retro-explains why `SetPosition` forwards to a helper "that propagates
+to physics/scene" — it must refresh the world matrix, because the translation
+row *is* part of the matrix.
+
+### The two by-value primitives — both remotely callable
+
+| | Address | Convention |
+|---|---|---|
+| `CEntity::SetPos(vec3)` | **`0x101b5180`** | thiscall, `ecx`=entity, vec3 by value, `ret 0xc` |
+| `CEntity::SetAngles(ndAngle3)` | **`0x101b5190`** | thiscall, `ecx`=entity, angle3 by value, `ret 0xc` |
+| `CEntity::GetPosition(vec3*)` | `0x105dccd0` | thiscall, out-pointer, `ret 4` |
+
+Structurally identical twins, 16 bytes apart:
+
+```asm
+0x101b5180  push 0 ; lea eax,[esp+8] ; push eax ; call 0x101b4580 ; ret 0xc
+0x101b5190  push 0 ; lea eax,[esp+8] ; push eax ; call 0x101b4630 ; ret 0xc
+```
+
+**Confirmation that `0x101b5190` is `SetAngles`**, from its inner function
+`FUN_101b4630`: it reads the entity's current position out of `+0x70`/`+0x74`/
+`+0x78`, pairs it with the angles argument, calls `FUN_10183c10` to build a
+matrix from (angles, position), then `FUN_101b4310` to store it. Preserve
+position, apply rotation, rebuild matrix — that is `SetAngles` and nothing else.
+
+Supporting identifications:
+
+- `FUN_101b4580` — `SetPos(vec3 const&, CEntityComponent*)`. **176 bytes vs
+  FC2's 175** — near-exact size match across MSVC/GCC.
+- `FUN_101b4630` — `SetAngles(ndAngle3 const&, CEntityComponent*)`. 288 bytes vs
+  FC2's 854; the size does *not* transfer here, but the behaviour is
+  unambiguous. Sizes are a tiebreaker, never proof.
+- `FUN_10183c10` — build matrix from angles + position
+- `FUN_101b4310` — `SetMatrix`
+
+Remote call shape for both:
+
+```asm
+push z ; push y ; push x      ; 12 bytes by value
+mov  ecx, <entity pointer>    ; thiscall
+call 0x101b5180               ; or 0x101b5190 for angles
+                              ; callee cleans (ret 0xc)
+```
+
+**This is everything needed to drive an entity's full transform** — position and
+rotation — with no code patching, no code cave, and no debugger.
+
+### Superseded: entity rotation "not found"
 
 `analysis/find_vec3_accessors.py` finds every trivial vec3 accessor in the DLL
 by byte shape (the compiler emits an identical encoding for each, with only the

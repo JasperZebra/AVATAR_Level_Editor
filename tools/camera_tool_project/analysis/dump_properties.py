@@ -112,45 +112,69 @@ def main():
     insns = disassemble_text(pe, data)
     print(f"  {len(insns):,} instructions\n", file=sys.stderr)
 
-    # Walk instructions collecting (name, type, offset, list_global) tuples.
+    # Anchor on the PUBLISH call. The publish site names its own property-list
+    # global in the push immediately before it:
+    #
+    #     push esi                  ; the record
+    #     push 0x111e8804           ; <- the class's property list
+    #     call 0x100b6b90           ; add_property
+    #
+    # Binding each record to the global in its own publish call makes the
+    # class-merge bug structurally impossible. Scanning forward for "the next
+    # global we happen to see" (the previous approach) silently attributed a
+    # class's trailing fields to whichever class came next in the binary.
+    PUBLISH = 0x100b6b90        # add_property(list_global, record)
+    ALLOC = 0x100ee250          # operator new -- marks the start of a record
+    # NB: a third call (the name-hash helper) sits BETWEEN the name store and
+    # the publish, so the backward walk must pass through calls in general and
+    # stop only at these two record boundaries.
     props = collections.defaultdict(list)   # list_global -> [(offset, name, type)]
+
     for i, ins in enumerate(insns):
-        # Anchor on the name-pointer store: mov [reg+4], <string VA>
-        if ins.mnemonic != "mov":
+        if ins.mnemonic != "call":
             continue
-        m = IMM_RE.search(ins.op_str)
-        if not m:
+        try:
+            if int(ins.op_str, 0) != PUBLISH:
+                continue
+        except ValueError:
             continue
-        imm = int(m.group(4), 0)
-        name = strings.get(imm)
-        if not name or not re.match(r"^[a-z]{1,4}[A-Z]", name):
-            continue      # engine field names are hungarian: fFoo, bBar, selBaz
-        # Scan forward for the offset store and the list global.
-        offset = typ = listg = None
-        for j in range(i + 1, min(i + args.window, len(insns))):
-            nxt = insns[j]
-            if nxt.mnemonic == "mov":
-                m2 = IMM_RE.search(nxt.op_str)
-                if m2:
-                    val = int(m2.group(4), 0)
-                    disp = m2.group(2)
-                    if disp and int(disp, 0) == 0xc and offset is None:
-                        offset = val
-                    elif disp is None and val in TYPE_NAMES and typ is None:
-                        typ = val
-                    elif not disp and val > 0x11000000 and typ is None:
-                        typ = val
-            elif nxt.mnemonic == "push":
+
+        # Walk BACKWARD over this record's construction only.
+        listg = offset = typ = name = None
+        for j in range(i - 1, max(i - args.window, -1), -1):
+            prev = insns[j]
+            if prev.mnemonic == "call":
                 try:
-                    v = int(nxt.op_str, 0)
+                    tgt = int(prev.op_str, 0)
+                except ValueError:
+                    continue
+                if tgt in (PUBLISH, ALLOC):
+                    break      # record boundary -- don't bleed into a neighbour
+                continue       # the name-hash helper; keep walking
+            if prev.mnemonic == "push" and listg is None:
+                try:
+                    v = int(prev.op_str, 0)
                 except ValueError:
                     continue
                 if 0x11000000 < v < 0x11400000 and v not in strings:
                     listg = v
-            elif nxt.mnemonic == "call" and listg is not None:
-                break
-        if offset is not None and listg is not None:
-            props[listg].append((offset, name, TYPE_NAMES.get(typ, hex(typ) if typ else "?")))
+            elif prev.mnemonic == "mov":
+                m = IMM_RE.search(prev.op_str)
+                if not m:
+                    continue
+                val = int(m.group(4), 0)
+                disp = m.group(2)
+                if disp and int(disp, 0) == 0xc and offset is None:
+                    offset = val
+                elif disp and int(disp, 0) == 4 and name is None:
+                    cand = strings.get(val)
+                    if cand and re.match(r"^[a-z]{1,4}[A-Z]", cand):
+                        name = cand
+                elif not disp and typ is None and val > 0x11000000:
+                    typ = val
+        if name and offset is not None and listg is not None:
+            props[listg].append(
+                (offset, name, TYPE_NAMES.get(typ, hex(typ) if typ else "?")))
 
     print(f"recovered properties for {len(props)} class property-lists\n")
 
@@ -167,7 +191,11 @@ def main():
                 continue
             seen.add(name)
             uniq.append((off, name, typ))
-        print(f"=== property list {listg:#010x}   ({len(uniq)} fields) ===")
+        # Sanity check: a single class with a huge internal gap almost certainly
+        # means two classes got merged. Announce it rather than hide it.
+        suspect = any(b[0] - (a[0] + 4) > 256 for a, b in zip(uniq, uniq[1:]))
+        flag = "   [SUSPECT: >256-byte gap, may be merged classes]" if suspect else ""
+        print(f"=== property list {listg:#010x}   ({len(uniq)} fields){flag} ===")
         prev_end = None
         for off, name, typ in uniq:
             gap = ""
