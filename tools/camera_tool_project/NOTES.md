@@ -642,6 +642,35 @@ Candidate layouts, to be settled by reading a live instance:
 read `+0x58`..`+0x73`, and check whether three of those floats match the
 player's editor coordinates. That single read settles the layout.
 
+### [CONFIRMED STATICALLY] The hole really is 7 floats
+
+Disassembled the camera neighbourhood `0x1024a000`–`0x1024e000` (5,300
+instructions) and counted every float access by displacement. The hole is
+accessed as **exactly seven consecutive float slots**, and the boundaries line
+up perfectly with the property map:
+
+| Offset | float accesses | Identified as |
+|---|---|---|
+| `+0x54` | 5 | `fCameraBlendTime` (registered) |
+| `+0x58` | 9 | ← transform |
+| `+0x5c` | 10 | ← transform |
+| `+0x60` | 10 | ← transform |
+| `+0x64` | 10 | ← transform |
+| `+0x68` | 10 | ← transform |
+| `+0x6c` | 9 | ← transform |
+| `+0x70` | 16 | ← transform |
+| `+0x74` | 10 | `fNearDistance` (registered) |
+| `+0x78` | 9 | `fFarDistance` (registered) |
+
+Seven slots, densely accessed, bounded on both sides by fields we independently
+know from the property table. This is no longer just gap arithmetic — the code
+demonstrably treats `+0x58`..`+0x70` as seven live floats. Only the *order*
+(vec3-then-quat or quat-then-vec3) remains unsettled, and one live read decides
+it.
+
+Object extent: the copy routine at `0x1024a344` copies fields field-by-field
+well past `+0xa8`, so the object is at least ~0xB0 bytes.
+
 ### Tool accuracy caveat
 
 `dump_properties.py` associates a property with the *next* property-list global
