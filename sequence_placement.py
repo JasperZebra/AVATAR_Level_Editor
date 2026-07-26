@@ -542,13 +542,24 @@ def begin_keyframe_drag(canvas, screen_x, screen_y) -> bool:
     return True
 
 
+def _shift_held(event) -> bool:
+    try:
+        from PyQt5.QtCore import Qt
+        return bool(event.modifiers() & Qt.ShiftModifier)
+    except Exception:
+        return False
+
+
 def _drag_world(canvas, event, anchor):
     """Cursor position in world space for a drag anchored at `anchor`.
 
-    2D unprojects the cursor straight through the top-down mapping. 3D
-    intersects the view ray with the HORIZONTAL plane through the anchor, so
-    the handle slides under the cursor at its own height instead of snapping
-    down to the ground (a camera flight path is rarely on the terrain).
+    2D unprojects the cursor straight through the top-down mapping — X/Y only,
+    exactly what a top-down view can express. 3D intersects the view ray with
+    the HORIZONTAL plane through the anchor, so the handle slides under the
+    cursor at its own height instead of snapping down to the ground (a camera
+    flight path is rarely on the terrain) -- and with SHIFT held it intersects
+    the VERTICAL plane instead, which is the only way to change a key's height.
+    Without that, a key in 3D could only ever slide sideways.
     """
     try:
         p = event.localPos()
@@ -574,7 +585,32 @@ def _drag_world(canvas, event, anchor):
     if near is None or far is None:
         return None
 
+    if _shift_held(event):
+        return _ray_vertical_world(near, far, anchor)
     return _ray_plane_world(near, far, float(anchor[2]))   # world Z is GL Y
+
+
+def _ray_vertical_world(near, far, anchor):
+    """Height-only move: the ray against the VERTICAL plane through `anchor`
+    that faces the camera. X/Y are held at the anchor, so Shift-dragging raises
+    and lowers the key without sliding it sideways. None when the camera looks
+    straight down (no horizontal component to build the plane from)."""
+    ax, ay, az = float(anchor[0]), float(anchor[1]), float(anchor[2])
+    a_gl = (ax, az, -ay)
+    d = (far[0] - near[0], far[1] - near[1], far[2] - near[2])
+    # Plane normal = the ray's HORIZONTAL direction, so the plane always faces
+    # the camera and the drag stays well-conditioned.
+    nl = math.hypot(d[0], d[2])
+    if nl < 1e-9:
+        return None
+    n = (d[0] / nl, 0.0, d[2] / nl)
+    denom = d[0] * n[0] + d[2] * n[2]
+    if abs(denom) < 1e-9:
+        return None
+    w = (a_gl[0] - near[0], a_gl[1] - near[1], a_gl[2] - near[2])
+    t = (w[0] * n[0] + w[2] * n[2]) / denom
+    gl_y = near[1] + t * d[1]
+    return (ax, ay, float(gl_y))          # GL Y is world Z
 
 
 def _ray_plane_world(near, far, plane_y):
@@ -626,11 +662,14 @@ def update_keyframe_drag(canvas, event) -> bool:
     if not entity_id:
         return False
 
-    # Keep the handle's own height unless terrain snapping is on.
-    z = _snap_height(canvas, world[0], world[1])
-    if z is None:
-        z = hit["world"][2]
-    target = (world[0], world[1], z)
+    if _is_3d(canvas) and _shift_held(event):
+        target = world              # Shift = height only; X/Y already held
+    else:
+        # Keep the handle's own height unless terrain snapping is on.
+        z = _snap_height(canvas, world[0], world[1])
+        if z is None:
+            z = hit["world"][2]
+        target = (world[0], world[1], z)
 
     if hit["kind"] == "node":
         # The rest marker carries the whole shot: same rigid follow an entity
@@ -642,10 +681,27 @@ def update_keyframe_drag(canvas, event) -> bool:
                                target[2] - hit["world"][2]))
         hit["world"] = target
     else:
+        # ONE key moves; every other key on the path stays exactly where it is.
         link.move_keyframe(entity_id, seq_name, hit["index"], target)
         _set_key_in_memory(mw, seq_name, hit["node_id"], hit["index"], target)
+        hit["world"] = target
+    _show_drag_value(mw, hit, target)
     canvas.update()
     return True
+
+
+def _show_drag_value(mw, hit, pos):
+    """Live read-out of what the handle is now worth, so a drag is verifiable
+    without reopening the XML."""
+    bar = getattr(mw, "status_bar", None)
+    if bar is None:
+        return
+    what = ("node %s rest pose" % hit["node_id"] if hit["kind"] == "node"
+            else "key %d (t=%.2f)" % (hit["index"], hit["time"]))
+    try:
+        bar.showMessage("%s  ->  %g, %g, %g" % (what, pos[0], pos[1], pos[2]))
+    except Exception:
+        pass
 
 
 # The renderers draw from main_window.movie_data while the writes go through
@@ -689,7 +745,11 @@ def end_keyframe_drag(canvas) -> bool:
     link = getattr(mw, "sequence_link", None)
     if link is not None and getattr(link, "dirty", False):
         link.save()
-        print("[seq] keyframe move saved")
+        w = hit.get("world") or (0.0, 0.0, 0.0)
+        print("[seq] saved %s of node %s at %g,%g,%g"
+              % ("rest pose" if hit["kind"] == "node"
+                 else "key %d (t=%.2f)" % (hit["index"], hit["time"]),
+                 hit["node_id"], w[0], w[1], w[2]))
         md = getattr(mw, "movie_data", None)
         if md is not None and getattr(md, "source_path", None):
             try:
