@@ -159,15 +159,18 @@ def handle_key(canvas, event) -> bool:
     return False
 
 
-# ── picking keyframes in the viewport ──────────────────────────────────────────
+# ── picking sequence handles in the viewport ───────────────────────────────────
 #
 # A sequence node whose entity exists in the level is selected by clicking that
 # entity -- it is an ordinary entity and moving it already drags its keyframes
-# along (sequence_link). What is NOT otherwise reachable is the KEYFRAMES
-# themselves: the diamonds along a path are drawn but have nothing behind them.
-# These make them clickable and draggable.
+# along (sequence_link). What is NOT otherwise reachable is the sequence's OWN
+# geometry: the keyframe diamonds along a path, and the grey rest marker of a
+# node whose entity this level does not have. Both are drawn but had nothing
+# behind them. These make them clickable and draggable, in 2D AND in 3D.
 
 PICK_RADIUS_PX = 8
+
+_MODE_3D = 1        # map_canvas_gpu.MODE_3D
 
 
 def _selected_sequence(canvas):
@@ -177,12 +180,110 @@ def _selected_sequence(canvas):
     return getattr(mw, "movie_data", None), getattr(mw, "selected_movie_sequence", None)
 
 
-def keyframe_at(canvas, screen_x, screen_y):
-    """Which keyframe is under the cursor?
+def _is_3d(canvas) -> bool:
+    return getattr(canvas, "mode", 0) == _MODE_3D
 
-    Returns {'node_id', 'index', 'time', 'world'} or None. Only considers the
-    sequence currently selected in the Sequences tab, so paths you are not
-    working on cannot be grabbed by accident.
+
+def _gl_matrices(canvas):
+    """(viewport, modelview, projection, dpr) for the live 3D view, or None.
+
+    Rebuilt exactly like `map_canvas_gpu.select_entity_3d` and
+    `Gizmo3D.reproject_for_hit` -- FOV 50, the same as the render pass -- so a
+    click lands where the marker was actually drawn.
+    """
+    try:
+        from OpenGL.GL import (glMatrixMode, glLoadIdentity, glGetIntegerv,
+                               glGetDoublev, GL_PROJECTION, GL_MODELVIEW,
+                               GL_VIEWPORT, GL_MODELVIEW_MATRIX,
+                               GL_PROJECTION_MATRIX)
+        from OpenGL.GLU import gluPerspective, gluLookAt
+        canvas.makeCurrent()
+        w = canvas.width()
+        h = max(canvas.height(), 1)
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        gluPerspective(50, w / float(h), 0.1, 10000.0)
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        cam = canvas.camera_3d
+        gluLookAt(cam.position[0], cam.position[1], cam.position[2],
+                  *cam.get_look_at(), 0, 1, 0)
+        return (glGetIntegerv(GL_VIEWPORT),
+                glGetDoublev(GL_MODELVIEW_MATRIX),
+                glGetDoublev(GL_PROJECTION_MATRIX),
+                float(canvas.devicePixelRatio()))
+    except Exception as exc:
+        print(f"[seq] 3D pick matrices unavailable: {exc}")
+        return None
+
+
+def _screen_projector(canvas):
+    """world (x, y, z) -> (screen_x, screen_y) in LOGICAL pixels, or None.
+
+    One projector for both views so PICK_RADIUS_PX means the same thing in
+    each. In 3D, points behind the camera project to None.
+    """
+    if not _is_3d(canvas):
+        w2s = getattr(canvas, "world_to_screen", None)
+        if w2s is None:
+            return None
+
+        def project_2d(x, y, z):
+            try:
+                return w2s(x, y)
+            except Exception:
+                return None
+        return project_2d
+
+    mats = _gl_matrices(canvas)
+    if mats is None:
+        return None
+    viewport, modelview, projection, dpr = mats
+    vph = float(viewport[3])
+    from OpenGL.GLU import gluProject
+
+    def project_3d(x, y, z):
+        try:
+            p = gluProject(x, z, -y, modelview, projection, viewport)
+        except Exception:
+            return None
+        if p is None or not (0.0 <= p[2] <= 1.0):
+            return None                      # behind the camera / clipped
+        return (p[0] / dpr, (vph - p[1]) / dpr)
+    return project_3d
+
+
+def _pick_targets(canvas, movie_data, seq):
+    """Everything grabbable in `seq`, as (kind, node_id, index, time, world).
+
+    Mirrors what the renderers actually DRAW: only the selected node when one
+    is picked in the Sequences tab, and a node's rest marker only when its
+    entity is missing from the level (otherwise the entity itself is the
+    handle, and moving it already drags the path along).
+    """
+    mw = getattr(canvas, "main_window", None)
+    only = getattr(mw, "selected_movie_node_id", None)
+    loaded = {e.id for e in (getattr(canvas, "entities", None) or [])}
+
+    out = []
+    for seq_node in seq.nodes:
+        if only is not None and seq_node.node_id != only:
+            continue
+        for i, k in enumerate(seq_node.all_pos_keys()):
+            out.append(("key", seq_node.node_id, i, k.time, (k.x, k.y, k.z)))
+        nd = movie_data.node_defs.get(seq_node.node_id)
+        if nd is not None and nd.entity_id not in loaded:
+            out.append(("node", seq_node.node_id, -1, 0.0, tuple(nd.pos)))
+    return out
+
+
+def keyframe_at(canvas, screen_x, screen_y):
+    """Which sequence handle is under the cursor?
+
+    Returns {'kind', 'node_id', 'index', 'time', 'world'} or None -- 'kind' is
+    'key' for a keyframe diamond, 'node' for a node's rest marker. Only the
+    sequence currently selected in the Sequences tab is considered, so paths
+    you are not working on cannot be grabbed by accident.
     """
     movie_data, seq_name = _selected_sequence(canvas)
     if movie_data is None or not seq_name:
@@ -190,38 +291,124 @@ def keyframe_at(canvas, screen_x, screen_y):
     seq = movie_data.get_sequence(seq_name)
     if seq is None:
         return None
-    if not hasattr(canvas, "world_to_screen"):
+    project = _screen_projector(canvas)
+    if project is None:
         return None
 
     best = None
     best_d2 = float(PICK_RADIUS_PX) ** 2
-    for seq_node in seq.nodes:
-        keys = seq_node.all_pos_keys()
-        for i, k in enumerate(keys):
-            try:
-                sx, sy = canvas.world_to_screen(k.x, k.y)
-            except Exception:
-                continue
-            d2 = (sx - screen_x) ** 2 + (sy - screen_y) ** 2
-            if d2 <= best_d2:
-                best_d2 = d2
-                best = {"node_id": seq_node.node_id, "index": i,
-                        "time": k.time, "world": (k.x, k.y, k.z)}
+    for kind, node_id, index, t, world in _pick_targets(canvas, movie_data, seq):
+        sp = project(*world)
+        if sp is None:
+            continue
+        d2 = (sp[0] - screen_x) ** 2 + (sp[1] - screen_y) ** 2
+        if d2 <= best_d2:
+            best_d2 = d2
+            best = {"kind": kind, "node_id": node_id, "index": index,
+                    "time": t, "world": world}
     return best
 
 
+def _drag_allowed(canvas) -> bool:
+    """3D View mode is camera-only -- editing there needs Edit mode, same as the
+    gizmo. The 2D handler does its own gating, so it is always allowed here."""
+    if not _is_3d(canvas):
+        return True
+    return bool(getattr(getattr(canvas, "input_handler", None),
+                        "edit_mode_3d", False))
+
+
 def begin_keyframe_drag(canvas, screen_x, screen_y) -> bool:
-    """Grab a keyframe if one is under the cursor. True if a drag started."""
+    """Grab a sequence handle if one is under the cursor.
+
+    True when the click was consumed, so normal selection must not run. In 3D
+    View mode nothing is grabbed and the click falls through to entity
+    selection -- the same rule the gizmo follows.
+    """
     hit = keyframe_at(canvas, screen_x, screen_y)
     if hit is None:
         return False
+    if not _drag_allowed(canvas):
+        print("[seq] cutscene handle under the cursor - switch to Edit mode "
+              "to move it")
+        return False
     mw = canvas.main_window
-    mw.dragging_keyframe = hit
     mw.selected_movie_node_id = hit["node_id"]
-    print("[seq] grabbed keyframe %d (t=%.2f) of node %s"
-          % (hit["index"], hit["time"], hit["node_id"]))
+    mw.dragging_keyframe = hit
+    if hit["kind"] == "node":
+        print("[seq] grabbed node %s (rest marker) - the whole path follows"
+              % hit["node_id"])
+    else:
+        print("[seq] grabbed keyframe %d (t=%.2f) of node %s"
+              % (hit["index"], hit["time"], hit["node_id"]))
     canvas.update()
     return True
+
+
+def _drag_world(canvas, event, anchor):
+    """Cursor position in world space for a drag anchored at `anchor`.
+
+    2D unprojects the cursor straight through the top-down mapping. 3D
+    intersects the view ray with the HORIZONTAL plane through the anchor, so
+    the handle slides under the cursor at its own height instead of snapping
+    down to the ground (a camera flight path is rarely on the terrain).
+    """
+    try:
+        p = event.localPos()
+        sx, sy = p.x(), p.y()
+    except Exception:
+        return None
+
+    if not _is_3d(canvas):
+        return _cursor_world(canvas, event)
+
+    mats = _gl_matrices(canvas)
+    if mats is None:
+        return None
+    viewport, modelview, projection, dpr = mats
+    from OpenGL.GLU import gluUnProject
+    vph = float(viewport[3])
+    px, py = sx * dpr, vph - sy * dpr
+    try:
+        near = gluUnProject(px, py, 0.0, modelview, projection, viewport)
+        far  = gluUnProject(px, py, 1.0, modelview, projection, viewport)
+    except Exception:
+        return None
+    if near is None or far is None:
+        return None
+
+    return _ray_plane_world(near, far, float(anchor[2]))   # world Z is GL Y
+
+
+def _ray_plane_world(near, far, plane_y):
+    """Where a GL view ray crosses the horizontal plane y = plane_y, in WORLD
+    coords. GL (gx, gy, gz) maps back to world (gx, -gz, gy) — the inverse of
+    the world(x, y, z) -> gl(x, z, -y) the renderers use."""
+    dy = far[1] - near[1]
+    if abs(dy) < 1e-9:                  # ray parallel to the plane
+        return None
+    t = (plane_y - near[1]) / dy
+    if t < 0:                           # plane is behind the camera
+        return None
+    gx = near[0] + t * (far[0] - near[0])
+    gz = near[2] + t * (far[2] - near[2])
+    return (float(gx), float(-gz), float(plane_y))
+
+
+def _snap_height(canvas, x, y):
+    """Terrain height at (x, y) when snapping is on, else None."""
+    mw = getattr(canvas, "main_window", None)
+    want = (getattr(mw, "pending_sequence_snap", False)
+            or (_is_3d(canvas) and getattr(canvas, "terrain_snap_enabled", False)))
+    if not want:
+        return None
+    getter = getattr(canvas, "get_terrain_height_at", None)
+    if not callable(getter):
+        return None
+    try:
+        return float(getter(x, y))
+    except Exception:
+        return None
 
 
 def update_keyframe_drag(canvas, event) -> bool:
@@ -229,7 +416,7 @@ def update_keyframe_drag(canvas, event) -> bool:
     hit = getattr(mw, "dragging_keyframe", None) if mw else None
     if not hit:
         return False
-    world = _cursor_world(canvas, event)
+    world = _drag_world(canvas, event, hit["world"])
     if world is None:
         return False
 
@@ -238,14 +425,62 @@ def update_keyframe_drag(canvas, event) -> bool:
     if link is None or not seq_name:
         return False
 
-    # Keep the keyframe's own height unless terrain snapping is on.
-    z = world[2] if getattr(mw, "pending_sequence_snap", False) else hit["world"][2]
     entity_id = _entity_for_node(mw, hit["node_id"])
-    if entity_id:
-        link.move_keyframe(entity_id, seq_name, hit["index"],
-                           (world[0], world[1], z))
+    if not entity_id:
+        return False
+
+    # Keep the handle's own height unless terrain snapping is on.
+    z = _snap_height(canvas, world[0], world[1])
+    if z is None:
+        z = hit["world"][2]
+    target = (world[0], world[1], z)
+
+    if hit["kind"] == "node":
+        # The rest marker carries the whole shot: same rigid follow an entity
+        # move gets. Measured from the LAST cursor position, so re-anchor.
+        link.on_entity_moved(entity_id, hit["world"], target)
+        _shift_node_in_memory(mw, hit["node_id"],
+                              (target[0] - hit["world"][0],
+                               target[1] - hit["world"][1],
+                               target[2] - hit["world"][2]))
+        hit["world"] = target
+    else:
+        link.move_keyframe(entity_id, seq_name, hit["index"], target)
+        _set_key_in_memory(mw, seq_name, hit["node_id"], hit["index"], target)
     canvas.update()
     return True
+
+
+# The renderers draw from main_window.movie_data while the writes go through
+# SequenceLink's own ElementTree, so the drag has to touch both -- otherwise the
+# path only jumps to its new shape after the post-drag reload.
+
+def _set_key_in_memory(mw, seq_name, node_id, index, pos):
+    md = getattr(mw, "movie_data", None)
+    seq = md.get_sequence(seq_name) if md is not None else None
+    node = seq.node_by_id(node_id) if seq is not None else None
+    keys = node.all_pos_keys() if node is not None else []
+    if 0 <= index < len(keys):
+        k = keys[index]
+        k.x, k.y, k.z = float(pos[0]), float(pos[1]), float(pos[2])
+
+
+def _shift_node_in_memory(mw, node_id, delta):
+    md = getattr(mw, "movie_data", None)
+    if md is None:
+        return
+    dx, dy, dz = delta
+    nd = md.node_defs.get(node_id)
+    if nd is not None:
+        nd.pos = (nd.pos[0] + dx, nd.pos[1] + dy, nd.pos[2] + dz)
+    for seq in md.sequences:          # on_entity_moved shifts every sequence
+        node = seq.node_by_id(node_id)
+        if node is None:
+            continue
+        for k in node.all_pos_keys():
+            k.x += dx
+            k.y += dy
+            k.z += dz
 
 
 def end_keyframe_drag(canvas) -> bool:

@@ -215,15 +215,23 @@ class SequenceLink:
 
         Non-invasive: the original method still does everything it did, this
         just runs afterwards. Safe to call twice -- it refuses to double-wrap.
+
+        The wrapper reads `canvas.sequence_link` at CALL time rather than
+        closing over `self`: the wrap only happens once, so a closed-over link
+        would keep writing to the previously loaded level's moviedata.xml after
+        the user opens another level.
         """
+        canvas.sequence_link = self
         if getattr(canvas, "_sequence_link_attached", False):
             return False
         original = canvas._auto_save_entity_changes
-        link = self
 
         def wrapped(entity):
             before = getattr(entity, "_seq_last_pos", None)
             result = original(entity)
+            link = getattr(canvas, "sequence_link", None)
+            if link is None:
+                return result
             try:
                 eid = str(getattr(entity, "id", ""))
                 pos = _entity_pos(entity)
@@ -240,7 +248,6 @@ class SequenceLink:
 
         canvas._auto_save_entity_changes = wrapped
         canvas._sequence_link_attached = True
-        canvas.sequence_link = link
         return True
 
 

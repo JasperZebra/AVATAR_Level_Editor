@@ -6377,6 +6377,12 @@ class SimplifiedMapEditor(QMainWindow):
                     loaded_components.append(f"Movie Data ({seq_count} sequences)")
                     self._attach_sequence_link(movie_path)
                 else:
+                    # Drop the previous level's link — the autosave wrapper is
+                    # only installed once and reads this at call time, so a
+                    # leftover link would sync moves into the OLD level's file.
+                    self.sequence_link = None
+                    if hasattr(self, 'canvas'):
+                        self.canvas.sequence_link = None
                     log("No moviedata.xml found for this level")
             except Exception as _me:
                 log(f"moviedata.xml load error: {_me}")
@@ -9250,11 +9256,16 @@ class SimplifiedMapEditor(QMainWindow):
         cinematic camera without this leaves its animated path behind and
         silently breaks the shot.
         """
+        canvas = getattr(self, 'canvas', None)
+        # Never leave the previously loaded level's link in place — the autosave
+        # wrapper is installed once and resolves it at call time.
+        self.sequence_link = None
+        if canvas is not None:
+            canvas.sequence_link = None
         try:
             import sequence_link
             link = sequence_link.SequenceLink(movie_path)
             self.sequence_link = link
-            canvas = getattr(self, 'canvas', None)
             if canvas is not None and hasattr(canvas, '_auto_save_entity_changes'):
                 if link.attach(canvas):
                     print("   [seq] moviedata sync attached to autosave")
@@ -12045,11 +12056,20 @@ class SimplifiedMapEditor(QMainWindow):
         canvas.selected = [ent]
         canvas.selected_entity = ent
         self.selected_entity = ent
-        if hasattr(self, 'update_ui_for_selected_entity'):
-            try:
-                self.update_ui_for_selected_entity(ent)
-            except Exception:
-                pass
+        # Route through the same handler a viewport click uses, so the node
+        # gets its GIZMO (2D handles + the 3D translate/rotate widget) instead
+        # of only being highlighted -- without this there was nothing to grab
+        # in 3D at all.
+        try:
+            self.on_entity_selected(ent)
+        except Exception as exc:
+            print("   [seq] gizmo sync skipped: %s" % exc)
+            if hasattr(self, 'update_ui_for_selected_entity'):
+                try:
+                    self.update_ui_for_selected_entity(ent)
+                except Exception:
+                    pass
+        canvas.update()
         self.status_bar.showMessage("Selected %s (sequence node)" % nd.name)
 
     # ── Preview playback ───────────────────────────────────────────────────────

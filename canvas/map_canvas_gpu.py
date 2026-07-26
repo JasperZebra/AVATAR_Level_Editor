@@ -50,6 +50,7 @@ from water_mesh_editor import ImprovedWaterMeshEditor
 from water_plane_renderer import WaterPlaneRenderer, strip_baked_water
 from .movie_renderer import (draw_movie_paths_2d, render_movie_paths_3d,
                              draw_pending_sequence_2d, render_pending_sequence_3d)
+import sequence_placement
 
 """Enhanced 3D Camera with 2D-style smooth movement"""
 import numpy as np
@@ -6733,6 +6734,13 @@ class MapCanvas(QOpenGLWidget):
                         self.update()
                         return
 
+                # Cutscene handles (keyframe diamonds, node rest markers) are
+                # drawn depth-test-free ON TOP of the level, so they get the
+                # click before the entity raycast — same order as 2D.
+                if sequence_placement.begin_keyframe_drag(self, mouse_x, mouse_y):
+                    self.update()
+                    return
+
                 selected_entity = self.select_entity_3d(mouse_x, mouse_y)
 
                 if selected_entity:
@@ -6779,6 +6787,10 @@ class MapCanvas(QOpenGLWidget):
         """Handle mouse release - mode aware"""
         if self.mode == MODE_3D:
             if event.button() == Qt.LeftButton:
+                # Finish a cutscene handle drag (writes moviedata.xml)
+                if sequence_placement.end_keyframe_drag(self):
+                    return
+
                 # End terrain edit stroke
                 if self.terrain_edit_mode and self._terrain_edit_pressing:
                     self._terrain_edit_pressing = False
@@ -6824,6 +6836,10 @@ class MapCanvas(QOpenGLWidget):
                 mx = event.localPos().x() * dpr
                 my = event.localPos().y() * dpr
                 self.gizmo_3d.update_drag(mx, my, self.selected_entity, self)
+                return
+
+            # Dragging a cutscene keyframe / node marker
+            if sequence_placement.update_keyframe_drag(self, event):
                 return
 
             if self.mouse_captured_3d and hasattr(self, '_mouse_anchor_global'):

@@ -65,6 +65,10 @@ root_files = [
     'main.py',
     'object_library.py',
     'set_patch_folder.py',
+    'sequence_export_import.py',
+    'sequence_import_dialog.py',
+    'sequence_link.py',
+    'sequence_placement.py',
     'simplified_map_editor.py',
     'theme_settings.py',
     '__init__.py',
@@ -449,6 +453,10 @@ build_options = {
         'main',
         'movie_data',                   # ← moviedata.xml cutscene parser (Sequences tab)
         'object_library',
+        'sequence_export_import',       # ← cinematic bundle export/import
+        'sequence_import_dialog',       # ← Sequences tab import dialog
+        'sequence_link',                # ← keeps moviedata keys with their entity
+        'sequence_placement',           # ← viewport placing + keyframe picking (2D/3D)
         'set_patch_folder',
         'simplified_map_editor',
         'theme_settings',
