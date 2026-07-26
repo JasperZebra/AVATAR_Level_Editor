@@ -6,6 +6,8 @@ __pycache__/
 tools/*
 !tools/camera_tool_project/
 mass_exported_objects/
+# exported sequence bundles are user data, like objects/ above
+sequences/
 objects/
 patch_config.json
 editor_config.json
