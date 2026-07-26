@@ -803,9 +803,50 @@ up in scans.
   `CCameraComponent` registers no vec3 and why `CCameraComponent::OnEntityMove()`
   exists in the symbol table. Moving a camera entity is the same call.
 
-Still needed: entity *rotation*. `GetPosition`/`SetPosition` only cover
-translation, and `ndAngle3<float>` angles must live nearby — `+0x7c` is the
-obvious next field to check, given `0x1024a7a0` writes a vec3 at `+0x7c`.
+### Entity rotation — NOT yet found, and the obvious guess is wrong
+
+`analysis/find_vec3_accessors.py` finds every trivial vec3 accessor in the DLL
+by byte shape (the compiler emits an identical encoding for each, with only the
+displacement changing). It self-validates by recovering the known
+`CEntity::GetPosition` at `+0x70`.
+
+Result: **11 getters, 7 setters** across the whole binary. None is an entity
+rotation accessor. So rotation is not stored as a plain vec3 with a trivial
+accessor — it may be a matrix, a quaternion, or reached through a non-trivial
+function.
+
+There is also a layout puzzle to resolve rather than paper over. If property
+list `0x111e6f64` is `CEntity` (it registers `hidScale` and
+`selSpecificToTerritoryController`, both of which appear in
+`Camera.Free_1.xml`), then:
+
+```
++0x70  position vec3   (confirmed via GetPosition)  -> ends at +0x7c
++0x7c  ??? one dword
++0x80  hidScale
+```
+
+But the FCB authoring order is `hidPos`, `hidAngles`, `hidScale`. If runtime
+matched that order, a 12-byte `hidAngles` at `+0x7c` would push scale to `+0x88`,
+not `+0x80`. Two possibilities, unresolved:
+
+1. Runtime layout simply differs from authoring order (likely — `hid*` fields
+   are engine built-ins, serialised specially rather than as ordinary
+   properties, and neither `hidPos` nor `hidAngles` appears in any property
+   table).
+2. Property list `0x111e6f64` is **not** `CEntity`, and the `+0x70` position and
+   `+0x80` scale belong to different classes. **This is not proven** — the class
+   identity was inferred from field names, not established.
+
+Do not build on the `+0x7c` guess until one of these is settled.
+
+**Byte-pattern lesson worth keeping:** three separate scans in this session
+returned a confident "0 results" because of regex problems, not absent data.
+Binary opcodes collide with regex metacharacters (`0x24` is `$`, `0x2e` is `.`),
+and shell quoting mangles escapes on top of that. `find_vec3_accessors.py`
+matches raw byte lists with an explicit wildcard instead of using `re`. Do the
+same for any future binary pattern work, and always include one known-answer
+case in the output as a self-check.
 
 ## [CONFIRMED] A developer console exists in the binary
 
