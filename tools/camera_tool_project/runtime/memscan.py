@@ -151,10 +151,11 @@ def cmd_new(args, proc):
             arr = as_array(data, dtype, off)
             if arr is None:
                 continue
-            if args.type in FLOAT_EPS:
-                hit = np.where(np.abs(arr - target) <= FLOAT_EPS[args.type])[0]
-            else:
-                hit = np.where(arr == target)[0]
+            with np.errstate(invalid="ignore", over="ignore", under="ignore"):
+                if args.type in FLOAT_EPS:
+                    hit = np.where(np.abs(arr - target) <= FLOAT_EPS[args.type])[0]
+                else:
+                    hit = np.where(arr == target)[0]
             if hit.size:
                 addrs.append(base + off + hit * itemsize)
                 vals.append(arr[hit])
@@ -242,6 +243,13 @@ def cmd_refine(args, proc):
 
 
 def compare(old, new, args, eps):
+    # Raw memory reinterpreted as floats contains NaN/inf bit patterns, and as
+    # ints it wraps -- both are expected here, so don't let numpy warn on them.
+    with np.errstate(invalid="ignore", over="ignore", under="ignore"):
+        return _compare(old, new, args, eps)
+
+
+def _compare(old, new, args, eps):
     if args.value is not None:
         t = np.array(args.value, dtype=old.dtype)
         return np.where(np.abs(new - t) <= eps if eps else new == t)[0]

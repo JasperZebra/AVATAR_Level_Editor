@@ -208,6 +208,9 @@ class DuniaProcess:
     # -- memory ----------------------------------------------------------
 
     def read(self, address: int, size: int) -> bytes:
+        # Callers routinely pass numpy integers from scan results; ctypes will
+        # not coerce those, so normalise here rather than at every call site.
+        address, size = int(address), int(size)
         buf = ctypes.create_string_buffer(size)
         got = ctypes.c_size_t(0)
         ok = k32.ReadProcessMemory(self.handle, ctypes.c_void_p(address),
@@ -225,6 +228,7 @@ class DuniaProcess:
             return None
 
     def write(self, address: int, data: bytes) -> int:
+        address = int(address)
         wrote = ctypes.c_size_t(0)
         ok = k32.WriteProcessMemory(self.handle, ctypes.c_void_p(address),
                                     data, len(data), ctypes.byref(wrote))

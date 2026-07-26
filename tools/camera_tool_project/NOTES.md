@@ -353,6 +353,85 @@ entity has to exist first. That leaves:
   instantiate as the genuine runtime class. This is the level editor's home
   turf and needs no injection.
 
+## [FOUND] Live camera transform matrices — 2026-07-25
+
+Located empirically with `memscan.py` plus known editor coordinates, which is
+far faster than unknown-value scanning alone. **Ground-truthing against the
+level editor's coordinates is the single biggest accelerator available on this
+project — use it first, every time.**
+
+Method that worked, in order:
+
+1. Unknown-value f32 snapshot, then alternating `refine --changed` (while
+   moving) and `refine --unchanged` (while still): 7.4M → 2.4M → 890K → 240K.
+2. Alternation stalled around 139K, so switched to **known coordinates**. User
+   reported standing near `(594, 288, 31)` in editor space; scanning for that
+   triple in any axis order found `(592.13, 290.11, 33.68)`. **The game's axis
+   order matches the editor's directly — no permutation or sign flip needed.**
+3. Moved to `(647, 281, 31)` and kept only sites that both *changed* and now
+   held the new position: 6,455 → 5,700 tracking sites.
+4. Rotation-only test (mouse turn, no walking) to separate camera from player,
+   then filtered to orthonormal 4×4s whose *rotation rows* changed: 166 → 75.
+
+### Result
+
+A group of five matrices, evenly spaced ~0xE00 apart, rotating together and
+sitting ~2.3 m from the player and slightly above — a ring of per-frame camera
+transforms:
+
+```
+0x0c3cc950  0x0c3cd750  0x0c3ce550  0x0c3cf350  0x0c9175e0
+```
+
+`0x0c3cc950` read live:
+
+```
+right   -0.9510  -0.3093  -0.0016   0.0000
+up       0.3028  -0.9300  -0.2085   0.0000
+fwd      0.0631  -0.1988   0.9780   0.0000
+POS    646.3718 282.3441  33.4197   1.0000
+```
+
+Perfectly orthonormal (all three basis rows measure exactly 1.0000) with a
+canonical `0,0,0,1` last column. Row-major, translation in **row 3**.
+
+**These are heap addresses and will not survive a level reload or restart.**
+They are for experimentation only; the durable target is the code that *writes*
+them, per the AFOP approach below.
+
+### Two matrix conventions exist here too
+
+Earlier in the same scan, a static (non-tracking) transform pair appeared in
+both layouts simultaneously — `0x0c5dc370` with translation in row 3, and
+`0x0c5dbc90` holding its exact transpose with translation in the 4th column.
+This is the same trap the AFOP tool's README documents. Any code reading or
+writing a Dunia matrix must re-verify which layout it has rather than assume.
+
+## Reference implementation: the AFOP camera tool
+
+`C:\Users\sambe\Desktop\AFOP_TESTING\CAMERA_TOOL` is a complete, working
+external freecam for *Avatar: Frontiers of Pandora* — pure ctypes, no DLL
+injection, verified live. It is the architectural template for this project:
+
+1. AOB-scan for the camera-matrix-**write** routine.
+2. Displace its first instructions into an allocated **code cave** that (a)
+   captures the camera object pointer from a register every time the game
+   writes, and (b) on a freeze flag jumps straight to the routine's `ret`,
+   skipping every matrix store.
+3. Drive the camera from outside the process.
+
+Critical lesson recorded in its notes, expected to apply here as well:
+**writing the destination matrix from outside was measured NOT to move the
+rendered view — the SOURCE matrix being copied is the thing to control.**
+
+Its AOB does not transfer: it matches a `movups`-based 4×4 copy, and scanning
+Dunia for that shape returns hits only in the AMD driver and `combase`, none in
+Dunia itself. Expected — AFOP is a 2023 x64 build, Avatar is 2009 x86. Avatar's
+write site must be found independently.
+
+Porting the hook to x86 means a 5-byte `E9 rel32` patch rather than AFOP's
+14-byte absolute `jmp [rip]`, and 32-bit registers throughout.
+
 ## [CONFIRMED] A developer console exists in the binary
 
 `CDominoConsoleCommandManager`, `CFCXConsole`, `CConsoleService`,
