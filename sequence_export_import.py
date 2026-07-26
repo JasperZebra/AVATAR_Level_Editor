@@ -36,6 +36,7 @@ boxes, not guessed):
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import xml.etree.ElementTree as ET
@@ -119,6 +120,47 @@ def _vec3(s: str) -> list:
 def _fmt_vec(vals) -> str:
     # Match the game's own formatting: shortest repr that round-trips.
     return ",".join(f"{v:g}" for v in vals)
+
+
+# ── quaternion helpers ─────────────────────────────────────────────────────────
+#
+# moviedata stores rotations as (w, x, y, z). Per movie_data.quat_to_editor_angles
+# (verified there against 333 NodeDef<->entity pairs), game space is Z-up and the
+# rotation decomposes as Rz(az)*Rx(ax)*Ry(ay) -- so HEADING is rotation about Z.
+# "Face the other way" therefore means composing a yaw quaternion about Z.
+
+def _quat_mul(a, b) -> tuple:
+    """Hamilton product, (w,x,y,z). a*b applies b first, then a."""
+    aw, ax, ay, az = a
+    bw, bx, by, bz = b
+    return (aw * bw - ax * bx - ay * by - az * bz,
+            aw * bx + ax * bw + ay * bz - az * by,
+            aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw)
+
+
+def yaw_quat(degrees: float) -> tuple:
+    """Rotation of `degrees` about the world Z axis (the game's up axis)."""
+    half = math.radians(degrees) * 0.5
+    return (math.cos(half), 0.0, 0.0, math.sin(half))
+
+
+def rotate_point_z(x: float, y: float, z: float, degrees: float,
+                   pivot) -> tuple:
+    """Rotate a point about a vertical axis through `pivot`. Z is unchanged."""
+    rad = math.radians(degrees)
+    c, s = math.cos(rad), math.sin(rad)
+    dx, dy = x - pivot[0], y - pivot[1]
+    return (pivot[0] + dx * c - dy * s,
+            pivot[1] + dx * s + dy * c,
+            z)
+
+
+def _parse_quat(s: str) -> tuple:
+    parts = [float(v) for v in s.split(",")[:4]]
+    while len(parts) < 4:
+        parts.append(0.0)
+    return tuple(parts)
 
 
 def _auto_anchor(node_defs) -> tuple:
@@ -308,6 +350,345 @@ def rebase_bundle(bundle: SequenceBundle, target_anchor: tuple) -> int:
 
     bundle.anchor = tuple(target_anchor)
     return moved
+
+
+def rotate_bundle(bundle: SequenceBundle, degrees: float, pivot=None) -> dict:
+    """Spin the whole sequence about a vertical axis -- change which way it faces.
+
+    Rotates BOTH halves of the transform, which is the part that is easy to get
+    wrong: every Position key and rest pose orbits the pivot, and every Rotation
+    key and rest orientation is composed with the same yaw. Doing only one gives
+    a Samson that flies the new path while still pointing the old way.
+
+    `pivot` defaults to the bundle's anchor, so the shot turns in place.
+    Returns counts of what changed.
+    """
+    if pivot is None:
+        pivot = bundle.anchor
+    q_yaw = yaw_quat(degrees)
+    moved = turned = 0
+
+    for n in bundle.node_defs:
+        p = _vec3(n.get("Pos", "0,0,0"))
+        n.set("Pos", _fmt_vec(rotate_point_z(p[0], p[1], p[2], degrees, pivot)))
+        moved += 1
+        rot = n.get("Rotate")
+        if rot:
+            n.set("Rotate", _fmt_vec(_quat_mul(q_yaw, _parse_quat(rot))))
+            turned += 1
+
+    for node in bundle.sequence_elem.findall("./Nodes/Node"):
+        for track in node.findall("Track"):
+            pid = track.get("ParamId")
+            if pid == "1":                      # Position
+                for key in track.findall("Key"):
+                    val = key.get("value")
+                    if not val:
+                        continue
+                    p = _vec3(val)
+                    key.set("value", _fmt_vec(
+                        rotate_point_z(p[0], p[1], p[2], degrees, pivot)))
+                    moved += 1
+            elif pid == "2":                    # Rotation (quaternion)
+                for key in track.findall("Key"):
+                    val = key.get("value")
+                    if not val:
+                        continue
+                    key.set("value", _fmt_vec(_quat_mul(q_yaw, _parse_quat(val))))
+                    turned += 1
+
+    # The anchor itself only moves if we spun about something else.
+    if pivot != bundle.anchor:
+        bundle.anchor = rotate_point_z(bundle.anchor[0], bundle.anchor[1],
+                                       bundle.anchor[2], degrees, pivot)
+    return {"positions_rotated": moved, "orientations_rotated": turned,
+            "degrees": degrees}
+
+
+def rotate_node(bundle: SequenceBundle, node_name_or_id: str, degrees: float,
+                pivot=None) -> dict:
+    """Rotate ONE node of the sequence, leaving the rest of the shot alone.
+
+    Use to re-aim a single actor -- e.g. have the Samson enter facing a
+    different way without disturbing the cameras. `pivot` defaults to that
+    node's own rest position, so it turns on the spot.
+    """
+    target = None
+    for n in bundle.node_defs:
+        if n.get("Name") == node_name_or_id or n.get("Id") == str(node_name_or_id):
+            target = n
+            break
+    if target is None:
+        raise KeyError(f"no node named {node_name_or_id!r} in this sequence")
+
+    if pivot is None:
+        pivot = tuple(_vec3(target.get("Pos", "0,0,0")))
+    q_yaw = yaw_quat(degrees)
+
+    p = _vec3(target.get("Pos", "0,0,0"))
+    target.set("Pos", _fmt_vec(rotate_point_z(p[0], p[1], p[2], degrees, pivot)))
+    rot = target.get("Rotate")
+    if rot:
+        target.set("Rotate", _fmt_vec(_quat_mul(q_yaw, _parse_quat(rot))))
+
+    moved = turned = 0
+    for sn in bundle.sequence_elem.findall("./Nodes/Node"):
+        if sn.get("Id") != target.get("Id"):
+            continue
+        for track in sn.findall("Track"):
+            pid = track.get("ParamId")
+            for key in track.findall("Key"):
+                val = key.get("value")
+                if not val:
+                    continue
+                if pid == "1":
+                    q = _vec3(val)
+                    key.set("value", _fmt_vec(
+                        rotate_point_z(q[0], q[1], q[2], degrees, pivot)))
+                    moved += 1
+                elif pid == "2":
+                    key.set("value", _fmt_vec(_quat_mul(q_yaw, _parse_quat(val))))
+                    turned += 1
+    return {"node": target.get("Name"), "positions_rotated": moved,
+            "orientations_rotated": turned, "degrees": degrees}
+
+
+# ── adding and removing nodes ──────────────────────────────────────────────────
+
+def list_nodes(bundle: SequenceBundle) -> list:
+    """Every node in the sequence, for a +/- list UI.
+
+    Returns [{'id','name','entity_id','is_camera','pos_keys','rot_keys'}].
+    """
+    by_id = {n.get("Id"): n for n in bundle.node_defs}
+    out = []
+    for sn in bundle.sequence_elem.findall("./Nodes/Node"):
+        nd = by_id.get(sn.get("Id"))
+        pos_keys = rot_keys = 0
+        for track in sn.findall("Track"):
+            k = len(track.findall("Key"))
+            if track.get("ParamId") == "1":
+                pos_keys += k
+            elif track.get("ParamId") == "2":
+                rot_keys += k
+        out.append({
+            "id": sn.get("Id"),
+            "name": nd.get("Name") if nd is not None else f"<orphan {sn.get('Id')}>",
+            "entity_id": nd.get("EntityId", "") if nd is not None else "",
+            "is_camera": is_camera_node(nd) if nd is not None else False,
+            "pos_keys": pos_keys,
+            "rot_keys": rot_keys,
+        })
+    return out
+
+
+def remove_node(bundle: SequenceBundle, node_id: str) -> dict:
+    """Drop one node from the sequence -- the '-' button.
+
+    Removes both the registry entry and the animated tracks. Everything else
+    keeps its animation exactly.
+    """
+    node_id = str(node_id)
+    removed_name = None
+    for n in list(bundle.node_defs):
+        if n.get("Id") == node_id:
+            removed_name = n.get("Name")
+            bundle.node_defs.remove(n)
+            break
+
+    nodes_parent = bundle.sequence_elem.find("Nodes")
+    dropped_tracks = 0
+    if nodes_parent is not None:
+        for sn in list(nodes_parent.findall("Node")):
+            if sn.get("Id") == node_id:
+                dropped_tracks = len(sn.findall("Track"))
+                nodes_parent.remove(sn)
+    if removed_name is None and dropped_tracks == 0:
+        raise KeyError(f"no node {node_id!r} in this sequence")
+    return {"removed": removed_name or node_id, "tracks_dropped": dropped_tracks}
+
+
+def _free_node_id(bundle: SequenceBundle) -> str:
+    """A node Id not already used. Shipped ids are signed 32-bit, both signs."""
+    used = {n.get("Id") for n in bundle.node_defs}
+    used |= {n.get("Id") for n in bundle.sequence_elem.findall("./Nodes/Node")}
+    candidate = 1000000
+    while str(candidate) in used:
+        candidate += 1
+    return str(candidate)
+
+
+def add_node(bundle: SequenceBundle, name: str, entity_id: str,
+             pos=(0.0, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0),
+             keyframes=None) -> dict:
+    """Add a node to the sequence -- the '+' button.
+
+    `keyframes` is an optional [(time, x, y, z)] Position track. With none, the
+    node gets a single key at t=0 holding it at `pos`, which is the useful
+    default for something that should simply be present and posed (a prop, or a
+    camera you are about to author a path for).
+    """
+    node_id = _free_node_id(bundle)
+
+    nd = ET.Element("Node", {
+        "Id": node_id,
+        "Type": "1",
+        "Name": name,
+        "EntityId": str(entity_id),
+        "Pos": _fmt_vec(pos),
+        "Rotate": _fmt_vec(rot),
+        "Scale": "1,1,1",
+    })
+    bundle.node_defs.append(nd)
+
+    nodes_parent = bundle.sequence_elem.find("Nodes")
+    if nodes_parent is None:
+        nodes_parent = ET.SubElement(bundle.sequence_elem, "Nodes")
+    sn = ET.SubElement(nodes_parent, "Node", {"Id": node_id})
+
+    track = ET.SubElement(sn, "Track", {"ParamId": "1", "Flags": "0"})
+    keys = keyframes or [(0.0, pos[0], pos[1], pos[2])]
+    for t, x, y, z in keys:
+        ET.SubElement(track, "Key", {"time": f"{float(t):g}",
+                                     "value": _fmt_vec((x, y, z))})
+
+    rtrack = ET.SubElement(sn, "Track", {"ParamId": "2", "Flags": "0"})
+    ET.SubElement(rtrack, "Key", {"time": "0", "value": _fmt_vec(rot)})
+
+    return {"added": name, "node_id": node_id, "pos_keys": len(keys)}
+
+
+def duplicate_node(bundle: SequenceBundle, node_id: str, new_name: str = None,
+                   entity_id: str = None, offset=(0.0, 0.0, 0.0),
+                   time_shift: float = 0.0, yaw: float = 0.0) -> dict:
+    """Copy a node WITH its whole animated path -- "two Samsons instead of one".
+
+    The copy keeps the original's flight exactly, then optionally:
+        offset      shifts it in space, so they fly in formation rather than
+                    through each other
+        time_shift  delays it, so the second one trails the first
+        yaw         turns it about its own start position
+
+    `entity_id` must be a DIFFERENT entity from the original -- two nodes
+    pointing at one entity means the engine drives the same object twice and
+    only the last write per frame survives. Left as None it copies the
+    original's id and returns a warning saying so.
+    """
+    node_id = str(node_id)
+    src_def = None
+    for n in bundle.node_defs:
+        if n.get("Id") == node_id:
+            src_def = n
+            break
+    src_seq = None
+    for sn in bundle.sequence_elem.findall("./Nodes/Node"):
+        if sn.get("Id") == node_id:
+            src_seq = sn
+            break
+    if src_def is None or src_seq is None:
+        raise KeyError(f"no node {node_id!r} in this sequence")
+
+    new_id = _free_node_id(bundle)
+    warning = None
+    if entity_id is None:
+        entity_id = src_def.get("EntityId", "")
+        warning = ("copy shares the original's EntityId -- give it a distinct "
+                   "entity or both nodes will drive the same object")
+
+    pivot = tuple(_vec3(src_def.get("Pos", "0,0,0")))
+    q_yaw = yaw_quat(yaw) if yaw else None
+
+    def _place(x, y, z):
+        if q_yaw is not None:
+            x, y, z = rotate_point_z(x, y, z, yaw, pivot)
+        return (x + offset[0], y + offset[1], z + offset[2])
+
+    nd = ET.Element("Node", dict(src_def.attrib))
+    nd.set("Id", new_id)
+    nd.set("Name", new_name or f"{src_def.get('Name','node')}_copy")
+    nd.set("EntityId", str(entity_id))
+    nd.set("Pos", _fmt_vec(_place(*_vec3(src_def.get("Pos", "0,0,0")))))
+    if q_yaw is not None and src_def.get("Rotate"):
+        nd.set("Rotate", _fmt_vec(_quat_mul(q_yaw,
+                                            _parse_quat(src_def.get("Rotate")))))
+    bundle.node_defs.append(nd)
+
+    sn = ET.SubElement(bundle.sequence_elem.find("Nodes"), "Node", {"Id": new_id})
+    copied = 0
+    for track in src_seq.findall("Track"):
+        pid = track.get("ParamId")
+        nt = ET.SubElement(sn, "Track", dict(track.attrib))
+        for key in track.findall("Key"):
+            attrs = dict(key.attrib)
+            if time_shift:
+                attrs["time"] = f"{float(attrs.get('time', 0)) + time_shift:g}"
+            val = attrs.get("value")
+            if val and pid == "1":
+                attrs["value"] = _fmt_vec(_place(*_vec3(val)))
+            elif val and pid == "2" and q_yaw is not None:
+                attrs["value"] = _fmt_vec(_quat_mul(q_yaw, _parse_quat(val)))
+            ET.SubElement(nt, "Key", attrs)
+            copied += 1
+
+    # A delayed copy can run past the sequence's declared end, which would clip it.
+    if time_shift > 0:
+        end = float(bundle.sequence_elem.get("EndTime", 0))
+        needed = end + time_shift
+        if needed > end:
+            bundle.sequence_elem.set("EndTime", f"{needed:g}")
+            bundle.duration = needed
+
+    out = {"source": src_def.get("Name"), "new_node": nd.get("Name"),
+           "node_id": new_id, "keys_copied": copied}
+    if warning:
+        out["warning"] = warning
+    return out
+
+
+def add_keyframe(bundle: SequenceBundle, node_id: str, time: float,
+                 pos) -> dict:
+    """Insert a Position keyframe on a node, kept in time order."""
+    node_id = str(node_id)
+    for sn in bundle.sequence_elem.findall("./Nodes/Node"):
+        if sn.get("Id") != node_id:
+            continue
+        track = None
+        for t in sn.findall("Track"):
+            if t.get("ParamId") == "1":
+                track = t
+                break
+        if track is None:
+            track = ET.SubElement(sn, "Track", {"ParamId": "1", "Flags": "0"})
+        key = ET.Element("Key", {"time": f"{float(time):g}",
+                                 "value": _fmt_vec(pos)})
+        keys = track.findall("Key")
+        idx = len(keys)
+        for i, k in enumerate(keys):
+            if float(k.get("time", 0)) > float(time):
+                idx = i
+                break
+        track.insert(idx, key)
+        return {"node_id": node_id, "time": time, "keys": len(keys) + 1}
+    raise KeyError(f"no node {node_id!r} in this sequence")
+
+
+def remove_keyframe(bundle: SequenceBundle, node_id: str, key_index: int,
+                    param_id: str = "1") -> dict:
+    """Delete one keyframe by index from a node's track."""
+    node_id = str(node_id)
+    for sn in bundle.sequence_elem.findall("./Nodes/Node"):
+        if sn.get("Id") != node_id:
+            continue
+        for track in sn.findall("Track"):
+            if track.get("ParamId") != param_id:
+                continue
+            keys = track.findall("Key")
+            if not (0 <= key_index < len(keys)):
+                raise IndexError(f"key {key_index} out of range ({len(keys)})")
+            track.remove(keys[key_index])
+            return {"node_id": node_id, "removed_index": key_index,
+                    "keys_left": len(keys) - 1}
+    raise KeyError(f"no node {node_id!r} with track {param_id}")
 
 
 def remap_entity_ids(bundle: SequenceBundle, mapping: dict) -> list:
