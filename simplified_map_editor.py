@@ -9457,20 +9457,18 @@ class SimplifiedMapEditor(QMainWindow):
         menu.exec_(self.sequences_tree.viewport().mapToGlobal(point))
 
     def _sequence_context_target(self, item):
-        """(sequence_name, node_id or None) for the clicked row."""
+        """(sequence_name, node_id or None) for the clicked row.
+
+        Matches how refresh_sequences_tree stores things: a sequence row keeps
+        its name in Qt.UserRole, and a node row keeps its node id in
+        Qt.UserRole + 1 with the name on its parent.
+        """
         if item is None:
             return (getattr(self, 'selected_movie_sequence', None), None)
-        data = item.data(0, Qt.UserRole)
-        if isinstance(data, dict):
-            return (data.get('sequence'), data.get('node_id'))
         parent = item.parent()
         if parent is None:
-            return (item.text(0).split('  ')[0].strip(), None)
-        pdata = parent.data(0, Qt.UserRole)
-        seq = (pdata.get('sequence') if isinstance(pdata, dict)
-               else parent.text(0).split('  ')[0].strip())
-        nid = data if isinstance(data, (str, int)) else None
-        return (seq, nid)
+            return (item.data(0, Qt.UserRole), None)
+        return (parent.data(0, Qt.UserRole), item.data(0, Qt.UserRole + 1))
 
     def _sequence_live_bundle(self, seq_name):
         """Wrap the loaded moviedata's sequence so the edit helpers can act on it.
@@ -12000,6 +11998,7 @@ class SimplifiedMapEditor(QMainWindow):
             node_id  = item.data(0, Qt.UserRole + 1)
             self.selected_movie_sequence = seq_name
             self.selected_movie_node_id  = node_id
+            self._select_entity_for_movie_node(node_id)
         else:
             # Top-level sequence item — show all nodes
             seq_name = item.data(0, Qt.UserRole)
@@ -12013,6 +12012,45 @@ class SimplifiedMapEditor(QMainWindow):
             self.cs_camera_preview.set_sequence(self.selected_movie_sequence)
         if hasattr(self, 'canvas'):
             self.canvas.update()
+
+    def _select_entity_for_movie_node(self, node_id):
+        """Select the world entity a sequence node drives.
+
+        Clicking a node in the Sequences tab now selects the real entity in the
+        viewport, so it can be moved with the ordinary gizmo in 2D or 3D -- and
+        moving it drags the node's keyframes along (sequence_link).
+        """
+        md = getattr(self, 'movie_data', None)
+        if md is None or node_id is None:
+            return
+        nd = md.node_defs.get(node_id)
+        if nd is None:
+            return
+        ent = None
+        try:
+            lookup = self._movie_entity_map() or {}
+            ent = lookup.get(nd.entity_id) or lookup.get(str(nd.entity_id))
+        except Exception:
+            ent = None
+        if ent is None:
+            # Node points at an entity this level does not have -- say so
+            # rather than silently selecting nothing.
+            self.status_bar.showMessage(
+                "Node '%s' has no entity in this level (EntityId %s)"
+                % (nd.name, nd.entity_id))
+            return
+        canvas = getattr(self, 'canvas', None)
+        if canvas is None:
+            return
+        canvas.selected = [ent]
+        canvas.selected_entity = ent
+        self.selected_entity = ent
+        if hasattr(self, 'update_ui_for_selected_entity'):
+            try:
+                self.update_ui_for_selected_entity(ent)
+            except Exception:
+                pass
+        self.status_bar.showMessage("Selected %s (sequence node)" % nd.name)
 
     # ── Preview playback ───────────────────────────────────────────────────────
 
