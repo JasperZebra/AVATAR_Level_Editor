@@ -9464,6 +9464,9 @@ class SimplifiedMapEditor(QMainWindow):
         menu.addSeparator()
         menu.addAction("Export This Sequence...",
                        self.show_sequence_export_dialog)
+        menu.addSeparator()
+        menu.addAction("Remove Sequence '%s'..." % seq_name,
+                       lambda: self._seq_remove_sequence(seq_name))
 
         menu.exec_(self.sequences_tree.viewport().mapToGlobal(point))
 
@@ -9509,17 +9512,53 @@ class SimplifiedMapEditor(QMainWindow):
         bundle = sx.SequenceBundle(
             name=seq_name, sequence_elem=seq, node_defs=node_defs,
             anchor=sx._auto_anchor(node_defs),
-            duration=float(seq.get('EndTime', 0)) - float(seq.get('StartTime', 0)))
+            duration=float(seq.get('EndTime', 0)) - float(seq.get('StartTime', 0)),
+            # node_defs above is a FILTERED list; without the root the removers
+            # cannot reach the real <NodeData> registry (see sx.drop_node_defs).
+            source_root=root)
         return bundle, md
 
     def _sequence_save(self, md, what):
+        """Write the edit, then put every other view of the file back in step.
+
+        These helpers edit the raw ElementTree. Three things go stale the
+        moment they do, and all three used to be left that way:
+          * `movie_data.sequences` / `.node_defs` — the PARSED model the
+            Sequences tree and both canvas renderers draw from, so a removed
+            node kept showing up until the level was reloaded;
+          * `sequence_link` — its own parse of the same file, which the next
+            keyframe drag would happily save back over this edit;
+          * the tree itself — the old call here was to `refresh_sequences_tree`,
+            a method that does not exist (the real one is
+            `update_sequences_tab`), so the `hasattr` guard silently skipped it.
+        """
+        path = getattr(md, 'source_path', None)
         try:
             md.save()
         except Exception as exc:
             QMessageBox.critical(self, "Sequences", "Could not save: %s" % exc)
             return
-        if hasattr(self, 'refresh_sequences_tree'):
-            self.refresh_sequences_tree()
+
+        if path:
+            try:
+                self.movie_data = MovieData.load(path)
+            except Exception as exc:
+                print("   [seq] reload after edit failed: %s" % exc)
+            self._attach_sequence_link(path)
+
+        # Drop a selection that points at something this edit deleted.
+        md_now = getattr(self, 'movie_data', None)
+        seq_name = getattr(self, 'selected_movie_sequence', None)
+        seq = md_now.get_sequence(seq_name) if (md_now and seq_name) else None
+        if seq is None:
+            self.selected_movie_sequence = None
+            self.selected_movie_node_id = None
+        elif (self.selected_movie_node_id is not None
+              and seq.node_by_id(self.selected_movie_node_id) is None):
+            self.selected_movie_node_id = None
+
+        if hasattr(self, 'sequences_tree'):
+            self.update_sequences_tab()
         if hasattr(self, 'canvas'):
             self.canvas.update()
         self.status_bar.showMessage(what)
@@ -9573,6 +9612,58 @@ class SimplifiedMapEditor(QMainWindow):
             QMessageBox.warning(self, "Sequences", str(exc))
             return
         self._sequence_save(md, "Removed '%s' from %s" % (res['removed'], seq_name))
+
+    def _seq_remove_sequence(self, seq_name):
+        """Delete a whole sequence from moviedata.xml.
+
+        Takes its nodes, their tracks and every key with it, plus the
+        <NodeData> registry entries no OTHER sequence still uses. The entities
+        themselves stay in the level -- this only unmakes the cinematic.
+        """
+        import sequence_export_import as sx
+        md = getattr(self, 'movie_data', None)
+        tree = getattr(md, '_tree', None) if md else None
+        if tree is None:
+            QMessageBox.warning(self, "Sequences", "No moviedata loaded.")
+            return
+        root = tree.getroot()
+
+        seq = md.get_sequence(seq_name)
+        n_nodes = len(seq.nodes) if seq is not None else 0
+        n_keys = sum(len(t.pos_keys) + len(t.rot_keys) + len(t.event_keys)
+                     + len(t.sound_keys)
+                     for n in (seq.nodes if seq is not None else [])
+                     for t in n.tracks.values())
+        reply = QMessageBox.question(
+            self, "Remove Sequence",
+            "Delete the sequence '%s'?\n\n"
+            "%d node(s) and %d keyframe(s) go with it, along with any node "
+            "registry entries no other sequence uses.\n\n"
+            "The entities themselves stay in the level. This cannot be undone."
+            % (seq_name, n_nodes, n_keys),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            res = sx.remove_sequence(root, seq_name)
+        except KeyError as exc:
+            QMessageBox.warning(self, "Sequences", str(exc))
+            return
+
+        # This sequence is gone -- do not leave the canvas pointed at it.
+        if getattr(self, 'selected_movie_sequence', None) == seq_name:
+            self.selected_movie_sequence = None
+            self.selected_movie_node_id = None
+            if hasattr(self, 'cs_camera_preview'):
+                try:
+                    self.cs_camera_preview.set_sequence(None)
+                except Exception:
+                    pass
+        self._sequence_save(
+            md, "Removed sequence '%s' (%d nodes, %d keys, %d node defs)"
+                % (res['removed'], res['nodes_dropped'], res['keys_dropped'],
+                   len(res['node_defs_dropped'])))
 
     def _seq_duplicate_node(self, seq_name, node_id):
         from PyQt5.QtWidgets import QInputDialog

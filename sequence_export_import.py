@@ -100,6 +100,12 @@ class SequenceBundle:
     folder: str = ""                     # bundle folder; entity XMLs sit here
     node_defs: list = field(default_factory=list)   # list[ET.Element] <Node>
     duration: float = 0.0
+    # Set ONLY when this bundle wraps a level's live moviedata tree (see
+    # SimplifiedMapEditor._sequence_live_bundle). `node_defs` is then a filtered
+    # VIEW of <NodeData>, so dropping an element from that list does not remove
+    # it from the file -- the removers need the root to reach the real registry,
+    # and to check whether another sequence still uses the node.
+    source_root: ET.Element = None
 
     def entity_ids(self) -> list:
         return [n.get("EntityId", "") for n in self.node_defs]
@@ -482,10 +488,41 @@ def list_nodes(bundle: SequenceBundle) -> list:
     return out
 
 
+def drop_node_defs(root: ET.Element, node_ids) -> list:
+    """Delete <NodeData> registry entries for `node_ids` that nothing uses now.
+
+    A node id is only dropped when NO sequence in the file still references it,
+    so a node shared by two sequences survives losing one of them. Returns the
+    names of the entries actually removed.
+
+    This is the half that was missing: `node_defs` on a live bundle is a
+    filtered Python list, so removing an element from it left the real
+    <Node Name="Camera..." EntityId=... Pos=...> registry entry sitting in
+    moviedata.xml forever, long after its keys were gone. Across all 260
+    shipped moviedata files (Avatar + FC2) every one of the 1438 registry
+    entries is referenced by a sequence -- an orphan is never legitimate data,
+    it is litter this editor left behind.
+    """
+    parent = root.find("./NodeData")
+    if parent is None:
+        return []
+    wanted = {str(i) for i in node_ids}
+    used = {sn.get("Id")
+            for sn in root.findall("./SequenceData/Sequence/Nodes/Node")}
+    dropped = []
+    for n in list(parent.findall("Node")):
+        nid = n.get("Id")
+        if nid in wanted and nid not in used:
+            parent.remove(n)
+            dropped.append(n.get("Name") or nid)
+    return dropped
+
+
 def remove_node(bundle: SequenceBundle, node_id: str) -> dict:
     """Drop one node from the sequence -- the '-' button.
 
-    Removes both the registry entry and the animated tracks. Everything else
+    Removes the animated tracks AND the registry entry (when this bundle wraps
+    a live tree and no other sequence still uses the node). Everything else
     keeps its animation exactly.
     """
     node_id = str(node_id)
@@ -498,14 +535,48 @@ def remove_node(bundle: SequenceBundle, node_id: str) -> dict:
 
     nodes_parent = bundle.sequence_elem.find("Nodes")
     dropped_tracks = 0
+    dropped_keys = 0
     if nodes_parent is not None:
         for sn in list(nodes_parent.findall("Node")):
             if sn.get("Id") == node_id:
                 dropped_tracks = len(sn.findall("Track"))
+                dropped_keys = len(sn.findall("./Track/Key"))
                 nodes_parent.remove(sn)
     if removed_name is None and dropped_tracks == 0:
         raise KeyError(f"no node {node_id!r} in this sequence")
-    return {"removed": removed_name or node_id, "tracks_dropped": dropped_tracks}
+
+    defs_dropped = (drop_node_defs(bundle.source_root, [node_id])
+                    if bundle.source_root is not None else [])
+    return {"removed": removed_name or node_id,
+            "tracks_dropped": dropped_tracks,
+            "keys_dropped": dropped_keys,
+            "node_defs_dropped": defs_dropped}
+
+
+def remove_sequence(root: ET.Element, name: str) -> dict:
+    """Delete a whole <Sequence> and every registry entry it leaves unused.
+
+    Operates on the moviedata ROOT rather than a bundle: a sequence is a
+    top-level thing, and the registry cleanup has to see every other sequence
+    to know what is still in use.
+    """
+    parent = root.find("./SequenceData")
+    if parent is None:
+        raise KeyError("this moviedata has no SequenceData")
+    target = None
+    for s in parent.findall("Sequence"):
+        if s.get("Name") == name:
+            target = s
+            break
+    if target is None:
+        raise KeyError(f"no sequence named {name!r}")
+
+    node_ids = [sn.get("Id") for sn in target.findall("./Nodes/Node")]
+    keys = len(target.findall("./Nodes/Node/Track/Key"))
+    parent.remove(target)                      # do this FIRST, so the registry
+    defs = drop_node_defs(root, node_ids)      # sweep sees it as gone
+    return {"removed": name, "nodes_dropped": len(node_ids),
+            "keys_dropped": keys, "node_defs_dropped": defs}
 
 
 def _free_node_id(bundle: SequenceBundle) -> str:
@@ -955,6 +1026,10 @@ def strip_camera_nodes(bundle: "SequenceBundle") -> list:
         for sn in list(nodes_parent.findall("Node")):
             if sn.get("Id") in cam_ids:
                 nodes_parent.remove(sn)
+    # Take the registry entries with them, or the file keeps a camera NodeDef
+    # (name, EntityId, rest pose) for a camera that no longer has a single key.
+    if bundle.source_root is not None:
+        drop_node_defs(bundle.source_root, cam_ids)
     return removed
 
 
