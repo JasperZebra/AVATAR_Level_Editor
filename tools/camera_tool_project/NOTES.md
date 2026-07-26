@@ -432,6 +432,97 @@ write site must be found independently.
 Porting the hook to x86 means a 5-byte `E9 rel32` patch rather than AFOP's
 14-byte absolute `jmp [rip]`, and 32-bit registers throughout.
 
+## [KEY INSIGHT] The render camera is CSceneCamera, and it is DOUBLE-BUFFERED
+
+This is why writing the matrix did nothing, and it reframes the whole approach.
+Recovered from the FC2 Linux symbols, which name the entire path:
+
+```
+CCameraComponent::ReadSceneCamera() const      46 bytes   read-only access
+CCameraComponent::ModifySceneCamera()          48 bytes   writable access
+CCameraComponent::UpdateSceneCamera()          64 bytes   pushes component -> scene
+CCameraComponent::SetFOVInDeg(float)
+CCameraComponent::GetFOVInDeg() const
+CCameraComponent::SetPositionFractions(ndVec_tpl<float,3> const&)
+CCameraComponent::BlendWithPreviousCamera(ndVec_tpl<float,3>*, ndAngle3<float>*, float)
+```
+
+The gameplay-side `CCameraComponent` does **not** own the rendered view. It
+pushes its transform into a separate render-scene object, `CSceneCamera`, and
+that object is managed by a double-buffered container:
+
+```
+CSceneObjectContainer<CSceneCamera>::ReadOriginal(handle)
+CSceneObjectContainer<CSceneCamera>::ReadCopy(handle)
+CSceneObjectContainer<CSceneCamera>::GetOriginalSingleton()
+CSceneObjectContainer<CSceneCamera>::SyncForRendering()
+CSceneObjectContainer<CSceneCamera>::CNodeData::SetBackup(CSceneCamera*, uint)
+CSceneObjectContainer<CSceneCamera>::CNodeData::UseBackup()
+CSceneObjectContainer<CSceneCamera>::FreeBackups()
+```
+
+**This explains the failed write test.** 58,740 writes to the five matrices at
+`0x0c3cc950`… changed nothing on screen because those were *copies*. The
+renderer reads a different buffer, and `SyncForRendering()` overwrites the copy
+from the original every frame. The ring of five matrices spaced `0xE00` apart
+is exactly what a copy/backup ring looks like.
+
+It also explains why `find_writers` caught nothing there — a stale backup node
+isn't written every frame, so a 5-second watch on one can legitimately see zero
+writes. That result was never evidence the tool is broken (still unvalidated
+either way — validate against a known-hot address before trusting it).
+
+### CSceneCamera is confirmed present in Avatar
+
+The string `CSceneCamera` exists in Avatar's `Dunia.dll` at VA `0x110172d8`
+(.rdata), with exactly one pointer to it at `0x110172e8` — a type-info record.
+Neither is cross-referenced in the decompile, so Ghidra reached it indirectly.
+
+Critically, it sits inside the **scene-object type-name table**, whose
+neighbours are already familiar territory for this project:
+
+```
+CSceneFogOfWar   CSceneGodRay   CSceneFakeAOPrimitive   CScenePostFxMotionBlur
+CSceneMaterialContainer   CScenePostFxAtmosphericFog   CSceneOffscreenViewport
+>>> CSceneCamera <<<   CSceneSky   CSceneSun
+```
+
+The editor already handles `CSceneSky` and `CSceneSun` (sky/sun/night sharing
+and god rays). **`CSceneCamera` is the same kind of object, in the same table.**
+Whatever pattern the editor already uses to reach sky/sun applies here.
+
+### There is a built-in scene-camera OVERRIDE
+
+FC2's editor camera exposes precisely the API a freecam needs:
+
+```
+CFCXEditorCamera::OverrideSceneCamera()      15 bytes
+CFCXEditorCamera::ReleaseSceneCamera()       15 bytes
+CFCXEditorCamera::SetCamera(ndVec_tpl<float,3> const& pos,
+                            ndAngle3<float> const& angles, bool, bool)   567 bytes
+CFCXEditorCamera::GetSceneCamera()
+CFCXEditorCamera::ModifySceneCamera()
+CFCXEditorCamera::UpdateSceneCamera()
+CFCXEditorCamera::ApplyConstraints(...)
+CFCXEditorCamera::CenterToPosition(...)  /  ScrollToPosition(...)  /  UpdateBlend(float)
+```
+
+`OverrideSceneCamera()` being only 15 bytes means it is a trivial setter — it
+flips a flag or stores a pointer that makes the scene camera follow the editor
+camera instead of gameplay. That is a freecam switch built into the engine.
+
+### Revised targets, in priority order
+
+1. **`UpdateSceneCamera` / `ModifySceneCamera`** — hook the write, don't fight
+   the double buffer. This is the correct analogue of what the AFOP tool hooks.
+2. **The `CSceneCamera` original singleton** — writing the original rather than
+   a copy may stick where writing copies did not.
+3. **The override flag** — if Avatar retains `OverrideSceneCamera`'s mechanism,
+   setting it is a single write.
+
+Note the earlier `SwitchCamera` work is *not* wasted: it operates one level up
+(which entity owns the camera). But the rendered view is decided here.
+
 ## [CONFIRMED] A developer console exists in the binary
 
 `CDominoConsoleCommandManager`, `CFCXConsole`, `CConsoleService`,
