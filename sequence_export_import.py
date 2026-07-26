@@ -558,9 +558,29 @@ def add_node(bundle: SequenceBundle, name: str, entity_id: str,
     return {"added": name, "node_id": node_id, "pos_keys": len(keys)}
 
 
+def _default_entity_id(bundle: SequenceBundle) -> str:
+    """Fresh EntityId not already used in this bundle.
+
+    Only a fallback. Prefer passing `id_generator=editor.generate_new_entity_id`
+    so the id is unique across the whole LEVEL, not just this sequence -- that
+    is what the entity importer does and it is the only way to be sure.
+    """
+    used = set()
+    for n in bundle.node_defs:
+        try:
+            used.add(int(n.get("EntityId", "0")))
+        except ValueError:
+            pass
+    candidate = max(used) + 1 if used else 900000
+    while candidate in used:
+        candidate += 1
+    return str(candidate)
+
+
 def duplicate_node(bundle: SequenceBundle, node_id: str, new_name: str = None,
                    entity_id: str = None, offset=(0.0, 0.0, 0.0),
-                   time_shift: float = 0.0, yaw: float = 0.0) -> dict:
+                   time_shift: float = 0.0, yaw: float = 0.0,
+                   id_generator=None) -> dict:
     """Copy a node WITH its whole animated path -- "two Samsons instead of one".
 
     The copy keeps the original's flight exactly, then optionally:
@@ -569,10 +589,14 @@ def duplicate_node(bundle: SequenceBundle, node_id: str, new_name: str = None,
         time_shift  delays it, so the second one trails the first
         yaw         turns it about its own start position
 
-    `entity_id` must be a DIFFERENT entity from the original -- two nodes
-    pointing at one entity means the engine drives the same object twice and
-    only the last write per frame survives. Left as None it copies the
-    original's id and returns a warning saying so.
+    The copy always gets a NEW EntityId, the same way imported models do -- two
+    nodes pointing at one entity would drive the same object twice and only the
+    last write per frame would survive. Pass `id_generator` (typically
+    `editor.generate_new_entity_id`) so the id is unique across the level;
+    without one a bundle-local fallback is used.
+
+    If the bundle carries the source entity's XML, it is copied too under the
+    new id, so importing the bundle actually creates the second object.
     """
     node_id = str(node_id)
     src_def = None
@@ -589,11 +613,12 @@ def duplicate_node(bundle: SequenceBundle, node_id: str, new_name: str = None,
         raise KeyError(f"no node {node_id!r} in this sequence")
 
     new_id = _free_node_id(bundle)
-    warning = None
+    src_entity_id = src_def.get("EntityId", "")
     if entity_id is None:
-        entity_id = src_def.get("EntityId", "")
-        warning = ("copy shares the original's EntityId -- give it a distinct "
-                   "entity or both nodes will drive the same object")
+        if callable(id_generator):
+            entity_id = str(id_generator())
+        else:
+            entity_id = _default_entity_id(bundle)
 
     pivot = tuple(_vec3(src_def.get("Pos", "0,0,0")))
     q_yaw = yaw_quat(yaw) if yaw else None
@@ -639,10 +664,57 @@ def duplicate_node(bundle: SequenceBundle, node_id: str, new_name: str = None,
             bundle.duration = needed
 
     out = {"source": src_def.get("Name"), "new_node": nd.get("Name"),
-           "node_id": new_id, "keys_copied": copied}
-    if warning:
-        out["warning"] = warning
+           "node_id": new_id, "entity_id": entity_id, "keys_copied": copied}
+
+    # Copy the source entity's XML too, under the new id and at the new pose,
+    # so importing this bundle genuinely creates a second object rather than
+    # animating a node that points at nothing.
+    made = _clone_bundle_entity(bundle, src_entity_id, entity_id,
+                                nd.get("Name"), nd.get("Pos"), nd.get("Rotate"))
+    if made:
+        out["entity_xml"] = os.path.basename(made)
+    elif bundle.folder:
+        out["entity_xml"] = ("source entity XML not in bundle - the new node "
+                             "has no entity to create")
     return out
+
+
+def _clone_bundle_entity(bundle: SequenceBundle, old_entity_id: str,
+                         new_entity_id: str, new_name: str,
+                         pos: str = None, rot: str = None):
+    """Duplicate an entity XML inside the bundle folder under a new id."""
+    if not bundle.folder or not os.path.isdir(bundle.folder):
+        return None
+    for fname in sorted(os.listdir(bundle.folder)):
+        if not fname.endswith(".xml") or fname == BUNDLE_XML:
+            continue
+        path = os.path.join(bundle.folder, fname)
+        try:
+            root = ET.parse(path).getroot()
+        except ET.ParseError:
+            continue
+        fld = root.find("./field[@name='disEntityId']")
+        if fld is None:
+            continue
+        val = fld.get("value-Id64") or fld.get("value-UInt64") or ""
+        if val != str(old_entity_id):
+            continue
+
+        for attr in ("value-Id64", "value-UInt64"):
+            if fld.get(attr) is not None:
+                fld.set(attr, str(new_entity_id))
+        nm = root.find("./field[@name='hidName']")
+        if nm is not None and nm.get("value-String") is not None:
+            nm.set("value-String", new_name)
+        if pos:
+            pf = root.find("./field[@name='hidPos']")
+            if pf is not None and pf.get("value-Vector3") is not None:
+                pf.set("value-Vector3", pos)
+        safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in new_name)[:80]
+        outp = os.path.join(bundle.folder, f"{safe}.xml")
+        ET.ElementTree(root).write(outp, encoding="utf-8", xml_declaration=True)
+        return outp
+    return None
 
 
 def add_keyframe(bundle: SequenceBundle, node_id: str, time: float,
