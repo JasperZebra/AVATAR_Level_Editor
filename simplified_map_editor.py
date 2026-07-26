@@ -9751,6 +9751,14 @@ class SimplifiedMapEditor(QMainWindow):
         out = {"lua": written, "scope": target['scope'], "why": target['reason']}
         rel = sx.lua_relative_path(level_folder, doc, graph, target['lua_dir'])
         depload = target['depload']
+
+        # Only the per-level shape needs a depload entry. Scripts in the
+        # game-wide folder are picked up without one, so a missing depload
+        # there is normal and must not be reported as a problem.
+        if target['scope'] == 'global':
+            out["depload"] = "not needed (game-wide script folder)"
+            return out
+
         if depload and os.path.exists(depload):
             reg = sx.DeploadRegistry(depload)
             if not reg.has_box(rel):
