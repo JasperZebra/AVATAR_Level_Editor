@@ -48,7 +48,8 @@ from .model_loader import ModelLoader, entity_has_graphic_component
 from .undo_redo import UndoRedoManager, MoveCommand, RotateCommand
 from water_mesh_editor import ImprovedWaterMeshEditor
 from water_plane_renderer import WaterPlaneRenderer, strip_baked_water
-from .movie_renderer import draw_movie_paths_2d, render_movie_paths_3d
+from .movie_renderer import (draw_movie_paths_2d, render_movie_paths_3d,
+                             draw_pending_sequence_2d, render_pending_sequence_3d)
 
 """Enhanced 3D Camera with 2D-style smooth movement"""
 import numpy as np
@@ -1815,6 +1816,7 @@ class MapCanvas(QOpenGLWidget):
             self._render_collision_3d(visible_entities)
             self._overlay_batch_flush()
             render_movie_paths_3d(self)
+            render_pending_sequence_3d(self)
             self._pf('shape', _ts)
             return
 
@@ -1843,6 +1845,7 @@ class MapCanvas(QOpenGLWidget):
             self._ov_cache_key = None
         self._draw_sphere_cyl_prims(getattr(self, '_ov_cache_spherecyl', None))
         render_movie_paths_3d(self)
+        render_pending_sequence_3d(self)
         self._pf('overlay3d', _ts)
 
     def _render_collision_3d(self, visible_entities=None):
@@ -4303,6 +4306,7 @@ class MapCanvas(QOpenGLWidget):
                 _stage('entities', _draw_entities)
 
             _stage('movie-paths', lambda: draw_movie_paths_2d(painter, self))
+            _stage('seq-preview', lambda: draw_pending_sequence_2d(painter, self))
 
             _stage('gizmo', lambda: self.gizmo_renderer.render_rotation_gizmo_2d(painter, self))
 

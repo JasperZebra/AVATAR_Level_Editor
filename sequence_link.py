@@ -234,41 +234,136 @@ class SequenceLink:
 
 @dataclass
 class PlacementGroup:
-    """An imported sequence held in a movable preview state before committing.
+    """An imported sequence held as a movable preview BEFORE anything is created.
 
-    Everything in the group moves rigidly together, like a multi-selection,
-    until commit() fixes it in place. Cancel discards without touching disk.
+    The preview is drawn straight from the bundle, so no entities exist and
+    nothing is written until commit(). Cancelling is genuinely free -- there is
+    nothing to undo.
+
+    Typical flow:
+        group = PlacementGroup.from_bundle(bundle)
+        group.move_to(cursor_world_pos)     # every mouse move, cheap
+        ...
+        group.commit(...)                   # or just drop the object to cancel
     """
     name: str
-    entities: list = field(default_factory=list)      # editor entity objects
+    bundle: object = None                 # SequenceBundle, for preview geometry
+    entities: list = field(default_factory=list)   # populated only on commit
     link: SequenceLink = None
-    origin: tuple = (0.0, 0.0, 0.0)                   # where the group currently sits
+    origin: tuple = (0.0, 0.0, 0.0)       # where the group currently sits
+    base_origin: tuple = (0.0, 0.0, 0.0)  # where the bundle's own coords sit
     committed: bool = False
 
-    def move_to(self, new_origin) -> None:
-        """Rigidly move the whole group. Preview only -- nothing is saved."""
-        dx = new_origin[0] - self.origin[0]
-        dy = new_origin[1] - self.origin[1]
-        dz = new_origin[2] - self.origin[2]
-        for ent in self.entities:
-            p = ent.position
-            ent.position = (p[0] + dx, p[1] + dy, p[2] + dz)
-        self.origin = tuple(new_origin)
+    @classmethod
+    def from_bundle(cls, bundle) -> "PlacementGroup":
+        anchor = tuple(getattr(bundle, "anchor", (0.0, 0.0, 0.0)))
+        return cls(name=bundle.name, bundle=bundle,
+                   origin=anchor, base_origin=anchor)
 
-    def commit(self, canvas=None) -> dict:
-        """Fix the group in place: sync every node's keyframes, then save."""
+    # -- preview ------------------------------------------------------------
+
+    @property
+    def delta(self) -> tuple:
+        return (self.origin[0] - self.base_origin[0],
+                self.origin[1] - self.base_origin[1],
+                self.origin[2] - self.base_origin[2])
+
+    def move_to(self, new_origin) -> None:
+        """Rigidly move the whole group. Preview only -- nothing is written.
+
+        Cheap enough to call on every mouse-move: it only updates one tuple,
+        and preview geometry is offset at draw time.
+        """
+        self.origin = (float(new_origin[0]), float(new_origin[1]),
+                       float(new_origin[2]))
+        if self.entities:      # already committed -- keep real entities in step
+            dx, dy, dz = self.delta
+            for ent in self.entities:
+                base = getattr(ent, "_seq_base_pos", ent.position)
+                ent.position = (base[0] + dx, base[1] + dy, base[2] + dz)
+
+    def preview_paths(self) -> list:
+        """Live preview geometry, offset to the current origin.
+
+        Returns [{'name', 'is_camera', 'points': [(t, x, y, z), ...]}] -- one
+        entry per animated node, ready for the 2D and 3D renderers.
+        """
+        if self.bundle is None or self.bundle.sequence_elem is None:
+            return []
+        dx, dy, dz = self.delta
+        registry = {n.get("Id"): n for n in self.bundle.node_defs}
+        out = []
+        for sn in self.bundle.sequence_elem.findall("./Nodes/Node"):
+            nd = registry.get(sn.get("Id"))
+            name = nd.get("Name", sn.get("Id")) if nd is not None else sn.get("Id")
+            pts = []
+            for track in sn.findall("Track"):
+                if track.get("ParamId") != "1":
+                    continue
+                for key in track.findall("Key"):
+                    val = key.get("value")
+                    if not val:
+                        continue
+                    x, y, z = _vec3(val)
+                    pts.append((float(key.get("time", 0)),
+                                x + dx, y + dy, z + dz))
+            pts.sort(key=lambda k: k[0])
+            out.append({
+                "name": name,
+                "is_camera": name.startswith("CameraCinematic")
+                             or "Camera.Cinematic" in name,
+                "points": pts,
+            })
+        return out
+
+    def preview_nodes(self) -> list:
+        """Rest positions of every node, offset -- for drawing ghost markers."""
+        dx, dy, dz = self.delta
+        out = []
+        for nd in (self.bundle.node_defs if self.bundle else []):
+            p = _vec3(nd.get("Pos", "0,0,0"))
+            name = nd.get("Name", "")
+            out.append({
+                "name": name,
+                "entity_id": nd.get("EntityId", ""),
+                "pos": (p[0] + dx, p[1] + dy, p[2] + dz),
+                "is_camera": name.startswith("CameraCinematic")
+                             or "Camera.Cinematic" in name,
+            })
+        return out
+
+    def bounds(self) -> tuple:
+        """(min, max) of the previewed geometry -- for framing the view."""
+        pts = [p for path in self.preview_paths() for p in path["points"]]
+        if not pts:
+            return (self.origin, self.origin)
+        xs = [p[1] for p in pts]; ys = [p[2] for p in pts]; zs = [p[3] for p in pts]
+        return ((min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs)))
+
+    # -- commit -------------------------------------------------------------
+
+    def commit(self, canvas=None, entities=None) -> dict:
+        """Fix the group in place.
+
+        `entities` are the real entity objects created by the entity importer.
+        Their rest poses are written back to the moviedata nodes and the file is
+        saved. Everything before this point was preview only.
+        """
         if self.committed:
             return {"already": True}
-        moved = 0
+        self.entities = entities or self.entities
+        synced = 0
         for ent in self.entities:
             eid = str(getattr(ent, "id", ""))
+            ent._seq_base_pos = tuple(ent.position)
+            ent._seq_last_pos = tuple(ent.position)
             if self.link and self.link.is_cinematic_entity(eid):
                 self.link.set_node_rest_pose(eid, ent.position)
-            ent._seq_last_pos = tuple(ent.position)
+                synced += 1
             if canvas and hasattr(canvas, "_auto_save_entity_changes"):
                 canvas._auto_save_entity_changes(ent)
-            moved += 1
         if self.link:
             self.link.save()
         self.committed = True
-        return {"entities": moved, "sequence": self.name}
+        return {"entities": len(self.entities), "nodes_synced": synced,
+                "sequence": self.name, "origin": self.origin}

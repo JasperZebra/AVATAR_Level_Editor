@@ -40,6 +40,18 @@ _GL_SIGHT    = (0.95, 0.85, 0.3,  1.0)   # the live sight line        (AM3D 0.95
 _GL_CAM_BODY = (0.80, 0.83, 0.92, 1.0)   # camera model, idle         (AM3D 0.80,0.83,0.92)
 _GL_CAM_SEL  = (1.0,  0.92, 0.35, 1.0)   # camera model, live/selected(AM3D 1.0,0.92,0.35)
 
+# Pending-placement colours — an imported sequence that has NOT been committed
+# yet. Deliberately cyan rather than the purple used for real sequences, so a
+# preview can never be mistaken for something that exists in the level.
+_PENDING_PATH = QColor(60, 220, 220, 230)
+_PENDING_CAM  = QColor(255, 210, 80, 230)
+_PENDING_NODE = QColor(90, 240, 200, 230)
+_PENDING_TEXT = QColor(120, 250, 240, 255)
+
+_GL_PENDING_PATH = (0.24, 0.86, 0.86, 0.9)
+_GL_PENDING_CAM  = (1.0,  0.82, 0.31, 0.9)
+_GL_PENDING_NODE = (0.35, 0.94, 0.78, 0.9)
+
 # How far in front of a camera to place its look-at point when the sequence has
 # no actors to aim at (moviedata has no explicit focus target — see aim_point).
 _AIM_FALLBACK = 25.0
@@ -204,6 +216,101 @@ def draw_movie_paths_2d(painter, canvas):
 
     # Ghost cubes for NodeDef entries not matched to a loaded entity
     _draw_ghost_nodes_2d(painter, canvas, movie_data, seq, selected_node_id)
+
+
+def draw_pending_sequence_2d(painter, canvas):
+    """Draw an imported-but-not-yet-placed sequence as a movable ghost.
+
+    Reads canvas.main_window.pending_sequence (a sequence_link.PlacementGroup).
+    Nothing exists in the level yet -- this is drawn straight from the bundle,
+    so cancelling costs nothing and there is nothing to undo.
+
+    Deliberately styled apart from the committed-sequence colours above: cyan
+    instead of purple, so a preview is never mistaken for something real.
+    """
+    mw = getattr(canvas, 'main_window', None)
+    group = getattr(mw, 'pending_sequence', None) if mw else None
+    if group is None or getattr(group, 'committed', False):
+        return
+
+    try:
+        paths = group.preview_paths()
+        nodes = group.preview_nodes()
+    except Exception:
+        return
+
+    for path in paths:
+        pts = path.get('points') or []
+        if len(pts) < 2:
+            continue
+        colour = _PENDING_CAM if path.get('is_camera') else _PENDING_PATH
+        screen = [QPointF(*canvas.world_to_screen(p[1], p[2])) for p in pts]
+        painter.setPen(QPen(colour, 2.0, Qt.DashLine))
+        painter.setBrush(Qt.NoBrush)
+        for i in range(len(screen) - 1):
+            painter.drawLine(screen[i], screen[i + 1])
+        for sp in screen:
+            _draw_diamond_2d(painter, sp.x(), sp.y(), 4, colour)
+
+    # Node markers, plus a label on the group origin so it is obvious what is
+    # being placed and that it is not committed yet.
+    for nd in nodes:
+        sx, sy = canvas.world_to_screen(nd['pos'][0], nd['pos'][1])
+        colour = _PENDING_CAM if nd.get('is_camera') else _PENDING_NODE
+        painter.setPen(QPen(colour, 1.5))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRect(QRectF(sx - 6, sy - 6, 12, 12))
+
+    ox, oy = canvas.world_to_screen(group.origin[0], group.origin[1])
+    painter.setPen(QPen(_PENDING_TEXT, 1))
+    painter.setFont(QFont('Arial', 9, QFont.Bold))
+    painter.drawText(QPointF(ox + 10, oy - 8),
+                     f"{group.name}  (placing — click to confirm)")
+    painter.setPen(QPen(_PENDING_TEXT, 1, Qt.DashLine))
+    painter.drawLine(QPointF(ox - 12, oy), QPointF(ox + 12, oy))
+    painter.drawLine(QPointF(ox, oy - 12), QPointF(ox, oy + 12))
+
+
+def render_pending_sequence_3d(canvas):
+    """3D counterpart of draw_pending_sequence_2d."""
+    mw = getattr(canvas, 'main_window', None)
+    group = getattr(mw, 'pending_sequence', None) if mw else None
+    if group is None or getattr(group, 'committed', False):
+        return
+
+    try:
+        paths = group.preview_paths()
+        nodes = group.preview_nodes()
+    except Exception:
+        return
+
+    gl.glDisable(gl.GL_LIGHTING)
+    gl.glDisable(gl.GL_DEPTH_TEST)      # preview reads through geometry
+    gl.glEnable(gl.GL_BLEND)
+    gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+    gl.glLineWidth(2.0)
+
+    for path in paths:
+        pts = path.get('points') or []
+        if len(pts) < 2:
+            continue
+        gl.glColor4f(*(_GL_PENDING_CAM if path.get('is_camera')
+                       else _GL_PENDING_PATH))
+        gl.glBegin(gl.GL_LINE_STRIP)
+        for _t, x, y, z in pts:
+            gx, gy, gz = canvas.world_to_gl(x, y, z)
+            gl.glVertex3f(gx, gy, gz)
+        gl.glEnd()
+
+    for nd in nodes:
+        gl.glColor4f(*(_GL_PENDING_CAM if nd.get('is_camera')
+                       else _GL_PENDING_NODE))
+        gx, gy, gz = canvas.world_to_gl(*nd['pos'])
+        _draw_wireframe_cube_3d(gx, gy, gz, 1.5)
+
+    gl.glLineWidth(1.0)
+    gl.glEnable(gl.GL_DEPTH_TEST)
+    gl.glEnable(gl.GL_LIGHTING)
 
 
 def _draw_diamond_2d(painter, cx, cy, r, color):
