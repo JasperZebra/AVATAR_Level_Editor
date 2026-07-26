@@ -733,6 +733,80 @@ contiguous and plausible. The camera table was hand-verified.
 it are Demonware (`bd*`) and `magma` middleware; Dunia's own classes were
 compiled without RTTI. No `CCamera*` anything. Do not open it again.
 
+## [MAJOR] CEntity position accessors — the primitive for camera AND noclip
+
+Found by disassembling `AvtSetEntityPos` (the Avatar-specific script function),
+whose thunk `LAB_10a86750` forwards to the real implementation at
+**`0x10a865c0`**. It resolves two entity handles and does:
+
+```asm
+sub  esp, 0xc               ; a vec3 on the stack
+push esp
+mov  ecx, ebx               ; entity B
+call 0x105dccd0             ; GetPosition(vec3* out)
+mov  ecx, ebp               ; entity A
+call 0x101b5180             ; SetPosition(vec3 by value)
+```
+
+So `AvtSetEntityPos(EntityId dst, EntityId src)` copies one entity's position
+onto another — a teleport-to-entity.
+
+### `CEntity::GetPosition` @ `0x105dccd0`  (thiscall, `ecx` = entity)
+
+```asm
+mov eax, dword ptr [esp + 4]      ; out vec3*
+fld dword ptr [ecx + 0x70] ; fstp dword ptr [eax]       ; x
+fld dword ptr [ecx + 0x74] ; fstp dword ptr [eax + 4]   ; y
+fld dword ptr [ecx + 0x78] ; fstp dword ptr [eax + 8]   ; z
+ret 4
+```
+
+**`CEntity` stores its world position as a vec3 at `+0x70`.**
+
+### `CEntity::SetPosition` @ `0x101b5180`  (thiscall, `ecx` = entity)
+
+```asm
+push 0
+lea  eax, [esp + 8]
+push eax
+call 0x101b4580             ; the real setter (also updates physics/scene)
+ret  0xc                    ; <- 12 bytes: the vec3 is passed BY VALUE
+```
+
+Call convention for a remote invocation:
+
+```asm
+push z ; push y ; push x     ; vec3 by value, 12 bytes
+mov  ecx, <entity pointer>   ; thiscall
+call 0x101b5180              ; cleans its own 12 bytes (ret 0xc)
+```
+
+Use the **setter**, not a raw write to `+0x70` — `FUN_101b4580` exists precisely
+to propagate the change (physics, scene graph, sector membership). A bare poke
+at `+0x70` is the "write the destination" mistake this project already made
+once with the camera matrices.
+
+### ⚠ Do not confuse the two `+0x70`s
+
+- `CCameraComponent` **`+0x70`** = FOV in radians
+- `CEntity` **`+0x70`** = position vec3
+
+Different classes, same offset, entirely different meaning. They will both turn
+up in scans.
+
+### Why this matters for both goals
+
+- **Noclip / teleport:** call `SetPosition` on the player entity each frame.
+  No code patching, no code cave, no debugger — the same remote-call harness
+  that already ran `SwitchCamera` safely without crashing anything.
+- **Camera:** camera entities carry their transform on the entity, which is why
+  `CCameraComponent` registers no vec3 and why `CCameraComponent::OnEntityMove()`
+  exists in the symbol table. Moving a camera entity is the same call.
+
+Still needed: entity *rotation*. `GetPosition`/`SetPosition` only cover
+translation, and `ndAngle3<float>` angles must live nearby — `+0x7c` is the
+obvious next field to check, given `0x1024a7a0` writes a vec3 at `+0x7c`.
+
 ## [CONFIRMED] A developer console exists in the binary
 
 `CDominoConsoleCommandManager`, `CFCXConsole`, `CConsoleService`,
