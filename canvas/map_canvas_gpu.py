@@ -6734,12 +6734,18 @@ class MapCanvas(QOpenGLWidget):
                         self.update()
                         return
 
-                # Cutscene handles (keyframe diamonds, node rest markers) are
-                # drawn depth-test-free ON TOP of the level, so they get the
-                # click before the entity raycast — same order as 2D.
-                if sequence_placement.begin_keyframe_drag(self, mouse_x, mouse_y):
-                    self.update()
-                    return
+                # Cutscene handles (keyframe markers, node rest markers) are
+                # ray-cast just like models are, and drawn depth-test-free ON
+                # TOP of the level, so they get the click before the entity
+                # raycast — same order as 2D.
+                try:
+                    if sequence_placement.begin_keyframe_drag(self, mouse_x, mouse_y):
+                        self.update()
+                        return
+                except Exception as _spe:
+                    print(f"[seq] cutscene handle pick failed: {_spe}")
+                    import traceback
+                    traceback.print_exc()
 
                 selected_entity = self.select_entity_3d(mouse_x, mouse_y)
 

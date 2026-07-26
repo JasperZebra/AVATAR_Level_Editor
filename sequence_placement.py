@@ -170,14 +170,23 @@ def handle_key(canvas, event) -> bool:
 # node whose entity this level does not have. Both are drawn but had nothing
 # behind them. These make them clickable and draggable, in 2D AND in 3D.
 
-PICK_RADIUS_PX = 8          # floor: a distant marker is still an 8 px target
-_MAX_PICK_PX = 90.0         # ceiling: a marker under your nose can't own the view
+# In 3D the markers are hit by a RAY, the same way models / fallback boxes /
+# marker cubes are (map_canvas_gpu.select_entity_3d): unproject the cursor to a
+# world ray and intersect the marker's own box, so you click the SHAPE and the
+# nearest one along the ray wins. In 2D the markers are drawn at a fixed pixel
+# size, so the test is the drawn square — the same test the entity squares get
+# (input_handler.get_entity_at_position).
+#
+# World half-extents below are exactly what movie_renderer draws:
+#   diamond  _draw_diamond_3d(..., 0.8)        -> 0.4
+#   cam key  _draw_wireframe_cube_3d(..., 1.2) -> 0.6
+#   rest     _draw_wireframe_cube_3d(..., 1.5) -> 0.75
+_HALF_DIAMOND = 0.4
+_HALF_CAM_KEY = 0.6
+_HALF_REST    = 0.75
 
-# World-space radius of each handle's DRAWN marker (movie_renderer sizes: ghost
-# cube 1.5, camera key cube 1.2, diamond 0.8 — all full extents), so the pick
-# area tracks what you can see. Without this the marker filling half the screen
-# was only clickable within 8 px of its centre, which reads as "not clickable".
-_MARKER_RADIUS = {"key": 0.75, "node": 0.9}
+_MARKER_2D_HALF_PX = 5      # _draw_diamond_2d / ghost square are drawn at r=5
+PICK_RADIUS_PX = 8          # 3D rescue: a marker too small to ray-hit at range
 
 _MODE_3D = 1        # map_canvas_gpu.MODE_3D
 
@@ -262,13 +271,24 @@ def _screen_projector(canvas):
     return project_3d
 
 
+def _is_camera_node(nd) -> bool:
+    """Camera nodes get bigger cube markers than the actor diamonds."""
+    try:
+        from canvas.cs_camera_preview import is_camera
+        return bool(is_camera(nd))
+    except Exception:
+        name = getattr(nd, "name", "") or ""
+        return name.startswith("CameraCinematic") or "Camera.Cinematic" in name
+
+
 def _pick_targets(canvas, movie_data, seq):
-    """Everything grabbable in `seq`, as (kind, node_id, index, time, world).
+    """Everything grabbable in `seq`, as dicts carrying the marker's own size.
 
     Mirrors what the renderers actually DRAW: only the selected node when one
-    is picked in the Sequences tab, and a node's rest marker only when its
-    entity is missing from the level (otherwise the entity itself is the
-    handle, and moving it already drags the path along).
+    is picked in the Sequences tab, a node's rest marker only when its entity
+    is missing from the level (otherwise the entity itself is the handle, and
+    moving it already drags the path along), and each marker's `half` is the
+    half-extent movie_renderer gives it — so the ray hits the shape you see.
     """
     mw = getattr(canvas, "main_window", None)
     only = getattr(mw, "selected_movie_node_id", None)
@@ -278,21 +298,101 @@ def _pick_targets(canvas, movie_data, seq):
     for seq_node in seq.nodes:
         if only is not None and seq_node.node_id != only:
             continue
-        for i, k in enumerate(seq_node.all_pos_keys()):
-            out.append(("key", seq_node.node_id, i, k.time, (k.x, k.y, k.z)))
         nd = movie_data.node_defs.get(seq_node.node_id)
+        half = _HALF_CAM_KEY if _is_camera_node(nd) else _HALF_DIAMOND
+        for i, k in enumerate(seq_node.all_pos_keys()):
+            out.append({"kind": "key", "node_id": seq_node.node_id, "index": i,
+                        "time": k.time, "world": (k.x, k.y, k.z), "half": half})
         if nd is not None and nd.entity_id not in loaded:
-            out.append(("node", seq_node.node_id, -1, 0.0, tuple(nd.pos)))
+            out.append({"kind": "node", "node_id": seq_node.node_id, "index": -1,
+                        "time": 0.0, "world": tuple(nd.pos), "half": _HALF_REST})
     return out
+
+
+# ── ray casting (3D) ───────────────────────────────────────────────────────────
+
+def _pick_ray(canvas, screen_x, screen_y):
+    """(origin, direction) in GL space for the cursor, or None.
+
+    Built exactly like `map_canvas_gpu.select_entity_3d`: unproject the pixel at
+    both depths and normalise, so marker hits and entity hits agree about where
+    the ray is.
+    """
+    mats = _gl_matrices(canvas)
+    if mats is None:
+        return None
+    viewport, modelview, projection, dpr = mats
+    from OpenGL.GLU import gluUnProject
+    px = float(screen_x) * dpr
+    py = float(viewport[3]) - float(screen_y) * dpr
+    try:
+        near = gluUnProject(px, py, 0.0, modelview, projection, viewport)
+        far  = gluUnProject(px, py, 1.0, modelview, projection, viewport)
+    except Exception as exc:
+        print(f"[seq] pick ray unavailable: {exc}")
+        return None
+    if near is None or far is None:
+        return None
+    d = (far[0] - near[0], far[1] - near[1], far[2] - near[2])
+    n = math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2])
+    if n < 1e-10:
+        return None
+    return ((float(near[0]), float(near[1]), float(near[2])),
+            (d[0] / n, d[1] / n, d[2] / n))
+
+
+def _ray_box_t(origin, direction, centre, half):
+    """Slab test: distance along the ray to an axis-aligned box, or None.
+
+    Same shape as `map_canvas_gpu._ray_aabb_intersect`, kept local so picking
+    never depends on importing the GL-heavy canvas package.
+    """
+    tmin, tmax = float("-inf"), float("inf")
+    for i in range(3):
+        o, d, c = origin[i], direction[i], centre[i]
+        if abs(d) < 1e-12:                      # parallel to this slab
+            if abs(o - c) > half:
+                return None
+            continue
+        t1 = (c - half - o) / d
+        t2 = (c + half - o) / d
+        if t1 > t2:
+            t1, t2 = t2, t1
+        tmin = max(tmin, t1)
+        tmax = min(tmax, t2)
+        if tmin > tmax:
+            return None
+    if tmin > 0.0:
+        return tmin
+    return tmax if tmax > 0.0 else None          # origin inside the box
+
+
+def _raycast_3d(canvas, screen_x, screen_y, targets):
+    """Closest marker along the cursor ray, or None. GL space — the markers are
+    axis-aligned there, which is also axis-aligned in world (world x,y,z ->
+    gl x,z,-y is an axis permutation)."""
+    ray = _pick_ray(canvas, screen_x, screen_y)
+    if ray is None:
+        return None
+    origin, direction = ray
+    best, best_t = None, float("inf")
+    for tgt in targets:
+        wx, wy, wz = tgt["world"]
+        t = _ray_box_t(origin, direction, (wx, wz, -wy), tgt["half"])
+        if t is not None and t < best_t:
+            best_t, best = t, tgt
+    return best
 
 
 def keyframe_at(canvas, screen_x, screen_y):
     """Which sequence handle is under the cursor?
 
-    Returns {'kind', 'node_id', 'index', 'time', 'world'} or None -- 'kind' is
-    'key' for a keyframe diamond, 'node' for a node's rest marker. Only the
-    sequence currently selected in the Sequences tab is considered, so paths
-    you are not working on cannot be grabbed by accident.
+    Returns {'kind', 'node_id', 'index', 'time', 'world', 'half'} or None --
+    'kind' is 'key' for a keyframe marker, 'node' for a node's rest marker.
+    3D casts a ray at the marker boxes (nearest along the ray wins, like every
+    other 3D pick); 2D tests the drawn square. Only the sequence currently
+    selected in the Sequences tab is considered, so paths you are not working
+    on cannot be grabbed by accident.
     """
     movie_data, seq_name = _selected_sequence(canvas)
     if movie_data is None or not seq_name:
@@ -300,51 +400,49 @@ def keyframe_at(canvas, screen_x, screen_y):
     seq = movie_data.get_sequence(seq_name)
     if seq is None:
         return None
+    targets = _pick_targets(canvas, movie_data, seq)
+    if not targets:
+        return None
+
+    if _is_3d(canvas):
+        hit = _raycast_3d(canvas, screen_x, screen_y, targets)
+        if hit is not None:
+            return hit
+        # A marker far enough away is only a pixel or two wide — the ray can
+        # miss what you can plainly see. Screen proximity rescues exactly that
+        # case; up close the ray above has already decided.
+        return _screen_pick(canvas, screen_x, screen_y, targets,
+                            float(PICK_RADIUS_PX), circle=True)
+
+    # 2D markers are drawn at a FIXED pixel size whatever the zoom, so the hit
+    # test is that square — the same test the entity squares get.
+    return _screen_pick(canvas, screen_x, screen_y, targets,
+                        float(_MARKER_2D_HALF_PX), circle=False)
+
+
+def _screen_pick(canvas, screen_x, screen_y, targets, extent_px, circle):
+    """Nearest marker whose drawn footprint contains the cursor, or None."""
     project = _screen_projector(canvas)
     if project is None:
         return None
-
-    best = None
-    best_score = 1.0            # normalised: distance / this marker's radius
-    nearest = None              # for the miss diagnostic
-    for kind, node_id, index, t, world in _pick_targets(canvas, movie_data, seq):
-        sp = project(*world)
+    best, best_d = None, float("inf")
+    nearest = None
+    for tgt in targets:
+        sp = project(*tgt["world"])
         if sp is None:
             continue
-        d = math.hypot(sp[0] - screen_x, sp[1] - screen_y)
+        dx, dy = sp[0] - screen_x, sp[1] - screen_y
+        d = math.hypot(dx, dy)
         if nearest is None or d < nearest:
             nearest = d
-        r = _marker_radius_px(project, world, sp,
-                              _MARKER_RADIUS.get(kind, 0.75))
-        score = d / r
-        if score <= best_score:
-            best_score = score
-            best = {"kind": kind, "node_id": node_id, "index": index,
-                    "time": t, "world": world}
+        inside = (d <= extent_px if circle
+                  else (abs(dx) <= extent_px and abs(dy) <= extent_px))
+        if inside and d < best_d:
+            best_d, best = d, tgt
     if best is None and nearest is not None:
         print("[seq] no cutscene handle under the cursor (nearest %.0f px)"
               % nearest)
     return best
-
-
-def _marker_radius_px(project, world, screen_pos, world_radius):
-    """On-screen radius of a marker of `world_radius` sitting at `world`.
-
-    The markers are drawn at a fixed WORLD size, so their screen size swings
-    with distance -- a fixed pixel radius makes a close-up marker unclickable
-    everywhere except its centre. Projecting one world-radius offset per axis
-    and taking the largest gives the marker's actual screen extent.
-    """
-    biggest = 0.0
-    for off in ((world_radius, 0.0, 0.0),
-                (0.0, world_radius, 0.0),
-                (0.0, 0.0, world_radius)):
-        p = project(world[0] + off[0], world[1] + off[1], world[2] + off[2])
-        if p is None:
-            continue
-        biggest = max(biggest, math.hypot(p[0] - screen_pos[0],
-                                          p[1] - screen_pos[1]))
-    return max(float(PICK_RADIUS_PX), min(biggest, _MAX_PICK_PX))
 
 
 def _select_backing_entity(canvas, node_id) -> bool:
@@ -383,6 +481,35 @@ def _select_backing_entity(canvas, node_id) -> bool:
     return True
 
 
+def _highlight_in_tree(mw, node_id):
+    """Move the Sequences tab's selection to the node just clicked.
+
+    Signals are blocked: `selected_movie_node_id` is already set by the caller,
+    and re-entering `_on_sequence_selected` would only redo that work. This is
+    purely so "selected" is VISIBLE somewhere when you pick a marker in the
+    viewport.
+    """
+    tree = getattr(mw, "sequences_tree", None)
+    seq_name = getattr(mw, "selected_movie_sequence", None)
+    if tree is None or not seq_name:
+        return
+    try:
+        from PyQt5.QtCore import Qt
+        for i in range(tree.topLevelItemCount()):
+            top = tree.topLevelItem(i)
+            if top.data(0, Qt.UserRole) != seq_name:
+                continue
+            for j in range(top.childCount()):
+                child = top.child(j)
+                if child.data(0, Qt.UserRole + 1) == node_id:
+                    was = tree.blockSignals(True)
+                    tree.setCurrentItem(child)
+                    tree.blockSignals(was)
+                    return
+    except Exception as exc:
+        print(f"[seq] tree highlight skipped: {exc}")
+
+
 def begin_keyframe_drag(canvas, screen_x, screen_y) -> bool:
     """Grab a sequence handle if one is under the cursor.
 
@@ -396,6 +523,7 @@ def begin_keyframe_drag(canvas, screen_x, screen_y) -> bool:
     mw.selected_movie_node_id = hit["node_id"]
     mw.dragging_keyframe = hit
     picked_entity = _select_backing_entity(canvas, hit["node_id"])
+    _highlight_in_tree(mw, hit["node_id"])
     if hit["kind"] == "node":
         print("[seq] grabbed node %s (rest marker) - the whole path follows"
               % hit["node_id"])

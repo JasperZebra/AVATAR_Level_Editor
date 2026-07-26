@@ -45,19 +45,29 @@ class InputHandler:
 
         print("InputHandler initialized - 2D ONLY")
 
+    def _begin_sequence_pick(self, event):
+        """Left-click on a cutscene keyframe / node marker → select + arm drag.
+
+        Returns True when the click was consumed. Errors are REPORTED, not
+        swallowed: this used to sit behind a bare `except: pass`, so a broken
+        pick looked exactly like "the markers aren't clickable".
+        """
+        try:
+            if event.button() != Qt.LeftButton:
+                return False
+            p = event.localPos()
+            return sequence_placement.begin_keyframe_drag(self.canvas,
+                                                          p.x(), p.y())
+        except Exception as exc:
+            print(f"[seq] cutscene handle pick failed: {exc}")
+            import traceback
+            traceback.print_exc()
+            return False
+
     def handle_mouse_press(self, event):
         """Handle mouse press events - 2D ONLY"""
         if sequence_placement.handle_mouse_press(self.canvas, event):
             return
-        try:
-            from PyQt5.QtCore import Qt as _Qt
-            if event.button() == _Qt.LeftButton:
-                _p = event.localPos()
-                if sequence_placement.begin_keyframe_drag(self.canvas,
-                                                          _p.x(), _p.y()):
-                    return
-        except Exception:
-            pass
         print(f"Mouse press: button={event.button()}, pos=({event.localPos().x():.1f}, {event.localPos().y():.1f})")
 
         try:
@@ -97,6 +107,12 @@ class InputHandler:
                     print("Started gizmo interaction")
                     self.canvas.update()
                     return  # Gizmo interaction started, don't do other mouse handling
+
+            # Cutscene handles — after the gizmo, because keyframe 0 usually sits
+            # exactly on its entity and would otherwise swallow the gizmo's own
+            # centre handle.
+            if self._begin_sequence_pick(event):
+                return
 
             # Handle 2D mouse press
             self.handle_mouse_press_2d(event)
@@ -168,15 +184,6 @@ class InputHandler:
         # Placing an imported sequence takes priority over normal editing.
         if sequence_placement.handle_mouse_press(self.canvas, event):
             return
-        try:
-            from PyQt5.QtCore import Qt as _Qt
-            if event.button() == _Qt.LeftButton:
-                _p = event.localPos()
-                if sequence_placement.begin_keyframe_drag(self.canvas,
-                                                          _p.x(), _p.y()):
-                    return
-        except Exception:
-            pass
         if event.button() == Qt.LeftButton:
             # CRITICAL: Check if we're clicking on a gizmo FIRST (before anything else)
             if hasattr(self.canvas, 'gizmo_renderer'):
@@ -218,6 +225,12 @@ class InputHandler:
                     self._shape_drag_anchor = (level_x, level_y)
                     self.canvas.update()
                     return
+
+            # Cutscene handles (keyframe markers / node rest markers) sit on top
+            # of the level, so they get the click before the entity squares —
+            # but after the gizmo and shape points, which are the finer targets.
+            if self._begin_sequence_pick(event):
+                return
 
             # Check if an entity was clicked
             entity = self.get_entity_at_position(mouse_x, mouse_y)
