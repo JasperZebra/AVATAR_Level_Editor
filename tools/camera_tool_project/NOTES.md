@@ -622,7 +622,55 @@ its registration stores a register rather than a literal offset, matching
 `CCameraComponent::SetFOVInDeg` / `GetFOVInDeg` in the FC2 symbols. That is
 consistent behaviour, not a gap in the tool.
 
-### Hypothesis: the camera transform lives at +0x58..+0x73
+### [CONFIRMED BY CONSTRUCTION] CCameraComponent field identities
+
+Recovered by finding the small accessor functions in the class's translation
+unit `0x10249000`–`0x1024c000` (40 functions) and reading the offsets they
+write. This is proof by construction, not inference.
+
+| Offset | Field | Evidence |
+|---|---|---|
+| `+0x54` | `fCameraBlendTime` (configured) | property table |
+| `+0x58` | **runtime blend timer** | `0x1024bd70` copies `+0x54` → `+0x58`; `0x10249eb0` zeroes `+0x58` alone |
+| `+0x5c`…`+0x6c` | 5 floats, identities open | dense access, see below |
+| **`+0x70`** | **FOV, in RADIANS** | `0x10249ef0` = `SetFOVInDeg`, below |
+| `+0x74` | `fNearDistance` | property table |
+| `+0x78` | `fFarDistance` | property table |
+| `+0x7c`…`+0x84` | a vec3 | `0x1024a7a0` writes three consecutive floats from a vec3 argument |
+
+**`FUN_10249ef0` is `CCameraComponent::SetFOVInDeg(float)`:**
+
+```asm
+movss xmm0, dword ptr [esp + 4]      ; degrees
+mulss xmm0, dword ptr [0x11010a14]   ; × 0.01745329238474369
+movss dword ptr [ecx + 0x70], xmm0   ; -> +0x70
+ret 4
+```
+
+`0x11010a14` reads as **0.01745329238474369**, which is π/180 to float32
+precision. A one-float setter that converts degrees to radians and stores to a
+single offset is `SetFOVInDeg` beyond reasonable doubt, and it pins **FOV at
+`+0x70`, stored in radians**.
+
+### [WITHDRAWN] The vec3 + quaternion reading of the hole
+
+Recorded because it was committed and is wrong on two counts:
+
+1. **A quaternion contradicts the symbol table.** `ndAngle3<float>` is 3 floats.
+   Every `CCameraComponent` signature uses it —
+   `BlendWithPreviousCamera(ndVec_tpl<float,3>*, ndAngle3<float>*, float)`,
+   `SetPositionFractions(ndVec_tpl<float,3> const&)`. The 3+4=7 arithmetic came
+   from `BlendLookAnglesWithLookAt`, which is a **different method on a
+   different class** (`CCameraGameComponent`). Wrong function, wrong class.
+2. **`+0x58` is not a position component.** It is the runtime blend timer, per
+   the two accessors above. So the hole does not begin with a vec3, and the
+   naive "pos at `+0x58`, angles at `+0x64`" replacement is also unconfirmed.
+
+What survives: the hole is genuinely 7 live floats (the access-frequency
+evidence stands), and one of them — `+0x70` — is now positively identified.
+The remaining five, `+0x5c`…`+0x6c`, are still open.
+
+### Superseded hypothesis (kept for the reasoning trail)
 
 28 bytes is exactly 7 floats, and FC2's signature
 `CCameraGameComponent::BlendLookAnglesWithLookAt(ndVec_tpl<float,3> const&, Gear::Quaternion4<float>&)`
