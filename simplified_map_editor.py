@@ -9735,13 +9735,23 @@ class SimplifiedMapEditor(QMainWindow):
             duration=getattr(group.bundle, 'duration', 0.0),
             mode=mode, once_only=once)
         doc = opts.get('doc_name', 'custom')
-        written = sx.install_trigger_lua(patch, level_folder, doc, graph, lua)
 
-        out = {"lua": written}
-        rel = sx.lua_relative_path(level_folder, doc, graph)
-        depload = os.path.join(patch, 'worlds', level_folder, 'generated',
-                               level_folder + '_depload.xml')
-        if os.path.exists(depload):
+        # Ask the data where this level keeps its scripts. Story levels have a
+        # per-level domino/user/levels/<level>/ folder registered in their own
+        # world depload; dev rooms have no such folder and use the game-wide
+        # avatarsamples folder registered in combined_depload.xml. Neither path
+        # is hardcoded -- resolve_lua_target picks by what exists on disk.
+        target = sx.resolve_lua_target(
+            patch, level_folder,
+            data_folder=getattr(self, 'resource_folder', None),
+            override_dir=opts.get('lua_dir'))
+        written = sx.install_trigger_lua(patch, level_folder, doc, graph, lua,
+                                         lua_dir=target['lua_dir'])
+
+        out = {"lua": written, "scope": target['scope'], "why": target['reason']}
+        rel = sx.lua_relative_path(level_folder, doc, graph, target['lua_dir'])
+        depload = target['depload']
+        if depload and os.path.exists(depload):
             reg = sx.DeploadRegistry(depload)
             if not reg.has_box(rel):
                 reg.add_box(rel, children=sx.boxes_for_mode(mode, once))
@@ -9750,9 +9760,11 @@ class SimplifiedMapEditor(QMainWindow):
             else:
                 out["depload"] = "already registered"
         else:
-            out["depload"] = ("NOT REGISTERED - %s is not in the patch folder. "
-                              "Copy it there or the game will never load this "
-                              "script." % os.path.basename(depload))
+            want = (os.path.basename(depload) if depload
+                    else "%s_depload.xml" % level_folder)
+            out["depload"] = ("NOT REGISTERED - %s was not found. Copy it into "
+                              "the patch folder (as converted .xml) or the game "
+                              "will never load this script." % want)
         return out
 
     def show_entity_import_dialog(self):

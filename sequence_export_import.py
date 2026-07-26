@@ -1173,19 +1173,93 @@ def boxes_for_mode(mode: str, once_only: bool = True) -> list:
     return boxes
 
 
-def lua_relative_path(level_folder: str, doc_name: str, graph_name: str) -> str:
-    """The canonical in-data path for a generated graph.
+GLOBAL_LUA_FOLDER = "domino\\user\\avatarsamples"
+
+
+def resolve_lua_target(patch_folder: str, level_folder: str,
+                       data_folder: str = None, override_dir: str = None) -> dict:
+    """Work out WHERE a generated script goes and WHICH depload registers it.
+
+    Two shapes exist in the shipped game and both are legitimate:
+
+      per-level   domino\\user\\levels\\<level>\\...     registered in
+                  worlds\\<level>\\generated\\<level>_depload.xml
+                  (how sp_sebastien_rb_02 and the other story levels work)
+
+      global      domino\\user\\avatarsamples\\...       registered in
+                  combined_depload.xml at top level
+                  (loaded game-wide, not per world -- verified: the
+                  avatarsamples entries sit at depth 1 of combined_depload.xml,
+                  not nested under any world)
+
+    Dev rooms like z_dev_orouleau have no per-level script folder and use the
+    global one. Rather than special-case a room name, this picks by asking the
+    data which shape the level actually uses.
+
+    Returns {'lua_dir', 'depload', 'scope', 'reason'}. `depload` may be None,
+    which means the caller must say so loudly -- an unregistered script is
+    never loaded.
+    """
+    if override_dir:
+        rel = override_dir.replace("/", "\\").strip("\\")
+        return {"lua_dir": rel, "depload": _find_depload(patch_folder, level_folder,
+                                                         data_folder, rel),
+                "scope": "override", "reason": "explicitly set by the user"}
+
+    per_level = f"domino\\user\\levels\\{level_folder}"
+    for root in (patch_folder, data_folder):
+        if root and os.path.isdir(os.path.join(root, per_level.replace("\\", os.sep))):
+            return {"lua_dir": per_level,
+                    "depload": _find_depload(patch_folder, level_folder,
+                                             data_folder, per_level),
+                    "scope": "per-level",
+                    "reason": f"{per_level} exists, so this level keeps its own scripts"}
+
+    return {"lua_dir": GLOBAL_LUA_FOLDER,
+            "depload": _find_depload(patch_folder, level_folder, data_folder,
+                                     GLOBAL_LUA_FOLDER),
+            "scope": "global",
+            "reason": (f"no {per_level} folder, so this level uses the "
+                       f"game-wide script folder")}
+
+
+def _find_depload(patch_folder: str, level_folder: str, data_folder: str,
+                  lua_dir: str):
+    """The depload that should register a script in `lua_dir`, or None."""
+    if lua_dir.startswith("domino\\user\\levels"):
+        rel = os.path.join("worlds", level_folder, "generated",
+                           f"{level_folder}_depload.xml")
+    else:
+        rel = "combined_depload.xml"
+    for root in (patch_folder, data_folder):
+        if not root:
+            continue
+        cand = os.path.join(root, rel)
+        if os.path.exists(cand):
+            return cand
+    return None
+
+
+def lua_relative_path(level_folder: str, doc_name: str, graph_name: str,
+                     lua_dir: str = None) -> str:
+    """The in-data path for a generated graph.
 
     Shipped scripts are named "<document>.<graph>.lua", e.g.
     "riverbank_seb.sp_bluelagoon_rb02_cinematicpascal.lua".
+
+    `lua_dir` comes from resolve_lua_target(). Without it the per-level
+    convention is assumed, which is right for story levels but wrong for dev
+    rooms that use the game-wide avatarsamples folder.
     """
-    return f"domino\\user\\levels\\{level_folder}\\{doc_name}.{graph_name}.lua"
+    base = (lua_dir or f"domino\\user\\levels\\{level_folder}").replace("/", "\\")
+    return base.rstrip("\\") + f"\\{doc_name}.{graph_name}.lua"
 
 
 def install_trigger_lua(patch_folder: str, level_folder: str, doc_name: str,
-                        graph_name: str, lua_text: str) -> str:
+                        graph_name: str, lua_text: str,
+                        lua_dir: str = None) -> str:
     """Write the .lua into the patch folder, creating directories. Returns path."""
-    rel = lua_relative_path(level_folder, doc_name, graph_name)
+    rel = lua_relative_path(level_folder, doc_name, graph_name, lua_dir)
     full = os.path.join(patch_folder, rel.replace("\\", os.sep))
     os.makedirs(os.path.dirname(full), exist_ok=True)
     with open(full, "w", encoding="utf-8", newline="\n") as fh:
