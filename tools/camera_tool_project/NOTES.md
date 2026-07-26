@@ -579,6 +579,83 @@ process. Hardware-breakpoint debugging may simply not be viable on this target.
 **Prefer static analysis of the decompile.** It is free, safe, repeatable, and
 this project has a 68 MB decompile plus a naming oracle sitting right there.
 
+## [BREAKTHROUGH] Class field offsets are literally in the binary
+
+Dunia registers every serialisable field through a per-class
+`RegisterProperties` routine that writes the field's **byte offset as an
+immediate**. The compiled binary therefore contains an exact field map for
+every reflected class — recoverable offline, no debugger, no scanning:
+
+```asm
+push 0x14                     ; sizeof(property record)
+call operator_new
+mov  [esi],     0x11014c1c    ; record vtable
+push 0x1103d6f8               ; -> "fCameraBlendTime"
+mov  [esi+4],   0x1103d6f8    ; name pointer
+call hash_name
+mov  [esi],     0x110d8a2c    ; TYPE descriptor (0x110d8a2c = float)
+mov  [esi+0xc], 0x54          ; <<< BYTE OFFSET OF THE FIELD
+push esi
+push 0x111e8804               ; the class's property-list global
+call add_property
+```
+
+`analysis/dump_properties.py` recovers this for the whole DLL —
+**530 class property tables**, dumped to
+`analysis/out/dunia_class_properties.txt`. This is broadly useful beyond the
+camera; it is an exact field map for every reflected Dunia class.
+
+### CCameraComponent layout (property list `0x111e8804`)
+
+Verified twice: by the tool, and by reading the disassembly at `0x1024b860`
+by hand.
+
+| Offset | Field | Type |
+|---|---|---|
+| `+0x54` | `fCameraBlendTime` | float |
+| **`+0x58` … `+0x73`** | **28 unregistered bytes** | **← the transform** |
+| `+0x74` | `fNearDistance` | float |
+| `+0x78` | `fFarDistance` | float |
+
+`fFOV` is absent from the table because it is a **method-backed** property —
+its registration stores a register rather than a literal offset, matching
+`CCameraComponent::SetFOVInDeg` / `GetFOVInDeg` in the FC2 symbols. That is
+consistent behaviour, not a gap in the tool.
+
+### Hypothesis: the camera transform lives at +0x58..+0x73
+
+28 bytes is exactly 7 floats, and FC2's signature
+`CCameraGameComponent::BlendLookAnglesWithLookAt(ndVec_tpl<float,3> const&, Gear::Quaternion4<float>&)`
+pairs a vec3 with a quaternion — 3 + 4 = **7 floats = 28 bytes**. The runtime
+transform is not serialised (it is live state, not a saved property), which is
+exactly why it appears as a hole in an otherwise contiguous property map.
+
+Candidate layouts, to be settled by reading a live instance:
+
+```
++0x58  vec3 position (3f)   +0x64  quaternion (4f)
+        -- or --
++0x58  quaternion (4f)      +0x68  vec3 position (3f)
+```
+
+**Test when the game is next up:** find a live `CCameraComponent` instance,
+read `+0x58`..`+0x73`, and check whether three of those floats match the
+player's editor coordinates. That single read settles the layout.
+
+### Tool accuracy caveat
+
+`dump_properties.py` associates a property with the *next* property-list global
+it sees, which sometimes merges adjacent classes into one list (e.g.
+`0x11010a5c` is visibly several classes concatenated, with impossible 700-byte
+gaps). Treat a single class's table as reliable only when its fields are
+contiguous and plausible. The camera table was hand-verified.
+
+### Ruled out as an asset
+
+`FC2Windows_RTTI_Vtables.txt` (6.7 MB) is not worth reading. All 396 classes in
+it are Demonware (`bd*`) and `magma` middleware; Dunia's own classes were
+compiled without RTTI. No `CCamera*` anything. Do not open it again.
+
 ## [CONFIRMED] A developer console exists in the binary
 
 `CDominoConsoleCommandManager`, `CFCXConsole`, `CConsoleService`,
