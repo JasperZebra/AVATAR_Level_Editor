@@ -6,6 +6,9 @@ from PyQt5.QtWidgets import QApplication, QMenu
 from .opengl_utils import OpenGLUtils
 from PyQt5.QtGui import QVector3D
 
+# Placement mode for imported cinematic sequences (early-return checks below).
+import sequence_placement
+
 class InputHandler:
     """Handles mouse and keyboard input for the canvas - 2D ONLY"""
     
@@ -44,6 +47,8 @@ class InputHandler:
 
     def handle_mouse_press(self, event):
         """Handle mouse press events - 2D ONLY"""
+        if sequence_placement.handle_mouse_press(self.canvas, event):
+            return
         print(f"Mouse press: button={event.button()}, pos=({event.localPos().x():.1f}, {event.localPos().y():.1f})")
 
         try:
@@ -94,6 +99,8 @@ class InputHandler:
 
     def handle_mouse_move(self, event):
         """Handle mouse move events - 2D ONLY"""
+        if sequence_placement.handle_mouse_move(self.canvas, event):
+            return
         try:
             # CRITICAL: Check if we're dragging a gizmo FIRST (highest priority)
             if hasattr(self.canvas, 'gizmo_renderer'):
@@ -145,6 +152,9 @@ class InputHandler:
 
     def handle_mouse_press_2d(self, event):
         """Handle mouse press in 2D mode with gizmo integration"""
+        # Placing an imported sequence takes priority over normal editing.
+        if sequence_placement.handle_mouse_press(self.canvas, event):
+            return
         if event.button() == Qt.LeftButton:
             # CRITICAL: Check if we're clicking on a gizmo FIRST (before anything else)
             if hasattr(self.canvas, 'gizmo_renderer'):
@@ -283,6 +293,8 @@ class InputHandler:
 
     def handle_mouse_move_2d(self, event):
         """Handle mouse move in 2D mode with entity dragging and gizmo updates"""
+        if sequence_placement.handle_mouse_move(self.canvas, event):
+            return
         current_x = event.localPos().x()
         current_y = event.localPos().y()
         
@@ -845,6 +857,8 @@ class InputHandler:
     
     def handle_key_press(self, event):
         """Handle key press events - 2D ONLY with SHIFT speed boost"""
+        if sequence_placement.handle_key(self.canvas, event):
+            return
         # Set modifier flags
         if event.key() == Qt.Key_Shift:
             self.shift_is_pressed = True

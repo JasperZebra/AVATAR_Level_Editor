@@ -217,11 +217,11 @@ class SequenceLink:
                     n = link.on_entity_moved(eid, before, pos)
                     if n:
                         link.save()
-                        print(f"   🎬 moved {n} keyframe(s) with "
+                        print(f"   [seq] moved {n} keyframe(s) with "
                               f"{getattr(entity, 'name', eid)}")
                 entity._seq_last_pos = pos
             except Exception as exc:      # never break the user's save
-                print(f"   ⚠️ sequence sync skipped: {exc}")
+                print(f"   WARNING: sequence sync skipped: {exc}")
             return result
 
         canvas._auto_save_entity_changes = wrapped
