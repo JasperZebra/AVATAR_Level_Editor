@@ -432,7 +432,11 @@ class CSCameraPreviewWidget(QWidget):
             self.stop_play()
             return
         md, seq = self._movie()
-        if seq is None or self._cam_node_id is None:
+        # Test the RESOLVED camera, not the combo value: _cam_node_id is None
+        # when the combo is on "Auto", which is a perfectly valid selection --
+        # and it is the DEFAULT for every sequence with more than one shot. The
+        # old check refused to play exactly those multi-camera cutscenes.
+        if seq is None or self._resolved_cam() is None:
             return
         self._playing = True
         self._play_wall = time.time() - self._t   # resume from scrub position
