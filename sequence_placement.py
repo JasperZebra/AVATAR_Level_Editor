@@ -21,6 +21,8 @@ event, so normal editing is untouched the rest of the time.
 
 from __future__ import annotations
 
+import math
+
 
 # ── state access ───────────────────────────────────────────────────────────────
 
@@ -168,7 +170,14 @@ def handle_key(canvas, event) -> bool:
 # node whose entity this level does not have. Both are drawn but had nothing
 # behind them. These make them clickable and draggable, in 2D AND in 3D.
 
-PICK_RADIUS_PX = 8
+PICK_RADIUS_PX = 8          # floor: a distant marker is still an 8 px target
+_MAX_PICK_PX = 90.0         # ceiling: a marker under your nose can't own the view
+
+# World-space radius of each handle's DRAWN marker (movie_renderer sizes: ghost
+# cube 1.5, camera key cube 1.2, diamond 0.8 — all full extents), so the pick
+# area tracks what you can see. Without this the marker filling half the screen
+# was only clickable within 8 px of its centre, which reads as "not clickable".
+_MARKER_RADIUS = {"key": 0.75, "node": 0.9}
 
 _MODE_3D = 1        # map_canvas_gpu.MODE_3D
 
@@ -296,51 +305,104 @@ def keyframe_at(canvas, screen_x, screen_y):
         return None
 
     best = None
-    best_d2 = float(PICK_RADIUS_PX) ** 2
+    best_score = 1.0            # normalised: distance / this marker's radius
+    nearest = None              # for the miss diagnostic
     for kind, node_id, index, t, world in _pick_targets(canvas, movie_data, seq):
         sp = project(*world)
         if sp is None:
             continue
-        d2 = (sp[0] - screen_x) ** 2 + (sp[1] - screen_y) ** 2
-        if d2 <= best_d2:
-            best_d2 = d2
+        d = math.hypot(sp[0] - screen_x, sp[1] - screen_y)
+        if nearest is None or d < nearest:
+            nearest = d
+        r = _marker_radius_px(project, world, sp,
+                              _MARKER_RADIUS.get(kind, 0.75))
+        score = d / r
+        if score <= best_score:
+            best_score = score
             best = {"kind": kind, "node_id": node_id, "index": index,
                     "time": t, "world": world}
+    if best is None and nearest is not None:
+        print("[seq] no cutscene handle under the cursor (nearest %.0f px)"
+              % nearest)
     return best
 
 
-def _drag_allowed(canvas) -> bool:
-    """3D View mode is camera-only -- editing there needs Edit mode, same as the
-    gizmo. The 2D handler does its own gating, so it is always allowed here."""
-    if not _is_3d(canvas):
-        return True
-    return bool(getattr(getattr(canvas, "input_handler", None),
-                        "edit_mode_3d", False))
+def _marker_radius_px(project, world, screen_pos, world_radius):
+    """On-screen radius of a marker of `world_radius` sitting at `world`.
+
+    The markers are drawn at a fixed WORLD size, so their screen size swings
+    with distance -- a fixed pixel radius makes a close-up marker unclickable
+    everywhere except its centre. Projecting one world-radius offset per axis
+    and taking the largest gives the marker's actual screen extent.
+    """
+    biggest = 0.0
+    for off in ((world_radius, 0.0, 0.0),
+                (0.0, world_radius, 0.0),
+                (0.0, 0.0, world_radius)):
+        p = project(world[0] + off[0], world[1] + off[1], world[2] + off[2])
+        if p is None:
+            continue
+        biggest = max(biggest, math.hypot(p[0] - screen_pos[0],
+                                          p[1] - screen_pos[1]))
+    return max(float(PICK_RADIUS_PX), min(biggest, _MAX_PICK_PX))
+
+
+def _select_backing_entity(canvas, node_id) -> bool:
+    """Select the world entity the node drives, exactly as clicking it would.
+
+    Clicking a handle should behave like clicking the object: the entity gets
+    the selection AND the gizmo, so it can be moved the ordinary way (which
+    drags the whole path along via SequenceLink). No-op for a node whose entity
+    this level does not have -- there the marker itself is the only handle.
+    """
+    mw = getattr(canvas, "main_window", None)
+    md = getattr(mw, "movie_data", None) if mw else None
+    nd = md.node_defs.get(node_id) if md is not None else None
+    if nd is None:
+        return False
+    ent = next((e for e in (getattr(canvas, "entities", None) or [])
+                if e.id == nd.entity_id), None)
+    if ent is None:
+        return False
+    try:
+        if hasattr(canvas, "select_entity_with_children"):
+            canvas.selected = canvas.select_entity_with_children(ent)
+        else:
+            canvas.selected = [ent]
+        canvas.selected_entity = ent
+        if hasattr(canvas, "gizmo_renderer"):
+            canvas.gizmo_renderer.update_gizmo_for_entity(ent)
+        if hasattr(canvas, "gizmo_3d"):
+            canvas.gizmo_3d.move_to(ent)
+        if hasattr(canvas, "entitySelected"):
+            canvas.entitySelected.emit(ent)
+        canvas.selection_modified = True
+    except Exception as exc:
+        print(f"[seq] selecting the node's entity failed: {exc}")
+        return False
+    return True
 
 
 def begin_keyframe_drag(canvas, screen_x, screen_y) -> bool:
     """Grab a sequence handle if one is under the cursor.
 
-    True when the click was consumed, so normal selection must not run. In 3D
-    View mode nothing is grabbed and the click falls through to entity
-    selection -- the same rule the gizmo follows.
+    Selects the node (and its entity, when the level has one) and arms a drag.
+    True when the click was consumed, so normal selection must not run.
     """
     hit = keyframe_at(canvas, screen_x, screen_y)
     if hit is None:
         return False
-    if not _drag_allowed(canvas):
-        print("[seq] cutscene handle under the cursor - switch to Edit mode "
-              "to move it")
-        return False
     mw = canvas.main_window
     mw.selected_movie_node_id = hit["node_id"]
     mw.dragging_keyframe = hit
+    picked_entity = _select_backing_entity(canvas, hit["node_id"])
     if hit["kind"] == "node":
         print("[seq] grabbed node %s (rest marker) - the whole path follows"
               % hit["node_id"])
     else:
-        print("[seq] grabbed keyframe %d (t=%.2f) of node %s"
-              % (hit["index"], hit["time"], hit["node_id"]))
+        print("[seq] grabbed keyframe %d (t=%.2f) of node %s%s"
+              % (hit["index"], hit["time"], hit["node_id"],
+                 " (entity selected - gizmo is on it)" if picked_entity else ""))
     canvas.update()
     return True
 
