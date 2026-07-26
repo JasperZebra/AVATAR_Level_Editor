@@ -96,6 +96,7 @@ class SequenceBundle:
     source_level: str = ""
     anchor: tuple = (0.0, 0.0, 0.0)      # reference point the keys are relative to
     sequence_elem: ET.Element = None     # <Sequence> subtree
+    folder: str = ""                     # bundle folder; entity XMLs sit here
     node_defs: list = field(default_factory=list)   # list[ET.Element] <Node>
     duration: float = 0.0
 
@@ -264,6 +265,7 @@ def load_bundle(folder: str) -> SequenceBundle:
         info = json.load(fh)
     root = ET.parse(os.path.join(folder, BUNDLE_XML)).getroot()
     return SequenceBundle(
+        folder=folder,
         name=info["name"],
         source_level=info.get("source_level", ""),
         anchor=tuple(info.get("anchor", (0, 0, 0))),

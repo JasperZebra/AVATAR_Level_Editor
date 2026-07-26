@@ -1746,6 +1746,20 @@ class SimplifiedMapEditor(QMainWindow):
 
         edit_menu.addSeparator()
 
+        export_sequence_action = QAction("Export Cinematic Sequence...", self)
+        export_sequence_action.triggered.connect(self.show_sequence_export_dialog)
+        export_sequence_action.setToolTip(
+            "Export a moviedata sequence and the entities it drives")
+        edit_menu.addAction(export_sequence_action)
+
+        import_sequence_action = QAction("Import Cinematic Sequence...", self)
+        import_sequence_action.triggered.connect(self.show_sequence_import_dialog)
+        import_sequence_action.setToolTip(
+            "Import a sequence as a cutscene or a camera-less scripted event")
+        edit_menu.addAction(import_sequence_action)
+
+        edit_menu.addSeparator()
+
         mass_export_action = QAction("Mass Export Level...", self)
         mass_export_action.triggered.connect(self.show_mass_export_dialog)
         mass_export_action.setToolTip("Export all unique entity types from the loaded level to mass_exported_objects/")
@@ -6361,6 +6375,7 @@ class SimplifiedMapEditor(QMainWindow):
                     node_count = len(self.movie_data.node_defs)
                     log(f"Loaded moviedata.xml: {seq_count} sequences, {node_count} nodes")
                     loaded_components.append(f"Movie Data ({seq_count} sequences)")
+                    self._attach_sequence_link(movie_path)
                 else:
                     log("No moviedata.xml found for this level")
             except Exception as _me:
@@ -9205,6 +9220,245 @@ class SimplifiedMapEditor(QMainWindow):
             import traceback
             traceback.print_exc()
             QMessageBox.critical(self, "Error", f"Failed to open entity export dialog:\n{str(e)}")
+
+    def show_sequence_export_dialog(self):
+        """Export a cinematic sequence (and the entities it drives) as a bundle."""
+        try:
+            from sequence_import_dialog import show_sequence_export_dialog
+            show_sequence_export_dialog(self)
+        except Exception as e:
+            print("Error showing sequence export dialog: %s" % e)
+            import traceback; traceback.print_exc()
+            QMessageBox.critical(self, "Error",
+                                 "Failed to open sequence export dialog:\n%s" % e)
+
+    def show_sequence_import_dialog(self):
+        """Import a cinematic sequence, then place it with the mouse."""
+        try:
+            from sequence_import_dialog import show_sequence_import_dialog
+            show_sequence_import_dialog(self)
+        except Exception as e:
+            print("Error showing sequence import dialog: %s" % e)
+            import traceback; traceback.print_exc()
+            QMessageBox.critical(self, "Error",
+                                 "Failed to open sequence import dialog:\n%s" % e)
+
+    def _attach_sequence_link(self, movie_path):
+        """Keep moviedata keyframes in step when a cinematic entity is moved.
+
+        Every Position key is an absolute world coordinate, so moving a
+        cinematic camera without this leaves its animated path behind and
+        silently breaks the shot.
+        """
+        try:
+            import sequence_link
+            link = sequence_link.SequenceLink(movie_path)
+            self.sequence_link = link
+            canvas = getattr(self, 'canvas', None)
+            if canvas is not None and hasattr(canvas, '_auto_save_entity_changes'):
+                if link.attach(canvas):
+                    print("   [seq] moviedata sync attached to autosave")
+            # Seed each entity's last-known position so the first drag has a
+            # baseline to measure its delta against.
+            for ent in getattr(self, 'entities', []) or []:
+                try:
+                    ent._seq_last_pos = (float(ent.position[0]),
+                                         float(ent.position[1]),
+                                         float(ent.position[2]))
+                except Exception:
+                    pass
+        except Exception as exc:
+            print("   [seq] moviedata sync unavailable: %s" % exc)
+
+    def import_sequence_entities(self, group):
+        """Create the entities a placed sequence drives, at the drop point.
+
+        Reuses EntityImportDialog's helpers rather than duplicating entity
+        creation: generate_unique_entity_id() for fresh ids and
+        add_entity_xml_to_sector() to write them into a MissionLayer. The dialog
+        is constructed but never shown -- we only want its methods.
+
+        Returns {old_entity_id: new_entity_id} for remap_entity_ids().
+        """
+        import os
+        import xml.etree.ElementTree as ET
+
+        folder = getattr(group.bundle, 'folder', '') or ''
+        if not folder or not os.path.isdir(folder):
+            print("   [seq] no bundle folder - entities not created")
+            return {}
+
+        try:
+            from entity_export_import import EntityImportDialog
+            helper = EntityImportDialog(self)
+        except Exception as exc:
+            print("   [seq] entity importer unavailable: %s" % exc)
+            return {}
+
+        # Where to write. Prefer whatever sector the editor is already targeting.
+        sector = (getattr(self, 'current_worldsector_path', None) or
+                  getattr(self, 'active_worldsector', None))
+        if not sector:
+            trees = getattr(self, 'worldsectors_trees', None) or {}
+            sector = next(iter(trees), None)
+        if not sector:
+            print("   [seq] no target worldsector - entities not created")
+            return {}
+
+        dx, dy, dz = group.delta
+        id_map = {}
+        created = 0
+
+        for fname in sorted(os.listdir(folder)):
+            if not fname.endswith('.xml') or fname == 'sequence.xml':
+                continue
+            try:
+                elem = ET.parse(os.path.join(folder, fname)).getroot()
+            except Exception:
+                continue
+
+            fld = elem.find("./field[@name='disEntityId']")
+            if fld is None:
+                continue
+            old_id = fld.get('value-Id64') or fld.get('value-UInt64') or ''
+            new_id = helper.generate_unique_entity_id()
+            for attr in ('value-Id64', 'value-UInt64'):
+                if fld.get(attr) is not None:
+                    fld.set(attr, str(new_id))
+            if old_id:
+                id_map[old_id] = new_id
+
+            # Shift the rest pose by the same delta the preview was moved by, so
+            # the entity lands where the ghost was shown.
+            pos = elem.find("./field[@name='hidPos']")
+            if pos is not None and pos.get('value-Vector3'):
+                try:
+                    x, y, z = [float(v) for v in pos.get('value-Vector3').split(',')[:3]]
+                    pos.set('value-Vector3', "%g,%g,%g" % (x + dx, y + dy, z + dz))
+                except Exception:
+                    pass
+
+            try:
+                helper.add_entity_xml_to_sector(elem, sector)
+                created += 1
+            except Exception as exc:
+                print("   [seq] could not add %s: %s" % (fname, exc))
+
+        print("   [seq] created %d entities in %s" % (created, os.path.basename(sector)))
+        return id_map
+
+    def sequence_commit_hook(self, group):
+        """Called when a placed sequence is dropped.
+
+        Rebases the bundle to the drop point, imports the entities it drives
+        through the existing entity importer, points the sequence's NodeData at
+        those new entities, merges it into this level's moviedata.xml, then
+        writes the Domino trigger script and registers it in depload.xml.
+        """
+        import os
+        import sequence_export_import as sx
+
+        opts = getattr(group, 'import_options', {}) or {}
+        report = {"sequence": group.name}
+
+        # 1. Rebase every absolute coordinate to where it was dropped.
+        report["coords_rebased"] = sx.rebase_bundle(group.bundle, group.origin)
+
+        # 2. Create the entities, reusing the entity importer so there is only
+        #    one code path that ever creates entities.
+        id_map = {}
+        try:
+            importer = getattr(self, 'import_sequence_entities', None)
+            if callable(importer):
+                id_map = importer(group) or {}
+        except Exception as exc:
+            report["entity_import_error"] = str(exc)
+        if id_map:
+            unmapped = sx.remap_entity_ids(group.bundle, id_map)
+            report["entities_mapped"] = len(id_map)
+            if unmapped:
+                report["nodes_without_entity"] = unmapped
+        else:
+            report["entities_mapped"] = 0
+            report["note"] = ("no entities created - sequence placed but its "
+                              "nodes still reference the source level's ids")
+
+        # 3. Merge into this level's moviedata.xml.
+        md = getattr(self, 'movie_data', None)
+        md_path = getattr(md, 'source_path', None) if md else None
+        if md_path and os.path.exists(md_path):
+            try:
+                report["merged"] = sx.import_sequence(group.bundle, md_path,
+                                                      overwrite=True)
+                from movie_data import MovieData
+                self.movie_data = MovieData.load(md_path)
+                if hasattr(self, 'refresh_sequences_tree'):
+                    self.refresh_sequences_tree()
+            except Exception as exc:
+                report["merge_error"] = str(exc)
+        else:
+            report["merge_error"] = "no moviedata.xml for this level"
+
+        # 4. Domino trigger script + depload registration.
+        try:
+            report.update(self._write_sequence_trigger(group, opts))
+        except Exception as exc:
+            report["trigger_error"] = str(exc)
+
+        print("   [seq] commit: %s" % report)
+        return report
+
+    def _write_sequence_trigger(self, group, opts):
+        """Emit the Domino .lua and register it so the game actually loads it."""
+        import os
+        import sequence_export_import as sx
+
+        graph = opts.get('graph_name')
+        if not graph:
+            return {"trigger": "skipped - no graph name"}
+        trigger_id = opts.get('trigger_id') or "0"
+        mode = opts.get('mode', sx.MODE_CUTSCENE)
+        once = opts.get('once_only', True)
+
+        patch = (getattr(self, 'patch_folder', None) or
+                 getattr(getattr(self, 'patch_manager', None), 'patch_folder', None))
+        if not patch:
+            return {"trigger": "skipped - no patch folder set"}
+
+        level_folder = getattr(self, 'current_level_folder', None) or ''
+        if not level_folder:
+            lp = getattr(self, 'current_level_path', '') or ''
+            level_folder = os.path.basename(lp.rstrip('/\\'))
+            if level_folder.endswith('_l'):
+                level_folder = level_folder[:-2]
+        if not level_folder:
+            return {"trigger": "skipped - cannot determine level folder"}
+
+        lua = sx.generate_trigger_lua(
+            group.name, trigger_id,
+            camera_entity_id=opts.get('camera_id'),
+            duration=getattr(group.bundle, 'duration', 0.0),
+            mode=mode, once_only=once)
+        doc = opts.get('doc_name', 'custom')
+        written = sx.install_trigger_lua(patch, level_folder, doc, graph, lua)
+
+        out = {"lua": written}
+        rel = sx.lua_relative_path(level_folder, doc, graph)
+        depload = os.path.join(patch, 'worlds', level_folder, 'generated',
+                               level_folder + '_depload.xml')
+        if os.path.exists(depload):
+            reg = sx.DeploadRegistry(depload)
+            if not reg.has_box(rel):
+                reg.add_box(rel, children=sx.boxes_for_mode(mode, once))
+                reg.save()
+                out["depload"] = "registered"
+            else:
+                out["depload"] = "already registered"
+        else:
+            out["depload"] = ("NOT REGISTERED - %s is not in the patch folder. "
+                              "Copy it there or the game will never load this "
+                              "script." % os.path.basename(depload))
+        return out
 
     def show_entity_import_dialog(self):
         """Show the entity import dialog"""
