@@ -1336,17 +1336,22 @@ class EntityRenderer:
             painter.setPen(QPen(QColor(255, 255, 255), 1))
             painter.setBrush(QBrush(QColor(0, 0, 0, 150)))
         
-        # Simple text positioning
-        text_x = x + size + 5
-        text_y = y
-        
+        # Simple text positioning. x/y come from world_to_screen and are FLOATS;
+        # QPainter's int overloads of fillRect/drawText reject those outright
+        # (sip does not truncate), which aborted the whole 2D entity pass with
+        # "argument 1 has unexpected type 'float'" on every frame. Every other
+        # painter call in this module int()s its coordinates — these two were
+        # missed.
+        text_x = int(x + size + 5)
+        text_y = int(y)
+
         # Draw simple background
         metrics = painter.fontMetrics()
         text_width = metrics.boundingRect(entity_name).width()
-        painter.fillRect(text_x - 2, text_y - metrics.ascent() - 2, 
-                        text_width + 4, metrics.height() + 4, 
+        painter.fillRect(text_x - 2, text_y - metrics.ascent() - 2,
+                        int(text_width) + 4, metrics.height() + 4,
                         QColor(0, 0, 0, 150))
-        
+
         # Draw text
         painter.setPen(QPen(QColor(255, 255, 255), 1))
         painter.drawText(text_x, text_y, entity_name)

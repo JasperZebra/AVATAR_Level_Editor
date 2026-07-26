@@ -426,22 +426,29 @@ def _screen_pick(canvas, screen_x, screen_y, targets, extent_px, circle):
     if project is None:
         return None
     best, best_d = None, float("inf")
-    nearest = None
+    near_tgt, near_d, near_at = None, float("inf"), None
     for tgt in targets:
         sp = project(*tgt["world"])
         if sp is None:
             continue
         dx, dy = sp[0] - screen_x, sp[1] - screen_y
         d = math.hypot(dx, dy)
-        if nearest is None or d < nearest:
-            nearest = d
+        if d < near_d:
+            near_d, near_tgt, near_at = d, tgt, sp
         inside = (d <= extent_px if circle
                   else (abs(dx) <= extent_px and abs(dy) <= extent_px))
         if inside and d < best_d:
             best_d, best = d, tgt
-    if best is None and nearest is not None:
-        print("[seq] no cutscene handle under the cursor (nearest %.0f px)"
-              % nearest)
+    if best is None and near_tgt is not None:
+        # Say WHAT you nearly hit and where it is on screen — "nearest 53 px"
+        # alone can't tell a near miss from aiming at the wrong thing entirely.
+        # ASCII only: a cp1252 console raises UnicodeEncodeError on fancy
+        # glyphs, and this print sits in the click path.
+        print("[seq] missed by %.0f px - nearest is node %s %s at (%.0f, %.0f)"
+              % (near_d, near_tgt["node_id"],
+                 "rest marker" if near_tgt["kind"] == "node"
+                 else "key %d" % near_tgt["index"],
+                 near_at[0], near_at[1]))
     return best
 
 
