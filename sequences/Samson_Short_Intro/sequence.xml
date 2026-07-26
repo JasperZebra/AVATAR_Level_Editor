@@ -1,0 +1,82 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ExportedSequence><NodeData><Node Id="353939980" Type="1" Name="CameraCinematic_Cinematique_Intro_Camera03" EntityId="2063242576988745766" Pos="774.364,918.259,21.3869" Rotate="0.372439,0.063662,-0.156,-0.912634" Scale="1,1,1" />
+		<Node Id="372534096" Type="1" Name="CameraCinematic_Cinematique_Intro_Camera01" EntityId="2063242014549356574" Pos="691.214,898.811,53.7345" Rotate="0.755059,0.0635914,0.0130836,0.652435" Scale="1,1,1" />
+		<Node Id="-1707133885" Type="1" Name="CameraCinematic_Cinematique_Intro_Camera02" EntityId="2063242304579186722" Pos="702.84,877.614,45.097" Rotate="0.996659,0.0522327,0.0032862,0.0627045" Scale="1,1,1" />
+		<Node Id="1361778850" Type="1" Name="Avatar.Samson_Pilotable.Static_0" EntityId="2060782150466149997" Pos="618.41,912.775,48.8005" Rotate="0.585079,-0.0563367,0.0775409,-0.805292" Scale="1,1,1" />
+		</NodeData><SequenceData><Sequence Name="Samson_Short_Intro" Flags="0" StartTime="0" EndTime="30">
+			<Nodes>
+				<Node Id="1361778850">
+					<Track ParamId="1" Flags="0">
+						<Key time="0" value="618.41,912.775,48.8005" />
+						<Key time="5.5" value="693.654,889.423,45.1196" />
+						<Key time="9.5" value="747.971,910.605,43.1827" />
+						<Key time="12.5" value="773.65,924.567,42.261" />
+						<Key time="15.5" value="795.912,936.509,39.8774" />
+						<Key time="18.5" value="802.559,918.955,37.7917" />
+						<Key time="21" value="798.36,897.125,35.5676" />
+						<Key time="23" value="785.178,898.342,31.9866" />
+						<Key time="26.9" value="775.771,911.919,25.5511" />
+						<Key time="30" value="775.694,916.19,19.9831" />
+					</Track>
+					<Track ParamId="2" Flags="0">
+						<Key time="0" value="0.585079,-0.0563367,0.0775409,-0.805292" />
+						<Key time="4" value="0.579842,-0.103345,-0.00921995,-0.808096" />
+						<Key time="5.5" value="0.707869,-0.11091,-0.0154511,-0.697411" />
+						<Key time="7" value="0.817592,-0.07377,0.0268191,-0.570423" />
+						<Key time="9.5" value="0.859969,-0.061877,0.043984,-0.504669" />
+						<Key time="12.5" value="0.852419,0.01499,0.0971134,-0.513542" />
+						<Key time="15.5" value="0.459851,0.19549,-0.00137612,-0.86621" />
+						<Key time="18.5" value="0.13887,0.0153908,0.109965,0.984066" />
+						<Key time="21" value="0.665297,-0.0657311,0.152869,0.727798" />
+						<Key time="23" value="0.935698,-0.0266117,0.149416,0.318491" />
+						<Key time="26.9" value="0.999602,0.0104684,-0.000274114,-0.0261756" />
+						<Key time="30" value="0.999657,0,0,-0.0261769" />
+					</Track>
+				</Node>
+				<Node Id="372534096">
+					<Track ParamId="1" Flags="0">
+						<Key time="0" value="691.214,898.811,53.7345" />
+						<Key time="5.5" value="707.161,879.212,54.8894" />
+					</Track>
+					<Track ParamId="2" Flags="0">
+						<Key time="0" value="0.755058,0.0635914,0.0130836,0.652435" />
+						<Key time="5.5" value="0.900461,-0.201124,-0.117168,0.36741" />
+					</Track>
+				</Node>
+				<Node Id="-1707133885">
+					<Track ParamId="1" Flags="0">
+						<Key time="5.5" value="702.84,877.614,45.097" cont="-1" />
+						<Key time="7.2" value="713.518,882.787,49.4145" />
+						<Key time="9.5" value="739.578,898.658,45.9047" />
+						<Key time="12.5" value="773.32,908.718,54.6345" />
+						<Key time="15.5" value="776.879,905.534,53.4421" />
+						<Key time="18.5" value="780.429,903.172,53.4421" />
+						<Key time="21" value="787.963,900.658,53.4421" />
+					</Track>
+					<Track ParamId="2" Flags="0">
+						<Key time="5.5" value="0.996659,0.0522327,0.0032862,0.0627045" cont="-1" />
+						<Key time="7.2" value="0.947043,-0.141977,0.0137072,-0.287687" />
+						<Key time="9.5" value="0.921109,-0.100065,0.0406318,-0.374024" />
+						<Key time="11" value="0.932418,-0.234405,0.0881303,-0.260544" />
+						<Key time="12.5" value="0.930308,-0.325789,0.0556884,-0.159021" />
+						<Key time="15.5" value="0.935198,-0.169954,0.0555496,-0.30567" />
+						<Key time="18.5" value="0.850377,-0.185412,0.104901,-0.481121" />
+						<Key time="21" value="0.509559,-0.312258,0.418927,-0.683626" />
+					</Track>
+				</Node>
+				<Node Id="353939980">
+					<Track ParamId="1" Flags="0">
+						<Key time="21" value="774.364,918.259,21.3869" />
+						<Key time="26.6" value="773.666,927.848,21.7802" />
+						<Key time="30" value="773.278,929.929,21.4997" />
+					</Track>
+					<Track ParamId="2" Flags="0">
+						<Key time="21" value="0.372441,0.0636623,-0.156,-0.912633" />
+						<Key time="23.9" value="0.286852,0.0612339,-0.234348,-0.926848" />
+						<Key time="26.6" value="0.178957,0.0452273,-0.233375,-0.954707" />
+						<Key time="30" value="0.137007,0.0199681,-0.0201306,-0.990164" />
+					</Track>
+				</Node>
+			</Nodes>
+		</Sequence>
+		</SequenceData></ExportedSequence>

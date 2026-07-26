@@ -49,6 +49,15 @@ class InputHandler:
         """Handle mouse press events - 2D ONLY"""
         if sequence_placement.handle_mouse_press(self.canvas, event):
             return
+        try:
+            from PyQt5.QtCore import Qt as _Qt
+            if event.button() == _Qt.LeftButton:
+                _p = event.localPos()
+                if sequence_placement.begin_keyframe_drag(self.canvas,
+                                                          _p.x(), _p.y()):
+                    return
+        except Exception:
+            pass
         print(f"Mouse press: button={event.button()}, pos=({event.localPos().x():.1f}, {event.localPos().y():.1f})")
 
         try:
@@ -101,6 +110,8 @@ class InputHandler:
         """Handle mouse move events - 2D ONLY"""
         if sequence_placement.handle_mouse_move(self.canvas, event):
             return
+        if sequence_placement.update_keyframe_drag(self.canvas, event):
+            return
         try:
             # CRITICAL: Check if we're dragging a gizmo FIRST (highest priority)
             if hasattr(self.canvas, 'gizmo_renderer'):
@@ -128,6 +139,8 @@ class InputHandler:
 
     def handle_mouse_release(self, event):
         """Handle mouse release events - 2D ONLY"""
+        if sequence_placement.end_keyframe_drag(self.canvas):
+            return
         print(f"Mouse release: button={event.button()}")
 
         try:
@@ -155,6 +168,15 @@ class InputHandler:
         # Placing an imported sequence takes priority over normal editing.
         if sequence_placement.handle_mouse_press(self.canvas, event):
             return
+        try:
+            from PyQt5.QtCore import Qt as _Qt
+            if event.button() == _Qt.LeftButton:
+                _p = event.localPos()
+                if sequence_placement.begin_keyframe_drag(self.canvas,
+                                                          _p.x(), _p.y()):
+                    return
+        except Exception:
+            pass
         if event.button() == Qt.LeftButton:
             # CRITICAL: Check if we're clicking on a gizmo FIRST (before anything else)
             if hasattr(self.canvas, 'gizmo_renderer'):
@@ -295,6 +317,8 @@ class InputHandler:
         """Handle mouse move in 2D mode with entity dragging and gizmo updates"""
         if sequence_placement.handle_mouse_move(self.canvas, event):
             return
+        if sequence_placement.update_keyframe_drag(self.canvas, event):
+            return
         current_x = event.localPos().x()
         current_y = event.localPos().y()
         
@@ -422,6 +446,8 @@ class InputHandler:
 
     def handle_mouse_release_2d(self, event):
         """Handle mouse release in 2D mode"""
+        if sequence_placement.end_keyframe_drag(self.canvas):
+            return
         if event.button() == Qt.LeftButton:
             if self.selection_box_active:
                 # Complete selection box and select entities within it

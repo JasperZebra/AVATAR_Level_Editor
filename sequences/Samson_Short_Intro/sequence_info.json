@@ -1,0 +1,38 @@
+{
+  "bundle_version": 1,
+  "name": "Samson_Short_Intro",
+  "source_level": "generated",
+  "duration": 30.0,
+  "anchor": [
+    696.707,
+    901.8647500000001,
+    42.254725
+  ],
+  "nodes": [
+    {
+      "id": "353939980",
+      "name": "CameraCinematic_Cinematique_Intro_Camera03",
+      "entity_id": "2063242576988745766",
+      "pos": "774.364,918.259,21.3869"
+    },
+    {
+      "id": "372534096",
+      "name": "CameraCinematic_Cinematique_Intro_Camera01",
+      "entity_id": "2063242014549356574",
+      "pos": "691.214,898.811,53.7345"
+    },
+    {
+      "id": "-1707133885",
+      "name": "CameraCinematic_Cinematique_Intro_Camera02",
+      "entity_id": "2063242304579186722",
+      "pos": "702.84,877.614,45.097"
+    },
+    {
+      "id": "1361778850",
+      "name": "Avatar.Samson_Pilotable.Static_0",
+      "entity_id": "2060782150466149997",
+      "pos": "618.41,912.775,48.8005"
+    }
+  ],
+  "missing_node_defs": []
+}

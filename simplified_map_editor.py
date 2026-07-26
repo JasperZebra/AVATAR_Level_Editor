@@ -9273,41 +9273,32 @@ class SimplifiedMapEditor(QMainWindow):
     def import_sequence_entities(self, group):
         """Create the entities a placed sequence drives, at the drop point.
 
-        Reuses EntityImportDialog's helpers rather than duplicating entity
-        creation: generate_unique_entity_id() for fresh ids and
-        add_entity_xml_to_sector() to write them into a MissionLayer. The dialog
-        is constructed but never shown -- we only want its methods.
+        Follows the same path as pasting/duplicating a model so the new objects
+        RENDER IMMEDIATELY instead of only appearing after a level reload:
+        build real Entity objects, route each to a worldsector by position, add
+        them to self.entities, assign 3D models, then refresh the canvas.
 
         Returns {old_entity_id: new_entity_id} for remap_entity_ids().
         """
         import os
         import xml.etree.ElementTree as ET
+        from data_models import Entity
 
         folder = getattr(group.bundle, 'folder', '') or ''
         if not folder or not os.path.isdir(folder):
             print("   [seq] no bundle folder - entities not created")
             return {}
 
+        helper = None
         try:
             from entity_export_import import EntityImportDialog
             helper = EntityImportDialog(self)
         except Exception as exc:
             print("   [seq] entity importer unavailable: %s" % exc)
-            return {}
-
-        # Where to write. Prefer whatever sector the editor is already targeting.
-        sector = (getattr(self, 'current_worldsector_path', None) or
-                  getattr(self, 'active_worldsector', None))
-        if not sector:
-            trees = getattr(self, 'worldsectors_trees', None) or {}
-            sector = next(iter(trees), None)
-        if not sector:
-            print("   [seq] no target worldsector - entities not created")
-            return {}
 
         dx, dy, dz = group.delta
         id_map = {}
-        created = 0
+        new_entities = []
 
         for fname in sorted(os.listdir(folder)):
             if not fname.endswith('.xml') or fname == 'sequence.xml':
@@ -9321,31 +9312,335 @@ class SimplifiedMapEditor(QMainWindow):
             if fld is None:
                 continue
             old_id = fld.get('value-Id64') or fld.get('value-UInt64') or ''
-            new_id = helper.generate_unique_entity_id()
+
+            if helper is not None:
+                new_id = helper.generate_unique_entity_id()
+            elif hasattr(self, 'generate_new_entity_id'):
+                new_id = self.generate_new_entity_id()
+            else:
+                new_id = abs(hash(old_id + fname)) % (10 ** 18)
             for attr in ('value-Id64', 'value-UInt64'):
                 if fld.get(attr) is not None:
                     fld.set(attr, str(new_id))
             if old_id:
                 id_map[old_id] = new_id
 
-            # Shift the rest pose by the same delta the preview was moved by, so
-            # the entity lands where the ghost was shown.
+            # Shift the rest pose by the placement delta so it lands where the
+            # ghost was shown.
+            nx = ny = nz = 0.0
             pos = elem.find("./field[@name='hidPos']")
             if pos is not None and pos.get('value-Vector3'):
                 try:
                     x, y, z = [float(v) for v in pos.get('value-Vector3').split(',')[:3]]
-                    pos.set('value-Vector3', "%g,%g,%g" % (x + dx, y + dy, z + dz))
+                    nx, ny, nz = x + dx, y + dy, z + dz
+                    pos.set('value-Vector3', "%g,%g,%g" % (nx, ny, nz))
                 except Exception:
                     pass
 
-            try:
-                helper.add_entity_xml_to_sector(elem, sector)
-                created += 1
-            except Exception as exc:
-                print("   [seq] could not add %s: %s" % (fname, exc))
+            nm = elem.find("./field[@name='hidName']")
+            ent_name = nm.get('value-String') if nm is not None else fname[:-4]
 
-        print("   [seq] created %d entities in %s" % (created, os.path.basename(sector)))
+            entity = Entity(id=str(new_id), name=ent_name,
+                            x=nx, y=ny, z=nz, xml_element=elem)
+            entity.source_file = 'worldsectors'
+            entity.source_layer = 'main'
+            new_entities.append(entity)
+
+        if not new_entities:
+            print("   [seq] no entity XMLs in bundle - nothing created")
+            return id_map
+
+        # Route each entity to a worldsector by POSITION, the same way paste
+        # does -- writing them all into whichever sector happened to be loaded
+        # first puts them in the wrong streaming cell.
+        for entity in new_entities:
+            target, sector_id = (None, -1)
+            finder = getattr(self, '_find_best_worldsector_for_entity', None)
+            if callable(finder):
+                try:
+                    target, sector_id = finder(entity)
+                except Exception:
+                    target, sector_id = (None, -1)
+            if not target:
+                trees = getattr(self, 'worldsectors_trees', None) or {}
+                target = next(iter(trees), None)
+            if not target:
+                continue
+            added = False
+            adder = getattr(self, '_add_entity_xml_to_sector', None)
+            if callable(adder):
+                added = adder(entity.xml_element, target)
+            elif helper is not None:
+                added = helper.add_entity_xml_to_sector(entity.xml_element, target)
+            if added:
+                entity.source_file_path = target
+                entity.source_sector_id = sector_id
+                if sector_id >= 0 and hasattr(self, 'canvas'):
+                    try:
+                        self.canvas.dirty_sectors.add(sector_id)
+                    except Exception:
+                        pass
+            self.entities.append(entity)
+
+        # THIS is what makes them show up without a reload.
+        canvas = getattr(self, 'canvas', None)
+        if canvas is not None:
+            try:
+                if hasattr(canvas, 'model_loader'):
+                    canvas.model_loader.assign_models_to_entities(
+                        new_entities, game_mode=getattr(self, 'game_mode', 'avatar'))
+            except Exception as exc:
+                print("   [seq] could not assign models: %s" % exc)
+            try:
+                canvas.set_entities(self.entities, center_view=False)
+            except Exception:
+                pass
+            canvas.update()
+        if hasattr(self, 'update_entity_tree'):
+            try:
+                self.update_entity_tree()
+            except Exception:
+                pass
+
+        print("   [seq] created %d entities (rendered immediately)" % len(new_entities))
         return id_map
+
+    # ── Sequences tab: right-click operations ──────────────────────────────
+
+    def on_sequence_tree_context_menu(self, point):
+        """Right-click menu for the Sequences tab.
+
+        Works on whichever row was clicked: a sequence row offers
+        sequence-wide actions, a node row offers per-node ones.
+        """
+        from PyQt5.QtWidgets import QMenu
+
+        item = self.sequences_tree.itemAt(point)
+        menu = QMenu(self.sequences_tree)
+
+        seq_name, node_id = self._sequence_context_target(item)
+        if seq_name is None:
+            menu.addAction("Import Cinematic Sequence...",
+                           self.show_sequence_import_dialog)
+            menu.exec_(self.sequences_tree.viewport().mapToGlobal(point))
+            return
+
+        header = menu.addAction(seq_name if node_id is None
+                                else "%s  >  node %s" % (seq_name, node_id))
+        header.setEnabled(False)
+        menu.addSeparator()
+
+        menu.addAction("Add Camera...",
+                       lambda: self._seq_add_node(seq_name, camera=True))
+        menu.addAction("Add Object...",
+                       lambda: self._seq_add_node(seq_name, camera=False))
+
+        if node_id is not None:
+            menu.addSeparator()
+            menu.addAction("Duplicate This Node",
+                           lambda: self._seq_duplicate_node(seq_name, node_id))
+            menu.addAction("Remove This Node",
+                           lambda: self._seq_remove_node(seq_name, node_id))
+            menu.addSeparator()
+            menu.addAction("Rotate This Node...",
+                           lambda: self._seq_rotate(seq_name, node_id))
+
+        menu.addSeparator()
+        menu.addAction("Remove All Cameras (make scripted event)",
+                       lambda: self._seq_strip_cameras(seq_name))
+        menu.addAction("Rotate Whole Sequence...",
+                       lambda: self._seq_rotate(seq_name, None))
+        menu.addSeparator()
+        menu.addAction("Export This Sequence...",
+                       self.show_sequence_export_dialog)
+
+        menu.exec_(self.sequences_tree.viewport().mapToGlobal(point))
+
+    def _sequence_context_target(self, item):
+        """(sequence_name, node_id or None) for the clicked row."""
+        if item is None:
+            return (getattr(self, 'selected_movie_sequence', None), None)
+        data = item.data(0, Qt.UserRole)
+        if isinstance(data, dict):
+            return (data.get('sequence'), data.get('node_id'))
+        parent = item.parent()
+        if parent is None:
+            return (item.text(0).split('  ')[0].strip(), None)
+        pdata = parent.data(0, Qt.UserRole)
+        seq = (pdata.get('sequence') if isinstance(pdata, dict)
+               else parent.text(0).split('  ')[0].strip())
+        nid = data if isinstance(data, (str, int)) else None
+        return (seq, nid)
+
+    def _sequence_live_bundle(self, seq_name):
+        """Wrap the loaded moviedata's sequence so the edit helpers can act on it.
+
+        Edits go straight into the live ElementTree and are saved immediately,
+        which is what the rest of the editor does on change.
+        """
+        import sequence_export_import as sx
+        md = getattr(self, 'movie_data', None)
+        tree = getattr(md, '_tree', None) if md else None
+        if tree is None:
+            QMessageBox.warning(self, "Sequences", "No moviedata loaded.")
+            return None, None
+        root = tree.getroot()
+        seq = None
+        for s in root.findall('./SequenceData/Sequence'):
+            if s.get('Name') == seq_name:
+                seq = s
+                break
+        if seq is None:
+            QMessageBox.warning(self, "Sequences",
+                                "Sequence '%s' not found." % seq_name)
+            return None, None
+        used = {n.get('Id') for n in seq.findall('./Nodes/Node')}
+        node_defs = [n for n in root.findall('./NodeData/Node')
+                     if n.get('Id') in used]
+        bundle = sx.SequenceBundle(
+            name=seq_name, sequence_elem=seq, node_defs=node_defs,
+            anchor=sx._auto_anchor(node_defs),
+            duration=float(seq.get('EndTime', 0)) - float(seq.get('StartTime', 0)))
+        return bundle, md
+
+    def _sequence_save(self, md, what):
+        try:
+            md.save()
+        except Exception as exc:
+            QMessageBox.critical(self, "Sequences", "Could not save: %s" % exc)
+            return
+        if hasattr(self, 'refresh_sequences_tree'):
+            self.refresh_sequences_tree()
+        if hasattr(self, 'canvas'):
+            self.canvas.update()
+        self.status_bar.showMessage(what)
+        print("   [seq] %s" % what)
+
+    def _seq_add_node(self, seq_name, camera=False):
+        from PyQt5.QtWidgets import QInputDialog
+        import sequence_export_import as sx
+        bundle, md = self._sequence_live_bundle(seq_name)
+        if bundle is None:
+            return
+        default = "Camera.Cinematic_New" if camera else "New_Object"
+        name, ok = QInputDialog.getText(self, "Add Node", "Node name:", text=default)
+        if not ok or not name.strip():
+            return
+        eid, ok = QInputDialog.getText(
+            self, "Add Node",
+            "EntityId it should drive\n(leave blank to generate a new one):")
+        if not ok:
+            return
+        eid = eid.strip() or str(self.generate_new_entity_id()
+                                 if hasattr(self, 'generate_new_entity_id')
+                                 else sx._default_entity_id(bundle))
+        # Place it at the view centre so it is reachable, not at the origin.
+        pos = (0.0, 0.0, 0.0)
+        cam = getattr(self, 'canvas', None)
+        if cam is not None and hasattr(cam, 'camera_controller'):
+            try:
+                cc = cam.camera_controller
+                pos = (float(cc.target_x), float(cc.target_y), float(cc.target_z))
+            except Exception:
+                pass
+        res = sx.add_node(bundle, name.strip(), eid, pos=pos)
+        self._sequence_save(md, "Added node '%s' to %s" % (res['added'], seq_name))
+
+    def _seq_remove_node(self, seq_name, node_id):
+        import sequence_export_import as sx
+        bundle, md = self._sequence_live_bundle(seq_name)
+        if bundle is None:
+            return
+        reply = QMessageBox.question(
+            self, "Remove Node",
+            "Remove this node from '%s'?\n\nIts animation is deleted. The "
+            "entity itself stays in the level." % seq_name,
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            res = sx.remove_node(bundle, node_id)
+        except KeyError as exc:
+            QMessageBox.warning(self, "Sequences", str(exc))
+            return
+        self._sequence_save(md, "Removed '%s' from %s" % (res['removed'], seq_name))
+
+    def _seq_duplicate_node(self, seq_name, node_id):
+        from PyQt5.QtWidgets import QInputDialog
+        import sequence_export_import as sx
+        bundle, md = self._sequence_live_bundle(seq_name)
+        if bundle is None:
+            return
+        off, ok = QInputDialog.getText(
+            self, "Duplicate Node",
+            "Offset for the copy (x,y,z) so they do not overlap:", text="20,0,0")
+        if not ok:
+            return
+        try:
+            offset = tuple(float(v) for v in off.split(',')[:3])
+        except Exception:
+            offset = (20.0, 0.0, 0.0)
+        delay, ok = QInputDialog.getDouble(
+            self, "Duplicate Node", "Delay the copy by (seconds):", 0.0, 0.0, 600.0, 2)
+        if not ok:
+            delay = 0.0
+        gen = getattr(self, 'generate_new_entity_id', None)
+        try:
+            res = sx.duplicate_node(bundle, node_id, offset=offset,
+                                    time_shift=delay, id_generator=gen)
+        except KeyError as exc:
+            QMessageBox.warning(self, "Sequences", str(exc))
+            return
+        self._sequence_save(
+            md, "Duplicated '%s' as '%s' (new EntityId %s)"
+                % (res['source'], res['new_node'], res['entity_id']))
+
+    def _seq_strip_cameras(self, seq_name):
+        import sequence_export_import as sx
+        bundle, md = self._sequence_live_bundle(seq_name)
+        if bundle is None:
+            return
+        cams = sx.camera_nodes(bundle)
+        if not cams:
+            QMessageBox.information(self, "Sequences",
+                                    "This sequence has no cinematic cameras - "
+                                    "it is already a scripted event.")
+            return
+        reply = QMessageBox.question(
+            self, "Remove Cameras",
+            "Remove %d cinematic camera(s) from '%s'?\n\nEverything else keeps "
+            "its exact animation. The sequence will play without taking the "
+            "camera from the player, like the Hell's Gate flyovers."
+            % (len(cams), seq_name),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply != QMessageBox.Yes:
+            return
+        removed = sx.strip_camera_nodes(bundle)
+        self._sequence_save(md, "Removed %d camera(s): %s"
+                                % (len(removed), ", ".join(removed)))
+
+    def _seq_rotate(self, seq_name, node_id):
+        from PyQt5.QtWidgets import QInputDialog
+        import sequence_export_import as sx
+        bundle, md = self._sequence_live_bundle(seq_name)
+        if bundle is None:
+            return
+        what = "this node" if node_id else "the whole sequence"
+        deg, ok = QInputDialog.getDouble(
+            self, "Rotate", "Turn %s by (degrees):" % what, 90.0, -360.0, 360.0, 1)
+        if not ok or deg == 0:
+            return
+        try:
+            if node_id:
+                res = sx.rotate_node(bundle, node_id, deg)
+            else:
+                res = sx.rotate_bundle(bundle, deg)
+        except KeyError as exc:
+            QMessageBox.warning(self, "Sequences", str(exc))
+            return
+        self._sequence_save(
+            md, "Rotated %s by %g deg (%d positions, %d orientations)"
+                % (what, deg, res['positions_rotated'], res['orientations_rotated']))
 
     def sequence_commit_hook(self, group):
         """Called when a placed sequence is dropped.
@@ -11437,6 +11732,9 @@ class SimplifiedMapEditor(QMainWindow):
         self.sequences_tree.setAlternatingRowColors(False)
         self.sequences_tree.setSelectionMode(QTreeWidget.SingleSelection)
         self.sequences_tree.itemSelectionChanged.connect(self._on_sequence_selected)
+        self.sequences_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.sequences_tree.customContextMenuRequested.connect(
+            self.on_sequence_tree_context_menu)
         seq_tab_layout.addWidget(self.sequences_tree)
 
         # Preview controls row

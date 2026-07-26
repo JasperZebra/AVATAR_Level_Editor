@@ -38,6 +38,21 @@ def _fmt(vals) -> str:
     return ",".join(f"{v:g}" for v in vals)
 
 
+def _entity_pos(entity) -> tuple:
+    """Entity stores x/y/z as separate attributes, not a position tuple."""
+    if hasattr(entity, "x"):
+        return (float(entity.x), float(entity.y), float(entity.z))
+    p = getattr(entity, "position", (0.0, 0.0, 0.0))
+    return (float(p[0]), float(p[1]), float(p[2]))
+
+
+def _set_entity_pos(entity, pos) -> None:
+    if hasattr(entity, "x"):
+        entity.x, entity.y, entity.z = float(pos[0]), float(pos[1]), float(pos[2])
+    else:
+        entity.position = tuple(pos)
+
+
 # ── the link ───────────────────────────────────────────────────────────────────
 
 class SequenceLink:
@@ -211,8 +226,7 @@ class SequenceLink:
             result = original(entity)
             try:
                 eid = str(getattr(entity, "id", ""))
-                pos = (float(entity.position[0]), float(entity.position[1]),
-                       float(entity.position[2]))
+                pos = _entity_pos(entity)
                 if before is not None and link.is_cinematic_entity(eid):
                     n = link.on_entity_moved(eid, before, pos)
                     if n:
@@ -279,8 +293,8 @@ class PlacementGroup:
         if self.entities:      # already committed -- keep real entities in step
             dx, dy, dz = self.delta
             for ent in self.entities:
-                base = getattr(ent, "_seq_base_pos", ent.position)
-                ent.position = (base[0] + dx, base[1] + dy, base[2] + dz)
+                base = getattr(ent, "_seq_base_pos", _entity_pos(ent))
+                _set_entity_pos(ent, (base[0] + dx, base[1] + dy, base[2] + dz))
 
     def preview_paths(self) -> list:
         """Live preview geometry, offset to the current origin.
@@ -355,10 +369,10 @@ class PlacementGroup:
         synced = 0
         for ent in self.entities:
             eid = str(getattr(ent, "id", ""))
-            ent._seq_base_pos = tuple(ent.position)
-            ent._seq_last_pos = tuple(ent.position)
+            ent._seq_base_pos = _entity_pos(ent)
+            ent._seq_last_pos = _entity_pos(ent)
             if self.link and self.link.is_cinematic_entity(eid):
-                self.link.set_node_rest_pose(eid, ent.position)
+                self.link.set_node_rest_pose(eid, _entity_pos(ent))
                 synced += 1
             if canvas and hasattr(canvas, "_auto_save_entity_changes"):
                 canvas._auto_save_entity_changes(ent)

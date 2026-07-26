@@ -159,6 +159,124 @@ def handle_key(canvas, event) -> bool:
     return False
 
 
+# ── picking keyframes in the viewport ──────────────────────────────────────────
+#
+# A sequence node whose entity exists in the level is selected by clicking that
+# entity -- it is an ordinary entity and moving it already drags its keyframes
+# along (sequence_link). What is NOT otherwise reachable is the KEYFRAMES
+# themselves: the diamonds along a path are drawn but have nothing behind them.
+# These make them clickable and draggable.
+
+PICK_RADIUS_PX = 8
+
+
+def _selected_sequence(canvas):
+    mw = getattr(canvas, "main_window", None)
+    if mw is None:
+        return None, None
+    return getattr(mw, "movie_data", None), getattr(mw, "selected_movie_sequence", None)
+
+
+def keyframe_at(canvas, screen_x, screen_y):
+    """Which keyframe is under the cursor?
+
+    Returns {'node_id', 'index', 'time', 'world'} or None. Only considers the
+    sequence currently selected in the Sequences tab, so paths you are not
+    working on cannot be grabbed by accident.
+    """
+    movie_data, seq_name = _selected_sequence(canvas)
+    if movie_data is None or not seq_name:
+        return None
+    seq = movie_data.get_sequence(seq_name)
+    if seq is None:
+        return None
+    if not hasattr(canvas, "world_to_screen"):
+        return None
+
+    best = None
+    best_d2 = float(PICK_RADIUS_PX) ** 2
+    for seq_node in seq.nodes:
+        keys = seq_node.all_pos_keys()
+        for i, k in enumerate(keys):
+            try:
+                sx, sy = canvas.world_to_screen(k.x, k.y)
+            except Exception:
+                continue
+            d2 = (sx - screen_x) ** 2 + (sy - screen_y) ** 2
+            if d2 <= best_d2:
+                best_d2 = d2
+                best = {"node_id": seq_node.node_id, "index": i,
+                        "time": k.time, "world": (k.x, k.y, k.z)}
+    return best
+
+
+def begin_keyframe_drag(canvas, screen_x, screen_y) -> bool:
+    """Grab a keyframe if one is under the cursor. True if a drag started."""
+    hit = keyframe_at(canvas, screen_x, screen_y)
+    if hit is None:
+        return False
+    mw = canvas.main_window
+    mw.dragging_keyframe = hit
+    mw.selected_movie_node_id = hit["node_id"]
+    print("[seq] grabbed keyframe %d (t=%.2f) of node %s"
+          % (hit["index"], hit["time"], hit["node_id"]))
+    canvas.update()
+    return True
+
+
+def update_keyframe_drag(canvas, event) -> bool:
+    mw = getattr(canvas, "main_window", None)
+    hit = getattr(mw, "dragging_keyframe", None) if mw else None
+    if not hit:
+        return False
+    world = _cursor_world(canvas, event)
+    if world is None:
+        return False
+
+    link = getattr(mw, "sequence_link", None)
+    seq_name = getattr(mw, "selected_movie_sequence", None)
+    if link is None or not seq_name:
+        return False
+
+    # Keep the keyframe's own height unless terrain snapping is on.
+    z = world[2] if getattr(mw, "pending_sequence_snap", False) else hit["world"][2]
+    entity_id = _entity_for_node(mw, hit["node_id"])
+    if entity_id:
+        link.move_keyframe(entity_id, seq_name, hit["index"],
+                           (world[0], world[1], z))
+    canvas.update()
+    return True
+
+
+def end_keyframe_drag(canvas) -> bool:
+    mw = getattr(canvas, "main_window", None)
+    hit = getattr(mw, "dragging_keyframe", None) if mw else None
+    if not hit:
+        return False
+    mw.dragging_keyframe = None
+    link = getattr(mw, "sequence_link", None)
+    if link is not None and getattr(link, "dirty", False):
+        link.save()
+        print("[seq] keyframe move saved")
+        md = getattr(mw, "movie_data", None)
+        if md is not None and getattr(md, "source_path", None):
+            try:
+                from movie_data import MovieData
+                mw.movie_data = MovieData.load(md.source_path)
+            except Exception:
+                pass
+    canvas.update()
+    return True
+
+
+def _entity_for_node(main_window, node_id):
+    md = getattr(main_window, "movie_data", None)
+    if md is None:
+        return None
+    nd = md.node_defs.get(node_id)
+    return nd.entity_id if nd is not None else None
+
+
 # ── commit ─────────────────────────────────────────────────────────────────────
 
 def commit(canvas, group) -> dict:
