@@ -15,9 +15,25 @@ Dunia static addresses so they can be looked up in the decompile.
     python find_writers.py 0x0c3cc950
     python find_writers.py 0x0c3cc950 --seconds 8 --len 4
 
-*** ATTACHING A DEBUGGER PAUSES THE GAME on every hit. *** Expect stutter while
-this runs; it detaches cleanly and the game recovers. DebugSetProcessKillOnExit
-is disabled first, so the game survives detach even if this script dies.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! DO NOT RUN THIS YET -- IT IS STRONGLY SUSPECTED OF CRASHING THE GAME.     !!
+!!                                                                           !!
+!! 2026-07-25: two runs, two dead games. First run reported a clean detach    !!
+!! and the game closed moments later; second run crashed it outright. Both    !!
+!! runs ALSO caught zero writes -- including on a player-position address     !!
+!! that is written every frame -- so the breakpoints were probably never      !!
+!! actually armed, meaning we took all of the risk and none of the benefit.   !!
+!!                                                                           !!
+!! Before ever running this again:                                           !!
+!!   1. Verify DR0/DR7 actually stick (readback added below; if DR0 reads     !!
+!!      back as 0 the whole approach is dead on this target).                 !!
+!!   2. Test against a THROWAWAY process, never the game.                     !!
+!!   3. Prefer static analysis of the decompile -- it is free and safe.       !!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Attaching a debugger pauses the game on every hit. DebugSetProcessKillOnExit is
+disabled first, so the game *should* survive detach -- but observed behaviour
+says otherwise. Treat detach as unsafe on this title.
 
 The target must be 4-byte aligned for a 4-byte watch (x86 requirement).
 """
@@ -231,14 +247,37 @@ def main():
     hits = collections.Counter()
     contexts = {}
     armed = set()
+    events = collections.Counter()
+    exceptions = collections.Counter()
     evt = DEBUG_EVENT()
     deadline = time.time() + args.seconds
 
     try:
-        for tid in thread_ids(pid):
+        all_tids = thread_ids(pid)
+        failed = 0
+        for tid in all_tids:
             if set_breakpoint(tid, args.address, args.len, True):
                 armed.add(tid)
-        print(f"armed DR0 on {len(armed)} thread(s)")
+            else:
+                failed += 1
+        print(f"armed DR0 on {len(armed)}/{len(all_tids)} thread(s)"
+              + (f", {failed} failed" if failed else ""))
+
+        # Verify the write actually took -- Wow64SetThreadContext can report
+        # success without the debug registers sticking.
+        if armed:
+            probe = next(iter(armed))
+            h = k32.OpenThread(THREAD_ALL_ACCESS, False, probe)
+            if h:
+                c = WOW64_CONTEXT()
+                c.ContextFlags = WOW64_CONTEXT_DEBUG_REGISTERS
+                if k32.Wow64GetThreadContext(h, ctypes.byref(c)):
+                    print(f"readback tid {probe}: Dr0={c.Dr0:#010x} Dr7={c.Dr7:#010x} "
+                          f"(want Dr0={args.address:#010x} "
+                          f"Dr7={dr7_for_write(args.len):#010x})")
+                    if c.Dr0 != (args.address & 0xFFFFFFFF):
+                        print("  !! DR0 DID NOT STICK -- breakpoints are not armed")
+                k32.CloseHandle(h)
 
         while time.time() < deadline:
             if not k32.WaitForDebugEvent(ctypes.byref(evt), 200):

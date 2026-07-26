@@ -523,6 +523,62 @@ camera instead of gameplay. That is a freecam switch built into the engine.
 Note the earlier `SwitchCamera` work is *not* wasted: it operates one level up
 (which entity owns the camera). But the rendered view is decided here.
 
+## [CONFIRMED] Static anchors for CSceneCamera — survive restarts
+
+Dunia.dll loads at its preferred base every time observed, so these are usable
+as-is with no slide:
+
+| What | Address |
+|---|---|
+| `"CSceneCamera"` string | `0x110172d8` (.rdata) |
+| type-info name-pointer field | `0x110172e8` |
+| **`CSceneObjectTypeInfo<CSceneCamera>` vtable** | **`0x110172f4`** |
+| **static type-info instance** | **`0x11178368`** |
+| container sub-object (instance + 0x20) | `0x11178388` |
+| scene-object size | `0x40` (64 bytes = one 4×4 matrix) |
+
+The type-info record layout at `0x110172e8`:
+
+```
++0x00  char*  "CSceneCamera"
++0x04  char*  "CSceneOffscreenViewport"   (parent type name)
++0x08  float  45.0                        (default FOV?)
++0x0c  vtable[7] -> 0x1007d8f0, 0x10061170, 0x10086500, 0x10084760,
+                    0x10087490, 0x10084960, 0x1007d8e0
+```
+
+`0x1007d8f0` is the ctor/dtor (`mov [esi], 0x110172f4`). The other six are
+adjustor thunks of the form `add ecx, 0x20 ; jmp <generic>` — confirming the
+container sub-object sits at **+0x20** and that container code is shared
+generically across every scene-object type.
+
+`FUN_1007cce0(&DAT_11178368, param_1)` registers it, in a long run of identical
+calls for every other `CScene*` type — this is Dunia's `InitGraphicsDatabase`
+(the FC2 symbols name a `InitGraphicsDatabase.cpp` translation unit, matching).
+
+**Dead end warning:** walking the container from `0x11178388` did not reach
+camera data. Its list head at `+0x00` points to itself+4 (an empty intrusive
+list), and the two node pointers at `+0x28`/`+0x2c` lead into a generic
+allocator pool holding unrelated data (`gfx_Draw_Sectors` strings). Either the
+camera is reached via `GetOriginalSingleton()` rather than the list, or the
+layout differs from the FC2 build. Do not sink more time into hand-walking this
+structure without a reason to think it changed.
+
+## [DANGER] find_writers.py is suspected of crashing the game
+
+Two runs on 2026-07-25, two dead games — one closed moments after a "clean"
+detach, one outright crash. **Both runs also caught zero writes, including on a
+player-position address that is written every frame.** That combination says
+the debug registers were probably never armed at all, so the risk bought
+nothing.
+
+Do not run it against the game again until DR0/DR7 readback is verified (a
+readback check is now in the script) and it has been proven against a throwaway
+process. Hardware-breakpoint debugging may simply not be viable on this target.
+
+**Prefer static analysis of the decompile.** It is free, safe, repeatable, and
+this project has a 68 MB decompile plus a naming oracle sitting right there.
+
 ## [CONFIRMED] A developer console exists in the binary
 
 `CDominoConsoleCommandManager`, `CFCXConsole`, `CConsoleService`,
