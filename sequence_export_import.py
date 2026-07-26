@@ -47,6 +47,29 @@ BUNDLE_INFO = "sequence_info.json"
 BUNDLE_XML = "sequence.xml"
 BUNDLE_VERSION = 1
 
+# A sequence bundle is deliberately a SUPERSET of an entity collection, so the
+# existing entity importer can consume the same folder:
+#
+#   my_cutscene/
+#       collection_info.json     <- entity_export_import.py reads this
+#       Camera_Cinematic_01.xml  <- the entities the sequence drives
+#       Samson_Pilotable.xml
+#       sequence_info.json       <- this module reads these two
+#       sequence.xml
+#
+# Import is therefore two passes over one folder, matching how model import
+# already works:
+#
+#   1. EntityImportDialog places the entities and returns its cross-reference
+#      map, {old_entity_id_str: new_entity_id_int} (_build_cross_ref_id_map).
+#   2. remap_entity_ids() applies that same map to the sequence's NodeData, so
+#      the tracks drive the entities that were just created.
+#
+# The pivot the entity importer computes (_compute_group_pivot) is the same
+# concept as this module's anchor -- pass it straight to rebase_bundle() and the
+# sequence lands wherever the entities did.
+COLLECTION_INFO = "collection_info.json"
+
 
 # ── path hashing ───────────────────────────────────────────────────────────────
 
@@ -164,6 +187,76 @@ def export_sequence(moviedata_path: str, sequence_name: str, out_folder: str,
     with open(os.path.join(out_folder, BUNDLE_INFO), "w", encoding="utf-8") as fh:
         json.dump(info, fh, indent=2)
     return bundle
+
+
+def find_entities_by_id(worldsectors_folder: str, entity_ids) -> dict:
+    """Locate the source XML for each EntityId across a level's worldsectors.
+
+    Returns {entity_id: (sector_path, element)}. Only converted .xml sectors are
+    searched -- run the editor's FCB->XML conversion first, same as any other
+    entity work.
+    """
+    wanted = {str(e) for e in entity_ids}
+    found = {}
+    if not os.path.isdir(worldsectors_folder):
+        return found
+    for fname in sorted(os.listdir(worldsectors_folder)):
+        if not fname.endswith(".converted.xml"):
+            continue
+        path = os.path.join(worldsectors_folder, fname)
+        try:
+            root = ET.parse(path).getroot()
+        except ET.ParseError:
+            continue
+        for obj in root.iter("object"):
+            fld = obj.find("./field[@name='disEntityId']")
+            if fld is None:
+                continue
+            val = fld.get("value-Id64") or fld.get("value-UInt64") or ""
+            if val in wanted and val not in found:
+                found[val] = (path, obj)
+        if len(found) == len(wanted):
+            break
+    return found
+
+
+def export_sequence_with_entities(moviedata_path: str, sequence_name: str,
+                                  worldsectors_folder: str, out_folder: str,
+                                  source_level: str = "") -> dict:
+    """Export a sequence AND the entities it drives, as one importable folder.
+
+    The result doubles as an entity collection, so the existing entity importer
+    can place the entities and hand back the id_map this module needs.
+    """
+    bundle = export_sequence(moviedata_path, sequence_name, out_folder,
+                             source_level=source_level)
+    located = find_entities_by_id(worldsectors_folder, bundle.entity_ids())
+
+    exported, missing = [], []
+    for node in bundle.node_defs:
+        eid = node.get("EntityId", "")
+        name = node.get("Name", eid)
+        if eid not in located:
+            missing.append(name)
+            continue
+        _sector, elem = located[eid]
+        safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in name)[:80]
+        ET.ElementTree(elem).write(os.path.join(out_folder, f"{safe}.xml"),
+                                   encoding="utf-8", xml_declaration=True)
+        exported.append({"name": name, "entity_id": eid, "file": f"{safe}.xml"})
+
+    # collection_info.json so entity_export_import.py recognises the folder
+    with open(os.path.join(out_folder, COLLECTION_INFO), "w", encoding="utf-8") as fh:
+        json.dump({
+            "collection_name": sequence_name,
+            "source_level": bundle.source_level,
+            "entity_count": len(exported),
+            "created_by": "sequence_export_import",
+            "note": "Also a sequence bundle -- see sequence_info.json",
+        }, fh, indent=2)
+
+    return {"bundle": bundle, "entities_exported": exported,
+            "entities_missing": missing}
 
 
 def load_bundle(folder: str) -> SequenceBundle:
