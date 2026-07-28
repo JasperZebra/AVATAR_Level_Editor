@@ -653,6 +653,14 @@ class MapCanvas(QOpenGLWidget):
         # Multi-cell 3D terrain (FC2 5×5 grid): list of (model, world_x, world_y)
         self.terrain_models = []
 
+        # Top-down mode draws the REAL 3D terrain mesh through an orthographic
+        # camera instead of the baked 2D pixmap (Stage 1 of the "2D becomes a
+        # top-down view of 3D" work).  Escape hatch, in the same spirit as
+        # _use_overlay_batch / _terrain_vbo_enabled: set False (or let the pass
+        # fail once) and the classic pixmap comes straight back.  Every 2D
+        # overlay is unaffected either way — see _setup_topdown_ortho.
+        self.topdown_3d_terrain = True
+
         print(f"MapCanvas initialized - 2D AND 3D VERSION (OpenGL: {self.use_gpu_rendering})")
 
     def _key_light_pos(self):
@@ -4280,6 +4288,21 @@ class MapCanvas(QOpenGLWidget):
         boundaries are a persistent reference overlay the user always wants
         visible, so a failure anywhere else must never suppress them.
         """
+        # Real 3D terrain through an orthographic top-down camera, drawn as raw
+        # GL BEFORE the QPainter pass so every 2D overlay composites on top of
+        # it exactly as it always has. Falls back to the baked 2D pixmap when
+        # there's no 3D terrain loaded, or permanently if the pass ever throws
+        # (so a broken frame can't repeat every repaint).
+        drew_terrain_3d = False
+        if getattr(self, 'topdown_3d_terrain', False):
+            try:
+                drew_terrain_3d = self._render_topdown_terrain_3d()
+            except Exception as e:
+                print(f"[topdown-3d] terrain pass failed ({e}) — using 2D pixmap")
+                import traceback
+                traceback.print_exc()
+                self.topdown_3d_terrain = False
+
         if self.show_grid:
             self.grid_renderer.render_2d_grid(self)
 
@@ -4296,7 +4319,7 @@ class MapCanvas(QOpenGLWidget):
                 traceback.print_exc()
 
         try:
-            if hasattr(self, 'terrain_renderer'):
+            if not drew_terrain_3d and hasattr(self, 'terrain_renderer'):
                 _stage('terrain', lambda: self.terrain_renderer.render_terrain_2d(painter, self))
 
             if self.show_entities:
@@ -4660,6 +4683,123 @@ class MapCanvas(QOpenGLWidget):
             if self._sphere_in_view(centre, radius):
                 out.append(entry)
         return out
+
+    # Depth half-range for the top-down ortho box.  Generous on purpose: the
+    # camera sits at the origin looking straight down, so the near plane is
+    # BEHIND it (negative) — legal for an orthographic projection and the
+    # simplest way to guarantee nothing clips whatever height terrain sits at.
+    _TOPDOWN_DEPTH = 100000.0
+
+    def _setup_topdown_ortho(self):
+        """Point an orthographic camera straight down, matched EXACTLY to the
+        2D transform.  Pushes PROJECTION+MODELVIEW; caller must pop both.
+
+        This is the load-bearing piece of top-down mode.  ``world_to_screen``
+        is affine::
+
+            sx = x*scale + offset_x
+            sy = height - (y*scale + offset_y)
+
+        An axis-aligned orthographic projection is affine too, so we can choose
+        ortho bounds that reproduce that mapping *exactly* rather than
+        approximately.  Solving for the world coords at the viewport edges::
+
+            left = -offset_x/scale            right = (w - offset_x)/scale
+            bottom = -offset_y/scale          top   = (h - offset_y)/scale
+
+        Because of that, every existing 2D overlay — entity squares, sector
+        boxes, labels, shape handles, the gizmo, picking, drag, box-select —
+        keeps working untouched on top of the 3D scene.  **If you change this
+        mapping, you break all of them at once.**
+
+        Bounds are expressed in LOGICAL pixels; the GL viewport is physical, but
+        ortho maps NDC to the whole viewport either way, so this is DPI-safe.
+
+        World→GL is ``(x, y, z) -> (x, z, -y)`` as everywhere else, so looking
+        down GL -Y with up = GL -Z puts world +X right and world +Y up, which is
+        what the 2D view shows.
+
+        Returns True if the camera was set up (matrices pushed).
+        """
+        w = max(1, int(self.width()))
+        h = max(1, int(self.height()))
+        s = float(getattr(self, 'scale_factor', 0.0) or 0.0)
+        if s <= 1e-9 or not np.isfinite(s):
+            return False
+        ox = float(getattr(self, 'offset_x', 0.0))
+        oy = float(getattr(self, 'offset_y', 0.0))
+        if not (np.isfinite(ox) and np.isfinite(oy)):
+            return False
+
+        left = -ox / s
+        right = (w - ox) / s
+        bottom = -oy / s
+        top = (h - oy) / s
+        if not (right > left and top > bottom):
+            return False
+
+        d = self._TOPDOWN_DEPTH
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
+        glOrtho(left, right, bottom, top, -d, d)
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glLoadIdentity()
+        gluLookAt(0.0, 0.0, 0.0,      # eye at the origin...
+                  0.0, -1.0, 0.0,     # ...looking straight down (GL -Y)
+                  0.0, 0.0, -1.0)     # up = GL -Z, i.e. world +Y
+        return True
+
+    def _restore_topdown_ortho(self):
+        """Pop the matrices pushed by _setup_topdown_ortho."""
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
+        glPopMatrix()
+
+    def _render_topdown_terrain_3d(self):
+        """Draw the real 3D terrain mesh under the top-down ortho camera.
+
+        Returns True when it drew (caller then skips the 2D pixmap), False when
+        there's nothing to draw so the classic path runs instead.
+
+        Deliberately minimal for now: unlit, no shadows, no water. Flat shading
+        reads better straight down than the sun rig (which washes the ground
+        out from directly above) and keeps this pass cheap; lighting and water
+        are a later stage.
+        """
+        tiles = []
+        if getattr(self, 'terrain_models', []):
+            tiles = [(m, wx, wy) for m, wx, wy in self.terrain_models]
+        elif getattr(self, 'terrain_model', None) is not None:
+            _tr = getattr(self, 'terrain_renderer', None)
+            tx = getattr(self, 'terrain_world_offset_x',
+                         getattr(_tr, 'terrain_offset_x', 0.0) if _tr else 0.0)
+            ty = getattr(self, 'terrain_world_offset_y',
+                         getattr(_tr, 'terrain_offset_y', 0.0) if _tr else 0.0)
+            tiles = [(self.terrain_model, tx, ty)]
+        if not tiles:
+            return False
+
+        if not self._setup_topdown_ortho():
+            return False
+
+        glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_DEPTH_BUFFER_BIT)
+        try:
+            glEnable(GL_DEPTH_TEST)
+            glDepthFunc(GL_LESS)
+            glDepthMask(GL_TRUE)
+            glDisable(GL_LIGHTING)
+            glDisable(GL_BLEND)
+            glDisable(GL_CULL_FACE)     # terrain winding varies; never drop faces
+            glColor4f(1.0, 1.0, 1.0, 1.0)
+            for model, tx, ty in tiles:
+                self._draw_terrain_tile(model, tx, ty, allow_shadow=False)
+        finally:
+            glPopAttrib()
+            self._restore_topdown_ortho()
+        return True
 
     def _draw_terrain_tile(self, model, tx, ty, allow_shadow=True):
         """Draw one terrain tile model at world offset (tx, ty).

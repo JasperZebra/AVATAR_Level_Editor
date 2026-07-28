@@ -1859,6 +1859,19 @@ class SimplifiedMapEditor(QMainWindow):
             lambda checked: self._set_collision_visibility(checked))
         view_menu.addAction(self.toggle_collision_action)
 
+        # 2D terrain source: the real 3D mesh under an orthographic top-down
+        # camera, or the classic baked pixmap. Every 2D overlay is identical
+        # either way — the ortho camera reproduces world_to_screen exactly.
+        self.toggle_topdown_3d_action = QAction("3D Terrain in 2D View", self)
+        self.toggle_topdown_3d_action.setCheckable(True)
+        self.toggle_topdown_3d_action.setChecked(True)
+        self.toggle_topdown_3d_action.setToolTip(
+            "Draw the real 3D terrain in the 2D view (top-down camera) "
+            "instead of the flat terrain image")
+        self.toggle_topdown_3d_action.triggered.connect(
+            lambda checked: self._set_topdown_3d_terrain(checked))
+        view_menu.addAction(self.toggle_topdown_3d_action)
+
         view_menu.addSeparator()
 
         sector_menu_action = QAction("Toggle Sectors", self)
@@ -14486,6 +14499,19 @@ class SimplifiedMapEditor(QMainWindow):
         self.canvas.update()
         self.status_bar.showMessage(
             f"Collision wireframes (selected): {'visible' if visible else 'hidden'}")
+
+    def _set_topdown_3d_terrain(self, enabled):
+        """Switch the 2D view's ground between the real 3D mesh and the flat image.
+
+        Only the terrain source changes — squares, sector boxes, labels, shape
+        handles, the gizmo and picking are identical either way, because the
+        top-down orthographic camera reproduces the 2D world→screen transform
+        exactly rather than approximately.
+        """
+        self.canvas.topdown_3d_terrain = bool(enabled)
+        self.canvas.update()
+        self.status_bar.showMessage(
+            f"2D terrain: {'real 3D mesh (top-down)' if enabled else 'flat image'}")
     
     def _on_light_angle_changed(self, angle):
         if hasattr(self, 'canvas'):

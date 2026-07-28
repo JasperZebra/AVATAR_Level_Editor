@@ -162,6 +162,7 @@ reference: <reference to this change in the docs if applicable>
 | `sequence_export_import.py` | `tests/test_sequence_removal.py` | — | Removal takes ALL of a thing: `remove_node`/`strip_camera_nodes` drop the `<NodeData>` registry entry as well as the keys (they only edited a filtered list before, so deleted cameras left an orphan NodeDef behind), `remove_sequence` deletes a whole sequence but SPARES a node another sequence still uses, and a rootless export bundle still behaves — excluded from `--cov` |
 | `sequence_link.py` | `tests/test_sequence_link_rebind.py` | — | The once-installed autosave wrapper resolves `canvas.sequence_link` at call time, so entity moves follow the level loaded LAST (it used to close over the first link and write into the previous level's moviedata.xml); a cleared link leaves the original autosave intact — excluded from `--cov` |
 | `sequence_placement.py` | `tests/test_sequence_placement.py` | — | Viewport picking of cutscene handles: ray-vs-box math (incl. ray starting inside the marker), a 3D click picks the marker its ray crosses with the nearest winning, a 2D click tests the drawn 5 px square, picking offers only what the renderers DRAW (isolated node / rest marker only when the entity is missing, at the drawn half-extent), and the GL-ray→world plane mapping the 3D drag uses; plus per-key isolation (dragging one key rewrites THAT key only, keeps its height, adds/loses none — through a real `SequenceLink` on a temp file) and the Shift vertical drag (X/Y held, refuses when looking straight down); GL ray + projector stubbed — excluded from `--cov` |
+| `canvas/map_canvas_gpu.py` | `tests/test_topdown_ortho.py` | — | The top-down ortho camera reproduces `world_to_screen` **exactly** (pixel-exact across widget sizes/zooms/pans), screen position is independent of entity height, axes/depth orientation correct, degenerate camera state rejected; projection **mirrored** in numpy (canvas needs GL+Qt) — excluded from `--cov` |
 | `simplified_map_editor.py` | `tests/test_cancel_loading.py` | — | AST scan of the real source: every `cancel_loading(...)` call passes BOTH `thread` and `dialog` (the `load_complete_level` site passed only the dialog, so clicking Cancel mid-load raised `TypeError` out of a Qt signal handler and killed the editor), plus `thread=None` tolerated and no exception ever escapes the handler; editor via `SimplifiedMapEditor.__new__` — excluded from `--cov` |
 | `pak_archive.py` | `tests/test_pak_archive.py` | — | PAK! v4 round trip is **byte-identical** (not merely content-identical) when order + FILETIMEs are preserved; changed-only packing picks exactly the edited files and never packs `*.fcb.converted.xml` / `*.bak`; malformed archives raise `PakError`; pure-Python LZO1X decoder matches the DLL. Runs without game data; the compressed cases skip when minilzo is absent — excluded from `--cov` |
 | `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
@@ -3887,6 +3888,74 @@ drop the rows that patch needs.
 watch the `⏱️ FRAME …ms CPU | overlay3d=… shape=… prims=…` line printed every 60 frames.
 `overlay3d≈0.1` means the cache is live; `shape`/`prims`/`triggers` appearing at all means
 something knocked it out.
+
+## 2D view as a top-down 3D camera — Stage 1: terrain (July 2026)
+
+Goal (user request, modelled on the Battalion Wars level editor at
+`BW_STUFF/battalion-level-editor`): keep the entire 2D UI — entity squares,
+sector/landmark/omnis boxes, labels, shape handles, trigger outlines, movie
+paths, gizmo, mode badge — but replace the flat 2D *content* with a top-down
+view of the real 3D scene. Staged: **1) terrain (done)**, 2) ortho-aware
+culling, 3) models, 4) lighting/water, 5) settings + persistence.
+
+### Why this is cheap: an axis-aligned ortho projection IS the 2D transform
+
+`world_to_screen` is affine — `sx = x*scale + offset_x`,
+`sy = height - (y*scale + offset_y)`. An orthographic camera pointed straight
+down is affine too, so `_setup_topdown_ortho` picks bounds that reproduce it
+**exactly** rather than approximately::
+
+    left = -offset_x/scale     right = (width  - offset_x)/scale
+    bottom = -offset_y/scale   top   = (height - offset_y)/scale
+
+with `gluLookAt((0,0,0), (0,-1,0), up=(0,0,-1))` — eye at the origin looking
+down GL −Y, up = GL −Z, which puts world +X screen-right and world +Y screen-up
+under the usual `world(x,y,z) → gl(x, z, −y)` mapping.
+
+**Consequence: nothing else had to change.** Squares, overlays, picking, drag,
+box-select, shape handles and the gizmo all keep using the same affine
+transform and land pixel-perfect on the 3D terrain. Verified GPU-free over
+14,400 projections across widget sizes / zoom levels / pan offsets: worst
+disagreement **2.2e-11 px**, and entity height shifts screen position by
+**exactly 0**. `tests/test_topdown_ortho.py` pins it.
+
+**If you change that mapping you break every 2D overlay at once**, silently —
+they just slide off the terrain, no exception. Bounds are in LOGICAL pixels;
+the viewport is physical, but ortho maps NDC across the whole viewport either
+way, so it's DPI-safe.
+
+### How it's wired
+
+`_render_2d_opengl` draws `_render_topdown_terrain_3d()` as **raw GL before**
+`QPainter(self)`, so the QPainter overlays composite on top for free — no need
+for BW's `glClear(GL_DEPTH_BUFFER_BIT)` trick to keep markers above the ground.
+The pass is unlit, no shadows, no water (flat reads better straight down than
+the sun rig, which washes the ground out from directly above — and it keeps the
+pass cheap). Matrices are pushed/popped and state is bracketed with
+`glPushAttrib`, then the existing `_reset_gl_state_for_qpainter()` runs as
+before — that reset is **load-bearing**: a dirty GL state segfaults PyQt5's
+QPainter, and with `OpenGL.ERROR_CHECKING=False` it surfaces as a bare access
+violation, not a traceback.
+
+Escape hatch: `canvas.topdown_3d_terrain` (default True), View ▸ **"3D Terrain
+in 2D View"**. Falls back to the baked pixmap when there's no 3D terrain loaded,
+and **latches off permanently** if the pass ever throws, so one bad frame can't
+repeat every repaint.
+
+### Known, still to do (stages 2-4)
+
+- **`_get_visible_entities` (3D branch) and F9 contribution culling both assume
+  PERSPECTIVE.** The frustum test uses VFOV-50 angle tests, and
+  `gdr_min_pixel_size` derives projected size from camera distance — both are
+  meaningless under ortho (projected size depends only on `scale_factor`). The
+  2D branch's vectorised AABB cull is already the right test for ortho. Fix
+  before enabling models in top-down, or culling will be wrong.
+- Top-down at full-map zoom puts the WHOLE level in frustum permanently, and
+  terrain tile culling stops paying (FC2: all 25 cells). Per this file's own
+  perf validation, ~5,600 on-screen entities is already at the 60 FPS budget —
+  contribution culling is the intended LOD (nearly everything is sub-4px zoomed
+  out, so models should vanish and leave terrain + squares, exactly like the
+  classic 2D look), but that only works once it is ortho-aware.
 
 ## PAK archive support — load a `.pak`, edit, repack (July 2026)
 
