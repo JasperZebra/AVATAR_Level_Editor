@@ -2467,15 +2467,27 @@ class ModelLoader:
             min_px = float(getattr(self, 'gdr_min_pixel_size', 0.0) or 0.0)
             if min_px > 0.0:
                 radii = getattr(canvas, '_radii_3d', None)
-                cam = getattr(getattr(canvas, 'camera_3d', None), 'position', None)
-                scr_h = float(canvas.height() or 0)
-                if radii is not None and len(radii) == len(valid) and cam is not None and scr_h > 0:
-                    import math as _m
-                    k = (scr_h * 0.5) / _m.tan(_m.radians(25.0))
-                    dpts = pos - np.asarray(cam, np.float32)
-                    d2 = np.einsum('ij,ij->i', dpts, dpts)
-                    lim = min_px / (2.0 * k)
-                    ent_vis &= (radii * radii >= d2 * (lim * lim)) | (radii <= 0.0)
+                if radii is not None and len(radii) == len(valid):
+                    if getattr(canvas, '_topdown_scene', False):
+                        # ORTHOGRAPHIC (top-down 2D view): size on screen does
+                        # NOT fall off with distance — it is purely the zoom.
+                        # projected_px = 2r·scale, so keep <=> r >= min_px/(2·scale).
+                        # Using the perspective formula here would cull by
+                        # distance-to-camera, which is meaningless under ortho.
+                        s = float(getattr(canvas, 'scale_factor', 0.0) or 0.0)
+                        if s > 0.0:
+                            lim = min_px / (2.0 * s)
+                            ent_vis &= (radii >= lim) | (radii <= 0.0)
+                    else:
+                        cam = getattr(getattr(canvas, 'camera_3d', None), 'position', None)
+                        scr_h = float(canvas.height() or 0)
+                        if cam is not None and scr_h > 0:
+                            import math as _m
+                            k = (scr_h * 0.5) / _m.tan(_m.radians(25.0))
+                            dpts = pos - np.asarray(cam, np.float32)
+                            d2 = np.einsum('ij,ij->i', dpts, dpts)
+                            lim = min_px / (2.0 * k)
+                            ent_vis &= (radii * radii >= d2 * (lim * lim)) | (radii <= 0.0)
 
             inst, counts, offsets = assemble_frame(
                 self._gdr_row_ent, self._gdr_row_slot, self._gdr_row_rot,

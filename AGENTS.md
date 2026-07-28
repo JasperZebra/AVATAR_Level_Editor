@@ -3889,14 +3889,20 @@ watch the `⏱️ FRAME …ms CPU | overlay3d=… shape=… prims=…` line prin
 `overlay3d≈0.1` means the cache is live; `shape`/`prims`/`triggers` appearing at all means
 something knocked it out.
 
-## 2D view as a top-down 3D camera — Stage 1: terrain (July 2026)
+## 2D view IS the 3D scene, seen top-down (July 2026)
 
 Goal (user request, modelled on the Battalion Wars level editor at
 `BW_STUFF/battalion-level-editor`): keep the entire 2D UI — entity squares,
 sector/landmark/omnis boxes, labels, shape handles, trigger outlines, movie
-paths, gizmo, mode badge — but replace the flat 2D *content* with a top-down
-view of the real 3D scene. Staged: **1) terrain (done)**, 2) ortho-aware
-culling, 3) models, 4) lighting/water, 5) settings + persistence.
+paths, gizmo, mode badge — but make what's UNDER it the real 3D scene rather
+than a flat baked image. **The 2D view now literally runs
+`_render_3d_opengl(topdown=True)`** — same lighting, shadows, terrain, water
+and models as 3D mode, just through a locked overhead orthographic camera.
+
+A first cut drew unlit terrain only; the user's feedback was that it "still
+looks like a flat image… it needs to look like 3D mode, just from a top-down
+stuck camera." Hence reusing the whole 3D path instead of re-implementing
+pieces of it — the shared scene IS the feature.
 
 ### Why this is cheap: an axis-aligned ortho projection IS the 2D transform
 
@@ -3942,20 +3948,35 @@ in 2D View"**. Falls back to the baked pixmap when there's no 3D terrain loaded,
 and **latches off permanently** if the pass ever throws, so one bad frame can't
 repeat every repaint.
 
-### Known, still to do (stages 2-4)
+### Three culls had PERSPECTIVE baked in — all now branch on `_topdown_scene`
 
-- **`_get_visible_entities` (3D branch) and F9 contribution culling both assume
-  PERSPECTIVE.** The frustum test uses VFOV-50 angle tests, and
-  `gdr_min_pixel_size` derives projected size from camera distance — both are
-  meaningless under ortho (projected size depends only on `scale_factor`). The
-  2D branch's vectorised AABB cull is already the right test for ortho. Fix
-  before enabling models in top-down, or culling will be wrong.
-- Top-down at full-map zoom puts the WHOLE level in frustum permanently, and
-  terrain tile culling stops paying (FC2: all 25 cells). Per this file's own
-  perf validation, ~5,600 on-screen entities is already at the 60 FPS budget —
-  contribution culling is the intended LOD (nearly everything is sub-4px zoomed
-  out, so models should vanish and leave terrain + squares, exactly like the
-  classic 2D look), but that only works once it is ortho-aware.
+`self._topdown_scene` is True only while the top-down pass runs. Any new code
+that reasons about camera distance or FOV must check it:
+
+1. **`_get_visible_entities`** — the 3D branch does VFOV-50 angle tests against
+   `camera_3d`. Top-down takes a new branch: a plain AABB test of world x/y
+   against the visible rectangle, expanded by each entity's `_radii_3d`. It
+   produces **`_visible_idx_3d`** (what the GDR pipeline consumes), NOT the 2D
+   index array, so the full model path runs unchanged. `_positions_3d` is GL
+   space `(x, z, -y)`, so world y is `-col2` and height (col 1) is irrelevant.
+2. **F9 contribution culling** (`model_loader.prepare_gpu_frame`) — perspective
+   size falls off with distance; under ortho it depends ONLY on zoom, so
+   `projected_px = 2r·scale` and the test is `r >= min_px/(2·scale)`. This is
+   the LOD that makes top-down affordable: at zoom 0.05 only radius ≥ 40 models
+   survive, at 4.0 everything draws — so zoomed out you get terrain + squares
+   (the classic 2D look) and models fade in as you zoom. Radius-0 markers are
+   always kept.
+3. **`_visible_terrain_tiles`** — `_sphere_in_view` is also a perspective test,
+   and a false cull is a hole in the world, so top-down draws every tile.
+   Tile culling was only ever an FC2 multi-cell optimisation.
+
+### Perf note
+
+Top-down at full-map zoom puts the whole level in frustum permanently and
+terrain tile culling stops paying (FC2: all 25 cells). Per this file's own perf
+validation ~5,600 on-screen entities is already at the 60 FPS budget — the
+contribution cull above is what keeps it sane. If a level still crawls, F9
+raises `gdr_min_pixel_size`.
 
 ## PAK archive support — load a `.pak`, edit, repack (July 2026)
 

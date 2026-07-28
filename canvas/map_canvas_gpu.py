@@ -653,13 +653,19 @@ class MapCanvas(QOpenGLWidget):
         # Multi-cell 3D terrain (FC2 5×5 grid): list of (model, world_x, world_y)
         self.terrain_models = []
 
-        # Top-down mode draws the REAL 3D terrain mesh through an orthographic
-        # camera instead of the baked 2D pixmap (Stage 1 of the "2D becomes a
-        # top-down view of 3D" work).  Escape hatch, in the same spirit as
-        # _use_overlay_batch / _terrain_vbo_enabled: set False (or let the pass
-        # fail once) and the classic pixmap comes straight back.  Every 2D
-        # overlay is unaffected either way — see _setup_topdown_ortho.
-        self.topdown_3d_terrain = True
+        # Top-down mode renders the FULL 3D scene — lighting, shadows, terrain,
+        # water, models — through a locked overhead orthographic camera instead
+        # of the flat baked pixmap, with the 2D overlays composited on top.
+        # Escape hatch, in the same spirit as _use_overlay_batch /
+        # _terrain_vbo_enabled: set False (or let the pass fail once) and the
+        # classic 2D look comes straight back.  Every 2D overlay is unaffected
+        # either way — see _setup_topdown_ortho for why.
+        self.topdown_3d_scene = True
+        # True only WHILE that pass runs. Read by the ortho entity cull in
+        # _get_visible_entities, the contribution cull in
+        # model_loader.prepare_gpu_frame, and _visible_terrain_tiles — all of
+        # which otherwise apply perspective math to an orthographic camera.
+        self._topdown_scene = False
 
         print(f"MapCanvas initialized - 2D AND 3D VERSION (OpenGL: {self.use_gpu_rendering})")
 
@@ -4288,20 +4294,28 @@ class MapCanvas(QOpenGLWidget):
         boundaries are a persistent reference overlay the user always wants
         visible, so a failure anywhere else must never suppress them.
         """
-        # Real 3D terrain through an orthographic top-down camera, drawn as raw
-        # GL BEFORE the QPainter pass so every 2D overlay composites on top of
-        # it exactly as it always has. Falls back to the baked 2D pixmap when
-        # there's no 3D terrain loaded, or permanently if the pass ever throws
-        # (so a broken frame can't repeat every repaint).
+        # The FULL 3D scene — lighting, shadows, terrain, water, models —
+        # through a locked overhead orthographic camera, drawn as raw GL BEFORE
+        # the QPainter pass so every 2D overlay composites on top of it exactly
+        # as it always has. Falls back to the flat 2D pixmap when there's no 3D
+        # terrain loaded, or permanently if the pass throws (so one broken frame
+        # can't repeat on every repaint).
         drew_terrain_3d = False
-        if getattr(self, 'topdown_3d_terrain', False):
+        if getattr(self, 'topdown_3d_scene', False) and self._has_3d_terrain():
             try:
-                drew_terrain_3d = self._render_topdown_terrain_3d()
+                # Read by the ortho cull in _get_visible_entities and by the
+                # contribution cull in model_loader.prepare_gpu_frame — both
+                # would otherwise apply perspective math to an ortho camera.
+                self._topdown_scene = True
+                self._render_3d_opengl(topdown=True)
+                drew_terrain_3d = True
             except Exception as e:
-                print(f"[topdown-3d] terrain pass failed ({e}) — using 2D pixmap")
+                print(f"[topdown-3d] scene pass failed ({e}) — using 2D pixmap")
                 import traceback
                 traceback.print_exc()
-                self.topdown_3d_terrain = False
+                self.topdown_3d_scene = False
+            finally:
+                self._topdown_scene = False
 
         if self.show_grid:
             self.grid_renderer.render_2d_grid(self)
@@ -4673,6 +4687,13 @@ class MapCanvas(QOpenGLWidget):
         tiles = getattr(self, 'terrain_models', None) or []
         if len(tiles) <= 1:
             return list(tiles)
+        # _sphere_in_view is a PERSPECTIVE test (VFOV 50 against camera_3d).
+        # Under the top-down orthographic camera it would cull by the wrong
+        # frustum entirely — and a false cull is a hole in the world — so draw
+        # every tile. The ortho cull in _get_visible_entities handles entities;
+        # tile-level culling here is an FC2 multi-cell optimisation only.
+        if getattr(self, '_topdown_scene', False):
+            return list(tiles)
         out = []
         for entry in tiles:
             model, tx, ty = entry
@@ -4758,48 +4779,14 @@ class MapCanvas(QOpenGLWidget):
         glMatrixMode(GL_MODELVIEW)
         glPopMatrix()
 
-    def _render_topdown_terrain_3d(self):
-        """Draw the real 3D terrain mesh under the top-down ortho camera.
+    def _has_3d_terrain(self):
+        """True when a 3D terrain mesh exists to render top-down.
 
-        Returns True when it drew (caller then skips the 2D pixmap), False when
-        there's nothing to draw so the classic path runs instead.
-
-        Deliberately minimal for now: unlit, no shadows, no water. Flat shading
-        reads better straight down than the sun rig (which washes the ground
-        out from directly above) and keeps this pass cheap; lighting and water
-        are a later stage.
+        Without one the top-down scene would be an empty void, so the caller
+        falls back to the classic baked 2D pixmap instead.
         """
-        tiles = []
-        if getattr(self, 'terrain_models', []):
-            tiles = [(m, wx, wy) for m, wx, wy in self.terrain_models]
-        elif getattr(self, 'terrain_model', None) is not None:
-            _tr = getattr(self, 'terrain_renderer', None)
-            tx = getattr(self, 'terrain_world_offset_x',
-                         getattr(_tr, 'terrain_offset_x', 0.0) if _tr else 0.0)
-            ty = getattr(self, 'terrain_world_offset_y',
-                         getattr(_tr, 'terrain_offset_y', 0.0) if _tr else 0.0)
-            tiles = [(self.terrain_model, tx, ty)]
-        if not tiles:
-            return False
-
-        if not self._setup_topdown_ortho():
-            return False
-
-        glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_DEPTH_BUFFER_BIT)
-        try:
-            glEnable(GL_DEPTH_TEST)
-            glDepthFunc(GL_LESS)
-            glDepthMask(GL_TRUE)
-            glDisable(GL_LIGHTING)
-            glDisable(GL_BLEND)
-            glDisable(GL_CULL_FACE)     # terrain winding varies; never drop faces
-            glColor4f(1.0, 1.0, 1.0, 1.0)
-            for model, tx, ty in tiles:
-                self._draw_terrain_tile(model, tx, ty, allow_shadow=False)
-        finally:
-            glPopAttrib()
-            self._restore_topdown_ortho()
-        return True
+        return bool(getattr(self, 'terrain_models', None)
+                    or getattr(self, 'terrain_model', None) is not None)
 
     def _draw_terrain_tile(self, model, tx, ty, allow_shadow=True):
         """Draw one terrain tile model at world offset (tx, ty).
@@ -5307,28 +5294,50 @@ class MapCanvas(QOpenGLWidget):
                 pass
             return fbo.toImage()
 
-    def _render_3d_opengl(self):
-        """Render 3D scene using OpenGL with matching grid style"""
+    def _render_3d_opengl(self, topdown=False):
+        """Render the 3D scene.
+
+        ``topdown=True`` renders the SAME scene — lighting, shadows, terrain,
+        water, models — through the locked overhead orthographic camera instead
+        of the free perspective one, so the 2D view shows real 3D content with
+        the flat 2D overlays composited on top. Only the projection and the
+        3D-only UI differ; everything that makes the scene look like the 3D
+        view is shared, which is the whole point.
+
+        Skipped when topdown: the sky stack (an ortho view ray is constant, so
+        the atmosphere shader would flood the frame with one colour), the 3D
+        grid / gizmo / wireframe overlays / HUD badges (2D draws its own), and
+        the planar water reflection (a mirrored top-down view reflects almost
+        nothing but costs a full extra scene pass).
+        """
+        pushed_topdown = False
         try:
             # Regenerate terrain display list if water was updated
             if hasattr(self, 'water_mesh_editor'):
                 self.water_mesh_editor.regenerate_if_needed()
-            
-            # Set up 3D projection
-            glMatrixMode(GL_PROJECTION)
-            glLoadIdentity()
-            gluPerspective(50, self.width() / self.height(), 0.1, 10000.0)
 
-            glMatrixMode(GL_MODELVIEW)
-            glLoadIdentity()
+            if topdown:
+                # Ortho bounds reproduce world_to_screen exactly — see
+                # _setup_topdown_ortho. Pushes both matrices; popped in finally.
+                if not self._setup_topdown_ortho():
+                    return
+                pushed_topdown = True
+            else:
+                # Set up 3D projection
+                glMatrixMode(GL_PROJECTION)
+                glLoadIdentity()
+                gluPerspective(50, self.width() / self.height(), 0.1, 10000.0)
 
-            # Position camera first
-            cam = self.camera_3d
-            gluLookAt(
-                cam.position[0], cam.position[1], cam.position[2],
-                *cam.get_look_at(),
-                0, 1, 0
-            )
+                glMatrixMode(GL_MODELVIEW)
+                glLoadIdentity()
+
+                # Position camera first
+                cam = self.camera_3d
+                gluLookAt(
+                    cam.position[0], cam.position[1], cam.position[2],
+                    *cam.get_look_at(),
+                    0, 1, 0
+                )
 
             # ── World-space sun lighting ────────────────────────────────────
             # Lights are set AFTER gluLookAt so their positions are in world
@@ -5367,9 +5376,12 @@ class MapCanvas(QOpenGLWidget):
 
             # Environment backdrop: daytime spectral atmosphere → night star dome
             # → cloud layer. Shared with the CS camera preview so a cutscene sees
-            # exactly the same sky (see _draw_sky_stack).
-            self._draw_sky_stack(self.width(), self.height(),
-                                 self.defaultFramebufferObject(), fov_deg=50.0)
+            # exactly the same sky (see _draw_sky_stack). Skipped top-down: every
+            # ortho view ray is parallel and points straight down, so the sky
+            # shaders would fill the whole frame with a single colour.
+            if not topdown:
+                self._draw_sky_stack(self.width(), self.height(),
+                                     self.defaultFramebufferObject(), fov_deg=50.0)
 
             # Enable proper depth testing for solid rendering
             glEnable(GL_DEPTH_TEST)
@@ -5417,7 +5429,8 @@ class MapCanvas(QOpenGLWidget):
             _ts = self._pf('terrain', _ts)
 
             # *** MODIFIED: Check show_3d_grid toggle instead of show_grid ***
-            if getattr(self, 'show_3d_grid', True):
+            # Skipped top-down — the 2D view draws its own grid.
+            if getattr(self, 'show_3d_grid', True) and not topdown:
                 # Isolate all grid state changes (color, linewidth, lighting) from entity rendering
                 glPushAttrib(GL_LINE_BIT | GL_CURRENT_BIT | GL_ENABLE_BIT)
                 glDisable(GL_LIGHTING)
@@ -5448,6 +5461,7 @@ class MapCanvas(QOpenGLWidget):
             if hasattr(self, 'water_plane_renderer'):
                 self.water_plane_renderer._water_reflect_tex = 0   # clear stale frame
             if (getattr(self, 'reflections_enabled', True)
+                    and not topdown
                     and hasattr(self, 'water_plane_renderer')
                     and hasattr(self, 'terrain_renderer')
                     and self._water_on_screen()):
@@ -5485,17 +5499,23 @@ class MapCanvas(QOpenGLWidget):
                 # paths) — cached across frames in world space; rebuilt only on
                 # entity/selection changes. See _render_overlays_3d ('overlay3d'
                 # profiler stage when cached; 'prims/triggers/shape' when not).
-                self._render_overlays_3d(visible)
+                # Skipped top-down: the 2D QPainter pass draws all of these
+                # itself, and drawing both would double every outline.
+                if not topdown:
+                    self._render_overlays_3d(visible)
 
             _ts = _time.perf_counter()
             # Pulsing glow tint on selected entity's mesh (before beacon lines so lines stay on top)
             self._render_3d_selection_glow()
 
-            # Selection beacon lines (always drawn, independent of show_entities)
-            self._render_3d_selection_lines()
+            # Selection beacon lines (always drawn, independent of show_entities).
+            # Useless top-down — they run straight at the camera, so they cover
+            # a single pixel.
+            if not topdown:
+                self._render_3d_selection_lines()
 
-            # 3D gizmo — only visible in Edit mode
-            if (hasattr(self, 'gizmo_3d') and
+            # 3D gizmo — only visible in Edit mode. Top-down uses the 2D gizmo.
+            if (not topdown and hasattr(self, 'gizmo_3d') and
                     getattr(self.input_handler, 'edit_mode_3d', False)):
                 self.gizmo_3d.render(self)
             _ts = self._pf('overlays', _ts)
@@ -5515,7 +5535,8 @@ class MapCanvas(QOpenGLWidget):
             # God rays: crepuscular light shafts streaming past terrain/objects
             # toward the sun. Post-process — needs the scene depth still valid and
             # the camera matrices current (both true here, before the teardown).
-            self._render_god_rays()
+            if not topdown:
+                self._render_god_rays()
 
             # RESTORE OpenGL STATE for 2D rendering
             glDisable(GL_LIGHTING)
@@ -5530,7 +5551,10 @@ class MapCanvas(QOpenGLWidget):
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
             # *** MODIFIED: Check show_3d_hud toggle before drawing UI overlays ***
-            if getattr(self, 'show_3d_hud', True):
+            # Top-down skips the 3D HUD entirely — the 2D pass draws its own
+            # badges, and opening a QPainter here would end the frame before
+            # those overlays get their turn.
+            if getattr(self, 'show_3d_hud', True) and not topdown:
                 # Draw 2D UI overlays on top
                 self._reset_gl_state_for_qpainter()
                 painter = QPainter(self)
@@ -5545,6 +5569,16 @@ class MapCanvas(QOpenGLWidget):
             print(f"Error in 3D rendering: {e}")
             import traceback
             traceback.print_exc()
+        finally:
+            # Pop ONLY what was actually pushed: a failed camera setup returns
+            # before pushing, and popping then underflows the matrix stack.
+            # Otherwise pop even when the scene threw halfway, or the stack
+            # grows every frame until it overflows.
+            if pushed_topdown:
+                try:
+                    self._restore_topdown_ortho()
+                except Exception:
+                    pass
 
     def _draw_3d_ui_overlays(self, painter):
         """Draw UI overlays for 3D mode"""
@@ -5963,6 +5997,47 @@ class MapCanvas(QOpenGLWidget):
         self._visible_idx_3d = None
 
         entities_to_check = self._get_map_filtered_entities()
+
+        # =========================================================
+        # TOP-DOWN 3D PASS — ORTHOGRAPHIC AABB CULL
+        # =========================================================
+        # The perspective frustum test below is meaningless here: an ortho
+        # camera has no FOV and no distance falloff, so "is it in view" is
+        # simply "is it inside the visible world rectangle". Produces
+        # _visible_idx_3d (what the GDR pipeline consumes) rather than the 2D
+        # index array, so the full 3D model path runs unchanged.
+        if getattr(self, '_topdown_scene', False):
+            valid = getattr(self, '_valid_entities_3d', None)
+            positions = getattr(self, '_positions_3d', None)
+            if not valid or positions is None or len(positions) != len(valid):
+                return []
+            s = float(getattr(self, 'scale_factor', 0.0) or 0.0)
+            if s <= 1e-9:
+                return []
+            w = max(1, int(self.width()))
+            h = max(1, int(self.height()))
+            ox = float(getattr(self, 'offset_x', 0.0))
+            oy = float(getattr(self, 'offset_y', 0.0))
+            left, right = -ox / s, (w - ox) / s
+            bottom, top = -oy / s, (h - oy) / s
+
+            # _positions_3d is GL space (x, z, -y): world x = col 0,
+            # world y = -col 2. Height (col 1) is irrelevant looking straight down.
+            wx = positions[:, 0]
+            wy = -positions[:, 2]
+
+            radii = getattr(self, '_radii_3d', None)
+            if radii is None or len(radii) != len(valid):
+                radii = np.zeros(len(valid), dtype=np.float32)
+
+            vis = ((wx + radii >= left) & (wx - radii <= right) &
+                   (wy + radii >= bottom) & (wy - radii <= top))
+            idx = np.where(vis)[0]
+            if idx.size == 0:
+                self._visible_idx_3d = None
+                return []
+            self._visible_idx_3d = idx           # ascending, as np.where returns
+            return [valid[i] for i in idx.tolist()]
 
         # =========================
         # 3D MODE - VECTORISED FRUSTUM CULL
