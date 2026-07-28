@@ -162,6 +162,7 @@ reference: <reference to this change in the docs if applicable>
 | `sequence_export_import.py` | `tests/test_sequence_removal.py` | — | Removal takes ALL of a thing: `remove_node`/`strip_camera_nodes` drop the `<NodeData>` registry entry as well as the keys (they only edited a filtered list before, so deleted cameras left an orphan NodeDef behind), `remove_sequence` deletes a whole sequence but SPARES a node another sequence still uses, and a rootless export bundle still behaves — excluded from `--cov` |
 | `sequence_link.py` | `tests/test_sequence_link_rebind.py` | — | The once-installed autosave wrapper resolves `canvas.sequence_link` at call time, so entity moves follow the level loaded LAST (it used to close over the first link and write into the previous level's moviedata.xml); a cleared link leaves the original autosave intact — excluded from `--cov` |
 | `sequence_placement.py` | `tests/test_sequence_placement.py` | — | Viewport picking of cutscene handles: ray-vs-box math (incl. ray starting inside the marker), a 3D click picks the marker its ray crosses with the nearest winning, a 2D click tests the drawn 5 px square, picking offers only what the renderers DRAW (isolated node / rest marker only when the entity is missing, at the drawn half-extent), and the GL-ray→world plane mapping the 3D drag uses; plus per-key isolation (dragging one key rewrites THAT key only, keeps its height, adds/loses none — through a real `SequenceLink` on a temp file) and the Shift vertical drag (X/Y held, refuses when looking straight down); GL ray + projector stubbed — excluded from `--cov` |
+| `simplified_map_editor.py` | `tests/test_cancel_loading.py` | — | AST scan of the real source: every `cancel_loading(...)` call passes BOTH `thread` and `dialog` (the `load_complete_level` site passed only the dialog, so clicking Cancel mid-load raised `TypeError` out of a Qt signal handler and killed the editor), plus `thread=None` tolerated and no exception ever escapes the handler; editor via `SimplifiedMapEditor.__new__` — excluded from `--cov` |
 | `pak_archive.py` | `tests/test_pak_archive.py` | — | PAK! v4 round trip is **byte-identical** (not merely content-identical) when order + FILETIMEs are preserved; changed-only packing picks exactly the edited files and never packs `*.fcb.converted.xml` / `*.bak`; malformed archives raise `PakError`; pure-Python LZO1X decoder matches the DLL. Runs without game data; the compressed cases skip when minilzo is absent — excluded from `--cov` |
 | `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
 
@@ -2505,6 +2506,28 @@ Per-frame: `|proj| <= half_frustum_at_depth + radius`. This prevents large model
 Tests: `tests/test_terrain_cache_key_fc2.py`.
 
 **FC2 cell-name convention is transposed + inverted (July 2026, verified on all 50 retail cells).** In `w{n}_{letter}_{digit}`: the DIGIT is the world COLUMN (1→col 0 … 5→col 4) and the LETTER is the world ROW, INVERTED (a→row 4 = top, e→row 0). Corner ground truth from sd numbering: w1_e_1→sd0→(0,0), w1_e_5→sd64→(4096,0), w1_a_1→sd5120→(0,4096), w1_a_5→sd5184→(4096,4096). The old letter=col/digit=row mapping only agreed on symmetric cells (c_3), so world terrain cells were scattered. `_get_fc2_world_offset` now uses the corrected formula, but terrain loading prefers `_fc2_offset_from_sector_numbers` (derives the offset from the cell's own sd numbers: `wx=(min%stride)*64, wy=(min//stride)*64`, stride from the first gap) — ground truth, no naming convention. Contiguous-from-0 numbering (standalone MP maps) → (0,0); contiguous-from-nonzero → None (fall back to name). Also: the FC2 sector remap in `terrain_renderer.load_sdat_folder` AND `terrain_to_gltf.load_all_sectors` runs on GAP DETECTION (not `min_s > 0` — w1_e_1 starts at sd0 but is world-strided), per-folder FC2 remap state is reset at the top of `load_sdat_folder` (`_fc2_remapped` flag; stale state from a previous cell poisoned the next cell's atlas math), and `terrain_to_gltf` mirrors the FC2 2×2-block atlas mapping + row-major texture combine + DIRECT UVs (`u=NX, v=NY` — Avatar keeps its rotated UVs). Tests: `tests/test_fc2_cell_offsets.py` (mirrored helpers validated against all 50 real cells).
+
+### Cancelling a level load crashed the editor (July 2026)
+
+`load_complete_level` wired its cancel signal as
+`lambda: self.cancel_loading(progress_dialog)` — **one** argument to
+`cancel_loading(self, thread, dialog)`. Clicking Cancel (or the dialog's X,
+which routes through `on_cancel`) therefore raised
+`TypeError: cancel_loading() missing 1 required positional argument: 'dialog'`
+**from inside a Qt signal handler**, where nothing catches it, so the editor
+died mid-load. Latent behind it: the body called `thread.stop()`
+unconditionally, but `load_level_objects` legitimately passes None when no
+object-loading thread exists yet — fixing only the arity would have traded the
+TypeError for an AttributeError.
+
+Fixed by passing `None` explicitly at that site (this load runs on the **main
+thread** and aborts by polling `progress_dialog.was_cancelled`, which it does at
+15 points — there is no worker to stop) and by making `cancel_loading` guard
+both parameters and swallow-and-log failures. **Rule: a slot connected to a Qt
+signal must not be able to raise** — there is no caller to catch it, and with
+`OpenGL.ERROR_CHECKING=False` a stray exception can surface as a bare crash
+rather than a traceback. Regression: `tests/test_cancel_loading.py` AST-scans
+every call site against the signature.
 
 ### Known issues / watch out
 

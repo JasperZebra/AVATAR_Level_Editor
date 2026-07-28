@@ -5533,14 +5533,16 @@ class SimplifiedMapEditor(QMainWindow):
             # Create enhanced progress dialog - THE ONLY ONE
             progress_dialog = EnhancedProgressDialog("Loading Complete Level", self, game_mode=self.game_mode)
             
-            # Connect cancel signal
+            # Connect cancel signal.  No worker thread to stop here — this load
+            # runs on the main thread and aborts by polling was_cancelled, so
+            # pass None explicitly (cancel_loading takes thread AND dialog).
             progress_dialog.cancelled.connect(
-                lambda: self.cancel_loading(progress_dialog)
+                lambda: self.cancel_loading(None, progress_dialog)
             )
-            
+
             progress_dialog.show()
             QApplication.processEvents()
-            
+
             # Helper function for logging
             def log(msg):
                 print(msg)
@@ -7359,11 +7361,26 @@ class SimplifiedMapEditor(QMainWindow):
         scrollbar.setValue(scrollbar.maximum())
 
     def cancel_loading(self, thread, dialog):
-        """Cancel the loading operation - close dialog after stopping thread"""
-        thread.stop()
-        dialog.stop_icon()
-        # Close the dialog immediately after cancelling
-        dialog.close()
+        """Cancel the loading operation - close dialog after stopping thread.
+
+        ``thread`` may be None: `load_complete_level` runs on the main thread
+        with no cancellable worker (it polls `progress_dialog.was_cancelled` at
+        every stage instead), and the `load_level_objects` site passes None when
+        no object-loading thread exists yet. Guard rather than assume — this
+        handler runs from a signal, so an exception here surfaces as an
+        unhandled TypeError/AttributeError that takes the editor down mid-load.
+        """
+        if thread is not None:
+            try:
+                thread.stop()
+            except Exception as exc:                   # noqa: BLE001
+                print(f"cancel_loading: thread.stop() failed: {exc}")
+        if dialog is not None:
+            try:
+                dialog.stop_icon()
+                dialog.close()      # close immediately after cancelling
+            except Exception as exc:                   # noqa: BLE001
+                print(f"cancel_loading: closing dialog failed: {exc}")
 
     def on_object_loading_finished(self, result, progress_dialog):
         """
