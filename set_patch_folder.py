@@ -1220,9 +1220,13 @@ class LevelSelectorDialog(QDialog):
 
         # Load .pak Archive button — unpacks an archive and uses the resulting
         # folder as the patch folder, so users never need an external pak tool.
+        # Avatar-only; FC2 ships .fat/.dat, a different container.
         load_pak_btn = QPushButton("Load .pak Archive...")
         load_pak_btn.setMaximumWidth(180)
+        load_pak_btn.setEnabled(self.game_mode != "farcry2")
         load_pak_btn.setToolTip(
+            "Far Cry 2 uses .fat/.dat archives, not .pak — not supported yet"
+            if self.game_mode == "farcry2" else
             "Unpack a game .pak archive and use the unpacked folder as the patch folder")
         load_pak_btn.clicked.connect(self.on_load_pak_archive)
         load_pak_btn.setStyleSheet(f"""

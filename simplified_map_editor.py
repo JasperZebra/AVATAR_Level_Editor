@@ -1719,17 +1719,31 @@ class SimplifiedMapEditor(QMainWindow):
 
         # PAK archive support — unpack a .pak into a folder the editor uses as
         # the patch folder, and pack that folder back up when finished.
+        # Avatar-only: Far Cry 2 ships .fat/.dat (Dunia FAT v5), a different
+        # container, so these are disabled rather than hidden in FC2 mode.
+        _is_fc2 = self.game_mode == "farcry2"
+        _pak_why = ("Far Cry 2 uses .fat/.dat archives, not .pak — "
+                    "not supported yet")
+
         load_pak_action = QAction("📦 Load .pak Archive...", self)
         load_pak_action.triggered.connect(self.open_load_pak_archive)
         load_pak_action.setToolTip(
+            _pak_why if _is_fc2 else
             "Unpack a game .pak archive and use the unpacked folder as the patch folder")
+        load_pak_action.setEnabled(not _is_fc2)
         file_menu.addAction(load_pak_action)
 
         repack_pak_action = QAction("📦 Repack Patch Folder to .pak...", self)
         repack_pak_action.triggered.connect(self.open_repack_pak)
         repack_pak_action.setToolTip(
+            _pak_why if _is_fc2 else
             "Build a .pak from the patch folder — everything, or only your changes")
+        repack_pak_action.setEnabled(not _is_fc2)
         file_menu.addAction(repack_pak_action)
+
+        if _is_fc2:
+            load_pak_action.setText("📦 Load .pak Archive...  (Avatar only)")
+            repack_pak_action.setText("📦 Repack Patch Folder to .pak...  (Avatar only)")
 
         file_menu.addSeparator()
 

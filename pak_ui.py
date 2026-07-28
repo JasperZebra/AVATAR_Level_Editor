@@ -31,7 +31,7 @@ from PyQt5.QtCore import QThread, Qt
 from PyQt5.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox,
     QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
-    QRadioButton, QVBoxLayout,
+    QRadioButton, QVBoxLayout, QWidget,
 )
 
 import pak_archive as pak
@@ -89,7 +89,7 @@ def _run_job(parent, title: str, fn: Callable[[_Job], object],
     """Run ``fn`` behind a progress dialog.  Returns ``(result, error, cancelled)``."""
     from simplified_map_editor import EnhancedProgressDialog
 
-    dialog = EnhancedProgressDialog(title, parent, game_mode=game_mode)
+    dialog = EnhancedProgressDialog(title, _as_parent(parent), game_mode=game_mode)
     job = _Job(fn)
     dialog.cancelled.connect(lambda: setattr(job, 'cancelled', True))
     dialog.set_status(title)
@@ -123,6 +123,32 @@ def _run_job(parent, title: str, fn: Callable[[_Job], object],
 
 def _game_mode(main_window) -> str:
     return getattr(main_window, 'game_mode', 'avatar')
+
+
+def _as_parent(obj):
+    """A QWidget suitable as a dialog parent, or None.
+
+    Callers always pass the main window in practice, but Qt raises TypeError
+    rather than ignoring a non-widget, so normalise instead of trusting it.
+    """
+    return obj if isinstance(obj, QWidget) else None
+
+
+def _reject_fc2(parent, main_window) -> bool:
+    """Guard: PAK is an Avatar container.  True means "stop, already warned".
+
+    The menu items and buttons are disabled in FC2 mode; this is the belt-and-
+    braces check so a stray programmatic call can't point an FC2 patch folder
+    at Avatar data.
+    """
+    if _game_mode(main_window) != 'farcry2':
+        return False
+    QMessageBox.information(
+        _as_parent(parent), "Not Supported for Far Cry 2",
+        "PAK archives are an Avatar container.\n\n"
+        "Far Cry 2 ships its data as .fat/.dat (Dunia FAT) archives, which the "
+        "editor cannot read or write yet. Use an unpacked folder for FC2.")
+    return True
 
 
 # --------------------------------------------------------------------------
@@ -218,7 +244,9 @@ def load_patch_folder_from_pak(main_window, pak_path: Optional[str] = None) -> O
 
     Returns None when the user cancels or the archive can't be read.
     """
-    parent = main_window
+    parent = _as_parent(main_window)
+    if _reject_fc2(parent, main_window):
+        return None
     if not pak_path:
         start = ''
         for attr in ('patch_folder', 'resource_folder'):
@@ -420,7 +448,9 @@ class RepackDialog(QDialog):
 
 def repack_patch_folder(main_window) -> bool:
     """Tools action: rebuild a ``.pak`` from the current patch folder."""
-    parent = main_window
+    parent = _as_parent(main_window)
+    if _reject_fc2(parent, main_window):
+        return False
     folder = getattr(main_window, 'patch_folder', None)
     if not folder:
         manager = getattr(main_window, 'patch_manager', None)

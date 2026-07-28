@@ -3279,7 +3279,7 @@ Because of the exact-match requirement, every `_l`-suffixed level showed up as *
 
 **Fix:** `_resolve_levels_name(world_name)` tries the exact name first, then `f"{world_name}_l"`, before giving up. Iterate over `worlds/` names (the canonical "real level" set) and resolve each to its levels/ folder; any leftover `levels/` folder with no matching `worlds/` entry still gets a partial entry (unchanged fallback behavior). Verified: full re-scan of `ATGE\patch` now returns exactly 10 entries (was ~19, with duplicates), zero duplicate names, and `mp_mridge_df_01`/`sp_pascal_fm_01`/`sp_pascal_rf04`/`sp_sebastien_rb_02`/`z_dev_orouleau`/`z_anim_creatures` all correctly `complete=True`.
 
-> **CORRECTION (July 2026).** This section used to conclude that the four remaining `complete=False` maps (`sp_bonusmap_01`, `sp_gravesbog_rb_of_01`, `sp_hellsgate_01`, `sp_plainsofgoliath_of_fm_01`) "genuinely only contain a bare `.game.xml`" and were "stripped-down/unused map data, not something to fix". **That was wrong.** The data is complete — it lives in `data.pak`, and the hand-made `ATGE\patch` folder those maps were checked against simply never had it extracted. Measured against the retail archive: `sp_hellsgate_01` has **279** files under `worlds\sp_hellsgate_01\` in `data.pak` versus 6 on disk (`mapsdata.fcb`, `managers.fcb`, `entitylibrary_full.fcb`, `moviedata.xml`, all 256 `preload/sectorN.preload.fcb`, the navmesh — all present); `sp_gravesbog_rb_of_01` 278 vs 4, `sp_plainsofgoliath_of_fm_01` 278 vs 3, `sp_bonusmap_01` 22 vs 2. Hellsgate is the reference level much of this file is written against, so treat any earlier "that level is stripped down" reasoning with suspicion. The lesson: **an incomplete patch folder is not evidence about the game's data** — check the archives (see the PAK section below) before concluding a file doesn't exist.
+> **CORRECTION (July 2026).** This section used to conclude that the four remaining `complete=False` maps (`sp_bonusmap_01`, `sp_gravesbog_rb_of_01`, `sp_hellsgate_01`, `sp_plainsofgoliath_of_fm_01`) "genuinely only contain a bare `.game.xml`" and were "stripped-down/unused map data, not something to fix". **That was wrong.** The data is complete — it lives in `data.pak`, and the hand-made `ATGE\patch` folder those maps were checked against simply never had it extracted. Measured against the retail archive: `sp_hellsgate_01` has **279** files under `worlds\sp_hellsgate_01\` in `data.pak` versus 6 on disk (`mapsdata.fcb`, `managers.fcb`, `entitylibrary_full.fcb`, `moviedata.xml`, all 256 `preload/sectorN.preload.fcb`, the navmesh — all present); `sp_gravesbog_rb_of_01` 278 vs 4, `sp_plainsofgoliath_of_fm_01` 278 vs 3, `sp_bonusmap_01` 22 vs 2. Confirmed by decoding them straight out of the archive: `sp_hellsgate_01.{mapsdata,omnis,managers,sectorsdep}.fcb` and `entitylibrary.fcb` all carry valid `nbCF` FCB magic, `moviedata.xml` is real parseable XML, and all **48** `worldsector*.data.fcb` are present (matching the 48-file / 3,126-entity figure documented in the unified-sectors section). Hellsgate is the reference level much of this file is written against, so treat any earlier "that level is stripped down" reasoning with suspicion. The lesson: **an incomplete patch folder is not evidence about the game's data** — check the archives (see the PAK section below) before concluding a file doesn't exist.
 
 ### Multi-variant tiling — residual "not tiled correct" roughness after the swatch-floor tune (July 2026)
 
@@ -3909,9 +3909,16 @@ touching the rest; nothing needs a full extraction to read a single entry.
 
 | archive | files | on disk | uncompressed | index parse |
 |---|---|---|---|---|
-| `data.pak` | 89,904 | 1.73 GB | 3.16 GB | ~0.2 s |
-| `patch.pak` | 2,730 | 43 MB | 0.11 GB | ~0.01 s |
-| `patch.pak1` (user repack) | 26,693 | 842 MB | 2.16 GB | ~0.07 s |
+| `data.pak` | 89,904 | 1.73 GB | 3.16 GB | 0.22 s |
+| `shadersobj.pak` | 112,738 | 585 MB | 0.58 GB | 0.27 s |
+| `patch.pak1` (user repack) | 26,693 | 842 MB | 2.16 GB | 0.12 s |
+| `data_english.pak` | 4,030 | 124 MB | 0.14 GB | 0.02 s |
+| `patch.pak` | 2,730 | 43 MB | 0.11 GB | 0.01 s |
+
+Verified across all of the above: zero duplicate normalised paths, and random
+per-entry decode (41 entries each, including each archive's largest) matches the
+metadata size every time — e.g. 249 MB pulled out of `patch.pak1` in 0.43 s
+without touching the rest of the archive.
 
 LZO throughput on real game data: **487 MB/s compress, 792 MB/s decompress**.
 The codec is never the bottleneck — a 110 MB extract is ~1.4 s and a repack
@@ -3981,10 +3988,20 @@ packer emits them whenever compression doesn't pay.
   work with (theirs is a full 26,693-file repack). If a future change wants
   one-click setup from a clean install, the move is extracting `data.pak` then
   `patch.pak` then `patch.pakN` into one folder in load order.
-- **FC2 is not covered.** Far Cry 2 uses `.fat`/`.dat` (Dunia FAT v5), a
-  different container in which many entries carry only a name hash, no string.
-  The UI and manifest design are format-agnostic, so a FAT backend can slot in
-  behind the same dialogs without redesign.
+- **FC2 is not covered, and the UI says so.** Far Cry 2 uses `.fat`/`.dat`
+  (Dunia FAT v5), a different container in which many entries carry only a name
+  hash, no string. Both File-menu actions and the level-selector button are
+  **disabled in FC2 mode** (labelled "(Avatar only)"), mirroring how MP Spawn
+  Creator is gated; `pak_ui._reject_fc2` is the belt-and-braces check behind
+  them, because pointing an FC2 patch folder at Avatar data would be silent
+  corruption. The UI and manifest design are format-agnostic, so a FAT backend
+  can slot in behind the same dialogs without redesign.
+- **`QMessageBox` parents go through `_as_parent`**, which returns None for a
+  non-widget. Qt raises `TypeError` rather than ignoring a bad parent, and a
+  *parentless modal* box segfaults outright on the offscreen platform — so
+  headless tests of anything that warns must monkeypatch
+  `QMessageBox.information` rather than let a real modal open with nobody to
+  dismiss it.
 
 ## setup.py packaging debt cleared (July 2026)
 
