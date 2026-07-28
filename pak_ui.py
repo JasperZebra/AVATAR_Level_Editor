@@ -180,7 +180,8 @@ def _choose_destination(parent, pak_path: str) -> Optional[str]:
     return None
 
 
-def _confirm_existing_folder(parent, dest: str) -> Optional[str]:
+def _confirm_existing_folder(parent, dest: str,
+                             pak_path: Optional[str] = None) -> Optional[str]:
     """Decide what to do about an existing destination.
 
     Returns ``'reuse'``, ``'extract'`` or None (cancel).  Never silently
@@ -195,6 +196,35 @@ def _confirm_existing_folder(parent, dest: str) -> Optional[str]:
     box = QMessageBox(parent)
     box.setWindowTitle("Folder Already Exists")
     box.setIcon(QMessageBox.Warning)
+
+    # The folder is named after the archive with the extension dropped, so
+    # patch.pak and patch.pak1 land on the same name.  Say so plainly rather
+    # than letting one archive quietly overwrite the other's extraction.
+    manifest = pak.read_manifest(dest)
+    other = manifest.get('source_pak') if manifest else None
+    if (other and pak_path
+            and os.path.normcase(os.path.abspath(other))
+            != os.path.normcase(os.path.abspath(pak_path))):
+        edits = ''
+        if changes and changes.total:
+            edits = (f"\n\nIt also holds {changes.total:,} locally changed "
+                     "file(s), which would be lost.")
+        box.setText("This folder holds a different archive.")
+        box.setInformativeText(
+            f"{dest}\n\nIt was unpacked from:\n{other}\n\n"
+            f"You are opening:\n{pak_path}{edits}\n\n"
+            "Unpack here to replace it, or choose another folder.")
+        reuse = box.addButton("Use Folder As-Is", QMessageBox.AcceptRole)
+        again = box.addButton("Replace It", QMessageBox.DestructiveRole)
+        box.setDefaultButton(reuse)
+        box.addButton("Cancel", QMessageBox.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is reuse:
+            return 'reuse'
+        if clicked is again:
+            return 'extract'
+        return None
 
     if changes is None:
         box.setText("That folder already contains files.")
@@ -275,7 +305,7 @@ def load_patch_folder_from_pak(main_window, pak_path: Optional[str] = None) -> O
     if not dest:
         return None
 
-    action = _confirm_existing_folder(parent, dest)
+    action = _confirm_existing_folder(parent, dest, pak_path)
     if action is None:
         return None
 

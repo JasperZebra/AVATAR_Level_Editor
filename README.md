@@ -37,9 +37,10 @@ A comprehensive level editor for modifying **Avatar: The Game** and **Far Cry 2*
 
 You no longer need an external tool to unpack the game first. In the level
 selector, **Change PAK File...** asks for an archive such as `patch.pak`,
-unpacks it next to the archive, and selects the resulting folder as the patch
-folder automatically. Everything after that works exactly as it does with a
-folder you set by hand — the archive is only how the data arrives.
+unpacks it into a folder of the same name beside it (`patch.pak` → `patch/`),
+and selects that folder as the patch folder automatically. Everything after
+that works exactly as it does with a folder you set by hand — the archive is
+only how the data arrives.
 
 *(Far Cry 2 ships `.fat`/`.dat` archives, which aren't supported, so that button
 stays **Change Patch Folder...** and browses for a folder as before.)*
