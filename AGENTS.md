@@ -163,6 +163,7 @@ reference: <reference to this change in the docs if applicable>
 | `sequence_link.py` | `tests/test_sequence_link_rebind.py` | — | The once-installed autosave wrapper resolves `canvas.sequence_link` at call time, so entity moves follow the level loaded LAST (it used to close over the first link and write into the previous level's moviedata.xml); a cleared link leaves the original autosave intact — excluded from `--cov` |
 | `sequence_placement.py` | `tests/test_sequence_placement.py` | — | Viewport picking of cutscene handles: ray-vs-box math (incl. ray starting inside the marker), a 3D click picks the marker its ray crosses with the nearest winning, a 2D click tests the drawn 5 px square, picking offers only what the renderers DRAW (isolated node / rest marker only when the entity is missing, at the drawn half-extent), and the GL-ray→world plane mapping the 3D drag uses; plus per-key isolation (dragging one key rewrites THAT key only, keeps its height, adds/loses none — through a real `SequenceLink` on a temp file) and the Shift vertical drag (X/Y held, refuses when looking straight down); GL ray + projector stubbed — excluded from `--cov` |
 | `canvas/map_canvas_gpu.py` | `tests/test_topdown_ortho.py` | — | The top-down ortho camera reproduces `world_to_screen` **exactly** (pixel-exact across widget sizes/zooms/pans), screen position is independent of entity height, axes/depth orientation correct, degenerate camera state rejected; projection **mirrored** in numpy (canvas needs GL+Qt) — excluded from `--cov` |
+| `canvas/model_shader.py` + `canvas/gpu_driven_renderer.py` + `canvas/water_plane_renderer.py` | `tests/test_topdown_view_vector.py` | — | The shading view vector follows the PROJECTION: `gl_ProjectionMatrix[2][3]` is exactly −1 perspective / 0 ortho, all three fragment sources branch on it, both model paths agree on eye-space `+Z`, and no shader reinstates an unguarded point-eye V. Mirrors the failure in numpy — the old `normalize(-v_posES)` flipped **97%** of camera-facing normals under the top-down camera (models went flat ambient-only); also proves the perspective path is untouched. Shader sources read as text, math in numpy (canvas needs GL+Qt) — excluded from `--cov` |
 | `simplified_map_editor.py` | `tests/test_cancel_loading.py` | — | AST scan of the real source: every `cancel_loading(...)` call passes BOTH `thread` and `dialog` (the `load_complete_level` site passed only the dialog, so clicking Cancel mid-load raised `TypeError` out of a Qt signal handler and killed the editor), plus `thread=None` tolerated and no exception ever escapes the handler; editor via `SimplifiedMapEditor.__new__` — excluded from `--cov` |
 | `pak_archive.py` | `tests/test_pak_archive.py` | — | PAK! v4 round trip is **byte-identical** (not merely content-identical) when order + FILETIMEs are preserved; changed-only packing picks exactly the edited files and never packs `*.fcb.converted.xml` / `*.bak`; malformed archives raise `PakError`; pure-Python LZO1X decoder matches the DLL. Runs without game data; the compressed cases skip when minilzo is absent — excluded from `--cov` |
 | `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
@@ -3993,6 +3994,67 @@ that reasons about camera distance or FOV must check it:
 Also: `_on_glow_tick` used to early-return on `mode != MODE_3D`, which froze
 the day/night cycle, the selection glow and animated-UV scroll the moment you
 switched to 2D. It now runs whenever the top-down 3D scene is active.
+
+### The shading view vector must follow the PROJECTION, not assume a point eye
+
+This is what was still making **models** — and only models — look unlike 3D mode
+after everything above was fixed. Both model fragment shaders
+(`gpu_driven_renderer._GDR_FRAG` and the universal `model_shader._FRAG_SRC`) did:
+
+```glsl
+vec3 V = normalize(-v_posES);      // direction to the eye-space ORIGIN
+if (dot(N, V) < 0.0) N = -N;       // two-sided: face the normal at the camera
+```
+
+`normalize(-v_posES)` is the eye **only under a perspective projection**, where
+the eye IS the eye-space origin. Under the top-down ortho camera every view ray
+is parallel and the eye is at infinity, so the correct V is the constant eye-space
+`+Z`. And the error is not small: `_setup_topdown_ortho` puts the eye at the
+**world origin**, so eye space works out to `v_posES = (world_x, world_y, height)`
+— dominated by the fragment's map coordinates, not its height. V therefore points
+nearly sideways across the level (**median 98° off**), and the two-sided test then
+flips **~97% of camera-facing normals AWAY from the sun**. `ndl` goes to 0 for
+both lights, so models rendered **flat ambient-only** — no diffuse, no relief, no
+specular — while the terrain looked right, because `terrain_shadow_shader` has no
+view vector at all and uses `gl_FrontFacing` for its two-sided flip. That
+asymmetry is the tell: *terrain fine, models flat* ⇒ suspect V, not the light rig.
+
+Both shaders now branch on the projection, which needs no new uniform and no
+Python plumbing — `gl_ProjectionMatrix[2][3]` is exactly `-1` for perspective and
+exactly `0` for ortho (GLSL indexes `m[column][row]`):
+
+```glsl
+vec3 V = (gl_ProjectionMatrix[2][3] == 0.0) ? vec3(0.0, 0.0, 1.0)
+                                            : normalize(-v_posES);
+```
+
+Same bug, world space, in `water_plane_renderer._WATER_FS`: `u_cam` is a POINT,
+so posing `camera_3d` overhead (see below) is **not** sufficient — at full-map
+zoom the visible rectangle is far wider than the camera's altitude, so water away
+from the viewport centre still got a near-sideways V, i.e. wrong fresnel and
+glint. It now takes the world-space view direction from the modelview's third
+rotation row (`vec3(gl_ModelViewMatrix[0][2], [1][2], [2][2])` = −forward =
+toward the camera; verified `(0,1,0)` for the top-down camera). That works
+because the water VBO holds world positions with no model transform, so
+`gl_ModelViewMatrix` is the pure view matrix.
+
+Finally, `GL_LIGHT_MODEL_LOCAL_VIEWER` is now `GL_FALSE` when `topdown` — "local
+viewer" is precisely the point-eye assumption, for the fixed-function fallback.
+
+`tests/test_topdown_view_vector.py` pins the discriminant, mirrors the flip in
+numpy (97% → 0%), proves the perspective path is untouched, and fails if any
+shader reinstates an unguarded point-eye V.
+
+**Anything view-dependent you add must branch this way.** Checked clean in the
+same sweep: `ShadowMap.update_light_vp` ignores `cam_fwd` entirely and uses only
+`cam_pos` x/z (which `_cast_sun_shadows` passes as the MAP centre), so the posed
+overhead camera cannot disturb the shadow box; `_setup_topdown_ortho`'s modelview
+rotation has **determinant +1** (no mirroring), so `glFrontFace`/`glCullFace`
+behave identically to 3D; and the selection glow is unlit.
+
+Remaining *by design*, not a bug: the contribution cull still drops models whose
+bounding radius is under `gdr_min_pixel_size_topdown / (2·scale)`, so small props
+fade out as you zoom out. **F9 → OFF** disables it in both views.
 
 ### Depth precision is the whole ballgame for an ortho camera
 

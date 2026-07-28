@@ -5477,7 +5477,16 @@ class MapCanvas(QOpenGLWidget):
             glEnable(GL_COLOR_MATERIAL)
             glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
             glEnable(GL_NORMALIZE)
-            glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE)
+            # Local viewer = "the eye is a point at the eye-space origin", which
+            # is what a PERSPECTIVE camera is. The top-down camera is
+            # ORTHOGRAPHIC (parallel rays, eye at infinity) AND sits at the world
+            # origin, so a local viewer computes the fixed-function specular
+            # against a view vector pointing sideways across the map. Infinite
+            # viewer is the correct — and cheaper — model there. This only
+            # affects the fixed-function fallback path; both GLSL model shaders
+            # branch on gl_ProjectionMatrix themselves.
+            glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER,
+                          GL_FALSE if topdown else GL_TRUE)
 
             # Sun: strong warm directional light high in the sky (world-space)
             glLightfv(GL_LIGHT0, GL_POSITION, self._key_light_pos())

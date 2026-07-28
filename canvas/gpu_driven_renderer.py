@@ -414,7 +414,15 @@ void main(){
         if (u_flip_green == 1) nTS.y = -nTS.y;
         N = normalize(mat3(T * im, B * im, N) * nTS);
     }
-    vec3 V = normalize(-v_posES);
+    // View vector — MUST match model_shader.py's universal path. Perspective:
+    // the eye is the eye-space origin. Orthographic (the top-down 2D view):
+    // parallel rays, eye at infinity, so V is the constant +Z. The perspective
+    // form under ortho points nearly sideways (the top-down camera sits at the
+    // world origin, so v_posES is dominated by world X/Y) and the two-sided
+    // test below then flips ~97% of camera-facing normals away from the sun —
+    // models go flat ambient-only. gl_ProjectionMatrix[2][3]: -1 persp, 0 ortho.
+    vec3 V = (gl_ProjectionMatrix[2][3] == 0.0) ? vec3(0.0, 0.0, 1.0)
+                                                : normalize(-v_posES);
     if (dot(N, V) < 0.0) N = -N;
 
     vec3 specMap = (m.hasflags.z > 0.5) ? texture(sampler2D(m.hSpecular), uv).rgb : vec3(1.0);

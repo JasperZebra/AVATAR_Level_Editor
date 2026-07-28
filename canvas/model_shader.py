@@ -185,7 +185,19 @@ void main() {
         if (u_flip_green == 1) nTS.y = -nTS.y;
         N = normalize(mat3(T * im, B * im, N) * nTS);
     }
-    vec3 V = normalize(-v_posES);
+    // View vector. Under PERSPECTIVE the eye IS the eye-space origin, so the
+    // direction toward it is normalize(-v_posES). Under ORTHOGRAPHIC (the
+    // top-down 2D view) every view ray is parallel and the eye is at infinity:
+    // V is the constant +Z. Using the perspective form there is not a small
+    // error — the top-down camera sits at the world origin, so v_posES is
+    // dominated by the fragment's world X/Y and V points nearly sideways
+    // (median 98 deg off). The two-sided test below then flips ~97% of
+    // camera-facing normals AWAY from the sun, so models lose all diffuse light
+    // and render flat ambient-only, while the terrain (whose shader has no view
+    // vector at all) looks correct. That was the "models don't look like 3D
+    // mode" bug. gl_ProjectionMatrix[2][3] is -1 for perspective, 0 for ortho.
+    vec3 V = (gl_ProjectionMatrix[2][3] == 0.0) ? vec3(0.0, 0.0, 1.0)
+                                                : normalize(-v_posES);
     if (dot(N, V) < 0.0) N = -N;
 
     vec3 specMap = (u_has_specular == 1) ? texture2D(u_specular, v_uv).rgb : vec3(1.0);

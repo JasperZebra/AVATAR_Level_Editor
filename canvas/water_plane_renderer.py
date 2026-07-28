@@ -96,7 +96,19 @@ void main(){
         N = normalize(vec3((h - hx) * u_choppy, 1.0, (h - hz) * u_choppy));
     }
 
-    vec3 V = normalize(u_cam - v_world);              // toward camera
+    // Toward the camera. u_cam is a POINT, which is only right under a
+    // PERSPECTIVE projection. Under ORTHOGRAPHIC (the top-down 2D view) every
+    // view ray is parallel, so V is a constant direction: the modelview's third
+    // rotation row is -forward, i.e. exactly "toward the camera" in world space
+    // (verified = GL +Y for the top-down camera). Posing u_cam overhead is not
+    // enough — at full-map zoom the visible rectangle is far wider than the
+    // camera's altitude, so a point eye still yields a near-sideways V (wrong
+    // fresnel and glint) for any water away from the viewport centre.
+    // gl_ProjectionMatrix[2][3] is -1 for perspective, 0 for ortho.
+    vec3 V = (gl_ProjectionMatrix[2][3] == 0.0)
+           ? normalize(vec3(gl_ModelViewMatrix[0][2], gl_ModelViewMatrix[1][2],
+                            gl_ModelViewMatrix[2][2]))
+           : normalize(u_cam - v_world);
     vec3 R = reflect(-V, N);                          // reflected view ray
 
     // Schlick fresnel (game: FresnelBias + (1-FresnelBias)*pow(1-facing,Power)).
