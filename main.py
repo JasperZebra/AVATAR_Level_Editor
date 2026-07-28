@@ -130,6 +130,13 @@ def main():
     # constructed so every GL context (incl. the canvas QOpenGLWidget) inherits it.
     _fmt = QSurfaceFormat.defaultFormat()
     _fmt.setSwapInterval(1)
+    # ── Ask for a 24-bit depth buffer ───────────────────────────────────────────
+    # Qt's default leaves the depth size to the driver, which may hand back 16
+    # bits. That is survivable under perspective (precision concentrates near the
+    # camera) but not under the top-down ORTHOGRAPHIC view, where precision is
+    # spread evenly across the whole depth range — at 16 bits models z-fight with
+    # the terrain and read as semi-transparent. Cheap insurance for both views.
+    _fmt.setDepthBufferSize(24)
     QSurfaceFormat.setDefaultFormat(_fmt)
 
     app = QApplication(sys.argv)

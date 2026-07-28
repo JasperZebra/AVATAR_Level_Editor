@@ -4732,11 +4732,61 @@ class MapCanvas(QOpenGLWidget):
                 out.append(entry)
         return out
 
-    # Depth half-range for the top-down ortho box.  Generous on purpose: the
-    # camera sits at the origin looking straight down, so the near plane is
-    # BEHIND it (negative) — legal for an orthographic projection and the
-    # simplest way to guarantee nothing clips whatever height terrain sits at.
-    _TOPDOWN_DEPTH = 100000.0
+    # Fallback depth half-range for the top-down ortho box when the scene's real
+    # height range isn't known yet. The camera sits at the origin looking down,
+    # so the near plane is BEHIND it (negative) — legal for an orthographic
+    # projection.
+    #
+    # Keep this TIGHT. Unlike perspective (where precision concentrates near the
+    # camera), an ortho depth buffer spreads precision EVENLY across the range,
+    # so the range is the precision. The first version used 100000 and models
+    # z-fought with the terrain badly enough to look semi-transparent: on a
+    # 16-bit depth buffer ±100000 is 3.05 world units per depth step, so
+    # anything shorter than ~3 units shares a depth value with the ground.
+    _TOPDOWN_DEPTH = 4096.0
+
+    def _topdown_depth_range(self):
+        """(near, far) for the top-down ortho box, fitted to the scene's heights.
+
+        Returns eye-space depth bounds. Depth here is simply GL Y (= world Z,
+        height), because the camera looks straight down from the origin.
+        Fitting to the real height range instead of a huge fixed box is what
+        keeps models from z-fighting the terrain — see _TOPDOWN_DEPTH.
+        """
+        lo = hi = None
+        try:
+            # Returns (cx, cz, half) — but as a side effect it records the
+            # terrain's vertical extent, which is what we actually want here.
+            self._shadow_world_box()
+            g_lo = getattr(self, '_shadow_ground_y', None)
+            g_span = getattr(self, '_shadow_ground_span', None)
+            if g_lo is not None and g_span:
+                lo, hi = float(g_lo), float(g_lo) + float(g_span)
+        except Exception:
+            lo = hi = None
+
+        # Entities can sit well above the terrain (aircraft, sky props), so widen
+        # to whatever the position array actually holds.
+        try:
+            pos = getattr(self, '_positions_3d', None)
+            if pos is not None and len(pos):
+                py = pos[:, 1]
+                ey_lo, ey_hi = float(np.min(py)), float(np.max(py))
+                lo = ey_lo if lo is None else min(lo, ey_lo)
+                hi = ey_hi if hi is None else max(hi, ey_hi)
+        except Exception:
+            pass
+
+        if lo is None or hi is None or not (np.isfinite(lo) and np.isfinite(hi)):
+            return -self._TOPDOWN_DEPTH, self._TOPDOWN_DEPTH
+
+        # Margin for model extents above their origin and terrain edit meshes.
+        margin = max(512.0, (hi - lo) * 0.5)
+        near = -(hi + margin)      # above everything (negative = behind the eye)
+        far = -(lo - margin)       # below everything
+        if not (far > near):
+            return -self._TOPDOWN_DEPTH, self._TOPDOWN_DEPTH
+        return near, far
 
     def _setup_topdown_ortho(self):
         """Point an orthographic camera straight down, matched EXACTLY to the
@@ -4786,11 +4836,11 @@ class MapCanvas(QOpenGLWidget):
         if not (right > left and top > bottom):
             return False
 
-        d = self._TOPDOWN_DEPTH
+        near, far = self._topdown_depth_range()
         glMatrixMode(GL_PROJECTION)
         glPushMatrix()
         glLoadIdentity()
-        glOrtho(left, right, bottom, top, -d, d)
+        glOrtho(left, right, bottom, top, near, far)
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
         glLoadIdentity()

@@ -3994,6 +3994,32 @@ Also: `_on_glow_tick` used to early-return on `mode != MODE_3D`, which froze
 the day/night cycle, the selection glow and animated-UV scroll the moment you
 switched to 2D. It now runs whenever the top-down 3D scene is active.
 
+### Depth precision is the whole ballgame for an ortho camera
+
+Under PERSPECTIVE, depth precision concentrates near the camera, so a huge
+far plane is survivable. Under ORTHO it is spread **evenly across the range**,
+so **the depth range IS the precision**. The first cut used a fixed ±100000
+box; on a 16-bit depth buffer that is **3.05 world units per depth step**, so
+anything shorter than ~3 units shared a depth value with the ground and models
+z-fought the terrain badly enough to look semi-transparent (reported as "the
+models are kinda see-through").
+
+Two fixes, both needed:
+
+- `_topdown_depth_range()` fits near/far to the scene's actual height extent —
+  terrain vertical span (via `_shadow_world_box`'s `_shadow_ground_y` /
+  `_shadow_ground_span` side effects; note that function returns
+  `(cx, cz, half)`, **not** a bounds tuple) widened by `_positions_3d[:, 1]` so
+  aircraft/sky props stay inside, plus a margin. A hellsgate-shaped scene
+  (terrain 0–512, entities −30–900) yields a **1,954-unit** box instead of
+  200,000 — a 102× precision gain. `_TOPDOWN_DEPTH` (now **4096**, was 100000)
+  is only the fallback for "nothing loaded yet".
+- `main.py` now requests `setDepthBufferSize(24)` on the default
+  `QSurfaceFormat`. Qt otherwise leaves it to the driver, which may hand back
+  16 bits.
+
+**Do not widen the ortho depth box "to be safe".** That is exactly the bug.
+
 ### Perf note
 
 Top-down at full-map zoom puts the whole level in frustum permanently and
