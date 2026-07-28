@@ -3366,8 +3366,15 @@ class MapCanvas(QOpenGLWidget):
     def _on_glow_tick(self):
         """Drive the selection-glow pulse AND animated-UV (Unlit/FX scroll)
         repaint in 3D mode. Repaints at the glow timer's ~30 FPS whenever
-        something is selected OR any loaded material has scrolling UVs."""
-        if self.mode != MODE_3D:
+        something is selected OR any loaded material has scrolling UVs.
+
+        Also runs for the top-down 3D view: it draws the same lit scene, so the
+        day/night cycle must keep advancing, the glow must keep pulsing and
+        animated materials must keep scrolling there too. Gating this on
+        MODE_3D alone froze the sun in the 2D view — with the cycle playing,
+        time_of_day simply stopped moving the moment you switched to 2D."""
+        if self.mode != MODE_3D and not (
+                getattr(self, 'topdown_3d_scene', False) and self._has_3d_terrain()):
             return
         # Advance the day/night cycle when playing — smooth continuous glide every
         # tick so the lighting transition is fluid, not stepped.
