@@ -676,6 +676,12 @@ class MapCanvas(QOpenGLWidget):
         # which otherwise apply perspective math to an orthographic camera.
         self._topdown_scene = False
 
+        # Carry the viewpoint across a 2D<->3D switch: whatever sits at the
+        # CENTRE of one view is at the centre of the other. See
+        # _sync_camera_3d_to_2d_view. View ▸ "Link 2D/3D Camera Position"
+        # turns it off (each view then keeps its own independent position).
+        self.link_2d_3d_cameras = True
+
         print(f"MapCanvas initialized - 2D AND 3D VERSION (OpenGL: {self.use_gpu_rendering})")
 
     def _key_light_pos(self):
@@ -2239,10 +2245,20 @@ class MapCanvas(QOpenGLWidget):
         return candidates
 
     def set_3d_mode(self, enabled: bool):
-        """Enable or disable 3D rendering."""
+        """Enable or disable 3D rendering.
+
+        Every mode switch in the editor funnels through here (the View toggle,
+        the T key, switch_to_2d/3d_mode), which is why the camera link lives
+        here and nowhere else.
+        """
+        was_3d = bool(getattr(self, 'is_3d_mode', False))
         self.is_3d_mode = enabled
         self.mode = MODE_3D if enabled else MODE_TOPDOWN
-        
+        # Only carry the viewpoint on a real 2D<->3D transition — re-asserting
+        # the mode you are already in must not move anything.
+        link = (bool(getattr(self, 'link_2d_3d_cameras', True))
+                and was_3d != bool(enabled))
+
         if enabled:
             print("Switching to 3D mode")
             # ONLY auto-position camera if it hasn't been initialized yet
@@ -2261,22 +2277,45 @@ class MapCanvas(QOpenGLWidget):
                 if min_x != float('inf'):
                     center_x = (min_x + max_x) / 2
                     center_y = (min_y + max_y) / 2
-                    
-                    # Position camera above and behind center
-                    self.camera_3d.position = np.array([center_x, 100.0, center_y + 0.0])
+
+                    # Position camera above and behind center. World -> GL is
+                    # (x, y, z) -> (x, z, -y), so world y goes in NEGATED; it
+                    # was going in as +center_y, which put the initial camera
+                    # mirrored across the world X axis (usually right off the
+                    # map). Normally invisible now because the 2D link below
+                    # overwrites the position — this is the fallback path.
+                    self.camera_3d.position = np.array([center_x, 100.0, -center_y])
                     self.camera_3d.yaw = -90.0
                     self.camera_3d.pitch = -30.0
                     self.camera_3d.update_vectors()
-                    
+
                     self.camera_3d_initialized = True
                     print(f"Initialized 3D camera at position")
             else:
                 print(f"Keeping 3D camera at current position")
+            # Carry the 2D viewpoint over: the world point at the centre of the
+            # 2D view becomes the point the 3D camera looks at. Runs AFTER the
+            # first-time init above so that init still supplies the yaw/pitch
+            # and only its position is superseded.
+            if link:
+                try:
+                    if self._sync_camera_3d_to_2d_view():
+                        self.camera_3d_initialized = True
+                        print("3D camera moved to the centre of the 2D view")
+                except Exception as e:
+                    print(f"[camera-link] 2D -> 3D sync skipped: {e}")
         else:
             print("Switching to 2D mode")
             self.mouse_captured_3d = False
             self.setCursor(Qt.ArrowCursor)
-        
+            # …and back: centre the 2D view on what the 3D camera was looking at.
+            if link:
+                try:
+                    if self._sync_2d_view_to_camera_3d():
+                        print("2D view centred on the 3D camera's viewpoint")
+                except Exception as e:
+                    print(f"[camera-link] 3D -> 2D sync skipped: {e}")
+
         self.update()
 
     def switch_to_3d_mode(self):
@@ -4897,6 +4936,170 @@ class MapCanvas(QOpenGLWidget):
         cam.yaw = 0.0
         cam.pitch = -90.0
         return cam
+
+    # ── Linked 2D / 3D viewpoint ──────────────────────────────────────────────
+    # The two views have completely separate cameras: 2D is (offset_x, offset_y,
+    # scale_factor) — a pan/zoom — and 3D is Camera3D (a GL-space position plus
+    # yaw/pitch). Switching modes used to leave each wherever it was last, so
+    # panning across the map in 2D and hitting T dropped you wherever the 3D
+    # camera happened to be parked, usually nowhere near what you were looking at.
+    #
+    # These tie them together by the one thing both views agree on: THE WORLD
+    # POINT AT THE CENTRE OF THE SCREEN. Switching preserves it in both
+    # directions, which makes the round trip exactly stable — 2D→3D→2D lands on
+    # the pan you started from, and 3D→2D→3D on the camera you started from.
+    #
+    # Note it is the point the 3D camera LOOKS AT, not where the camera stands.
+    # Standing the camera on the 2D centre would put what you had centred behind
+    # / below you (at the default -30° pitch the ground under the camera is off
+    # the bottom of the screen), which is the opposite of "the camera is right
+    # there".
+
+    # Below this |forward.y| the view ray is too close to horizontal to hit the
+    # ground anywhere useful (0.05 = pitch within ~3° of the horizon).
+    _FOCUS_MIN_DOWN = 0.05
+    # Absolute cap on how far ahead the focus point may be — only bites in that
+    # near-horizon regime, and keeps a near-zero divisor from producing inf.
+    _FOCUS_MAX_DIST = 20000.0
+    # Floor on the camera's height above ground when it is carried to a new spot.
+    _FOCUS_MIN_CLEARANCE = 5.0
+
+    def _ground_height_at(self, wx, wy):
+        """Terrain height at a world (x, y); 0.0 when there is no heightmap.
+
+        Wraps get_terrain_height_at, which prints a warning on every call when
+        the heightmap isn't loaded — that would spam the console on each mode
+        switch — and never raises out of a view change.
+        """
+        try:
+            tr = getattr(self, 'terrain_renderer', None)
+            if tr is None or getattr(tr, 'combined_heightmap', None) is None:
+                return 0.0
+            z = float(self.get_terrain_height_at(float(wx), float(wy)))
+            return z if np.isfinite(z) else 0.0
+        except Exception:
+            return 0.0
+
+    def _camera_3d_focus_world(self):
+        """(world_x, world_y) where the 3D camera's view ray meets the ground.
+
+        Falls back to the camera's own ground position when it is looking at or
+        above the horizon, or is underground — there is no sensible intersection
+        then, and "where you stand" is the best available answer.
+        Returns None only if the camera state itself is unusable.
+        """
+        cam = getattr(self, 'camera_3d', None)
+        if cam is None:
+            return None
+        pos = np.asarray(getattr(cam, 'position', None), dtype=float)
+        fwd = np.asarray(getattr(cam, 'forward', None), dtype=float)
+        if pos.shape != (3,) or fwd.shape != (3,):
+            return None
+        if not (np.all(np.isfinite(pos)) and np.all(np.isfinite(fwd))):
+            return None
+
+        # GL -> world is (x, y, z) -> (x, -z, y): world y is -pos[2], height is pos[1].
+        cam_wx, cam_wy = float(pos[0]), float(-pos[2])
+        if fwd[1] >= -self._FOCUS_MIN_DOWN:
+            return cam_wx, cam_wy
+
+        # Two passes: the ground height under the HIT point is what decides the
+        # hit, so solve against the height under the camera first and then
+        # re-solve against the height that lands under. Converges immediately on
+        # anything but a cliff, and terrain is only a refinement anyway — the
+        # first pass alone is already correct on flat ground.
+        gy = self._ground_height_at(cam_wx, cam_wy)
+        fx, fy = cam_wx, cam_wy
+        for _ in range(2):
+            t = (gy - float(pos[1])) / float(fwd[1])
+            if not np.isfinite(t) or t <= 0.0:
+                return cam_wx, cam_wy          # camera is below the ground
+            hit = pos + min(t, self._FOCUS_MAX_DIST) * fwd
+            fx, fy = float(hit[0]), float(-hit[2])
+            gy = self._ground_height_at(fx, fy)
+        return fx, fy
+
+    def _sync_2d_view_to_camera_3d(self):
+        """3D -> 2D: pan the 2D view so it is centred on what the 3D camera was
+        looking at. Zoom is deliberately untouched — it is the user's setting,
+        and there is no meaningful 'equivalent zoom' for a perspective camera.
+        Returns True if the view moved."""
+        focus = self._camera_3d_focus_world()
+        if focus is None:
+            return False
+        fx, fy = focus
+        s = float(getattr(self, 'scale_factor', 0.0) or 0.0)
+        if s <= 1e-9 or not np.isfinite(s):
+            return False
+        if not (np.isfinite(fx) and np.isfinite(fy)):
+            return False
+
+        # Inverse of world_to_screen at the viewport centre.
+        self.offset_x = self.width() * 0.5 - fx * s
+        self.offset_y = self.height() * 0.5 - fy * s
+        # CameraController keeps its OWN offset copy and writes it back into the
+        # canvas on the next WASD tick. Leave the two disagreeing and the view
+        # snaps back to the old pan the instant you press a movement key.
+        cc = getattr(self, 'camera_controller', None)
+        if cc is not None:
+            cc.offset_x = self.offset_x
+            cc.offset_y = self.offset_y
+        return True
+
+    def _sync_camera_3d_to_2d_view(self):
+        """2D -> 3D: move the 3D camera so its view ray lands on the world point
+        at the centre of the 2D view. Yaw and pitch are preserved (the direction
+        you were facing in 3D is yours, and the 2D view has no heading to take
+        one from), as is the camera's height ABOVE THE GROUND — carrying the
+        absolute altitude instead would bury you when switching over a hill or
+        strand you in the sky over a valley. Returns True if the camera moved."""
+        s = float(getattr(self, 'scale_factor', 0.0) or 0.0)
+        if s <= 1e-9 or not np.isfinite(s):
+            return False
+        ox = float(getattr(self, 'offset_x', 0.0))
+        oy = float(getattr(self, 'offset_y', 0.0))
+        if not (np.isfinite(ox) and np.isfinite(oy)):
+            return False
+        cam = getattr(self, 'camera_3d', None)
+        if cam is None:
+            return False
+        pos = np.asarray(getattr(cam, 'position', None), dtype=float)
+        fwd = np.asarray(getattr(cam, 'forward', None), dtype=float)
+        if pos.shape != (3,) or fwd.shape != (3,):
+            return False
+        if not (np.all(np.isfinite(pos)) and np.all(np.isfinite(fwd))):
+            return False
+
+        w = max(1, int(self.width()))
+        h = max(1, int(self.height()))
+        # World point under the viewport centre — the same inverse
+        # screen_to_world uses, and the same one _make_topdown_camera poses on.
+        fx = (w * 0.5 - ox) / s
+        fy = (h * 0.5 - oy) / s
+        if not (np.isfinite(fx) and np.isfinite(fy)):
+            return False
+
+        clearance = float(pos[1]) - self._ground_height_at(float(pos[0]), float(-pos[2]))
+        if not np.isfinite(clearance) or clearance < self._FOCUS_MIN_CLEARANCE:
+            clearance = self._FOCUS_MIN_CLEARANCE
+
+        gy = self._ground_height_at(fx, fy)
+        focus_gl = np.array([fx, gy, -fy], dtype=float)     # world -> GL
+        if fwd[1] < -self._FOCUS_MIN_DOWN:
+            # Step BACK up the view ray by exactly the distance that drops
+            # `clearance` in height, so the ray lands on the focus point: the
+            # centre of the 2D view becomes the centre of the 3D view.
+            t = min(clearance / -float(fwd[1]), self._FOCUS_MAX_DIST)
+            cam.position = focus_gl - t * fwd
+        else:
+            # Looking at/above the horizon — no ground hit to line up, so stand
+            # on the point instead. _camera_3d_focus_world agrees (it returns
+            # the camera's own ground position in the same case), so the round
+            # trip stays stable here too.
+            cam.position = focus_gl + np.array([0.0, clearance, 0.0])
+        if hasattr(cam, 'update_vectors'):
+            cam.update_vectors()
+        return True
 
     def _has_3d_terrain(self):
         """True when a 3D terrain mesh exists to render top-down.

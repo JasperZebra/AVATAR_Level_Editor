@@ -163,6 +163,7 @@ reference: <reference to this change in the docs if applicable>
 | `sequence_link.py` | `tests/test_sequence_link_rebind.py` | — | The once-installed autosave wrapper resolves `canvas.sequence_link` at call time, so entity moves follow the level loaded LAST (it used to close over the first link and write into the previous level's moviedata.xml); a cleared link leaves the original autosave intact — excluded from `--cov` |
 | `sequence_placement.py` | `tests/test_sequence_placement.py` | — | Viewport picking of cutscene handles: ray-vs-box math (incl. ray starting inside the marker), a 3D click picks the marker its ray crosses with the nearest winning, a 2D click tests the drawn 5 px square, picking offers only what the renderers DRAW (isolated node / rest marker only when the entity is missing, at the drawn half-extent), and the GL-ray→world plane mapping the 3D drag uses; plus per-key isolation (dragging one key rewrites THAT key only, keeps its height, adds/loses none — through a real `SequenceLink` on a temp file) and the Shift vertical drag (X/Y held, refuses when looking straight down); GL ray + projector stubbed — excluded from `--cov` |
 | `canvas/map_canvas_gpu.py` | `tests/test_topdown_ortho.py` | — | The top-down ortho camera reproduces `world_to_screen` **exactly** (pixel-exact across widget sizes/zooms/pans), screen position is independent of entity height, axes/depth orientation correct, degenerate camera state rejected; projection **mirrored** in numpy (canvas needs GL+Qt) — excluded from `--cov` |
+| `canvas/map_canvas_gpu.py` | `tests/test_camera_link_2d_3d.py` | — | The 2D↔3D camera link is **lossless both ways** (2D→3D→2D restores the exact pan, 3D→2D→3D the exact camera, across zooms/yaws/pitches incl. the no-ground-hit horizon case), the 3D camera LOOKS AT the 2D centre rather than standing on it (checked against the real `world_to_screen`), height above GROUND is preserved so a switch over a hill can't bury it, `CameraController`'s duplicate offsets are kept in sync, degenerate state bails without corrupting either view, and `set_3d_mode` moves nothing when the mode is re-asserted. Exercises the **real** methods + real `Camera3D` on a stub `self` (the module imports headlessly; it just can't be instantiated) — excluded from `--cov` |
 | `canvas/model_shader.py` + `canvas/gpu_driven_renderer.py` + `canvas/water_plane_renderer.py` | `tests/test_topdown_view_vector.py` | — | The shading view vector follows the PROJECTION: `gl_ProjectionMatrix[2][3]` is exactly −1 perspective / 0 ortho, all three fragment sources branch on it, both model paths agree on eye-space `+Z`, and no shader reinstates an unguarded point-eye V. Mirrors the failure in numpy — the old `normalize(-v_posES)` flipped **97%** of camera-facing normals under the top-down camera (models went flat ambient-only); also proves the perspective path is untouched. Shader sources read as text, math in numpy (canvas needs GL+Qt) — excluded from `--cov` |
 | `simplified_map_editor.py` | `tests/test_cancel_loading.py` | — | AST scan of the real source: every `cancel_loading(...)` call passes BOTH `thread` and `dialog` (the `load_complete_level` site passed only the dialog, so clicking Cancel mid-load raised `TypeError` out of a Qt signal handler and killed the editor), plus `thread=None` tolerated and no exception ever escapes the handler; editor via `SimplifiedMapEditor.__new__` — excluded from `--cov` |
 | `pak_archive.py` | `tests/test_pak_archive.py` | — | PAK! v4 round trip is **byte-identical** (not merely content-identical) when order + FILETIMEs are preserved; changed-only packing picks exactly the edited files and never packs `*.fcb.converted.xml` / `*.bak`; malformed archives raise `PakError`; pure-Python LZO1X decoder matches the DLL. Runs without game data; the compressed cases skip when minilzo is absent — excluded from `--cov` |
@@ -4098,6 +4099,59 @@ installed would corrupt the actual 3D view. Same swap-a-posed-clone trick
 
 `Camera3D` lives in `map_canvas_gpu.py` itself, NOT `camera_controller.py`
 (which holds `CameraController`, the 2D pan/zoom one).
+
+### The two views share a viewpoint across a mode switch (July 2026)
+
+The 2D and 3D cameras are unrelated objects — 2D is a pan/zoom (`offset_x`,
+`offset_y`, `scale_factor`), 3D is a `Camera3D` (GL-space position + yaw/pitch)
+— and a mode switch used to leave each wherever it was last. Pan across the map
+in 2D, press **T**, and you landed wherever the 3D camera happened to be parked.
+
+They are now tied together by the one thing both views agree on: **the world
+point at the centre of the screen.** `_sync_camera_3d_to_2d_view` (2D→3D) and
+`_sync_2d_view_to_camera_3d` (3D→2D), both called from **`set_3d_mode`** — the
+single funnel every switch goes through (View toggle, `T`, `switch_to_2d/3d_mode`).
+
+**It is the point the 3D camera LOOKS AT, not where it stands.** Standing the
+camera on the 2D centre would put what you had centred behind/below you — at the
+default −30° pitch the ground under the camera is off the bottom of the screen —
+which is the opposite of what "the camera is right there" means. So the camera is
+stepped BACK up its own view ray by the distance that drops its ground clearance,
+which lands the ray exactly on the 2D centre.
+
+Consequences worth not breaking:
+
+- **The round trip is lossless.** 2D→3D→2D returns the exact pan you started
+  from and 3D→2D→3D the exact camera, because both directions preserve the same
+  quantity. A link that drifted would walk the view a little further on every
+  press of `T`, and nothing would raise. `tests/test_camera_link_2d_3d.py` pins it.
+- **Yaw/pitch and zoom are never touched.** The heading you were facing is
+  yours (a 2D pan has no heading to take one from), and there is no meaningful
+  "equivalent zoom" for a perspective camera.
+- **Height above the GROUND is preserved, not absolute altitude** — carrying the
+  altitude buries the camera inside a hill / strands it over a valley.
+  `_ground_height_at` is the guarded terrain sampler (0.0 and no console spam
+  when no heightmap is loaded).
+- **Near-horizon views have no ground intersection.** Both directions fall back
+  to the camera's own ground position *in the same way*, so the round trip stays
+  stable there too instead of walking. `_FOCUS_MIN_DOWN` (0.05 ≈ 3° below the
+  horizon) is the cutoff; `_FOCUS_MAX_DIST` only stops a near-zero divisor
+  producing `inf`.
+- **`CameraController` keeps its OWN `offset_x/offset_y` copy** and writes it
+  back into the canvas on the next WASD tick. The 3D→2D sync must set both or
+  the view snaps back to the old pan the instant a movement key is pressed.
+- Re-asserting the mode you are already in must move nothing — `set_3d_mode`
+  gates on `was_3d != enabled`.
+
+Escape hatch: `canvas.link_2d_3d_cameras` (default True), View ▸ **"Link 2D/3D
+Camera Position"**. A sync that throws is caught inside `set_3d_mode` — a view
+change must never fail because of it.
+
+Fixed in passing: the first-time camera init in `set_3d_mode` wrote
+`position = [center_x, 100.0, +center_y]`, but world→GL is `(x, y, z) → (x, z,
+−y)` — world y goes in **negated**, so the initial camera was mirrored across the
+world X axis. The link overwrites the position immediately, so this only shows on
+the fallback path.
 
 ### Perf note
 

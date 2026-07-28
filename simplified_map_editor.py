@@ -1872,6 +1872,19 @@ class SimplifiedMapEditor(QMainWindow):
             lambda checked: self._set_topdown_3d_scene(checked))
         view_menu.addAction(self.toggle_topdown_3d_action)
 
+        # Carry the viewpoint across a 2D<->3D switch instead of leaving each
+        # view parked wherever it was last.
+        self.toggle_camera_link_action = QAction("Link 2D/3D Camera Position", self)
+        self.toggle_camera_link_action.setCheckable(True)
+        self.toggle_camera_link_action.setChecked(True)
+        self.toggle_camera_link_action.setToolTip(
+            "Keep the same spot centred when switching between 2D and 3D — "
+            "the 3D camera looks at whatever was in the middle of the 2D view, "
+            "and back again")
+        self.toggle_camera_link_action.triggered.connect(
+            lambda checked: self._set_link_2d_3d_cameras(checked))
+        view_menu.addAction(self.toggle_camera_link_action)
+
         view_menu.addSeparator()
 
         sector_menu_action = QAction("Toggle Sectors", self)
@@ -14512,7 +14525,20 @@ class SimplifiedMapEditor(QMainWindow):
         self.canvas.update()
         self.status_bar.showMessage(
             f"2D view: {'real 3D scene (top-down camera)' if enabled else 'flat 2D'}")
-    
+
+    def _set_link_2d_3d_cameras(self, enabled):
+        """Tie the two views' viewpoints together across a mode switch.
+
+        On: whatever is at the CENTRE of one view is at the centre of the other
+        — pan across the map in 2D, hit 3D, and the camera is looking at the
+        spot you left. Off: each view keeps its own independent position, the
+        behaviour before this existed.
+        """
+        self.canvas.link_2d_3d_cameras = bool(enabled)
+        self.status_bar.showMessage(
+            f"2D/3D camera position: {'linked' if enabled else 'independent'}")
+
+
     def _on_light_angle_changed(self, angle):
         if hasattr(self, 'canvas'):
             self.canvas.set_light_elevation(angle)
