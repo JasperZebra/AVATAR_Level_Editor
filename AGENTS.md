@@ -4020,6 +4020,23 @@ Two fixes, both needed:
 
 **Do not widen the ortho depth box "to be safe".** That is exactly the bug.
 
+### camera_3d is POSED, not ignored
+
+Parts of the 3D pipeline read `self.camera_3d` directly instead of the GL
+matrices. The one that shows is water: `u_cam` drives
+`V = normalize(u_cam - v_world)` for fresnel/specular, so with the camera left
+wherever the user parked it in 3D, the water is lit from a viewpoint unrelated
+to what's on screen. `_make_topdown_camera()` builds a `Camera3D` clone sitting
+directly above the world point under the viewport centre
+(`cx = (w/2 - offset_x)/scale`, same inverse as `screen_to_world`), forward
+straight down, altitude above the fitted depth box; `_render_3d_opengl` swaps it
+in for the pass and **always** restores the real one in `finally` — leaving it
+installed would corrupt the actual 3D view. Same swap-a-posed-clone trick
+`render_camera_preview` already uses.
+
+`Camera3D` lives in `map_canvas_gpu.py` itself, NOT `camera_controller.py`
+(which holds `CameraController`, the 2D pan/zoom one).
+
 ### Perf note
 
 Top-down at full-map zoom puts the whole level in frustum permanently and

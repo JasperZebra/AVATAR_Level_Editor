@@ -4856,6 +4856,48 @@ class MapCanvas(QOpenGLWidget):
         glMatrixMode(GL_MODELVIEW)
         glPopMatrix()
 
+    def _make_topdown_camera(self):
+        """A Camera3D posed directly above the centre of the current 2D view.
+
+        The scene pass runs the ordinary 3D pipeline, and parts of it read
+        ``self.camera_3d`` rather than the GL matrices — most visibly the water
+        shader, whose `u_cam` drives the fresnel/specular view vector
+        (`V = normalize(u_cam - v_world)`). Left pointing wherever the user
+        parked the 3D camera, water is lit from a viewpoint that has nothing to
+        do with what's on screen. Same swap-a-posed-clone trick
+        `render_camera_preview` uses.
+
+        Returns None if the camera state isn't usable (caller then leaves the
+        real camera alone).
+        """
+        s = float(getattr(self, 'scale_factor', 0.0) or 0.0)
+        if s <= 1e-9:
+            return None
+        w = max(1, int(self.width()))
+        h = max(1, int(self.height()))
+        ox = float(getattr(self, 'offset_x', 0.0))
+        oy = float(getattr(self, 'offset_y', 0.0))
+        # World point under the centre of the viewport (inverse of world_to_screen).
+        cx = (w * 0.5 - ox) / s
+        cy = (h * 0.5 - oy) / s
+
+        # Sit above everything so the view vector points convincingly downward.
+        try:
+            near, far = self._topdown_depth_range()
+            altitude = -near + 512.0        # near is -(top of scene)
+        except Exception:
+            altitude = 4096.0
+
+        cam = Camera3D.__new__(Camera3D)
+        cam.__dict__.update(self.camera_3d.__dict__)
+        cam.position = np.array([cx, altitude, -cy], dtype=float)   # world->GL
+        cam.forward = np.array([0.0, -1.0, 0.0])
+        cam.up = np.array([0.0, 0.0, -1.0])
+        cam.right = np.array([1.0, 0.0, 0.0])
+        cam.yaw = 0.0
+        cam.pitch = -90.0
+        return cam
+
     def _has_3d_terrain(self):
         """True when a 3D terrain mesh exists to render top-down.
 
@@ -5388,6 +5430,7 @@ class MapCanvas(QOpenGLWidget):
         nothing but costs a full extra scene pass).
         """
         pushed_topdown = False
+        saved_cam = None
         try:
             # Regenerate terrain display list if water was updated
             if hasattr(self, 'water_mesh_editor'):
@@ -5399,6 +5442,13 @@ class MapCanvas(QOpenGLWidget):
                 if not self._setup_topdown_ortho():
                     return
                 pushed_topdown = True
+                # Parts of the pipeline read camera_3d directly rather than the
+                # GL matrices (water's u_cam most visibly). Pose it overhead so
+                # they agree with what's actually on screen.
+                _td_cam = self._make_topdown_camera()
+                if _td_cam is not None:
+                    saved_cam = self.camera_3d
+                    self.camera_3d = _td_cam
             else:
                 # Set up 3D projection
                 glMatrixMode(GL_PROJECTION)
@@ -5656,6 +5706,10 @@ class MapCanvas(QOpenGLWidget):
                     self._restore_topdown_ortho()
                 except Exception:
                     pass
+            # Never leave the posed top-down camera installed — the real 3D
+            # view (and everything else reading camera_3d) would inherit it.
+            if saved_cam is not None:
+                self.camera_3d = saved_cam
 
     def _draw_3d_ui_overlays(self, painter):
         """Draw UI overlays for 3D mode"""
