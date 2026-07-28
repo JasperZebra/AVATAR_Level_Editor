@@ -600,7 +600,16 @@ class MapCanvas(QOpenGLWidget):
         # day). ENABLED by default (June 2026, user request) — paused at noon so
         # lighting stays stable while editing; ▶ Play / F4 starts the cycle.
         self.day_night_enabled = True
-        self.time_of_day = 0.5          # noon
+        # ~09:00, NOT noon. Noon puts the sun 70.7° up, which is the worst
+        # possible angle for reading relief: a shadow is then offset from its
+        # caster by only 0.35× the object's height (so from a top-down camera it
+        # hides underneath the object), and every terrain slope faces roughly
+        # upward so they all shade nearly identically — correct lighting,
+        # invisible result. At 0.375 the sun sits 49.4° up and the offset is
+        # 0.86× height, which reads as real relief in BOTH views. Still paused
+        # by default (_daynight_play False), so lighting is just as stable to
+        # edit under; drag the View ▸ lighting Time slider to change it.
+        self.time_of_day = 0.375        # ~09:00 — oblique sun, visible shadows
         self._daynight_play = False
         # Play advances the clock SMOOTHLY (continuous, every ~33ms glow tick) so the
         # sun/sky/shadows glide fluidly through dawn→day→dusk→night like a real game
@@ -4134,8 +4143,19 @@ class MapCanvas(QOpenGLWidget):
 
         try:
             if self.mode == MODE_TOPDOWN:
-                # 2D rendering
-                gl.glClearColor(0.94, 0.94, 0.94, 1.0)
+                # 2D rendering. When the top-down 3D scene is active, clear to
+                # the same sky tint 3D uses instead of the flat editor grey —
+                # the sky pass itself is skipped (parallel ortho rays), so the
+                # clear colour is what fills everything beyond the terrain, and
+                # grey there was a big part of why it didn't read as the 3D view.
+                if getattr(self, 'topdown_3d_scene', False) and self._has_3d_terrain():
+                    try:
+                        _sr, _sg, _sb = self._sky_color()
+                        gl.glClearColor(_sr, _sg, _sb, 1.0)
+                    except Exception:
+                        gl.glClearColor(0.94, 0.94, 0.94, 1.0)
+                else:
+                    gl.glClearColor(0.94, 0.94, 0.94, 1.0)
                 gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
                 self._render_2d_opengl()
             else:

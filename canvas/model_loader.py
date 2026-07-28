@@ -289,6 +289,11 @@ class ModelLoader:
         # clutter costs full vertex work for sub-noise visuals. The big lever
         # for vertex-bound GPUs (integrated Radeon/Intel). 0 disables. F9 cycles.
         self.gdr_min_pixel_size = 4.0
+        # Same idea for the top-down 2D view, but ORTHO applies the threshold
+        # uniformly across the whole scene rather than only to distant clutter,
+        # so it has to be far smaller or zooming out strips the level bare.
+        # 0 disables it entirely (everything draws, at whatever cost).
+        self.gdr_min_pixel_size_topdown = 1.0
 
         # True while load_complete_level runs: mid-load repaints must NOT hit the
         # model render paths (the GPU-driven rebuild on a churning models_cache
@@ -2474,9 +2479,18 @@ class ModelLoader:
                         # projected_px = 2r·scale, so keep <=> r >= min_px/(2·scale).
                         # Using the perspective formula here would cull by
                         # distance-to-camera, which is meaningless under ortho.
+                        #
+                        # A SEPARATE, much smaller threshold: 4 px is tuned for
+                        # perspective, where it only ever removes genuinely
+                        # distant clutter. Under ortho it applies uniformly to
+                        # the whole scene, so 4 px strips most props the moment
+                        # you zoom out past 1:1 (at zoom 0.25 it demands radius
+                        # >= 8) — which is exactly why top-down stopped looking
+                        # like the 3D view. 1 px only drops the sub-pixel tail.
                         s = float(getattr(canvas, 'scale_factor', 0.0) or 0.0)
-                        if s > 0.0:
-                            lim = min_px / (2.0 * s)
+                        tmin = float(getattr(self, 'gdr_min_pixel_size_topdown', 1.0) or 0.0)
+                        if s > 0.0 and tmin > 0.0:
+                            lim = tmin / (2.0 * s)
                             ent_vis &= (radii >= lim) | (radii <= 0.0)
                     else:
                         cam = getattr(getattr(canvas, 'camera_3d', None), 'position', None)

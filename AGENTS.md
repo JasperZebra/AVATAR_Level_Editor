@@ -3970,6 +3970,30 @@ that reasons about camera distance or FOV must check it:
    and a false cull is a hole in the world, so top-down draws every tile.
    Tile culling was only ever an FC2 multi-cell optimisation.
 
+### Why it didn't look like 3D at first (three separate causes)
+
+1. **The LOD threshold was tuned for perspective.** `gdr_min_pixel_size` = 4 px
+   only ever removes distant clutter under perspective; under ortho it applies
+   to the WHOLE scene uniformly, so past 1:1 zoom it stripped most props (at
+   zoom 0.25 it demands radius ≥ 8). Top-down now uses its own
+   `gdr_min_pixel_size_topdown` (default **1.0**), which only drops the
+   sub-pixel tail. Raise it if a level crawls; 0 disables it.
+2. **The background was editor grey.** The sky pass is skipped (parallel ortho
+   rays), so the CLEAR COLOUR is everything you see past the terrain. `paintGL`
+   now clears top-down to `_sky_color()` — the same tint 3D uses — instead of
+   0.94 grey.
+3. **The sun was parked at noon** (`time_of_day` 0.5 → 70.7° up). That is the
+   worst angle for a top-down view: a shadow is offset from its caster by only
+   0.35× the object's height, so it hides *underneath* the object, and every
+   terrain slope faces roughly upward so they all shade near-identically —
+   correct lighting, invisible result. Default is now **0.375 (~09:00, 49.4°
+   up, offset 0.86× height)**, which reads as real relief in both views. Still
+   paused by default, so it is just as stable to edit under.
+
+Also: `_on_glow_tick` used to early-return on `mode != MODE_3D`, which froze
+the day/night cycle, the selection glow and animated-UV scroll the moment you
+switched to 2D. It now runs whenever the top-down 3D scene is active.
+
 ### Perf note
 
 Top-down at full-map zoom puts the whole level in frustum permanently and
