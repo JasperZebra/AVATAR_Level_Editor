@@ -1067,9 +1067,6 @@ def pack(folder: str,
 def default_extract_dir(pak_path: str) -> str:
     """Where a ``.pak`` unpacks to by default: a sibling folder named after it.
 
-    ``…\\patch.pak`` unpacks to ``…\\patch``.  Note the extension is simply
-    dropped, so ``patch.pak`` and ``patch.pak1`` both propose ``patch`` — the
-    caller is expected to notice an existing extraction from a *different*
-    archive and ask (see ``pak_ui._confirm_existing_folder``).
+    ``…\\patch.pak`` unpacks to ``…\\patch`` — the extension is simply dropped.
     """
     return os.path.splitext(pak_path)[0]

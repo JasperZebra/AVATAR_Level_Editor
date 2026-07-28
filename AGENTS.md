@@ -3960,14 +3960,15 @@ freshly written files, not the packer; profile before optimising it.
   2.16 GB**, because the external tool packed whatever it found. `skipped_artifacts`
   deliberately excludes the manifest from its count — it is our bookkeeping, not
   something the user thinks they authored.
-- **The unpack folder is named after the archive, extension dropped** —
-  `default_extract_dir` is just `os.path.splitext(pak)[0]`, so
-  `…\patch.pak` → `…\patch` (user request: no `_unpacked` decoration).
-  Consequence: `patch.pak` and `patch.pak1` both propose `…\patch`, so
-  `_confirm_existing_folder` compares the destination manifest's `source_pak`
-  against the archive being opened and warns "this folder holds a different
-  archive" (naming both) before it will replace anything. Don't reintroduce a
-  suffix to dodge the collision — the guard is the intended handling.
+- **Only `.pak` is offered, and the unpack folder is named after it.**
+  `PAK_FILTER` is `*.pak` alone — numbered siblings (`.pak0`/`.pak1`/…) are
+  deliberately NOT selectable, by user decision. `default_extract_dir` is just
+  `os.path.splitext(pak)[0]`, so `…\patch.pak` → `…\patch` (no `_unpacked`
+  decoration). Default destinations therefore can't collide. They still can via
+  "Choose Folder...", so `_confirm_existing_folder` compares the destination
+  manifest's `source_pak` against the archive being opened and warns "this
+  folder holds a different archive" (naming both, counting edits at risk)
+  before replacing anything.
 - **Never overwrite a folder silently.** `_confirm_existing_folder` diffs
   against the manifest and reports modified/added/deleted counts before offering
   to re-extract. A folder with no manifest is treated as unknown, never as safe.

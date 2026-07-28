@@ -36,7 +36,7 @@ from PyQt5.QtWidgets import (
 
 import pak_archive as pak
 
-PAK_FILTER = "PAK archives (*.pak *.pak0 *.pak1 *.pak2 *.pak3);;All files (*)"
+PAK_FILTER = "PAK archives (*.pak);;All files (*)"
 
 
 # --------------------------------------------------------------------------
@@ -197,9 +197,9 @@ def _confirm_existing_folder(parent, dest: str,
     box.setWindowTitle("Folder Already Exists")
     box.setIcon(QMessageBox.Warning)
 
-    # The folder is named after the archive with the extension dropped, so
-    # patch.pak and patch.pak1 land on the same name.  Say so plainly rather
-    # than letting one archive quietly overwrite the other's extraction.
+    # Default destinations can't collide (one folder per .pak name), but
+    # "Choose Folder..." lets a second archive be aimed at an existing
+    # extraction.  Say so plainly rather than quietly overwriting it.
     manifest = pak.read_manifest(dest)
     other = manifest.get('source_pak') if manifest else None
     if (other and pak_path
