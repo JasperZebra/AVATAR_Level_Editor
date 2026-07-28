@@ -1196,9 +1196,18 @@ class LevelSelectorDialog(QDialog):
         
         patch_info_layout.addSpacing(10)
         
-        # Change Patch Folder button
-        change_folder_btn = QPushButton("Change Patch Folder...")
+        # Change Patch Folder button.  In Avatar mode the patch folder comes
+        # from a .pak archive (unpacked on selection), so the button says so;
+        # FC2 ships .fat/.dat and still picks a folder directly.
+        change_folder_btn = QPushButton(
+            "Change Patch Folder..." if self.game_mode == "farcry2"
+            else "Change PAK File...")
         change_folder_btn.setMaximumWidth(180)
+        change_folder_btn.setToolTip(
+            "Select the patch folder"
+            if self.game_mode == "farcry2" else
+            "Select a .pak archive — it is unpacked and the resulting folder "
+            "becomes the patch folder")
         change_folder_btn.clicked.connect(self.on_change_patch_folder)
         change_folder_btn.setStyleSheet(f"""
             QPushButton {{
@@ -1217,35 +1226,6 @@ class LevelSelectorDialog(QDialog):
             }}
         """)
         patch_info_layout.addWidget(change_folder_btn)
-
-        # Load .pak Archive button — unpacks an archive and uses the resulting
-        # folder as the patch folder, so users never need an external pak tool.
-        # Avatar-only; FC2 ships .fat/.dat, a different container.
-        load_pak_btn = QPushButton("Load .pak Archive...")
-        load_pak_btn.setMaximumWidth(180)
-        load_pak_btn.setEnabled(self.game_mode != "farcry2")
-        load_pak_btn.setToolTip(
-            "Far Cry 2 uses .fat/.dat archives, not .pak — not supported yet"
-            if self.game_mode == "farcry2" else
-            "Unpack a game .pak archive and use the unpacked folder as the patch folder")
-        load_pak_btn.clicked.connect(self.on_load_pak_archive)
-        load_pak_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {colors['button']};
-                border: 1px solid {colors['border']};
-                border-radius: 4px;
-                padding: 5px 10px;
-                color: {colors['text']};
-            }}
-            QPushButton:hover {{
-                background-color: {colors['button_hover']};
-                border: 1px solid {colors['accent']};
-            }}
-            QPushButton:pressed {{
-                background-color: {colors['button_pressed']};
-            }}
-        """)
-        patch_info_layout.addWidget(load_pak_btn)
 
         # Change Resource Folder button (NEW)
         change_resource_btn = QPushButton("Set Resource Folder...")
@@ -1806,47 +1786,6 @@ class LevelSelectorDialog(QDialog):
                 "Patch folder manager not available."
             )
 
-    def on_load_pak_archive(self):
-        """Unpack a .pak and adopt the resulting folder as the patch folder.
-
-        Deliberately reuses the ordinary change-patch-folder path once the
-        archive is on disk: the rest of the editor only ever sees a folder.
-        """
-        _spf_log("on_load_pak_archive called")
-        if not self.patch_manager:
-            QMessageBox.information(
-                self, "Load .pak Archive", "Patch folder manager not available.")
-            return
-
-        try:
-            from pak_ui import load_patch_folder_from_pak
-        except Exception as exc:                       # noqa: BLE001
-            _spf_log(f"pak_ui import failed: {exc}")
-            QMessageBox.critical(
-                self, "PAK Support Unavailable",
-                f"Could not load the PAK archive support module:\n\n{exc}")
-            return
-
-        owner = self.parent() or self
-        folder = load_patch_folder_from_pak(owner)
-        if not folder:
-            _spf_log("pak load cancelled")
-            return
-
-        self.patch_manager.patch_folder = folder
-        self.patch_manager.levels_data = {}
-        self.patch_manager.save_config()
-        _spf_log(f"pak unpacked, patch folder now: {folder}")
-
-        # Same teardown as on_change_patch_folder — accept() skips closeEvent,
-        # so the button rotation timers must be stopped by hand.
-        if hasattr(self, 'level_buttons'):
-            for btn in self.level_buttons.values():
-                btn.disable_rotate()
-        self.patch_folder_change_requested.emit()
-        self.accept()
-
-
 class PatchFolderManager:
     """Main manager class for patch folder operations"""
     
@@ -1911,13 +1850,33 @@ class PatchFolderManager:
             print(f"Error saving patch config: {e}")
     
     def set_patch_folder(self):
-        """Let user select and set the patch folder"""
+        """Let the user choose the patch folder.
+
+        Avatar delivers its data as ``.pak`` archives, so there the user picks
+        an archive and it is unpacked; the resulting folder becomes the patch
+        folder and everything downstream works against that folder exactly as
+        before.  Far Cry 2 ships ``.fat``/``.dat``, which we cannot read, so it
+        still browses for a folder directly.
+
+        Routing this through the ONE method every caller already uses (level
+        selector, first-run prompt, menu handler) means no caller changes and
+        no second "load a pak" option anywhere in the UI.
+        """
+        if self.game_mode != "farcry2":
+            folder = self._select_patch_folder_from_pak()
+            if not folder:
+                return False
+            self.patch_folder = folder
+            self.levels_data = {}          # force a rescan of the new folder
+            self.save_config()
+            return True
+
         folder = QFileDialog.getExistingDirectory(
             self.parent,
             "Select Patch Folder (containing 'worlds' and 'levels' subdirectories)",
             self.patch_folder or ""
         )
-        
+
         if not folder:
             return False
         
@@ -1943,6 +1902,21 @@ class PatchFolderManager:
         # after this returns, and calling both creates two progress dialogs.
         return True
     
+    def _select_patch_folder_from_pak(self):
+        """Pick a .pak, unpack it, and return the folder to use.  None on cancel."""
+        try:
+            from pak_ui import load_patch_folder_from_pak
+        except Exception as exc:                       # noqa: BLE001
+            _spf_log(f"pak_ui import failed: {exc}")
+            QMessageBox.critical(
+                self.parent, "PAK Support Unavailable",
+                f"Could not load the PAK archive support module:\n\n{exc}")
+            return None
+
+        folder = load_patch_folder_from_pak(self.parent)
+        _spf_log(f"pak selection returned: {folder}")
+        return folder
+
     def scan_patch_folder(self, show_progress=True):
         """
         Scan the patch folder for available levels with EnhancedProgressDialog.

@@ -17,7 +17,7 @@ A comprehensive level editor for modifying **Avatar: The Game** and **Far Cry 2*
 - **Interactive Canvas**: Color-coded entity visualization with adaptive grid system
 - **Sector Management**: Visual boundary display with violation detection; entities moved across sector (or FC2 cell) borders are re-homed to the correct sector file on save
 - **Terrain Editor**: In-app heightmap editing with brush tools and live preview — Avatar `.csdat` and Far Cry 2 `.sdat`
-- **PAK Archive Support** *(Avatar)*: Load a `.pak` archive directly — the editor unpacks it and works from the result — then repack when you're done, either in full or as a small mod archive containing only what you changed
+- **PAK Archive Support** *(Avatar)*: Select a `.pak` archive as your patch source — the editor unpacks it and uses the resulting folder automatically — then repack when you're done, either in full or as a small mod archive containing only what you changed
 
 ## Quick Start
 
@@ -35,11 +35,14 @@ A comprehensive level editor for modifying **Avatar: The Game** and **Far Cry 2*
 
 #### Working straight from a `.pak` archive (Avatar)
 
-You no longer need an external tool to unpack the game first. Use
-**File ▸ 📦 Load .pak Archive...** (or the *Load .pak Archive...* button in the
-level selector), pick an archive such as `patch.pak`, and the editor unpacks it
-and uses the resulting folder as the patch folder. Everything after that works
-exactly as it does with a folder you set by hand.
+You no longer need an external tool to unpack the game first. In the level
+selector, **Change PAK File...** asks for an archive such as `patch.pak`,
+unpacks it next to the archive, and selects the resulting folder as the patch
+folder automatically. Everything after that works exactly as it does with a
+folder you set by hand — the archive is only how the data arrives.
+
+*(Far Cry 2 ships `.fat`/`.dat` archives, which aren't supported, so that button
+stays **Change Patch Folder...** and browses for a folder as before.)*
 
 When you're finished editing, **File ▸ 📦 Repack Patch Folder to .pak...**
 builds an archive again, with two modes:

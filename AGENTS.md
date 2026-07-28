@@ -3870,11 +3870,24 @@ something knocked it out.
 `pak_archive.py` (format, GUI-free) + `pak_ui.py` (Qt dialogs) let the editor
 unpack an Avatar `PAK!` archive itself and pack one back up, so users no longer
 need an external pak tool. **The editor still only ever reads a folder** — the
-archive is a delivery mechanism. `File ▸ 📦 Load .pak Archive...` unpacks and
-then calls the ordinary `set_patch_folder` path; nothing downstream knows the
-folder came from an archive. `File ▸ 📦 Repack Patch Folder to .pak...` goes the
-other way. Ported from the drag-and-drop `tools/pak_converter/pak_tool.py`,
-which stays as a standalone utility.
+archive is a delivery mechanism. Ported from the drag-and-drop
+`tools/pak_converter/pak_tool.py`, which stays as a standalone utility.
+
+**Loading a pak is NOT a separate menu action — it replaced the folder picker.**
+`PatchFolderManager.set_patch_folder()` is the one method every caller already
+used (level-selector button, first-run prompt, `on_patch_folder_changed`); in
+Avatar mode it now asks for a `.pak`, unpacks it via
+`_select_patch_folder_from_pak` → `pak_ui.load_patch_folder_from_pak`, sets
+`self.patch_folder` to the unpacked folder and clears `levels_data` so the
+rescan fires. FC2 keeps the original folder browser. Because the routing lives
+in that single method, **no call site changed and there is no second "load a
+pak" option anywhere** — the level-selector button is just relabelled
+"Change PAK File..." (still "Change Patch Folder..." in FC2). The only genuinely
+new UI is `File ▸ 📦 Repack Patch Folder to .pak...`.
+
+Do not re-add a separate load action. An earlier revision had one in the File
+menu *and* a second button beside "Change Patch Folder", which duplicated the
+same flow three ways; it was removed deliberately.
 
 ### Format (verified byte-for-byte against retail archives)
 
@@ -3990,12 +4003,12 @@ packer emits them whenever compression doesn't pay.
   `patch.pak` then `patch.pakN` into one folder in load order.
 - **FC2 is not covered, and the UI says so.** Far Cry 2 uses `.fat`/`.dat`
   (Dunia FAT v5), a different container in which many entries carry only a name
-  hash, no string. Both File-menu actions and the level-selector button are
-  **disabled in FC2 mode** (labelled "(Avatar only)"), mirroring how MP Spawn
-  Creator is gated; `pak_ui._reject_fc2` is the belt-and-braces check behind
-  them, because pointing an FC2 patch folder at Avatar data would be silent
-  corruption. The UI and manifest design are format-agnostic, so a FAT backend
-  can slot in behind the same dialogs without redesign.
+  hash, no string. `set_patch_folder()` keeps the plain folder browser for FC2,
+  the repack action is **disabled in FC2 mode** (labelled "(Avatar only)")
+  mirroring how MP Spawn Creator is gated, and `pak_ui._reject_fc2` is the
+  belt-and-braces check behind it — pointing an FC2 patch folder at Avatar data
+  would be silent corruption. The UI and manifest design are format-agnostic,
+  so a FAT backend can slot in behind the same flow without redesign.
 - **`QMessageBox` parents go through `_as_parent`**, which returns None for a
   non-widget. Qt raises `TypeError` rather than ignoring a bad parent, and a
   *parentless modal* box segfaults outright on the offscreen platform — so

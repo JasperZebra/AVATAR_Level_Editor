@@ -308,7 +308,7 @@ def load_patch_folder_from_pak(main_window, pak_path: Optional[str] = None) -> O
         parent, "Patch Folder Ready",
         f"Using this folder as the patch folder:\n{dest}\n\n"
         f"{len(index):,} files from {os.path.basename(pak_path)}.\n\n"
-        "When you are finished editing, use Tools ▸ Repack Patch Folder "
+        "When you are finished editing, use File ▸ Repack Patch Folder "
         "to build a .pak again.")
     return dest
 
