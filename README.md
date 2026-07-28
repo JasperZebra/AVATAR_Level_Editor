@@ -17,6 +17,7 @@ A comprehensive level editor for modifying **Avatar: The Game** and **Far Cry 2*
 - **Interactive Canvas**: Color-coded entity visualization with adaptive grid system
 - **Sector Management**: Visual boundary display with violation detection; entities moved across sector (or FC2 cell) borders are re-homed to the correct sector file on save
 - **Terrain Editor**: In-app heightmap editing with brush tools and live preview — Avatar `.csdat` and Far Cry 2 `.sdat`
+- **PAK Archive Support** *(Avatar)*: Load a `.pak` archive directly — the editor unpacks it and works from the result — then repack when you're done, either in full or as a small mod archive containing only what you changed
 
 ## Quick Start
 
@@ -31,6 +32,29 @@ A comprehensive level editor for modifying **Avatar: The Game** and **Far Cry 2*
 1. Set your `patch` folder for the game type you're currently modding
 2. Level folders and files will be automatically read, loaded and converted as needed.
 3. Select the level you want to load into the editor from the UI screen
+
+#### Working straight from a `.pak` archive (Avatar)
+
+You no longer need an external tool to unpack the game first. Use
+**File ▸ 📦 Load .pak Archive...** (or the *Load .pak Archive...* button in the
+level selector), pick an archive such as `patch.pak`, and the editor unpacks it
+and uses the resulting folder as the patch folder. Everything after that works
+exactly as it does with a folder you set by hand.
+
+When you're finished editing, **File ▸ 📦 Repack Patch Folder to .pak...**
+builds an archive again, with two modes:
+
+- **Everything in the folder** — a complete archive, replacing the original.
+- **Only files changed since unpacking** — a small archive containing just your
+  edits. The game layers archives over one another, so dropping this in as the
+  next `patch.pakN` applies your changes without shipping a copy of the game.
+
+Notes:
+- Editor scratch files (`*.fcb.converted.xml`, `*.bak`) are never packed.
+- An existing archive at the target is backed up to `.bak` before being replaced,
+  and the new archive is only moved into place once it has been written in full.
+- If the destination folder already holds edits, the editor tells you how many
+  and asks before overwriting anything — it never silently discards work.
 
 | **AVATAR** | **FARCRY 2** |
 |---|---|
@@ -148,6 +172,11 @@ Entities are automatically color-coded by type with size-based scaling:
 - ``worldsector*.data.fcb`` - Individual sector data
 
 Both FCB (native game format) and XML (human-readable) formats are supported with automatic conversion.
+
+### Archives
+- ``*.pak`` *(Avatar)* — `PAK!` version 4 archives (`data.pak`, `patch.pak`,
+  `patch.pak0/1/...`). Read and written natively by the editor; unpacking an
+  archive and repacking it untouched reproduces the original file byte-for-byte.
 
 ## Editor Components
 

@@ -57,6 +57,8 @@ root_files = [
     'movie_data.py',
     'entity_library_browser.py',
     'env_preset_copy.py',
+    'pak_archive.py',
+    'pak_ui.py',
     'ui_style_utils.py',
     'world_editor.py',
     'init.py',
@@ -453,6 +455,8 @@ build_options = {
         'main',
         'movie_data',                   # ← moviedata.xml cutscene parser (Sequences tab)
         'object_library',
+        'pak_archive',                  # ← PAK! v4 archive reader/writer
+        'pak_ui',                       # ← load-from-.pak / repack dialogs
         'sequence_export_import',       # ← cinematic bundle export/import
         'sequence_import_dialog',       # ← Sequences tab import dialog
         'sequence_link',                # ← keeps moviedata keys with their entity

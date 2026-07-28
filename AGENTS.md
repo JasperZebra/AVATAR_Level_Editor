@@ -162,6 +162,7 @@ reference: <reference to this change in the docs if applicable>
 | `sequence_export_import.py` | `tests/test_sequence_removal.py` | — | Removal takes ALL of a thing: `remove_node`/`strip_camera_nodes` drop the `<NodeData>` registry entry as well as the keys (they only edited a filtered list before, so deleted cameras left an orphan NodeDef behind), `remove_sequence` deletes a whole sequence but SPARES a node another sequence still uses, and a rootless export bundle still behaves — excluded from `--cov` |
 | `sequence_link.py` | `tests/test_sequence_link_rebind.py` | — | The once-installed autosave wrapper resolves `canvas.sequence_link` at call time, so entity moves follow the level loaded LAST (it used to close over the first link and write into the previous level's moviedata.xml); a cleared link leaves the original autosave intact — excluded from `--cov` |
 | `sequence_placement.py` | `tests/test_sequence_placement.py` | — | Viewport picking of cutscene handles: ray-vs-box math (incl. ray starting inside the marker), a 3D click picks the marker its ray crosses with the nearest winning, a 2D click tests the drawn 5 px square, picking offers only what the renderers DRAW (isolated node / rest marker only when the entity is missing, at the drawn half-extent), and the GL-ray→world plane mapping the 3D drag uses; plus per-key isolation (dragging one key rewrites THAT key only, keeps its height, adds/loses none — through a real `SequenceLink` on a temp file) and the Shift vertical drag (X/Y held, refuses when looking straight down); GL ray + projector stubbed — excluded from `--cov` |
+| `pak_archive.py` | `tests/test_pak_archive.py` | — | PAK! v4 round trip is **byte-identical** (not merely content-identical) when order + FILETIMEs are preserved; changed-only packing picks exactly the edited files and never packs `*.fcb.converted.xml` / `*.bak`; malformed archives raise `PakError`; pure-Python LZO1X decoder matches the DLL. Runs without game data; the compressed cases skip when minilzo is absent — excluded from `--cov` |
 | `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
 
 ### Key patterns used
@@ -3276,7 +3277,9 @@ User was walking through a level's folder layout (`z_anim_creatures`: `data\worl
 
 Because of the exact-match requirement, every `_l`-suffixed level showed up as **two separate, permanently-incomplete entries**: one with `worlds_path` set and `levels_path=None` (world/environment data, no terrain), and another with `levels_path` set and `worlds_path=None` (terrain data, no environment) — verified directly by calling `analyze_level_structure` against the real `ATGE\patch` folder (`sme.SimplifiedMapEditor.__new__(...)`, skip `__init__`, since the scanning methods are pure path functions). Neither entry was ever `complete=True`, so **terrain/sdat data never loaded** when a user picked one of these maps through the normal level selector for 9 of 10 real levels — this predates the terrain-blend work earlier in this session (confirmed the `_l`-paired `generated/sdat` folder has real atlas data, 75 files for mridge, that was simply never reached).
 
-**Fix:** `_resolve_levels_name(world_name)` tries the exact name first, then `f"{world_name}_l"`, before giving up. Iterate over `worlds/` names (the canonical "real level" set) and resolve each to its levels/ folder; any leftover `levels/` folder with no matching `worlds/` entry still gets a partial entry (unchanged fallback behavior). Verified: full re-scan of `ATGE\patch` now returns exactly 10 entries (was ~19, with duplicates), zero duplicate names, and `mp_mridge_df_01`/`sp_pascal_fm_01`/`sp_pascal_rf04`/`sp_sebastien_rb_02`/`z_dev_orouleau`/`z_anim_creatures` all correctly `complete=True`. The remaining `complete=False` maps (`sp_bonusmap_01`, `sp_gravesbog_rb_of_01`, `sp_hellsgate_01`, `sp_plainsofgoliath_of_fm_01`) are NOT a matching bug — checked their `worlds/<name>/generated/` folders directly and they genuinely only contain a bare `.game.xml` (no `mapsdata`/`managers`/`omnis`/`sectorsdep` files at all), which `validate_worlds_folder` correctly flags as incomplete data — that's accurate reporting of stripped-down/unused map data, not something to "fix".
+**Fix:** `_resolve_levels_name(world_name)` tries the exact name first, then `f"{world_name}_l"`, before giving up. Iterate over `worlds/` names (the canonical "real level" set) and resolve each to its levels/ folder; any leftover `levels/` folder with no matching `worlds/` entry still gets a partial entry (unchanged fallback behavior). Verified: full re-scan of `ATGE\patch` now returns exactly 10 entries (was ~19, with duplicates), zero duplicate names, and `mp_mridge_df_01`/`sp_pascal_fm_01`/`sp_pascal_rf04`/`sp_sebastien_rb_02`/`z_dev_orouleau`/`z_anim_creatures` all correctly `complete=True`.
+
+> **CORRECTION (July 2026).** This section used to conclude that the four remaining `complete=False` maps (`sp_bonusmap_01`, `sp_gravesbog_rb_of_01`, `sp_hellsgate_01`, `sp_plainsofgoliath_of_fm_01`) "genuinely only contain a bare `.game.xml`" and were "stripped-down/unused map data, not something to fix". **That was wrong.** The data is complete — it lives in `data.pak`, and the hand-made `ATGE\patch` folder those maps were checked against simply never had it extracted. Measured against the retail archive: `sp_hellsgate_01` has **279** files under `worlds\sp_hellsgate_01\` in `data.pak` versus 6 on disk (`mapsdata.fcb`, `managers.fcb`, `entitylibrary_full.fcb`, `moviedata.xml`, all 256 `preload/sectorN.preload.fcb`, the navmesh — all present); `sp_gravesbog_rb_of_01` 278 vs 4, `sp_plainsofgoliath_of_fm_01` 278 vs 3, `sp_bonusmap_01` 22 vs 2. Hellsgate is the reference level much of this file is written against, so treat any earlier "that level is stripped down" reasoning with suspicion. The lesson: **an incomplete patch folder is not evidence about the game's data** — check the archives (see the PAK section below) before concluding a file doesn't exist.
 
 ### Multi-variant tiling — residual "not tiled correct" roughness after the swatch-floor tune (July 2026)
 
@@ -3861,6 +3864,127 @@ drop the rows that patch needs.
 watch the `⏱️ FRAME …ms CPU | overlay3d=… shape=… prims=…` line printed every 60 frames.
 `overlay3d≈0.1` means the cache is live; `shape`/`prims`/`triggers` appearing at all means
 something knocked it out.
+
+## PAK archive support — load a `.pak`, edit, repack (July 2026)
+
+`pak_archive.py` (format, GUI-free) + `pak_ui.py` (Qt dialogs) let the editor
+unpack an Avatar `PAK!` archive itself and pack one back up, so users no longer
+need an external pak tool. **The editor still only ever reads a folder** — the
+archive is a delivery mechanism. `File ▸ 📦 Load .pak Archive...` unpacks and
+then calls the ordinary `set_patch_folder` path; nothing downstream knows the
+folder came from an archive. `File ▸ 📦 Repack Patch Folder to .pak...` goes the
+other way. Ported from the drag-and-drop `tools/pak_converter/pak_tool.py`,
+which stays as a standalone utility.
+
+### Format (verified byte-for-byte against retail archives)
+
+```
+PAK! | u32 version=4 | u32 offset_to_metadata | ...file data blob...
+
+at offset_to_metadata:      u32 metadata_size  (= compressed metadata + 4)
+                            [zlib chunks, 64 KiB of plaintext each]
+at +metadata_size:          u32 chunk_header_count
+                            N x (u32 cumulative_decompressed, u24 cumulative_end_offset, u8 flag=128)
+
+decoded metadata:  u8 marker=1 | u32 file_count
+  part 1, per file:  u32 offset, u32 size, u32 crc32(path)
+                     ceil(size/65536) x (u16 stored_size, u16 flag)
+  part 2, per file:  u64 FILETIME, u8 path_len, path bytes (utf-8, backslashes)
+```
+
+- `flag == 65535` → chunk is STORED, real length is `65536 - stored_size` (so a
+  full chunk encodes as 0). Otherwise LZO1X in `stored_size` bytes (0 = 65536).
+- The **first metadata chunk header is a sentinel** covering the 4-byte size
+  field; it carries no payload. It is skipped by `decompressed_size ==
+  last_decompressed_size`, which is why that odd-looking check exists.
+- The u24 cumulative offset caps a metadata stream at 16,777,215 bytes.
+  Real headroom is large: `data.pak` peaks at 1,858,330.
+- `.vso/.pso/.rs/.bik` are never compressed (matches the retail packer).
+
+**The format is randomly accessible** — chunk *k* starts at
+`file_offset + sum(stored_size[0:k])`. `read_file()` pulls one file without
+touching the rest; nothing needs a full extraction to read a single entry.
+
+### Measured on retail archives (do not re-derive these)
+
+| archive | files | on disk | uncompressed | index parse |
+|---|---|---|---|---|
+| `data.pak` | 89,904 | 1.73 GB | 3.16 GB | ~0.2 s |
+| `patch.pak` | 2,730 | 43 MB | 0.11 GB | ~0.01 s |
+| `patch.pak1` (user repack) | 26,693 | 842 MB | 2.16 GB | ~0.07 s |
+
+LZO throughput on real game data: **487 MB/s compress, 792 MB/s decompress**.
+The codec is never the bottleneck — a 110 MB extract is ~1.4 s and a repack
+~0.8 s warm. A pack that appears to take 30 s is Windows first-touch/AV cost on
+freshly written files, not the packer; profile before optimising it.
+
+### Invariants that must not break
+
+- **Round-trip is byte-identical, and the test asserts it.** Unpacking
+  `patch.pak` and repacking it untouched reproduces the source archive exactly.
+  That only holds because `pack()` takes file order and per-file FILETIMEs from
+  the manifest instead of re-deriving them (`os.path.getctime` of the extracted
+  copy is a *different* value, which is what made the old tool land 80 bytes
+  off). If a change breaks byte-identity, it has broken the format.
+- **`.pak_manifest.json` is the contract.** Written at extract time into the
+  folder, it records source archive, original file order, and per-file
+  `[size, crc32, filetime]`. It drives repack ordering, the changed-only diff,
+  and the "you have local edits" guard. Deleting it degrades the folder to
+  full-repack-only, not to breakage.
+- **CRCs are computed during extraction, from bytes already in memory.** The
+  first version re-read the whole extraction to build the manifest and turned a
+  1.4 s extract into 23.5 s. Don't reintroduce a read-back pass.
+- **Editor scratch never gets packed** (`ARTIFACT_SUFFIXES` —
+  `*.fcb.converted.xml`, `*.bak`, plus the manifest). This is not cosmetic: the
+  user's own `patch.pak1` shipped **2,686 `.converted.xml` files, 0.93 GB of its
+  2.16 GB**, because the external tool packed whatever it found. `skipped_artifacts`
+  deliberately excludes the manifest from its count — it is our bookkeeping, not
+  something the user thinks they authored.
+- **Never overwrite a folder silently.** `_confirm_existing_folder` diffs
+  against the manifest and reports modified/added/deleted counts before offering
+  to re-extract. A folder with no manifest is treated as unknown, never as safe.
+- **Writes are atomic.** `pack()` builds `<target>.tmp`, fsyncs, backs the
+  existing archive up to `.bak`, then `os.replace`s. An interrupted pack cannot
+  destroy an archive.
+
+### LZO
+
+`minilzo_{c,d}_{x64,x86}.dll` live in `tools/pak_converter/`; `_dll_dirs()`
+also checks `tools/` and the app root, and frozen builds get them because
+`setup.py`'s `collect_files('tools')` walks recursively. **Reading does not
+depend on them**: `lzo1x_decompress_py` is a pure-Python LZO1X decoder,
+verified byte-identical to the DLL across all 3,630 compressed chunks of a
+retail `patch.pak` (~30x slower, so it is a fallback, not the path). Packing
+without the compressor falls back to STORED chunks, which is legal — the retail
+packer emits them whenever compression doesn't pay.
+
+### Gotchas
+
+- **`tools/` is gitignored**, so the modules live at the repo root
+  (`pak_archive.py`, `pak_ui.py`) and are registered in both `packages` and
+  `root_files` in `setup.py` (enforced by `tests/test_setup_packages.py`).
+- **`pak_tool.py` crashes on cp1252 stdout** at its final `✓` summary line —
+  the same `UnicodeEncodeError` class documented for `set_patch_folder.py`.
+  `pak_archive.py` carries the encoding-safe `print` shim; if you ever call the
+  old tool programmatically, force `PYTHONIOENCODING=utf-8`.
+- **`pak_ui` never touches widgets from a worker thread.** `_Job` buffers log
+  lines under a lock and the main thread drains them inside the top-level
+  busy-wait. Do not move `QApplication.processEvents()` into a signal handler
+  here — that is the documented stack-overflow footgun.
+- **`LevelSelectorDialog` has two `on_change_patch_folder` definitions**
+  (~1598 and ~1748); the later one wins. `on_load_pak_archive` was added next to
+  the live one and mirrors its teardown (stop button rotation timers, emit
+  `patch_folder_change_requested`, then `accept()` exactly once).
+- **A vanilla `patch.pak` is an overlay, not a game.** It holds 2,730 files and
+  is 97% a subset of `data.pak`; unpacking it alone yields a folder with almost
+  no levels. This is by design — the user picks whichever archive they want to
+  work with (theirs is a full 26,693-file repack). If a future change wants
+  one-click setup from a clean install, the move is extracting `data.pak` then
+  `patch.pak` then `patch.pakN` into one folder in load order.
+- **FC2 is not covered.** Far Cry 2 uses `.fat`/`.dat` (Dunia FAT v5), a
+  different container in which many entries carry only a name hash, no string.
+  The UI and manifest design are format-agnostic, so a FAT backend can slot in
+  behind the same dialogs without redesign.
 
 ## setup.py packaging debt cleared (July 2026)
 

@@ -1714,7 +1714,25 @@ class SimplifiedMapEditor(QMainWindow):
         save_level_action.triggered.connect(self.save_level)
         save_level_action.setShortcut("Ctrl+S")
         file_menu.addAction(save_level_action)
-                
+
+        file_menu.addSeparator()
+
+        # PAK archive support — unpack a .pak into a folder the editor uses as
+        # the patch folder, and pack that folder back up when finished.
+        load_pak_action = QAction("📦 Load .pak Archive...", self)
+        load_pak_action.triggered.connect(self.open_load_pak_archive)
+        load_pak_action.setToolTip(
+            "Unpack a game .pak archive and use the unpacked folder as the patch folder")
+        file_menu.addAction(load_pak_action)
+
+        repack_pak_action = QAction("📦 Repack Patch Folder to .pak...", self)
+        repack_pak_action.triggered.connect(self.open_repack_pak)
+        repack_pak_action.setToolTip(
+            "Build a .pak from the patch folder — everything, or only your changes")
+        file_menu.addAction(repack_pak_action)
+
+        file_menu.addSeparator()
+
         # Add exit action
         exit_action = QAction("Exit", self)
         exit_action.triggered.connect(self.close)
@@ -3583,6 +3601,60 @@ class SimplifiedMapEditor(QMainWindow):
         self._world_editor = show_world_editor(
             parent=self, game_xml_path=game_xml,
             game_mode=self.game_mode, canvas=canvas)
+
+    def open_load_pak_archive(self):
+        """Unpack a .pak archive and adopt the resulting folder as the patch folder.
+
+        The archive is only a delivery mechanism — once unpacked, the editor
+        works against an ordinary folder exactly as it always has.
+        """
+        try:
+            from pak_ui import load_patch_folder_from_pak
+        except Exception as exc:                       # noqa: BLE001
+            QMessageBox.critical(
+                self, "PAK Support Unavailable",
+                f"Could not load the PAK archive support module:\n\n{exc}")
+            return
+
+        folder = load_patch_folder_from_pak(self)
+        if not folder:
+            return
+
+        manager = getattr(self, 'patch_manager', None)
+        if manager is not None:
+            manager.patch_folder = folder
+            manager.levels_data = {}          # force a rescan of the new folder
+            try:
+                manager.save_config()
+            except Exception as exc:                   # noqa: BLE001
+                print(f"Could not save patch config: {exc}")
+            try:
+                from set_patch_folder import update_worlds_folder
+                update_worlds_folder(manager, self)
+            except Exception as exc:                   # noqa: BLE001
+                print(f"Could not update worlds folder: {exc}")
+
+        self.status_bar.showMessage(f"Patch folder set to {folder}", 6000)
+
+        reply = QMessageBox.question(
+            self, "Select a Level",
+            "Patch folder updated. Open the level selector now?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if reply == QMessageBox.Yes:
+            # Defer so this handler unwinds before a modal dialog opens —
+            # nesting a second modal loop inside this one crashes Qt.
+            QTimer.singleShot(100, self.select_level)
+
+    def open_repack_pak(self):
+        """Build a .pak from the current patch folder (all files, or just changes)."""
+        try:
+            from pak_ui import repack_patch_folder
+        except Exception as exc:                       # noqa: BLE001
+            QMessageBox.critical(
+                self, "PAK Support Unavailable",
+                f"Could not load the PAK archive support module:\n\n{exc}")
+            return
+        repack_patch_folder(self)
 
     def open_object_library(self):
         """Focus the Object Library tab in the right panel (place new entities by
