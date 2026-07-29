@@ -1196,18 +1196,19 @@ class LevelSelectorDialog(QDialog):
         
         patch_info_layout.addSpacing(10)
         
-        # Change Patch Folder button.  In Avatar mode the patch folder comes
-        # from a .pak archive (unpacked on selection), so the button says so;
-        # FC2 ships .fat/.dat and still picks a folder directly.
+        # Change Game Data button.  In Avatar mode it offers BOTH sources — a
+        # .pak archive (unpacked on selection) or an already-unpacked patch
+        # folder — so the label can't name just one; FC2 ships .fat/.dat, which
+        # we can't read, so it goes straight to the folder browser.
         change_folder_btn = QPushButton(
             "Change Patch Folder..." if self.game_mode == "farcry2"
-            else "Change PAK File...")
+            else "Change Game Data...")
         change_folder_btn.setMaximumWidth(180)
         change_folder_btn.setToolTip(
             "Select the patch folder"
             if self.game_mode == "farcry2" else
-            "Select a .pak archive — it is unpacked and the resulting folder "
-            "becomes the patch folder")
+            "Choose a .pak archive (unpacked on selection) or an "
+            "already-unpacked patch folder")
         change_folder_btn.clicked.connect(self.on_change_patch_folder)
         change_folder_btn.setStyleSheet(f"""
             QPushButton {{
@@ -1795,6 +1796,10 @@ class PatchFolderManager:
         self.patch_folder: Optional[str] = None
         self.levels_data: dict = {}
         self.scanner_thread: Optional[PatchFolderScanner] = None
+        # 'pak' | 'folder' | None — the source picked last time. Persisted so
+        # the chooser's DEFAULT button matches the user's habit; it never
+        # selects a source on its own.
+        self.last_data_source: Optional[str] = None
 
         # Load saved patch folder configuration for this game
         self.load_config()
@@ -1820,6 +1825,12 @@ class PatchFolderManager:
                     self.save_config()   # rewrite with per-game key
                     return
 
+            # Which source the user picked last (pak vs unpacked folder). Only
+            # decides which button the chooser defaults to — never picks alone.
+            src = config.get(f"{self.game_mode}_data_source")
+            if src in ('pak', 'folder'):
+                self.last_data_source = src
+
             if folder and os.path.exists(folder):
                 self.patch_folder = folder
                 print(f"Loaded patch folder from config [{self.game_mode}]: {self.patch_folder}")
@@ -1842,6 +1853,8 @@ class PatchFolderManager:
 
             key = f"{self.game_mode}_patch_folder"
             config[key] = self.patch_folder
+            if self.last_data_source:
+                config[f"{self.game_mode}_data_source"] = self.last_data_source
 
             with open(PATCH_CONFIG_FILE, 'w') as f:
                 json.dump(config, f, indent=2)
@@ -1850,19 +1863,28 @@ class PatchFolderManager:
             print(f"Error saving patch config: {e}")
     
     def set_patch_folder(self):
-        """Let the user choose the patch folder.
+        """Let the user choose where the game data comes from.
 
-        Avatar delivers its data as ``.pak`` archives, so there the user picks
-        an archive and it is unpacked; the resulting folder becomes the patch
-        folder and everything downstream works against that folder exactly as
-        before.  Far Cry 2 ships ``.fat``/``.dat``, which we cannot read, so it
-        still browses for a folder directly.
+        Avatar ships its data as ``.pak`` archives, but plenty of users already
+        keep an UNPACKED patch folder (extracted earlier, or built by hand), and
+        forcing them back through an archive every time was pointless — so
+        Avatar asks which of the two they want and routes accordingly.  Either
+        way the result is a FOLDER: a pak is unpacked and its output folder
+        becomes the patch folder, so everything downstream is unchanged.
+
+        Far Cry 2 ships ``.fat``/``.dat``, which we cannot read, so it goes
+        straight to the folder browser with no prompt.
 
         Routing this through the ONE method every caller already uses (level
         selector, first-run prompt, menu handler) means no caller changes and
-        no second "load a pak" option anywhere in the UI.
+        still no second "load a pak" action anywhere in the UI — the choice
+        lives INSIDE this method, not as a rival entry point.
         """
-        if self.game_mode != "farcry2":
+        if self.game_mode == "farcry2":
+            return self._select_patch_folder_from_folder()
+
+        choice = self._ask_data_source()
+        if choice == 'pak':
             folder = self._select_patch_folder_from_pak()
             if not folder:
                 return False
@@ -1870,7 +1892,46 @@ class PatchFolderManager:
             self.levels_data = {}          # force a rescan of the new folder
             self.save_config()
             return True
+        if choice == 'folder':
+            return self._select_patch_folder_from_folder()
+        return False                        # cancelled
 
+    def _ask_data_source(self):
+        """Ask whether to load a .pak or an already-unpacked folder.
+
+        Returns 'pak', 'folder' or None (cancelled). Defaults to whichever the
+        user picked last time, so the common case is one Enter press.
+        """
+        box = QMessageBox(self.parent)
+        box.setWindowTitle("Select Game Data")
+        box.setIcon(QMessageBox.Question)
+        box.setText("Where should the level editor read the game data from?")
+        box.setInformativeText(
+            "PAK archive — pick a .pak file; it is unpacked and the resulting "
+            "folder is used.\n\n"
+            "Unpacked folder — pick a folder that already contains 'worlds' "
+            "and/or 'levels'."
+        )
+        pak_btn = box.addButton("PAK Archive...", QMessageBox.AcceptRole)
+        dir_btn = box.addButton("Unpacked Folder...", QMessageBox.AcceptRole)
+        box.addButton(QMessageBox.Cancel)
+        box.setDefaultButton(dir_btn if self.last_data_source == 'folder' else pak_btn)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is pak_btn:
+            choice = 'pak'
+        elif clicked is dir_btn:
+            choice = 'folder'
+        else:
+            return None
+        # Remembered for the default button only — it never picks on its own.
+        self.last_data_source = choice
+        _spf_log(f"data source chosen: {choice}")
+        return choice
+
+    def _select_patch_folder_from_folder(self):
+        """Browse for an already-unpacked patch folder. True when one was set."""
         folder = QFileDialog.getExistingDirectory(
             self.parent,
             "Select Patch Folder (containing 'worlds' and 'levels' subdirectories)",
@@ -1879,11 +1940,11 @@ class PatchFolderManager:
 
         if not folder:
             return False
-        
+
         # Validate folder structure
         worlds_dir = os.path.join(folder, "worlds")
         levels_dir = os.path.join(folder, "levels")
-        
+
         if not os.path.exists(worlds_dir) and not os.path.exists(levels_dir):
             reply = QMessageBox.warning(
                 self.parent,
@@ -1895,13 +1956,17 @@ class PatchFolderManager:
             )
             if reply == QMessageBox.Cancel:
                 return False
-        
+
         self.patch_folder = folder
+        # A hand-picked folder replaces whatever was loaded before, so the old
+        # level list must not survive — same reset the pak branch does.
+        self.levels_data = {}
         self.save_config()
         # Do NOT call scan_patch_folder() here — select_level() will scan
         # after this returns, and calling both creates two progress dialogs.
         return True
-    
+
+
     def _select_patch_folder_from_pak(self):
         """Pick a .pak, unpack it, and return the folder to use.  None on cancel."""
         try:

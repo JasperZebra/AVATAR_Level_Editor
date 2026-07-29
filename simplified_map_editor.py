@@ -1239,10 +1239,14 @@ class SimplifiedMapEditor(QMainWindow):
             reply = QMessageBox.question(
                 self,
                 "Welcome — Set Patch Folder",
-                f"No patch folder has been configured for {game_label}.\n\n"
+                f"No game data has been configured for {game_label}.\n\n"
                 "The patch folder is your game directory containing the "
-                "'levels' and/or 'worlds' subdirectories.\n\n"
-                "Would you like to set it now?",
+                "'levels' and/or 'worlds' subdirectories."
+                + ("" if self.game_mode == "farcry2" else
+                   "  You can point the editor at a .pak archive and let it "
+                   "unpack one for you, or at a folder you have already "
+                   "unpacked.")
+                + "\n\nWould you like to set it now?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes,
             )
@@ -1718,7 +1722,8 @@ class SimplifiedMapEditor(QMainWindow):
         file_menu.addSeparator()
 
         # Pack the patch folder back into a .pak.  Loading one is NOT a separate
-        # action — it is what "Change PAK File" in the level selector does, via
+        # action — it is one of the two choices "Change Game Data" in the level
+        # selector offers (the other being an already-unpacked folder), via
         # PatchFolderManager.set_patch_folder.  Avatar-only: Far Cry 2 ships
         # .fat/.dat (Dunia FAT v5), a different container.
         _is_fc2 = self.game_mode == "farcry2"

@@ -169,6 +169,7 @@ reference: <reference to this change in the docs if applicable>
 | `pak_archive.py` | `tests/test_pak_archive.py` | — | PAK! v4 round trip is **byte-identical** (not merely content-identical) when order + FILETIMEs are preserved; changed-only packing picks exactly the edited files and never packs `*.fcb.converted.xml` / `*.bak`; malformed archives raise `PakError`; pure-Python LZO1X decoder matches the DLL. Runs without game data; the compressed cases skip when minilzo is absent — excluded from `--cov` |
 | `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
 | `canvas/texture_loader.py` + `canvas/gpu_driven_renderer.py` | `tests/test_material_vertex_mask.py` | — | The black/too-dark model fix: HDR tints survive the parse (no clamp to 1), `DiffuseColorBase` defaults to `DiffuseColor1` so the mask lerp is a no-op when unauthored, `SpecularColorBase`/`ReflectionPower` are read, `consolidate_geometry` packs vertex colours and defaults a colourless mesh to **white** (keeps the pre-change look), and `MAT_DTYPE` matches every GLSL `struct Material` member-for-member with 16-byte-aligned vec4s — drift there silently reads materials from the wrong bytes. XBMs built in-memory; GDR loaded by **file path** — excluded from `--cov` |
+| `set_patch_folder.py` | `tests/test_patch_data_source.py` | — | The Avatar pak-or-folder chooser: FC2 is never asked (its `.fat`/`.dat` can't be read), BOTH Avatar branches clear `levels_data` (a stale list suppresses the rescan and shows the previous archive's levels), and cancelling changes nothing. Manager built via `__new__` so no config file is touched — excluded from `--cov` |
 | `canvas/texture_loader.py` | `tests/test_cubemap_decode.py` | — | `decode_xbt_cubemap_to_rgba`: six DISTINCT faces (not face 0 six times — what PIL alone returns), face stride is the whole mip chain (a 1-mip and a 4-mip cube of the same size decode identically), non-cubemaps and short payloads return None so the caller falls back to no reflection instead of handing GL a short buffer. Synthetic DXT1 cubemap DDS built from scratch, no game data — excluded from `--cov` |
 
 ### Key patterns used
@@ -4252,21 +4253,36 @@ need an external pak tool. **The editor still only ever reads a folder** — the
 archive is a delivery mechanism. Ported from the drag-and-drop
 `tools/pak_converter/pak_tool.py`, which stays as a standalone utility.
 
-**Loading a pak is NOT a separate menu action — it replaced the folder picker.**
-`PatchFolderManager.set_patch_folder()` is the one method every caller already
-used (level-selector button, first-run prompt, `on_patch_folder_changed`); in
-Avatar mode it now asks for a `.pak`, unpacks it via
-`_select_patch_folder_from_pak` → `pak_ui.load_patch_folder_from_pak`, sets
-`self.patch_folder` to the unpacked folder and clears `levels_data` so the
-rescan fires. FC2 keeps the original folder browser. Because the routing lives
-in that single method, **no call site changed and there is no second "load a
-pak" option anywhere** — the level-selector button is just relabelled
-"Change PAK File..." (still "Change Patch Folder..." in FC2). The only genuinely
-new UI is `File ▸ 📦 Repack Patch Folder to .pak...`.
+**Loading a pak is NOT a separate menu action — it is one of two choices inside
+the folder picker.** `PatchFolderManager.set_patch_folder()` is the one method
+every caller already used (level-selector button, first-run prompt,
+`on_patch_folder_changed`). In Avatar mode it calls `_ask_data_source()` — a
+two-button `QMessageBox` — and routes to either `_select_patch_folder_from_pak`
+(→ `pak_ui.load_patch_folder_from_pak`, unpacks and returns the folder) or
+`_select_patch_folder_from_folder` (the plain browser + `worlds`/`levels`
+validation). FC2 short-circuits straight to the folder browser: it ships
+`.fat`/`.dat`, which `pak_archive` cannot read, so offering the choice would
+only ever present a dead option. Because the routing lives in that single
+method, **no call site changed and there is no second "load a pak" option
+anywhere** — the level-selector button is labelled "Change Game Data..."
+(still "Change Patch Folder..." in FC2). The only genuinely new UI is
+`File ▸ 📦 Repack Patch Folder to .pak...`.
+
+**Both Avatar branches must clear `levels_data`.** `new_select_level` skips
+scanning entirely when `levels_data` is already populated, so a stale list
+survives into the new folder and the user sees the PREVIOUS archive's levels.
+The pak branch always did this; the folder branch had to be given it when the
+choice was added (July 2026). Regression: `tests/test_patch_data_source.py`.
+
+`last_data_source` ('pak' | 'folder', persisted as `<game>_data_source` in
+`patch_config.json`) only decides which button the chooser DEFAULTS to. It must
+never select a source on its own — that would silently reintroduce the
+pak-only behaviour for anyone whose last pick was a pak.
 
 Do not re-add a separate load action. An earlier revision had one in the File
 menu *and* a second button beside "Change Patch Folder", which duplicated the
-same flow three ways; it was removed deliberately.
+same flow three ways; it was removed deliberately. Offering the two sources as
+a prompt *inside* `set_patch_folder` is the shape that keeps one entry point.
 
 ### Format (verified byte-for-byte against retail archives)
 
