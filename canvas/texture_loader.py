@@ -131,9 +131,16 @@ class XBMMaterialData:
 
         # ── Derived convenience fields (pre-extracted so callers don't
         # need to crawl `properties` again) ────────────────────────────
+        # aaa.fx GetDiffuseColor / GetSpecularColor blend the *Base and *1
+        # colours per-pixel by the vertex mask, so BOTH ends are needed:
+        #   diffuse  = tex * lerp(DiffuseColorBase,  DiffuseColor1,          mask.b)
+        #   specular = lerp(SpecularColorBase, specTex * SpecularColor1, mask.r)
+        # Values are NOT clamped to 1 — the game authors HDR tints up to 2.0.
         self.diffuse_color = (1.0, 1.0, 1.0)        # DiffuseColor1.rgb
         self.diffuse_color_base = (1.0, 1.0, 1.0)   # DiffuseColorBase.rgb
         self.specular_color = (0.5, 0.5, 0.5)       # SpecularColor1.rgb
+        self.specular_color_base = (0.0, 0.0, 0.0)  # SpecularColorBase.rgb
+        self.reflection_power = 1.0                 # ReflectionPower (cubemap strength)
         self.illumination_color = None              # (r, g, b) when emission present
         self.illumination_always_on = True          # alpha == 0.0 means always-on
         self.specular_power = 16.0                  # Blinn-Phong exponent
@@ -226,8 +233,14 @@ def _derive_material_fields(m: XBMMaterialData) -> None:
         return False
 
     m.diffuse_color = _rgb('DiffuseColor1', m.diffuse_color)
-    m.diffuse_color_base = _rgb('DiffuseColorBase', m.diffuse_color_base)
+    # DiffuseColorBase defaults to DiffuseColor1 when the material doesn't
+    # author one, so a material with only DiffuseColor1 blends to itself and
+    # the mask.b lerp is a no-op (matches the engine, whose constant register
+    # is initialised from the same value).
+    m.diffuse_color_base = _rgb('DiffuseColorBase', m.diffuse_color)
     m.specular_color = _rgb('SpecularColor1', m.specular_color)
+    m.specular_color_base = _rgb('SpecularColorBase', m.specular_color_base)
+    m.reflection_power = _scalar('ReflectionPower', m.reflection_power)
     m.specular_power = _scalar('SpecularPower', m.specular_power)
     m.alpha_test_enabled = _bool('AlphaTestEnabled')
     m.alpha_blend_enabled = _bool('AlphaBlendEnabled')
@@ -654,6 +667,103 @@ class TextureLoader:
             return result
         except Exception as e:
             print(f"  decode_xbt_to_rgba failed ({os.path.basename(xbt_path)}): {e}")
+            return None
+
+    # DDS header field offsets (dwSize is at +4, so the magic counts as field 0).
+    _DDS_FLAGS = 8
+    _DDS_HEIGHT = 12
+    _DDS_WIDTH = 16
+    _DDS_MIPCOUNT = 28
+    _DDS_FOURCC = 84
+    _DDS_RGBBITCOUNT = 88
+    _DDS_CAPS = 108
+    _DDS_CAPS2 = 112
+    _DDS_HEADER_LEN = 128
+    _DDSCAPS2_CUBEMAP = 0x200
+
+    @staticmethod
+    def _dds_face_mip_bytes(fourcc: bytes, bpp: int, w: int, h: int) -> int:
+        """Bytes for ONE mip level of a DDS surface."""
+        if fourcc in (b'DXT1',):
+            return max(1, (w + 3) // 4) * max(1, (h + 3) // 4) * 8
+        if fourcc in (b'DXT2', b'DXT3', b'DXT4', b'DXT5'):
+            return max(1, (w + 3) // 4) * max(1, (h + 3) // 4) * 16
+        return w * h * max(1, bpp // 8)
+
+    def decode_xbt_cubemap_to_rgba(self, xbt_path: str):
+        """Decode a cubemap XBT into its six faces.
+
+        Reflection cubemaps (`ReflectionTexture` in aaa.fx) ship as a single DDS
+        holding six faces, each with its OWN full mip chain, laid out
+        consecutively in +X, -X, +Y, -Y, +Z, -Z order. PIL only ever hands back
+        the first surface, so we slice each face's mip 0 out ourselves and wrap
+        it in a synthetic single-surface DDS header for PIL to decompress.
+
+        Returns (width, height, [rgba_bytes] * 6) or None. All faces are square
+        and share one size, which is what glTexImage2D wants per cube face.
+        """
+        if not PIL_AVAILABLE:
+            return None
+        cache_key = (xbt_path, False, 'cube')
+        if cache_key in self._xbt_cache:
+            return self._xbt_cache[cache_key]
+        try:
+            with open(xbt_path, 'rb') as f:
+                dds = self._extract_dds_from_xbt(f.read())
+            if not dds or len(dds) < self._DDS_HEADER_LEN:
+                return None
+            caps2 = struct.unpack_from('<I', dds, self._DDS_CAPS2)[0]
+            if not (caps2 & self._DDSCAPS2_CUBEMAP):
+                return None      # not a cubemap — caller should use the 2D path
+            h = struct.unpack_from('<I', dds, self._DDS_HEIGHT)[0]
+            w = struct.unpack_from('<I', dds, self._DDS_WIDTH)[0]
+            mips = max(1, struct.unpack_from('<I', dds, self._DDS_MIPCOUNT)[0])
+            fourcc = dds[self._DDS_FOURCC:self._DDS_FOURCC + 4]
+            bpp = struct.unpack_from('<I', dds, self._DDS_RGBBITCOUNT)[0]
+            if w <= 0 or h <= 0 or w > 8192 or h > 8192:
+                return None
+
+            # Size of one face = its whole mip chain.
+            face_len = 0
+            mw, mh = w, h
+            for _ in range(mips):
+                face_len += self._dds_face_mip_bytes(fourcc, bpp, mw, mh)
+                mw = max(1, mw // 2)
+                mh = max(1, mh // 2)
+            payload = dds[self._DDS_HEADER_LEN:]
+            if face_len <= 0 or len(payload) < face_len * 6:
+                print(f"  cubemap {os.path.basename(xbt_path)}: payload "
+                      f"{len(payload)}B < 6 x {face_len}B - not a 6-face cube")
+                return None
+
+            # Synthetic header: one surface, one mip, no cubemap caps.
+            head = bytearray(dds[:self._DDS_HEADER_LEN])
+            struct.pack_into('<I', head, self._DDS_MIPCOUNT, 1)
+            struct.pack_into('<I', head, self._DDS_CAPS2, 0)
+            flags = struct.unpack_from('<I', head, self._DDS_FLAGS)[0]
+            struct.pack_into('<I', head, self._DDS_FLAGS, flags & ~0x00020000)  # DDSD_MIPMAPCOUNT
+            caps = struct.unpack_from('<I', head, self._DDS_CAPS)[0]
+            struct.pack_into('<I', head, self._DDS_CAPS, caps & ~0x00400008)    # COMPLEX|MIPMAP
+
+            mip0 = self._dds_face_mip_bytes(fourcc, bpp, w, h)
+            faces = []
+            import io as _io
+            for i in range(6):
+                start = i * face_len
+                one = bytes(head) + payload[start:start + mip0]
+                img = Image.open(_io.BytesIO(one))
+                img.load()
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                if img.size != (w, h):
+                    return None
+                faces.append(img.tobytes())
+            result = (w, h, faces)
+            self._xbt_cache_put(cache_key, result)
+            return result
+        except Exception as e:
+            print(f"  decode_xbt_cubemap_to_rgba failed "
+                  f"({os.path.basename(xbt_path)}): {e}")
             return None
 
     def _extract_dds_from_xbt(self, xbt_data: bytes) -> Optional[bytes]:

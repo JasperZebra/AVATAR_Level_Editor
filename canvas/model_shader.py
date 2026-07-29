@@ -34,6 +34,7 @@ ATTR_POSITION = 0
 ATTR_NORMAL = 1
 ATTR_UV = 2
 ATTR_TANGENT = 3
+ATTR_COLOR = 8         # vec4 vertex colour = the engine's `vertexMask`
 # Per-INSTANCE attribute locations (divisor 1).
 ATTR_INST_POS = 4      # vec3 world position
 ATTR_INST_ROT = 5      # vec3 euler (rx, ry, rz) degrees
@@ -68,6 +69,7 @@ attribute vec3  a_position;
 attribute vec3  a_normal;
 attribute vec2  a_uv;
 attribute vec3  a_tangent;
+attribute vec4  a_color;    // vertexMask: .b Diffuse blend, .r Spec/reflection, .a AO
 attribute vec3  a_inst_pos;
 attribute vec3  a_inst_rot;
 attribute float a_inst_scale;
@@ -80,6 +82,7 @@ varying vec3  v_normalES;
 varying vec3  v_tangentES;
 varying vec2  v_uv;
 varying float v_overlay;
+varying vec4  v_mask;
 
 invariant gl_Position;      // bit-identical depth vs the prepass (early-Z safety)
 """ + _ROT_GLSL + """
@@ -90,6 +93,7 @@ void main(){
     v_tangentES = gl_NormalMatrix * modelRot(a_tangent, a_inst_rot);
     v_uv        = a_uv + u_uv_offset;
     v_overlay   = a_inst_overlay;
+    v_mask      = clamp(a_color, 0.0, 1.0);   // aaa.fx: saturate(input.vertexMask)
     gl_Position = gl_ModelViewProjectionMatrix * vec4(wp, 1.0);
 }
 """
@@ -140,14 +144,19 @@ uniform sampler2D u_diffuse;
 uniform sampler2D u_normal;
 uniform sampler2D u_specular;
 uniform sampler2D u_emission;
+uniform samplerCube u_reflection;
 uniform int   u_has_diffuse;
 uniform int   u_has_normal;
 uniform int   u_has_specular;
 uniform int   u_has_emission;
+uniform int   u_has_reflection;
 
-uniform vec3  u_tint;
+uniform vec3  u_tint;          // DiffuseColor1   (HDR, may exceed 1)
+uniform vec3  u_tint_base;     // DiffuseColorBase
 uniform vec3  u_emissive;
-uniform vec3  u_spec_color;
+uniform vec3  u_spec_color;    // SpecularColor1
+uniform vec3  u_spec_base;     // SpecularColorBase
+uniform float u_refl_power;    // ReflectionPower
 uniform float u_shininess;
 uniform int   u_alpha_mode;    // 0 opaque, 1 mask, 2 blend
 uniform float u_alpha_cutoff;
@@ -162,13 +171,21 @@ varying vec3  v_normalES;
 varying vec3  v_tangentES;
 varying vec2  v_uv;
 varying float v_overlay;
+varying vec4  v_mask;
 
 void main() {
     vec4 diff = (u_has_diffuse == 1) ? texture2D(u_diffuse, v_uv) : vec4(1.0);
     float alpha = diff.a;
     if (u_alpha_mode == 1 && alpha < u_alpha_cutoff) discard;
 
-    vec3 base = diff.rgb * u_tint;
+    // aaa.fx GetDiffuseColor():
+    //     diffuseColor.rgb = diffuseMapBase * lerp(DiffuseColorBase, DiffuseColor1, mask.b)
+    // Using DiffuseColor1 alone (what this shader did before) renders every
+    // material at the mask.b == 1 end. That is a no-op on the ~2/3 of models
+    // whose vertex colour is white, but it turned the CORP concrete walls
+    // black — their trim material authors DiffuseColor1 = (0,0,0) and carries
+    // its real colour in DiffuseColorBase.
+    vec3 base = diff.rgb * mix(u_tint_base, u_tint, v_mask.b);
 
     vec3 N = normalize(v_normalES);
     if (u_flip_normal == 1) N = -N;
@@ -201,20 +218,53 @@ void main() {
     if (dot(N, V) < 0.0) N = -N;
 
     vec3 specMap = (u_has_specular == 1) ? texture2D(u_specular, v_uv).rgb : vec3(1.0);
+    // aaa.fx GetSpecularColor():
+    //     specularColor = lerp(SpecularColorBase, specularMap * SpecularColor1, mask.r)
+    vec3 specColor = mix(u_spec_base, specMap * u_spec_color, v_mask.r);
 
-    vec3 color = gl_LightModel.ambient.rgb * base;
+    // Light quantities are accumulated SEPARATELY from the material colours so
+    // the combine below can be aaa.fx's GetFinalShading() verbatim — and so the
+    // reflection term can be scaled by saturate(ambient+diffuse+specular).
+    vec3 ambientL = gl_LightModel.ambient.rgb;
+    vec3 diffuseL = vec3(0.0);
+    vec3 specularL = vec3(0.0);
     if (u_unlit == 0) {
         for (int i = 0; i < NUM_LIGHTS; i++) {
             vec4 lp = gl_LightSource[i].position;
             vec3 L = normalize(lp.xyz - v_posES * lp.w);
             float ndl = max(dot(N, L), 0.0);
-            color += base * gl_LightSource[i].diffuse.rgb * ndl;
+            diffuseL += gl_LightSource[i].diffuse.rgb * ndl;
             if (ndl > 0.0) {
                 vec3 H = normalize(L + V);
                 float s = pow(max(dot(N, H), 0.0), max(u_shininess, 1.0));
-                color += gl_LightSource[i].specular.rgb * u_spec_color * specMap * s;
+                specularL += gl_LightSource[i].specular.rgb * s;
             }
         }
+    }
+    // aaalighting.inc.fx GetFinalShading():
+    //     diffuseColor * (occlusion*ambient + diffuse*shadow)
+    //   + specularColor * (specular*shadow)     [+ specularColor * reflection]
+    // occlusion is the vertex-colour alpha (baked AO); shadow is handled by the
+    // GPU-driven path only, so it is 1 here.
+    vec3 color = base * (ambientL * v_mask.a + diffuseL) + specColor * specularL;
+
+    // Reflection cubemap (aaa.fx line ~1027). This is where black-diffuse
+    // glass / chrome / polished-metal materials get ALL of their colour: they
+    // author a black diffuse on purpose. Without it they render pure black.
+    if (u_has_reflection == 1) {
+        // The cube is sampled in WORLD space. gl_ModelViewMatrix carries the
+        // view only (the model transform is applied in the vertex shader), so
+        // its rotation transpose takes an eye-space vector back to world.
+        mat3 eyeToWorld = mat3(gl_ModelViewMatrix[0].xyz,
+                               gl_ModelViewMatrix[1].xyz,
+                               gl_ModelViewMatrix[2].xyz);
+        vec3 Nw = normalize(N * eyeToWorld);   // v * M == transpose(M) * v
+        vec3 Vw = normalize(V * eyeToWorld);
+        // Engine passes the TOWARD-camera vector as reflect()'s incident, so
+        // match it rather than the textbook -Vw.
+        vec3 refl = textureCube(u_reflection, reflect(Vw, Nw)).rgb;
+        refl *= v_mask.r * u_refl_power * clamp(ambientL + diffuseL + specularL, 0.0, 1.0);
+        color += specColor * refl;
     }
 
     if (u_has_emission == 1) color += texture2D(u_emission, v_uv).rgb * u_emissive * u_night;
@@ -228,9 +278,11 @@ void main() {
 """
 
 _UNIFORMS = (
-    'u_diffuse', 'u_normal', 'u_specular', 'u_emission',
+    'u_diffuse', 'u_normal', 'u_specular', 'u_emission', 'u_reflection',
     'u_has_diffuse', 'u_has_normal', 'u_has_specular', 'u_has_emission',
-    'u_tint', 'u_emissive', 'u_spec_color', 'u_shininess',
+    'u_has_reflection',
+    'u_tint', 'u_tint_base', 'u_emissive', 'u_spec_color', 'u_spec_base',
+    'u_refl_power', 'u_shininess',
     'u_alpha_mode', 'u_alpha_cutoff', 'u_overlay_color', 'u_uv_offset', 'u_unlit', 'u_night',
     'u_flip_green', 'u_flip_normal',
 )
@@ -263,6 +315,7 @@ class ModelShader:
             gl.glBindAttribLocation(prog, ATTR_NORMAL, b'a_normal')
             gl.glBindAttribLocation(prog, ATTR_UV, b'a_uv')
             gl.glBindAttribLocation(prog, ATTR_TANGENT, b'a_tangent')
+            gl.glBindAttribLocation(prog, ATTR_COLOR, b'a_color')
             gl.glBindAttribLocation(prog, ATTR_INST_POS, b'a_inst_pos')
             gl.glBindAttribLocation(prog, ATTR_INST_ROT, b'a_inst_rot')
             gl.glBindAttribLocation(prog, ATTR_INST_SCALE, b'a_inst_scale')

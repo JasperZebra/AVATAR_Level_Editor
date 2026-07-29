@@ -156,6 +156,13 @@ def build_xbg_model(xbg_path, GLTFModel, GLTFMesh, lod_level=0,
         if _tarr is not None and len(_tarr) == _nverts:
             tans = np.ascontiguousarray(_tarr, dtype=np.float32)
 
+        # Vertex colour = the engine's `vertexMask` (aaa.fx). Kept as raw uint8
+        # RGBA and normalised by GL, so it costs 4 bytes/vertex, not 16.
+        cols = None
+        _carr = getattr(src, 'vert_color_arr', None)
+        if _carr is not None and len(_carr) == _nverts:
+            cols = np.ascontiguousarray(_carr, dtype=np.uint8)
+
         # One GLTFMesh per primitive (material group), sharing the vertex arrays.
         primitives = list(getattr(src, 'primitives', []) or [])
         if primitives:
@@ -163,14 +170,14 @@ def build_xbg_model(xbg_path, GLTFModel, GLTFMesh, lod_level=0,
                 if not prim.indices:
                     continue
                 gm = _make_gltfmesh(GLTFMesh, verts, norms, uvs,
-                                    prim.indices, prim.material_index, tans)
+                                    prim.indices, prim.material_index, tans, cols)
                 model.meshes.append(gm)
         elif src.face_list:
             flat = []
             for face in src.face_list:
                 flat.extend(face)
             if flat:
-                gm = _make_gltfmesh(GLTFMesh, verts, norms, uvs, flat, 0, tans)
+                gm = _make_gltfmesh(GLTFMesh, verts, norms, uvs, flat, 0, tans, cols)
                 model.meshes.append(gm)
 
     if have_bounds:
@@ -240,11 +247,12 @@ def _merge_attachments(xbg_path, model, GLTFModel, GLTFMesh, lod_level):
 
 
 def _make_gltfmesh(GLTFMesh, verts, norms, uvs, indices, material_index,
-                   authored_tangents=None):
+                   authored_tangents=None, colors=None):
     gm = GLTFMesh()
     gm.vertices = verts
     gm.normals = norms
     gm.uvs = uvs
+    gm.colors = colors
     # uint32 indices — the display-list path converts to uint32 anyway, and this
     # makes the immediate-mode / glow paths (which pass mesh.indices straight to
     # glDrawElements as GL_UNSIGNED_INT) correct too. The old gltf path stored

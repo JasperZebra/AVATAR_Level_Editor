@@ -42,19 +42,25 @@ DRAW_CMD_DTYPE = np.dtype([
 ])
 
 # Per-material record, std430 layout (must match `struct Material` in the shader):
-#   4 × uvec2 bindless handles (8 B each → 0,8,16,24) then 4 × vec4 (16 B → 32,48,64,80) = 96 B.
+#   5 × uvec2 bindless handles + 1 × uvec2 pad (8 B each → 0..40) then 7 × vec4
+#   (16 B → 48,64,80,96,112,128,144) = 160 B. The pad keeps the first vec4
+#   16-byte aligned, which std430 requires — five uvec2 alone would end at 40.
 # numpy packs structured dtypes tightly (no padding), matching std430 here exactly.
 MAT_DTYPE = np.dtype([
-    ('hDiffuse',  np.uint32, 2),
-    ('hNormal',   np.uint32, 2),
-    ('hSpecular', np.uint32, 2),
-    ('hEmission', np.uint32, 2),
-    ('tint',     np.float32, 4),   # rgb, w = alpha_mode (0 opaque / 1 mask / 2 blend)
+    ('hDiffuse',    np.uint32, 2),
+    ('hNormal',     np.uint32, 2),
+    ('hSpecular',   np.uint32, 2),
+    ('hEmission',   np.uint32, 2),
+    ('hReflection', np.uint32, 2),   # samplerCube — glass/chrome get their colour here
+    ('_pad',        np.uint32, 2),   # std430 vec4 alignment
+    ('tint',     np.float32, 4),   # DiffuseColor1 rgb (HDR), w = alpha_mode (0/1/2)
     ('emissive', np.float32, 4),   # rgb, w = alpha_cutoff
-    ('specShin', np.float32, 4),   # rgb spec colour, w = shininess
+    ('specShin', np.float32, 4),   # SpecularColor1 rgb, w = shininess
     ('hasflags', np.float32, 4),   # has_diffuse, has_normal, has_specular, has_emission (0/1)
     ('anim',     np.float32, 4),   # anim_type, uspeed, vspeed, _  (animated-UV scroll)
-])  # 112 B, std430
+    ('tintBase', np.float32, 4),   # DiffuseColorBase rgb, w = has_reflection (0/1)
+    ('specBase', np.float32, 4),   # SpecularColorBase rgb, w = ReflectionPower
+])  # 160 B, std430
 
 
 def _ver_ge(ver_str, major, minor):
@@ -141,7 +147,7 @@ def consolidate_geometry(models):
 
     GPU-FREE — safe to run on a worker thread / unit-test without a context.
     """
-    pos, nrm, uv, tan, idx = [], [], [], [], []
+    pos, nrm, uv, tan, col, idx = [], [], [], [], [], []
     table = []
     base_vertex = 0
     first_index = 0
@@ -171,6 +177,13 @@ def consolidate_geometry(models):
                       if has_u else np.zeros((nv, 2), np.float32))
             tan.append(np.ascontiguousarray(mesh.tangents, np.float32).reshape(-1, 3)
                        if has_t else np.zeros((nv, 3), np.float32))
+            # Vertex colour = the engine's vertexMask. A mesh without one reads
+            # WHITE (255), which keeps mix(ColorBase, Color1, mask.b) at the
+            # Color1 end — i.e. exactly the behaviour before this attribute.
+            mcol = getattr(mesh, 'colors', None)
+            col.append(np.ascontiguousarray(mcol, np.uint8).reshape(-1, 4)
+                       if mcol is not None and len(mcol) == nv
+                       else np.full((nv, 4), 255, np.uint8))
             idx.append(ix)
 
             # material_index can be None (mesh with no assigned material) — coerce
@@ -197,6 +210,7 @@ def consolidate_geometry(models):
         'normals':   _cat(nrm, 3, np.float32),
         'uvs':       _cat(uv, 2, np.float32),
         'tangents':  _cat(tan, 3, np.float32),
+        'colors':    _cat(col, 4, np.uint8),
         'indices':   (np.concatenate(idx) if idx else np.zeros((0,), np.uint32)).astype(np.uint32, copy=False),
         'table':     table,
         'by_model':  by_model,
@@ -304,6 +318,7 @@ layout(location=0) in vec3 a_position;
 layout(location=1) in vec3 a_normal;
 layout(location=2) in vec2 a_uv;
 layout(location=3) in vec3 a_tangent;
+layout(location=4) in vec4 a_color;   // vertexMask (aaa.fx): .b diffuse blend, .r spec/reflection, .a AO
 struct Inst { vec4 posScale; vec4 rotOverlay; };   // xyz=pos w=scale ; xyz=rot w=overlay
 layout(std430, binding=0) readonly buffer Instances { Inst insts[]; };
 layout(std430, binding=1) readonly buffer DrawMat  { uint drawMat[]; };  // per-draw material id (gl_DrawID)
@@ -312,6 +327,7 @@ out vec3 v_normalES;
 out vec3 v_tangentES;
 out vec2 v_uv;
 out float v_overlay;
+out vec4 v_mask;
 out vec3 v_wp;
 flat out uint v_mat;
 uniform vec4 u_clipPlane;   // world-space clip plane (planar water reflection); (0,0,0,1)=keep all
@@ -329,6 +345,7 @@ void main(){
     v_tangentES = gl_NormalMatrix * modelRot(a_tangent, I.rotOverlay.xyz);
     v_uv        = a_uv;
     v_overlay   = I.rotOverlay.w;
+    v_mask      = clamp(a_color, 0.0, 1.0);   // aaa.fx: saturate(input.vertexMask)
     v_mat       = drawMat[gl_DrawID];
     gl_Position = gl_ModelViewProjectionMatrix * vec4(wp, 1.0);
     // Clip geometry below the water plane out of the reflection pass (so
@@ -344,11 +361,14 @@ _GDR_FRAG = """
 #extension GL_ARB_bindless_texture : require
 struct Material {
     uvec2 hDiffuse; uvec2 hNormal; uvec2 hSpecular; uvec2 hEmission;
-    vec4 tint;      // rgb, w = alpha_mode (0/1/2)
+    uvec2 hReflection; uvec2 _pad;
+    vec4 tint;      // DiffuseColor1 rgb (HDR), w = alpha_mode (0/1/2)
     vec4 emissive;  // rgb, w = alpha_cutoff
-    vec4 specShin;  // rgb spec, w = shininess
+    vec4 specShin;  // SpecularColor1 rgb, w = shininess
     vec4 hasflags;  // has_diffuse, has_normal, has_specular, has_emission
     vec4 anim;      // anim_type, uspeed, vspeed, _
+    vec4 tintBase;  // DiffuseColorBase rgb, w = has_reflection
+    vec4 specBase;  // SpecularColorBase rgb, w = ReflectionPower
 };
 layout(std430, binding=2) readonly buffer Materials { Material mats[]; };
 uniform float u_time;    // seconds, for animated-UV scroll
@@ -364,6 +384,7 @@ in vec3 v_normalES;
 in vec3 v_tangentES;
 in vec2 v_uv;
 in float v_overlay;
+in vec4 v_mask;
 in vec3 v_wp;
 flat in uint v_mat;
 
@@ -397,7 +418,8 @@ void main(){
     vec4 diff = (m.hasflags.x > 0.5) ? texture(sampler2D(m.hDiffuse), uv) : vec4(1.0);
     float alpha = diff.a;
     if (int(m.tint.w) == 1 && alpha < m.emissive.w) discard;   // alpha-mask
-    vec3 base = diff.rgb * m.tint.rgb;
+    // aaa.fx GetDiffuseColor(): tex * lerp(DiffuseColorBase, DiffuseColor1, mask.b)
+    vec3 base = diff.rgb * mix(m.tintBase.rgb, m.tint.rgb, v_mask.b);
 
     vec3 N = normalize(v_normalES);
     if (u_flip_normal == 1) N = -N;
@@ -426,7 +448,15 @@ void main(){
     if (dot(N, V) < 0.0) N = -N;
 
     vec3 specMap = (m.hasflags.z > 0.5) ? texture(sampler2D(m.hSpecular), uv).rgb : vec3(1.0);
-    vec3 color = gl_LightModel.ambient.rgb * base;
+    // aaa.fx GetSpecularColor(): lerp(SpecularColorBase, specTex * SpecularColor1, mask.r)
+    vec3 specColor = mix(m.specBase.rgb, specMap * m.specShin.rgb, v_mask.r);
+
+    // Light quantities kept separate from material colours so the combine below
+    // is aaalighting.inc.fx's GetFinalShading() verbatim, and so the reflection
+    // term can be scaled by saturate(ambient + diffuse + specular).
+    vec3 ambientL = gl_LightModel.ambient.rgb;
+    vec3 diffuseL = vec3(0.0);
+    vec3 specularL = vec3(0.0);
     // Sun (light 0) visibility — computed once; drives both the sun-term shadow and
     // an overall darkening so shadowed models read as clearly as the terrain.
     vec4 sunLp = gl_LightSource[0].position;
@@ -437,12 +467,28 @@ void main(){
         vec3 L = normalize(lp.xyz - v_posES * lp.w);
         float ndl = max(dot(N, L), 0.0);
         float vis = (i == 0) ? sunVis : 1.0;   // only the sun (light 0) casts
-        color += base * gl_LightSource[i].diffuse.rgb * ndl * vis;
+        diffuseL += gl_LightSource[i].diffuse.rgb * ndl * vis;
         if (ndl > 0.0) {
             vec3 H = normalize(L + V);
             float s = pow(max(dot(N, H), 0.0), max(m.specShin.w, 1.0));
-            color += gl_LightSource[i].specular.rgb * m.specShin.rgb * specMap * s * vis;
+            specularL += gl_LightSource[i].specular.rgb * s * vis;
         }
+    }
+    // GetFinalShading: diffuseColor*(occlusion*ambient + diffuse) + specularColor*specular
+    vec3 color = base * (ambientL * v_mask.a + diffuseL) + specColor * specularL;
+
+    // Reflection cubemap (aaa.fx ~line 1027). Black-diffuse materials (glass,
+    // chrome, polished trim) carry ALL of their colour here — without this pass
+    // they render pure black, which is what made the CORP walls look broken.
+    if (m.tintBase.w > 0.5) {
+        mat3 eyeToWorld = mat3(gl_ModelViewMatrix[0].xyz,
+                               gl_ModelViewMatrix[1].xyz,
+                               gl_ModelViewMatrix[2].xyz);
+        vec3 Nw = normalize(N * eyeToWorld);   // v * M == transpose(M) * v
+        vec3 Vw = normalize(V * eyeToWorld);
+        vec3 refl = texture(samplerCube(m.hReflection), reflect(Vw, Nw)).rgb;
+        refl *= v_mask.r * m.specBase.w * clamp(ambientL + diffuseL + specularL, 0.0, 1.0);
+        color += specColor * refl;
     }
     // Deepen shadow so shadowed models read clearly; darkness fades with the
     // day/night strength (u_shadows_on) so it eases in/out synced to the sun.
@@ -522,7 +568,9 @@ _GDR_CAMDEPTH_FS = """
 #extension GL_ARB_bindless_texture : require
 struct Material {
     uvec2 hDiffuse; uvec2 hNormal; uvec2 hSpecular; uvec2 hEmission;
+    uvec2 hReflection; uvec2 _pad;
     vec4 tint; vec4 emissive; vec4 specShin; vec4 hasflags; vec4 anim;
+    vec4 tintBase; vec4 specBase;
 };
 layout(std430, binding=2) readonly buffer Materials { Material mats[]; };
 in vec2 v_uv;
@@ -570,7 +618,9 @@ _GDR_SUNDEPTH_FS = """
 #extension GL_ARB_bindless_texture : require
 struct Material {
     uvec2 hDiffuse; uvec2 hNormal; uvec2 hSpecular; uvec2 hEmission;
+    uvec2 hReflection; uvec2 _pad;
     vec4 tint; vec4 emissive; vec4 specShin; vec4 hasflags; vec4 anim;
+    vec4 tintBase; vec4 specBase;
 };
 layout(std430, binding=2) readonly buffer Materials { Material mats[]; };
 uniform int u_group;                             // 0 opaque 1-sided, 1 two-sided, 2 blend
@@ -713,6 +763,12 @@ class GPUDrivenRenderer:
             return b
         pos = _vbo(geo['positions']); nrm = _vbo(geo['normals'])
         uvb = _vbo(geo['uvs']); tanb = _vbo(geo['tangents'])
+
+        colb = int(g.glGenBuffers(1)); self.bufs.append(colb)
+        g.glBindBuffer(g.GL_ARRAY_BUFFER, colb)
+        _ca = np.ascontiguousarray(geo['colors'], np.uint8)
+        g.glBufferData(g.GL_ARRAY_BUFFER, _ca.nbytes, _ca, g.GL_STATIC_DRAW)
+
         idx = np.ascontiguousarray(geo['indices'], np.uint32)
         ibo = int(g.glGenBuffers(1)); self.bufs.append(ibo)
         g.glBindBuffer(g.GL_ELEMENT_ARRAY_BUFFER, ibo)
@@ -725,6 +781,10 @@ class GPUDrivenRenderer:
             g.glBindBuffer(g.GL_ARRAY_BUFFER, buf)
             g.glEnableVertexAttribArray(loc)
             g.glVertexAttribPointer(loc, comps, g.GL_FLOAT, g.GL_FALSE, 0, _z)
+        # attrib 4 = vertex colour, uint8 normalised to 0..1 by GL
+        g.glBindBuffer(g.GL_ARRAY_BUFFER, colb)
+        g.glEnableVertexAttribArray(4)
+        g.glVertexAttribPointer(4, 4, g.GL_UNSIGNED_BYTE, g.GL_TRUE, 0, _z)
         g.glBindBuffer(g.GL_ELEMENT_ARRAY_BUFFER, ibo)
         g.glBindVertexArray(0)
         g.glBindBuffer(g.GL_ARRAY_BUFFER, 0)
@@ -781,20 +841,27 @@ class GPUDrivenRenderer:
                 hn, fn = handle(slots.get('normal'))
                 hs, fs = handle(slots.get('specular'))
                 he, fe = handle(slots.get('emission'))
+                hr, fr = handle(slots.get('reflection'))
                 tint = p.get('tint', [1.0, 1.0, 1.0])
+                tbase = p.get('tint_base', tint)
                 emis = p.get('emissive', [0.0, 0.0, 0.0])
                 spec = p.get('spec_color', [0.3, 0.3, 0.3])
+                sbase = p.get('spec_base', [0.0, 0.0, 0.0])
                 alpha_mode = int(p.get('alpha_mode', 0))
                 two_sided = bool(p.get('two_sided', False))
                 rec = np.zeros(1, dtype=MAT_DTYPE)
                 rec['hDiffuse'] = hd; rec['hNormal'] = hn
                 rec['hSpecular'] = hs; rec['hEmission'] = he
+                rec['hReflection'] = hr
                 rec['tint'] = (tint[0], tint[1], tint[2], float(alpha_mode))
                 rec['emissive'] = (emis[0], emis[1], emis[2], float(p.get('alpha_cutoff', 0.5)))
                 rec['specShin'] = (spec[0], spec[1], spec[2], float(p.get('shininess', 32.0)))
                 rec['hasflags'] = (fd, fn, fs, fe)
                 rec['anim'] = (float(p.get('anim_type', 0)), float(p.get('uspeed', 0.0)),
                                float(p.get('vspeed', 0.0)), 0.0)
+                rec['tintBase'] = (tbase[0], tbase[1], tbase[2], fr)
+                rec['specBase'] = (sbase[0], sbase[1], sbase[2],
+                                   float(p.get('refl_power', 1.0)))
                 # render group: 2=blend, else 1 if two-sided (foliage/grates), else 0.
                 group = 2 if alpha_mode == 2 else (1 if two_sided else 0)
                 key_to_id[(path, mat_idx)] = len(records)

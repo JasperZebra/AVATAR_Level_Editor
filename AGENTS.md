@@ -168,6 +168,8 @@ reference: <reference to this change in the docs if applicable>
 | `simplified_map_editor.py` | `tests/test_cancel_loading.py` | — | AST scan of the real source: every `cancel_loading(...)` call passes BOTH `thread` and `dialog` (the `load_complete_level` site passed only the dialog, so clicking Cancel mid-load raised `TypeError` out of a Qt signal handler and killed the editor), plus `thread=None` tolerated and no exception ever escapes the handler; editor via `SimplifiedMapEditor.__new__` — excluded from `--cov` |
 | `pak_archive.py` | `tests/test_pak_archive.py` | — | PAK! v4 round trip is **byte-identical** (not merely content-identical) when order + FILETIMEs are preserved; changed-only packing picks exactly the edited files and never packs `*.fcb.converted.xml` / `*.bak`; malformed archives raise `PakError`; pure-Python LZO1X decoder matches the DLL. Runs without game data; the compressed cases skip when minilzo is absent — excluded from `--cov` |
 | `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
+| `canvas/texture_loader.py` + `canvas/gpu_driven_renderer.py` | `tests/test_material_vertex_mask.py` | — | The black/too-dark model fix: HDR tints survive the parse (no clamp to 1), `DiffuseColorBase` defaults to `DiffuseColor1` so the mask lerp is a no-op when unauthored, `SpecularColorBase`/`ReflectionPower` are read, `consolidate_geometry` packs vertex colours and defaults a colourless mesh to **white** (keeps the pre-change look), and `MAT_DTYPE` matches every GLSL `struct Material` member-for-member with 16-byte-aligned vec4s — drift there silently reads materials from the wrong bytes. XBMs built in-memory; GDR loaded by **file path** — excluded from `--cov` |
+| `canvas/texture_loader.py` | `tests/test_cubemap_decode.py` | — | `decode_xbt_cubemap_to_rgba`: six DISTINCT faces (not face 0 six times — what PIL alone returns), face stride is the whole mip chain (a 1-mip and a 4-mip cube of the same size decode identically), non-cubemaps and short payloads return None so the caller falls back to no reflection instead of handing GL a short buffer. Synthetic DXT1 cubemap DDS built from scratch, no game data — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -2926,6 +2928,87 @@ The fragment shader reads the **same lights** the fixed-function path sets up �
 - **Geometry normals were INWARD — fixed (May 2026).** XBG is CW-wound, but `mesh.compute_face_normals` used `cross(e1,e2)` which yields **inward** normals for CW winding. The `if(dot(N,V)<0) N=-N` two-sided hack masked this in the diffuse term (always lit) but the normal map was then applied/flipped in an inverted frame → globally inverted bump detail ("weird normals"). Now uses `cross(e2,e1)` → outward (unit-verified: a CW tri facing the viewer → `+Z`). If bump detail STILL looks inverted after this, the remaining suspect is the normal-map **green-channel (Y) convention** — flip `nTS.y` in both fragment shaders (1 line each).
 - **Normal-map TBN = screen-space derivatives (Schüler cotangent frame), May 2026.** Both the universal and GPU-driven fragment shaders now build the tangent frame per-fragment from `dFdx/dFdy(v_posES)` + `dFdx/dFdy(uv)` instead of a precomputed tangent + `cross(N,T)`. Reason: the editor's UV tangents had **no handedness sign**, so mirrored-UV regions inverted ("weird normals"). The derivative frame gets handedness automatically and needs no tangent attribute. **Verified the DXT5-GA decode matches the Blender addon** (`xbg-re-import/-Current/V11/script/modules/nodes.py` `normal_map`: X=Alpha, Y=Green, Z=√(1−X²−Y²), no Y-flip — same as `texture_loader._decode_dxt5_ga_normal_map`). The `tangents` attribute is still plumbed but now unused by lighting (could be removed).
 - **Still TODO:** the Unlit additive / Glass looks (the shader treats everything as the lit aaa path — Unlit emissive/additive and Glass fresnel/reflection aren't special-cased yet).
+
+### The base colour follows aaa.fx, not `DiffuseColor1` alone (July 2026)
+
+User report: "some models have black textures", narrowed to **wall models on
+Blue Lagoon**. Texture *loading* was never the problem — a sweep of 150 random
+Avatar models (222 unique materials) through the real `_load_xbg_textures` path
+resolved and decoded a diffuse for **216**, with 1 missing `.xbm`, 3 authored
+all-black diffuse textures and 2 black tints. The bug was in how the material
+was combined.
+
+**The game ships its own shader source** — `data/engine/shaders/meta/aaa.fx`
+(plus `aaalighting.inc.fx`) — so this is not reverse-engineered. Read it before
+changing anything here; it is the ground truth, and the Blender addon's
+`nodes_avatar.py` is a transcription of the same file.
+
+```hlsl
+// aaa.fx : LightingPS + GetDiffuseColor + GetSpecularColor
+mask     = saturate(input.vertexMask);          // the per-vertex COLOR attribute
+#ifdef MASK_MAP
+mask    *= tex2D(MaskTexture1, ...);
+#endif
+diffuse  = diffuseMapBase * lerp(DiffuseColorBase, DiffuseColor1, mask.b);
+specular = lerp(SpecularColorBase, specularMap * SpecularColor1, mask.r);
+reflect  = texCUBE(ReflectionTexture, reflect(viewDirWS, normalWS)) * mask.r
+           * saturate(ambient + diffuse + specular) * ReflectionPower;
+// aaalighting.inc.fx : GetFinalShading
+final    = diffuseColor * (occlusion*ambient + diffuse*shadow)
+         + specularColor * (specular*shadow)
+         + specularColor * reflect;             // occlusion = vertexMask.a
+```
+
+The editor computed `base = diffuse.rgb * clamp(DiffuseColor1, 0, 1)`. Three
+gaps, measured across every material in both games (1,583 Avatar / 2,190 FC2):
+
+1. **The clamp darkened every HDR tint.** The game authors `DiffuseColor1` up
+   to 2.0 — **288 Avatar (18%) / 280 FC2 (13%)** materials exceed 1.0. The CORP
+   wall body (`MTREMBLAY-M-1606200966841677`) is (1.122, 1.161, 1.216), so it
+   rendered **22% too dark**. `spec_color` was clamped the same way. Both now
+   clamp at 0 only.
+2. **`DiffuseColorBase` was never read**, so every material rendered at the
+   `mask.b == 1` end. 19 Avatar / 16 FC2 materials author
+   `DiffuseColor1 = (0,0,0)` and carry their colour in `DiffuseColorBase`; the
+   mask blend is now real, driven by the vertex colour.
+3. **No reflection cubemap.** **194 Avatar (12%) / 200 FC2 (9%)** materials
+   reference one, and glass / chrome / polished trim author a black diffuse
+   *deliberately* because `texCUBE` is where all their colour comes from.
+   Without it they can only ever be black.
+
+**Vertex colour is now a real vertex attribute** (`GLTFMesh.colors`, `(N,4)`
+uint8 straight from the XBG `COLOR` component, GL-normalised — 4 bytes/vertex,
+not 16). Universal path: `ATTR_COLOR = 8` (4-7 are the instance attribs).
+GPU-driven path: `layout(location=4)` (its instances come from an SSBO, so 4 is
+free). **A mesh with no vertex colour must default to WHITE** — both paths do,
+in `consolidate_geometry` and via `glVertexAttrib4f` on the disabled attribute.
+White keeps `mix(Base, Color1, mask.b)` at the `Color1` end, i.e. byte-identical
+to the behaviour before the attribute existed, so this change is a no-op on the
+~2/3 of models whose vertex colour is white and only bites where the data
+actually varies (65 of 200 sampled models have varying blue; 20 average < 128).
+
+**Cubemaps** (`decode_xbt_cubemap_to_rgba`): one DDS, six faces, each with its
+OWN full mip chain, consecutive in +X,-X,+Y,-Y,+Z,-Z order. PIL only ever hands
+back the first surface, so each face's mip 0 is sliced out and re-wrapped in a
+synthetic single-surface header (mipcount 1, `dwCaps2` 0, `DDSD_MIPMAPCOUNT` and
+`COMPLEX|MIPMAP` cleared). All 11 Avatar cubemaps decode. They are uploaded as
+`GL_TEXTURE_CUBE_MAP` on **texture unit 4** (universal) / as a bindless
+`samplerCube` (GDR) and share `_xbt_gl_cache` under a `(path, 'cube')` key.
+
+**`MAT_DTYPE` grew to 160 B** — `hReflection` + a `uvec2 _pad` (std430 needs the
+first vec4 16-byte aligned; five uvec2 alone end at 40) + `tintBase` (rgb, w =
+has_reflection) + `specBase` (rgb, w = ReflectionPower). **The struct is
+declared in THREE GLSL sources** (main fragment + both depth programs) and is
+uploaded raw — a mismatch doesn't error, it reads whole materials out of the
+wrong bytes. `tests/test_material_vertex_mask.py` pins the parity.
+
+**What this does NOT fix, by design:** a surface whose `DiffuseColor1` is black
+*and* whose vertex colour is white *and* which has no cubemap is black in the
+engine too — the CORP wall's base trim
+(`MTREMBLAY-M-1506200943848874`, 224 of 1,568 tris) is exactly that, and gets
+its look from the specular map alone. Don't "fix" it by forcing
+`DiffuseColorBase`; that deviates from the shader. Verify against `aaa.fx`
+first.
 
 ### Animated UVs (Unlit / FX scroll)
 

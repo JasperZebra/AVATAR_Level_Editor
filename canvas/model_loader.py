@@ -160,6 +160,12 @@ class GLTFMesh:
         self.uvs = None
         self.indices = None
         self.tangents = None          # per-vertex tangents (GLSL normal mapping)
+        # (N,4) uint8 RGBA vertex colour = the engine's `vertexMask`
+        # (aaa.fx: mask = saturate(input.vertexMask) [* MaskTexture1]).
+        # .b blends DiffuseColorBase -> DiffuseColor1, .r blends
+        # SpecularColorBase -> SpecularColor1 and gates the reflection,
+        # .a is baked ambient occlusion. None = treat as all-white.
+        self.colors = None
         self.vao = None
         self.vbo_vertices = None
         self.vbo_normals = None
@@ -1442,6 +1448,50 @@ class ModelLoader:
                 print(f"  XBT upload failed ({rel}): {e}")
                 return 0, False
 
+        _CUBE_FACES = (GL_TEXTURE_CUBE_MAP_POSITIVE_X, GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+                       GL_TEXTURE_CUBE_MAP_POSITIVE_Y, GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+                       GL_TEXTURE_CUBE_MAP_POSITIVE_Z, GL_TEXTURE_CUBE_MAP_NEGATIVE_Z)
+
+        def _upload_cube(rel):
+            """Decode + upload a reflection cubemap (GL_TEXTURE_CUBE_MAP).
+            Shares _xbt_gl_cache with the 2D path — a handful of cubemaps are
+            reused across hundreds of materials. Returns the GL id, or 0."""
+            if not rel:
+                return 0
+            try:
+                full = tl.resolve_xbt_full_path(rel, mat_name)
+                if not full:
+                    return 0
+                key = (os.path.normcase(full), 'cube')
+                cached = self._xbt_gl_cache.get(key)
+                if cached is not None:
+                    return cached[0]
+                res = tl.decode_xbt_cubemap_to_rgba(full)
+                if not res:
+                    return 0
+                w, h, faces = res
+                if len(faces) != 6 or any(len(f) < w * h * 4 for f in faces):
+                    return 0
+                tid = glGenTextures(1)
+                glBindTexture(GL_TEXTURE_CUBE_MAP, tid)
+                for target, data in zip(_CUBE_FACES, faces):
+                    glTexImage2D(target, 0, GL_RGBA, w, h, 0,
+                                 GL_RGBA, GL_UNSIGNED_BYTE, data)
+                glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
+                glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+                glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+                glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+                glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
+                glGenerateMipmap(GL_TEXTURE_CUBE_MAP)
+                glBindTexture(GL_TEXTURE_CUBE_MAP, 0)
+                # (tex_id, had_alpha, w, h, raw) — same shape the 2D path caches,
+                # so clear_cache's shared-id delete finds it too.
+                self._xbt_gl_cache[key] = (tid, False, w, h, None)
+                return tid
+            except Exception as e:
+                print(f"  cubemap upload failed ({rel}): {e}")
+                return 0
+
         bound = 0
         for mat_idx, mat_name in enumerate(names):
             xbm = None
@@ -1452,7 +1502,13 @@ class ModelLoader:
 
             # ── Per-material render properties (fixed-function fallback) ──
             if xbm is not None:
-                dr, dg, db = (max(0.0, min(1.0, c)) for c in xbm.diffuse_color)
+                # NOT clamped to 1: the game authors HDR tints up to 2.0 (288 of
+                # 1583 Avatar and 280 of 2190 FC2 materials exceed 1), and the old
+                # min(1.0, c) silently darkened every one of them. The
+                # fixed-function fallback clamps on its own; the GLSL paths want
+                # the real value.
+                dr, dg, db = (max(0.0, c) for c in xbm.diffuse_color)
+                br, bg, bb = (max(0.0, c) for c in xbm.diffuse_color_base)
                 model.base_color_factors[mat_idx] = [dr, dg, db, 1.0]
                 if xbm.alpha_blend_enabled:
                     model.alpha_modes[mat_idx] = 'BLEND'
@@ -1465,7 +1521,9 @@ class ModelLoader:
                     er, eg, eb = xbm.illumination_color
                     mx = max(er, eg, eb, 1.0)
                     model.emissive_factors[mat_idx] = [er / mx, eg / mx, eb / mx]
-                spec_color = [max(0.0, min(1.0, c)) for c in xbm.specular_color]
+                spec_color = [max(0.0, c) for c in xbm.specular_color]
+                spec_base = [max(0.0, c) for c in xbm.specular_color_base]
+                refl_power = max(0.0, float(getattr(xbm, 'reflection_power', 1.0)))
                 shininess = max(1.0, min(128.0, float(xbm.specular_power)))
                 two_sided = bool(xbm.two_sided)
                 # Animated UVs (Unlit/FX scroll) — AnimType/USpeed/VSpeed live in
@@ -1482,17 +1540,21 @@ class ModelLoader:
             else:
                 model.base_color_factors[mat_idx] = [1.0, 1.0, 1.0, 1.0]
                 model.alpha_modes.setdefault(mat_idx, 'OPAQUE')
+                dr = dg = db = br = bg = bb = 1.0
                 spec_color, shininess = [0.3, 0.3, 0.3], 32.0
+                spec_base, refl_power = [0.0, 0.0, 0.0], 1.0
                 anim_type, uspeed, vspeed = 0, 0.0, 0.0
                 two_sided = False
 
-            # ── All four texture slots (diffuse/normal/specular/emission) ──
+            # ── All five texture slots (diffuse/normal/specular/emission/reflection) ──
             d_id, d_alpha = _upload(xbm.textures.get('diffuse') if xbm else None, False, store_raw=True)
             n_id, _ = _upload(xbm.textures.get('normal') if xbm else None, True)
             s_id, _ = _upload(xbm.textures.get('specular') if xbm else None, False)
             e_id, _ = _upload(xbm.textures.get('emission') if xbm else None, False)
+            r_id = _upload_cube(xbm.textures.get('reflection') if xbm else None)
             model.mat_textures[mat_idx] = {'diffuse': d_id, 'normal': n_id,
-                                           'specular': s_id, 'emission': e_id}
+                                           'specular': s_id, 'emission': e_id,
+                                           'reflection': r_id}
             if d_id:
                 model.textures[mat_idx] = d_id            # fallback renderer binds diffuse
                 model.textures_has_alpha[mat_idx] = d_alpha
@@ -1503,11 +1565,13 @@ class ModelLoader:
                 emissive = [1.0, 1.0, 1.0]   # emission texture but no illum colour → show it (mirror gltf path)
             if anim_type or uspeed or vspeed:
                 self.has_animated_materials = True
-            bc = model.base_color_factors[mat_idx]
             model.mat_params[mat_idx] = {
-                'tint': [bc[0], bc[1], bc[2]],
+                'tint': [dr, dg, db],
+                'tint_base': [br, bg, bb],
                 'emissive': emissive,
                 'spec_color': spec_color,
+                'spec_base': spec_base,
+                'refl_power': refl_power,
                 'shininess': shininess,
                 'alpha_mode': _AMODE.get(model.alpha_modes.get(mat_idx, 'OPAQUE'), 0),
                 'alpha_cutoff': float(model.alpha_cutoffs.get(mat_idx, 0.5)),
@@ -2796,14 +2860,18 @@ class ModelLoader:
             nrm = _buf(GL_ARRAY_BUFFER, mesh.normals, np.float32) if mesh.normals is not None else 0
             uv  = _buf(GL_ARRAY_BUFFER, mesh.uvs, np.float32) if mesh.uvs is not None else 0
             tan = _buf(GL_ARRAY_BUFFER, mesh.tangents, np.float32) if mesh.tangents is not None else 0
+            # Vertex colour (the engine's vertexMask) as raw uint8 — GL normalises
+            # it to 0..1 on the way in, so it costs 4 bytes/vertex, not 16.
+            col = (_buf(GL_ARRAY_BUFFER, mesh.colors, np.uint8)
+                   if getattr(mesh, 'colors', None) is not None else 0)
             idx = np.ascontiguousarray(mesh.indices, dtype=np.uint32)
             ibo = glGenBuffers(1)
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo)
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx.nbytes, idx, GL_STATIC_DRAW)
             glBindBuffer(GL_ARRAY_BUFFER, 0)
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
-            vao = self._build_mesh_vao(pos, nrm, uv, tan, ibo)
-            mesh._vbo = {'pos': pos, 'nrm': nrm, 'uv': uv, 'tan': tan,
+            vao = self._build_mesh_vao(pos, nrm, uv, tan, ibo, col)
+            mesh._vbo = {'pos': pos, 'nrm': nrm, 'uv': uv, 'tan': tan, 'col': col,
                          'ibo': int(ibo), 'count': int(len(idx)), 'vao': int(vao)}
             return mesh._vbo
         except Exception as e:
@@ -2811,9 +2879,9 @@ class ModelLoader:
             mesh._vbo = False
             return False
 
-    def _build_mesh_vao(self, pos, nrm, uv, tan, ibo):
+    def _build_mesh_vao(self, pos, nrm, uv, tan, ibo, col=0):
         """Bake this mesh's whole attribute layout into a VAO: per-vertex attribs
-        0-3 (from the mesh VBOs) + per-instance attribs 4-7 (from the shared
+        0-3 + 8 (from the mesh VBOs) + per-instance attribs 4-7 (from the shared
         instance VBO, divisor 1). A draw then needs only glBindVertexArray +
         glDrawElementsInstanced. Returns the VAO id, or 0 (caller uses the manual
         per-draw attrib path). VAOs orphan-safe: re-glBufferData'ing the instance
@@ -2821,8 +2889,8 @@ class ModelLoader:
         if not self._vao_enabled or self._vao_supported is False:
             return 0
         from model_shader import (ATTR_POSITION, ATTR_NORMAL, ATTR_UV, ATTR_TANGENT,
-                                   ATTR_INST_POS, ATTR_INST_ROT, ATTR_INST_SCALE,
-                                   ATTR_INST_OVERLAY, INSTANCE_STRIDE)
+                                   ATTR_COLOR, ATTR_INST_POS, ATTR_INST_ROT,
+                                   ATTR_INST_SCALE, ATTR_INST_OVERLAY, INSTANCE_STRIDE)
         try:
             if self._instance_vbo is None:
                 self._instance_vbo = int(glGenBuffers(1))   # must exist; VAO captures it
@@ -2844,6 +2912,16 @@ class ModelLoader:
                 glBindBuffer(GL_ARRAY_BUFFER, tan)
                 glEnableVertexAttribArray(ATTR_TANGENT)
                 glVertexAttribPointer(ATTR_TANGENT, 3, GL_FLOAT, GL_FALSE, 0, _z)
+            if col:
+                glBindBuffer(GL_ARRAY_BUFFER, col)
+                glEnableVertexAttribArray(ATTR_COLOR)
+                glVertexAttribPointer(ATTR_COLOR, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, _z)
+            else:
+                # Baked into the VAO: a mesh with no vertex colour reads white,
+                # so mix(base, color1, mask.b) lands on DiffuseColor1 exactly as
+                # it did before this attribute existed.
+                glDisableVertexAttribArray(ATTR_COLOR)
+                glVertexAttrib4f(ATTR_COLOR, 1.0, 1.0, 1.0, 1.0)
             st = INSTANCE_STRIDE
             glBindBuffer(GL_ARRAY_BUFFER, self._instance_vbo)
             glEnableVertexAttribArray(ATTR_INST_POS)
@@ -2931,7 +3009,7 @@ class ModelLoader:
         in a SINGLE glDrawElementsInstanced call. The per-instance transform and
         selection overlay come from attribs 4-7 (bound by _setup_instance_attribs);
         the shader replicates the legacy glRotatef order exactly."""
-        from model_shader import ATTR_POSITION, ATTR_NORMAL, ATTR_UV, ATTR_TANGENT
+        from model_shader import ATTR_POSITION, ATTR_NORMAL, ATTR_UV, ATTR_TANGENT, ATTR_COLOR
         vbo = self._ensure_mesh_vbo(mesh)
         if not vbo:
             return
@@ -2949,8 +3027,12 @@ class ModelLoader:
             glEnable(GL_CULL_FACE)
 
         tn = p['tint']; glUniform3f(sh.u('u_tint'), tn[0], tn[1], tn[2])
+        tb = p.get('tint_base', tn); glUniform3f(sh.u('u_tint_base'), tb[0], tb[1], tb[2])
         em = p['emissive']; glUniform3f(sh.u('u_emissive'), em[0], em[1], em[2])
         sc = p['spec_color']; glUniform3f(sh.u('u_spec_color'), sc[0], sc[1], sc[2])
+        sb = p.get('spec_base', (0.0, 0.0, 0.0))
+        glUniform3f(sh.u('u_spec_base'), sb[0], sb[1], sb[2])
+        glUniform1f(sh.u('u_refl_power'), float(p.get('refl_power', 1.0)))
         glUniform1f(sh.u('u_shininess'), p['shininess'])
         glUniform1i(sh.u('u_alpha_mode'), p['alpha_mode'])
         glUniform1f(sh.u('u_alpha_cutoff'), p['alpha_cutoff'])
@@ -2965,6 +3047,7 @@ class ModelLoader:
 
         d = texs.get('diffuse', 0); n = texs.get('normal', 0)
         s = texs.get('specular', 0); e = texs.get('emission', 0)
+        r = texs.get('reflection', 0)
         has_n = 0 if self.dbg_no_normal else (1 if (n and vbo['nrm'] and vbo['tan']) else 0)
         has_s = 0 if self.dbg_no_spec else (1 if s else 0)
         has_e = 0 if self.dbg_no_emission else (1 if e else 0)
@@ -2972,10 +3055,12 @@ class ModelLoader:
         glUniform1i(sh.u('u_has_normal'), has_n)
         glUniform1i(sh.u('u_has_specular'), has_s)
         glUniform1i(sh.u('u_has_emission'), has_e)
+        glUniform1i(sh.u('u_has_reflection'), 1 if r else 0)
         glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, d or 0)
         glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, n or 0)
         glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, s or 0)
         glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, e or 0)
+        glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_CUBE_MAP, r or 0)
         glActiveTexture(GL_TEXTURE0)
 
         _z = ctypes.c_void_p(0)
@@ -3009,6 +3094,15 @@ class ModelLoader:
             glVertexAttribPointer(ATTR_TANGENT, 3, GL_FLOAT, GL_FALSE, 0, _z)
         else:
             glDisableVertexAttribArray(ATTR_TANGENT)
+        if vbo.get('col'):
+            glBindBuffer(GL_ARRAY_BUFFER, vbo['col'])
+            glEnableVertexAttribArray(ATTR_COLOR)
+            glVertexAttribPointer(ATTR_COLOR, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, _z)
+        else:
+            # A disabled attribute reads its constant; white keeps the
+            # Base->Color1 mix at the Color1 end (the pre-vertexMask behaviour).
+            glDisableVertexAttribArray(ATTR_COLOR)
+            glVertexAttrib4f(ATTR_COLOR, 1.0, 1.0, 1.0, 1.0)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo['ibo'])
 
         # ONE draw for every copy of this mesh. Transform + overlay per instance
@@ -3024,7 +3118,7 @@ class ModelLoader:
         material backface cull + alpha-mask discard + animated-UV offset so the
         depth silhouette is identical to what the color pass will shade; that's
         what lets the color pass early-Z with GL_LEQUAL against this depth."""
-        from model_shader import ATTR_POSITION, ATTR_NORMAL, ATTR_UV, ATTR_TANGENT
+        from model_shader import ATTR_POSITION, ATTR_NORMAL, ATTR_UV, ATTR_TANGENT, ATTR_COLOR
         vbo = self._ensure_mesh_vbo(mesh)
         if not vbo:
             return
@@ -3072,9 +3166,10 @@ class ModelLoader:
             glVertexAttribPointer(ATTR_UV, 2, GL_FLOAT, GL_FALSE, 0, _z)
         else:
             glDisableVertexAttribArray(ATTR_UV)
-        # Normal/tangent aren't declared by the depth program.
+        # Normal/tangent/colour aren't declared by the depth program.
         glDisableVertexAttribArray(ATTR_NORMAL)
         glDisableVertexAttribArray(ATTR_TANGENT)
+        glDisableVertexAttribArray(ATTR_COLOR)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo['ibo'])
 
         glDrawElementsInstanced(GL_TRIANGLES, vbo['count'], GL_UNSIGNED_INT, _z, n_instances)
@@ -3097,7 +3192,7 @@ class ModelLoader:
 
         If the depth program isn't available the color pass falls back to a plain
         GL_LESS depth-write pass (correct, just without the overdraw savings)."""
-        from model_shader import ATTR_POSITION, ATTR_NORMAL, ATTR_UV, ATTR_TANGENT
+        from model_shader import ATTR_POSITION, ATTR_NORMAL, ATTR_UV, ATTR_TANGENT, ATTR_COLOR
         sh = self._model_shader
         anim_t = time.monotonic() - self._anim_t0   # elapsed seconds for UV scroll
 
@@ -3152,6 +3247,7 @@ class ModelLoader:
         glUniform1i(sh.u('u_normal'), 1)
         glUniform1i(sh.u('u_specular'), 2)
         glUniform1i(sh.u('u_emission'), 3)
+        glUniform1i(sh.u('u_reflection'), 4)   # samplerCube, its own unit
         glUniform3f(sh.u('u_overlay_color'), 0.35, 0.50, 1.0)
         glUniform1i(sh.u('u_unlit'), 1 if self.dbg_unlit else 0)   # debug A/B
         glUniform1f(sh.u('u_night'), float(self.night_factor))     # bio emission scale
@@ -3202,7 +3298,7 @@ class ModelLoader:
         # Tear down every vertex/instance attrib so nothing (esp. the divisors)
         # leaks into the fixed-function fallback or the next frame.
         self._disable_instance_attribs()
-        for loc in (ATTR_POSITION, ATTR_NORMAL, ATTR_UV, ATTR_TANGENT):
+        for loc in (ATTR_POSITION, ATTR_NORMAL, ATTR_UV, ATTR_TANGENT, ATTR_COLOR):
             glDisableVertexAttribArray(loc)
         glDisable(GL_CULL_FACE)          # restore (other passes manage their own)
 
