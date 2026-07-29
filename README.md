@@ -33,14 +33,15 @@ A comprehensive level editor for modifying **Avatar: The Game** and **Far Cry 2*
 2. Level folders and files will be automatically read, loaded and converted as needed.
 3. Select the level you want to load into the editor from the UI screen
 
-#### Choosing your game data (Avatar)
+#### Choosing your game data
 
-In the level selector, **Change Game Data...** asks which of the two you want:
+In the level selector, **Change Game Data...** asks which of the two you want —
+the same question in both games:
 
-- **PAK Archive...** — pick an archive such as `patch.pak`. The editor unpacks
-  it into a folder of the same name beside it (`patch.pak` → `patch/`) and
-  selects that folder automatically, so you don't need an external tool to
-  unpack the game first.
+- **PAK Archive...** *(Avatar)* — pick an archive such as `patch.pak`. The
+  editor unpacks it into a folder of the same name beside it (`patch.pak` →
+  `patch/`) and selects that folder automatically, so you don't need an external
+  tool to unpack the game first.
 - **Unpacked Folder...** — pick a folder you have already extracted, containing
   the `worlds` and/or `levels` subdirectories.
 
@@ -48,9 +49,10 @@ Both end up at the same place: the editor always works against a folder, and
 the archive is only how the data arrives. Whichever you picked last becomes the
 default button next time.
 
-*(Far Cry 2 ships `.fat`/`.dat` archives, which aren't supported, so it skips
-the question — that button stays **Change Patch Folder...** and browses for a
-folder as before.)*
+*(Far Cry 2 ships `.fat`/`.dat` archives instead. The button is there for it too,
+but unpacking them isn't implemented yet — their index stores only a hash per
+file, with no names — so for now use **Unpacked Folder...** with a folder you
+extracted using an external tool.)*
 
 When you're finished editing, **File ▸ 📦 Repack Patch Folder to .pak...**
 builds an archive again, with two modes:

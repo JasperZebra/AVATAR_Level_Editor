@@ -1196,16 +1196,13 @@ class LevelSelectorDialog(QDialog):
         
         patch_info_layout.addSpacing(10)
         
-        # Change Game Data button.  In Avatar mode it offers BOTH sources — a
-        # .pak archive (unpacked on selection) or an already-unpacked patch
-        # folder — so the label can't name just one; FC2 ships .fat/.dat, which
-        # we can't read, so it goes straight to the folder browser.
-        change_folder_btn = QPushButton(
-            "Change Patch Folder..." if self.game_mode == "farcry2"
-            else "Change Game Data...")
+        # Change Game Data button — SAME for both games (user rule: every
+        # feature applies to Avatar and FC2 alike). It offers an archive or an
+        # already-unpacked patch folder, so the label can't name just one.
+        change_folder_btn = QPushButton("Change Game Data...")
         change_folder_btn.setMaximumWidth(180)
         change_folder_btn.setToolTip(
-            "Select the patch folder"
+            "Choose a .fat archive or an already-unpacked patch folder"
             if self.game_mode == "farcry2" else
             "Choose a .pak archive (unpacked on selection) or an "
             "already-unpacked patch folder")
@@ -1872,19 +1869,22 @@ class PatchFolderManager:
         way the result is a FOLDER: a pak is unpacked and its output folder
         becomes the patch folder, so everything downstream is unchanged.
 
-        Far Cry 2 ships ``.fat``/``.dat``, which we cannot read, so it goes
-        straight to the folder browser with no prompt.
+        BOTH games get the same chooser — user rule: every feature applies to
+        Avatar AND Far Cry 2.  Only the archive half differs, because the two
+        games ship different containers: Avatar ``.pak`` (supported) and FC2
+        ``.fat``/``.dat`` (Dunia FAT v5, reader not built yet — picking it
+        explains that rather than pretending the option isn't there).
 
         Routing this through the ONE method every caller already uses (level
         selector, first-run prompt, menu handler) means no caller changes and
-        still no second "load a pak" action anywhere in the UI — the choice
-        lives INSIDE this method, not as a rival entry point.
+        still no second "load an archive" action anywhere in the UI — the
+        choice lives INSIDE this method, not as a rival entry point.
         """
-        if self.game_mode == "farcry2":
-            return self._select_patch_folder_from_folder()
-
         choice = self._ask_data_source()
-        if choice == 'pak':
+        if choice == 'archive':
+            if self.game_mode == "farcry2":
+                self._explain_fc2_archive_unsupported()
+                return False
             folder = self._select_patch_folder_from_pak()
             if not folder:
                 return False
@@ -1896,31 +1896,45 @@ class PatchFolderManager:
             return self._select_patch_folder_from_folder()
         return False                        # cancelled
 
-    def _ask_data_source(self):
-        """Ask whether to load a .pak or an already-unpacked folder.
+    # Per-game archive wording. The flow is identical for both games; only the
+    # container name differs, so the labels are data rather than a code branch.
+    _ARCHIVE_LABEL = {'farcry2': 'FAT Archive...'}
+    _ARCHIVE_BLURB = {
+        'farcry2': "FAT archive — pick a .fat file (Far Cry 2's container). "
+                   "Not supported yet; see below.",
+    }
 
-        Returns 'pak', 'folder' or None (cancelled). Defaults to whichever the
-        user picked last time, so the common case is one Enter press.
+    def _archive_label(self):
+        return self._ARCHIVE_LABEL.get(self.game_mode, 'PAK Archive...')
+
+    def _ask_data_source(self):
+        """Ask whether to load an archive or an already-unpacked folder.
+
+        Returns 'archive', 'folder' or None (cancelled). Defaults to whichever
+        the user picked last time, so the common case is one Enter press.
         """
+        blurb = self._ARCHIVE_BLURB.get(
+            self.game_mode,
+            "PAK archive — pick a .pak file; it is unpacked and the resulting "
+            "folder is used.")
         box = QMessageBox(self.parent)
         box.setWindowTitle("Select Game Data")
         box.setIcon(QMessageBox.Question)
         box.setText("Where should the level editor read the game data from?")
         box.setInformativeText(
-            "PAK archive — pick a .pak file; it is unpacked and the resulting "
-            "folder is used.\n\n"
+            blurb + "\n\n"
             "Unpacked folder — pick a folder that already contains 'worlds' "
             "and/or 'levels'."
         )
-        pak_btn = box.addButton("PAK Archive...", QMessageBox.AcceptRole)
+        arc_btn = box.addButton(self._archive_label(), QMessageBox.AcceptRole)
         dir_btn = box.addButton("Unpacked Folder...", QMessageBox.AcceptRole)
         box.addButton(QMessageBox.Cancel)
-        box.setDefaultButton(dir_btn if self.last_data_source == 'folder' else pak_btn)
+        box.setDefaultButton(dir_btn if self.last_data_source == 'folder' else arc_btn)
         box.exec()
 
         clicked = box.clickedButton()
-        if clicked is pak_btn:
-            choice = 'pak'
+        if clicked is arc_btn:
+            choice = 'archive'
         elif clicked is dir_btn:
             choice = 'folder'
         else:
@@ -1929,6 +1943,26 @@ class PatchFolderManager:
         self.last_data_source = choice
         _spf_log(f"data source chosen: {choice}")
         return choice
+
+    def _explain_fc2_archive_unsupported(self):
+        """FC2 offers the archive button for parity, but the reader isn't built.
+
+        Say so plainly instead of hiding the option — hiding it is what made
+        the two games' setup differ in the first place. The blocker is real and
+        worth stating: a Dunia FAT v5 index is 16 bytes per entry with NO
+        filenames, so unpacking alone yields hash-named files the level scanner
+        can't use.
+        """
+        QMessageBox.information(
+            self.parent,
+            "Far Cry 2 Archives",
+            "Far Cry 2 ships .fat/.dat archives (Dunia FAT v5), which the "
+            "editor cannot unpack yet.\n\n"
+            "Its index stores only a hash per file — no names — so unpacking "
+            "would produce files the level scanner can't identify. Filename "
+            "recovery still has to be solved.\n\n"
+            "For now, unpack the archive with an external tool and choose "
+            "\"Unpacked Folder...\" instead.")
 
     def _select_patch_folder_from_folder(self):
         """Browse for an already-unpacked patch folder. True when one was set."""

@@ -169,7 +169,7 @@ reference: <reference to this change in the docs if applicable>
 | `pak_archive.py` | `tests/test_pak_archive.py` | — | PAK! v4 round trip is **byte-identical** (not merely content-identical) when order + FILETIMEs are preserved; changed-only packing picks exactly the edited files and never packs `*.fcb.converted.xml` / `*.bak`; malformed archives raise `PakError`; pure-Python LZO1X decoder matches the DLL. Runs without game data; the compressed cases skip when minilzo is absent — excluded from `--cov` |
 | `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
 | `canvas/texture_loader.py` + `canvas/gpu_driven_renderer.py` | `tests/test_material_vertex_mask.py` | — | The black/too-dark model fix: HDR tints survive the parse (no clamp to 1), `DiffuseColorBase` defaults to `DiffuseColor1` so the mask lerp is a no-op when unauthored, `SpecularColorBase`/`ReflectionPower` are read, `consolidate_geometry` packs vertex colours and defaults a colourless mesh to **white** (keeps the pre-change look), and `MAT_DTYPE` matches every GLSL `struct Material` member-for-member with 16-byte-aligned vec4s — drift there silently reads materials from the wrong bytes. XBMs built in-memory; GDR loaded by **file path** — excluded from `--cov` |
-| `set_patch_folder.py` | `tests/test_patch_data_source.py` | — | The Avatar pak-or-folder chooser: FC2 is never asked (its `.fat`/`.dat` can't be read), BOTH Avatar branches clear `levels_data` (a stale list suppresses the rescan and shows the previous archive's levels), and cancelling changes nothing. Manager built via `__new__` so no config file is touched — excluded from `--cov` |
+| `set_patch_folder.py` | `tests/test_patch_data_source.py` | — | The archive-or-folder chooser: **both** games are offered it (FC2 used to short-circuit past it), FC2's archive choice explains itself and never reaches the `.pak` loader, both success branches clear `levels_data` (a stale list suppresses the rescan and shows the previous archive's levels), and cancelling changes nothing. Manager built via `__new__` so no config file is touched — excluded from `--cov` |
 | `canvas/texture_loader.py` | `tests/test_cubemap_decode.py` | — | `decode_xbt_cubemap_to_rgba`: six DISTINCT faces (not face 0 six times — what PIL alone returns), face stride is the whole mip chain (a 1-mip and a 4-mip cube of the same size decode identically), non-cubemaps and short payloads return None so the caller falls back to no reflection instead of handing GL a short buffer. Synthetic DXT1 cubemap DDS built from scratch, no game data — excluded from `--cov` |
 
 ### Key patterns used
@@ -4256,19 +4256,25 @@ archive is a delivery mechanism. Ported from the drag-and-drop
 **Loading a pak is NOT a separate menu action — it is one of two choices inside
 the folder picker.** `PatchFolderManager.set_patch_folder()` is the one method
 every caller already used (level-selector button, first-run prompt,
-`on_patch_folder_changed`). In Avatar mode it calls `_ask_data_source()` — a
+`on_patch_folder_changed`). It calls `_ask_data_source()` — a
 two-button `QMessageBox` — and routes to either `_select_patch_folder_from_pak`
 (→ `pak_ui.load_patch_folder_from_pak`, unpacks and returns the folder) or
 `_select_patch_folder_from_folder` (the plain browser + `worlds`/`levels`
-validation). FC2 short-circuits straight to the folder browser: it ships
-`.fat`/`.dat`, which `pak_archive` cannot read, so offering the choice would
-only ever present a dead option. Because the routing lives in that single
-method, **no call site changed and there is no second "load a pak" option
-anywhere** — the level-selector button is labelled "Change Game Data..."
-(still "Change Patch Folder..." in FC2). The only genuinely new UI is
-`File ▸ 📦 Repack Patch Folder to .pak...`.
+validation). Because the routing lives in that single method, **no call site
+changed and there is no second "load an archive" option anywhere** — the
+level-selector button is labelled "Change Game Data..." in BOTH games. The only
+genuinely new UI is `File ▸ 📦 Repack Patch Folder to .pak...`.
 
-**Both Avatar branches must clear `levels_data`.** `new_select_level` skips
+**BOTH games get the chooser** (standing rule: every feature applies to Avatar
+and FC2). Only the archive half differs, and it differs as *data*
+(`_ARCHIVE_LABEL` / `_ARCHIVE_BLURB`), not a control-flow branch: Avatar's
+button says "PAK Archive...", FC2's says "FAT Archive...". FC2's archive choice
+routes to `_explain_fc2_archive_unsupported()` and returns False — it must
+NEVER reach `load_patch_folder_from_pak`, which would fail deep inside instead
+of saying why. An earlier revision short-circuited FC2 past the chooser
+entirely; that is the divergence this replaces, so don't reintroduce it.
+
+**Both success branches must clear `levels_data`.** `new_select_level` skips
 scanning entirely when `levels_data` is already populated, so a stale list
 survives into the new folder and the user sees the PREVIOUS archive's levels.
 The pak branch always did this; the folder branch had to be given it when the
@@ -4405,14 +4411,34 @@ packer emits them whenever compression doesn't pay.
   work with (theirs is a full 26,693-file repack). If a future change wants
   one-click setup from a clean install, the move is extracting `data.pak` then
   `patch.pak` then `patch.pakN` into one folder in load order.
-- **FC2 is not covered, and the UI says so.** Far Cry 2 uses `.fat`/`.dat`
-  (Dunia FAT v5), a different container in which many entries carry only a name
-  hash, no string. `set_patch_folder()` keeps the plain folder browser for FC2,
-  the repack action is **disabled in FC2 mode** (labelled "(Avatar only)")
-  mirroring how MP Spawn Creator is gated, and `pak_ui._reject_fc2` is the
+- **FC2 archives are not covered, and the UI says so.** Far Cry 2 uses
+  `.fat`/`.dat` (Dunia FAT v5). FC2 still gets the SAME chooser, but its
+  archive button explains the gap (`_explain_fc2_archive_unsupported`) and the
+  repack action is **disabled in FC2 mode** (labelled "(Avatar only)")
+  mirroring how MP Spawn Creator is gated, with `pak_ui._reject_fc2` as the
   belt-and-braces check behind it — pointing an FC2 patch folder at Avatar data
   would be silent corruption. The UI and manifest design are format-agnostic,
   so a FAT backend can slot in behind the same flow without redesign.
+
+  **What's already known about FAT v5** (measured on the retail
+  `Data_Win32\worlds\worlds.fat` + `.dat`, 142,369 entries / 2.577 GB — start
+  here rather than re-deriving): header is `'FAT2'` + `u32 version=5` +
+  `u32 0x00000301` + `u32 entryCount`, then `entryCount` × **16-byte** entries,
+  then a `u32 0` trailer (file size is exactly `16 + 16n + 4`). Per entry, four
+  little-endian u32: `[0]` name hash (**ascending — the index is sorted by
+  it**), `[1]` uncompressed size (`0` = stored uncompressed), `[2]` stored size
+  in the low 30 bits with 2 flag/scheme bits on top, `[3]` **`offset / 4`** —
+  `max(offset*4 + storedSize)` lands 3 bytes short of the archive's end, and
+  reading there yields real payloads (`TBX` texture headers, `nbCF` FCB magic).
+  Compressed entries are LZO1X — `pak_archive.lzo1x_decompress_py` already
+  decodes that.
+
+  **The blocker is names, not the container.** A FAT index is 16 bytes/entry
+  with NO string table, so unpacking alone produces hash-named files the level
+  scanner can't use (this is why a real unpack leaves an `__Unknown` folder).
+  Any FAT backend needs a hash→path dictionary — most likely generated from
+  FC2's own path conventions, which the editor already encodes — before it is
+  worth wiring into `set_patch_folder`.
 - **`QMessageBox` parents go through `_as_parent`**, which returns None for a
   non-widget. Qt raises `TypeError` rather than ignoring a bad parent, and a
   *parentless modal* box segfaults outright on the offscreen platform — so
