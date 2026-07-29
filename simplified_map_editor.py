@@ -1242,13 +1242,11 @@ class SimplifiedMapEditor(QMainWindow):
                 f"No game data has been configured for {game_label}.\n\n"
                 "The patch folder is your game directory containing the "
                 "'levels' and/or 'worlds' subdirectories."
-                + ("  Far Cry 2's .fat archives can't be unpacked by the "
-                   "editor yet, so point it at a folder you unpacked with an "
-                   "external tool."
-                   if self.game_mode == "farcry2" else
-                   "  You can point the editor at a .pak archive and let it "
-                   "unpack one for you, or at a folder you have already "
-                   "unpacked.")
+                + ("  You can point the editor at a "
+                   + ("Far Cry 2 .fat archive" if self.game_mode == "farcry2"
+                      else ".pak archive")
+                   + " and let it unpack one for you, or at a folder you have "
+                     "already unpacked.")
                 + "\n\nWould you like to set it now?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes,

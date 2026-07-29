@@ -343,6 +343,113 @@ def load_patch_folder_from_pak(main_window, pak_path: Optional[str] = None) -> O
     return dest
 
 
+FAT_FILTER = "Dunia FAT archives (*.fat);;All files (*)"
+
+
+def load_patch_folder_from_fat(main_window, fat_path: Optional[str] = None) -> Optional[str]:
+    """Far Cry 2 twin of :func:`load_patch_folder_from_pak`.
+
+    FC2 ships ``.fat``/``.dat`` (Dunia FAT v5) instead of ``.pak``. The flow is
+    deliberately identical — pick an archive, unpack it, use the folder — so
+    both games behave the same way; only the container differs.
+
+    One real difference: a FAT index stores no filenames, only hashes, so
+    :mod:`fc2_fat_archive` resolves them against a bundled path dictionary and
+    anything unmatched lands in ``__Unknown/``. That is reported rather than
+    hidden, because a poor resolve rate is the one thing that would make the
+    resulting folder useless to the level scanner.
+    """
+    parent = _as_parent(main_window)
+    try:
+        import fc2_fat_archive as fat
+    except Exception as exc:                          # noqa: BLE001
+        QMessageBox.critical(
+            parent, "FAT Support Unavailable",
+            f"Could not load the Far Cry 2 archive module:\n\n{exc}")
+        return None
+
+    if not fat_path:
+        start = ''
+        for attr in ('patch_folder', 'resource_folder'):
+            v = getattr(main_window, attr, None)
+            if v:
+                start = os.path.dirname(v)
+                break
+        fat_path, _ = QFileDialog.getOpenFileName(
+            parent, "Select a Far Cry 2 Archive (e.g. worlds.fat)", start, FAT_FILTER)
+        if not fat_path:
+            return None
+
+    if not fat.is_fat_file(fat_path):
+        QMessageBox.critical(parent, "Not a Dunia FAT Archive",
+                             f"This file is not a Far Cry 2 .fat archive:\n{fat_path}")
+        return None
+
+    try:
+        index = fat.read_index(fat_path)
+    except fat.FatError as exc:
+        QMessageBox.critical(parent, "Unreadable Archive",
+                             f"Could not read the archive:\n{fat_path}\n\n{exc}")
+        return None
+
+    names = fat.default_name_map()
+    if not names:
+        QMessageBox.warning(
+            parent, "No Filename Dictionary",
+            "The bundled Far Cry 2 filelist is missing, so every extracted file "
+            "would be named by hash and the level scanner would find nothing.\n\n"
+            "Reinstall the editor, or choose \"Unpacked Folder...\" instead.")
+        return None
+
+    dest = _choose_destination(parent, fat_path)
+    if not dest:
+        return None
+    action = _confirm_existing_folder(parent, dest, fat_path)
+    if action is None:
+        return None
+
+    result = None
+    if action == 'extract':
+        def _work(job: _Job):
+            def _progress(done, total):
+                job.report(done, total)
+                return not job.is_cancelled()
+            return fat.extract(fat_path, dest, names=names,
+                               progress=_progress, log=job.log)
+
+        result, error, cancelled = _run_job(
+            parent, f"Unpacking {os.path.basename(fat_path)}", _work,
+            _game_mode(main_window))
+
+        if error is not None:
+            QMessageBox.critical(parent, "Unpack Failed",
+                                 f"Could not unpack the archive:\n\n{error}")
+            return None
+        if cancelled:
+            QMessageBox.information(
+                parent, "Unpack Cancelled",
+                "Unpacking was cancelled. The folder holds a partial extraction.")
+            return None
+        if result is not None and result.failed:
+            QMessageBox.warning(
+                parent, "Unpacked With Errors",
+                f"{result.failed:,} of {result.total:,} file(s) could not be "
+                "extracted. See the log for the first few.")
+
+    _remember_source_pak(main_window, dest, fat_path)
+
+    extra = ""
+    if result is not None and result.unknown:
+        extra = (f"\n\n{result.unknown:,} file(s) had no known name "
+                 f"({result.resolved_pct:.1f}% resolved) and went to "
+                 f"{fat.UNKNOWN_DIR}/.")
+    QMessageBox.information(
+        parent, "Patch Folder Ready",
+        f"Using this folder as the patch folder:\n{dest}\n\n"
+        f"{len(index):,} files from {os.path.basename(fat_path)}.{extra}")
+    return dest
+
+
 def _remember_source_pak(main_window, folder: str, pak_path: str) -> None:
     """Persist which archive a patch folder came from, per game."""
     try:

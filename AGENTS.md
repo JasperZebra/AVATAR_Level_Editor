@@ -169,6 +169,7 @@ reference: <reference to this change in the docs if applicable>
 | `pak_archive.py` | `tests/test_pak_archive.py` | — | PAK! v4 round trip is **byte-identical** (not merely content-identical) when order + FILETIMEs are preserved; changed-only packing picks exactly the edited files and never packs `*.fcb.converted.xml` / `*.bak`; malformed archives raise `PakError`; pure-Python LZO1X decoder matches the DLL. Runs without game data; the compressed cases skip when minilzo is absent — excluded from `--cov` |
 | `simplified_map_editor.py` + `canvas/map_canvas_gpu.py` | `tests/test_movie_preview_perf.py` | — | Sequence-playback lag fix: `_movie_entity_map` caching + `_movie_register_preview_entities` re-registering when the moving set changes (real code, `SimplifiedMapEditor.__new__`); preview row-index patching and the overlay-cache bypass decision **mirrored** (canvas needs GL/Qt) — excluded from `--cov` |
 | `canvas/texture_loader.py` + `canvas/gpu_driven_renderer.py` | `tests/test_material_vertex_mask.py` | — | The black/too-dark model fix: HDR tints survive the parse (no clamp to 1), `DiffuseColorBase` defaults to `DiffuseColor1` so the mask lerp is a no-op when unauthored, `SpecularColorBase`/`ReflectionPower` are read, `consolidate_geometry` packs vertex colours and defaults a colourless mesh to **white** (keeps the pre-change look), and `MAT_DTYPE` matches every GLSL `struct Material` member-for-member with 16-byte-aligned vec4s — drift there silently reads materials from the wrong bytes. XBMs built in-memory; GDR loaded by **file path** — excluded from `--cov` |
+| `fc2_fat_archive.py` | `tests/test_fc2_fat_archive.py` | — | Dunia FAT v5 (FC2 `.fat`/`.dat`): `offset = offsetHigh*4 + (packField>>30)` at every alignment (dropping those 2 bits fails SILENTLY — still inside the `.dat`, just 1-3 bytes off), `sizeField` packs `realSize<<2 \| scheme`, `path_hash` is CRC-32 of the lowercased backslash path, extraction routes unnamed entries to `__Unknown/` instead of dropping them, and wrong magic / later version / missing `.dat` all raise `FatError`. Archives built in memory — excluded from `--cov` |
 | `set_patch_folder.py` | `tests/test_patch_data_source.py` | — | The archive-or-folder chooser: **both** games are offered it (FC2 used to short-circuit past it), FC2's archive choice explains itself and never reaches the `.pak` loader, both success branches clear `levels_data` (a stale list suppresses the rescan and shows the previous archive's levels), and cancelling changes nothing. Manager built via `__new__` so no config file is touched — excluded from `--cov` |
 | `canvas/texture_loader.py` | `tests/test_cubemap_decode.py` | — | `decode_xbt_cubemap_to_rgba`: six DISTINCT faces (not face 0 six times — what PIL alone returns), face stride is the whole mip chain (a 1-mip and a 4-mip cube of the same size decode identically), non-cubemaps and short payloads return None so the caller falls back to no reflection instead of handing GL a short buffer. Synthetic DXT1 cubemap DDS built from scratch, no game data — excluded from `--cov` |
 
@@ -4265,13 +4266,15 @@ changed and there is no second "load an archive" option anywhere** — the
 level-selector button is labelled "Change Game Data..." in BOTH games. The only
 genuinely new UI is `File ▸ 📦 Repack Patch Folder to .pak...`.
 
-**BOTH games get the chooser** (standing rule: every feature applies to Avatar
-and FC2). Only the archive half differs, and it differs as *data*
+**BOTH games get the chooser AND both archive formats work** (standing rule:
+every feature applies to Avatar and FC2). The archive half differs as *data*
 (`_ARCHIVE_LABEL` / `_ARCHIVE_BLURB`), not a control-flow branch: Avatar's
-button says "PAK Archive...", FC2's says "FAT Archive...". FC2's archive choice
-routes to `_explain_fc2_archive_unsupported()` and returns False — it must
-NEVER reach `load_patch_folder_from_pak`, which would fail deep inside instead
-of saying why. An earlier revision short-circuited FC2 past the chooser
+button says "PAK Archive...", FC2's says "FAT Archive...".
+`_select_patch_folder_from_archive()` picks the loader by game mode —
+`pak_ui.load_patch_folder_from_pak` (Avatar) or
+`pak_ui.load_patch_folder_from_fat` (FC2) — and both share the same
+destination / overwrite-confirm / progress-dialog flow, so the user-visible
+sequence is identical. An earlier revision short-circuited FC2 past the chooser
 entirely; that is the divergence this replaces, so don't reintroduce it.
 
 **Both success branches must clear `levels_data`.** `new_select_level` skips
@@ -4411,34 +4414,68 @@ packer emits them whenever compression doesn't pay.
   work with (theirs is a full 26,693-file repack). If a future change wants
   one-click setup from a clean install, the move is extracting `data.pak` then
   `patch.pak` then `patch.pakN` into one folder in load order.
-- **FC2 archives are not covered, and the UI says so.** Far Cry 2 uses
-  `.fat`/`.dat` (Dunia FAT v5). FC2 still gets the SAME chooser, but its
-  archive button explains the gap (`_explain_fc2_archive_unsupported`) and the
-  repack action is **disabled in FC2 mode** (labelled "(Avatar only)")
-  mirroring how MP Spawn Creator is gated, with `pak_ui._reject_fc2` as the
-  belt-and-braces check behind it — pointing an FC2 patch folder at Avatar data
-  would be silent corruption. The UI and manifest design are format-agnostic,
-  so a FAT backend can slot in behind the same flow without redesign.
+- **FC2 archives ARE covered now** — see the Dunia FAT section below.
+  **Repacking is still Avatar-only**: the repack action is disabled in FC2 mode
+  (labelled "(Avatar only)") mirroring how MP Spawn Creator is gated, with
+  `pak_ui._reject_fc2` as the belt-and-braces check behind it — pointing an FC2
+  patch folder at Avatar data would be silent corruption. `_reject_fc2` guards
+  the PAK-specific entry points only; `load_patch_folder_from_fat` must NOT
+  call it.
 
-  **What's already known about FAT v5** (measured on the retail
-  `Data_Win32\worlds\worlds.fat` + `.dat`, 142,369 entries / 2.577 GB — start
-  here rather than re-deriving): header is `'FAT2'` + `u32 version=5` +
-  `u32 0x00000301` + `u32 entryCount`, then `entryCount` × **16-byte** entries,
-  then a `u32 0` trailer (file size is exactly `16 + 16n + 4`). Per entry, four
-  little-endian u32: `[0]` name hash (**ascending — the index is sorted by
-  it**), `[1]` uncompressed size (`0` = stored uncompressed), `[2]` stored size
-  in the low 30 bits with 2 flag/scheme bits on top, `[3]` **`offset / 4`** —
-  `max(offset*4 + storedSize)` lands 3 bytes short of the archive's end, and
-  reading there yields real payloads (`TBX` texture headers, `nbCF` FCB magic).
-  Compressed entries are LZO1X — `pak_archive.lzo1x_decompress_py` already
-  decodes that.
+## Far Cry 2 `.fat`/`.dat` — Dunia FAT v5 (`fc2_fat_archive.py`, July 2026)
 
-  **The blocker is names, not the container.** A FAT index is 16 bytes/entry
-  with NO string table, so unpacking alone produces hash-named files the level
-  scanner can't use (this is why a real unpack leaves an `__Unknown` folder).
-  Any FAT backend needs a hash→path dictionary — most likely generated from
-  FC2's own path conventions, which the editor already encodes — before it is
-  worth wiring into `set_patch_folder`.
+FC2's twin of `pak_archive.py`, so both games load from an archive the same
+way. **Cracked and verified byte-for-byte** against retail
+`Data_Win32\worlds\worlds.fat` + `.dat` (142,369 entries / 2.577 GB) by
+extracting files and diffing them against an independent unpack of the same
+archive: **500/500 random entries byte-identical** (374 compressed, 126
+stored). Read-only by design — the editor saves into the unpacked folder, and
+repacking would need the compressor plus the hash ordering preserved.
+
+```
+header (16 B)  '2TAF' | u32 version=5 | u32 0x00000301 | u32 entryCount
+entries        entryCount x 16 B, SORTED ASCENDING BY nameHash:
+                 u32 nameHash    CRC-32 of the LOWERCASED '\'-separated path
+                 u32 sizeField   0 -> stored; else (realSize << 2) | scheme
+                 u32 packField   (offsetLow2 << 30) | storedSize   [30-bit]
+                 u32 offsetHigh  offset >> 2
+u32 trailer=0  (so the file is exactly 16 + 16n + 4 bytes)
+
+offset = offsetHigh * 4 + (packField >> 30)      scheme 0 = stored, 1 = LZO1X
+```
+
+Three things that bite:
+
+- **The magic reads `'2TAF'` on disk** — that is `'FAT2'` as a little-endian
+  u32. Compare the bytes, not the mnemonic.
+- **The two spare bits of `packField` are the offset's LOW bits, not a
+  compression enum.** They are uniformly distributed across the four values,
+  which is the tell. Folding them in takes extraction from **28% to 100%**
+  byte-identical — and dropping them fails SILENTLY, because a 1-3 byte
+  misalignment still lands inside the `.dat` and still yields plausible bytes.
+- **`sizeField` packs size AND scheme.** Reading it as a plain size makes every
+  compressed file 4x too long. `0` means stored, where the real size is
+  `storedSize`. (Retail check: `atlas2604_diffuse.xbt` is 11,096 bytes and its
+  field is 44,385 = `11096 << 2 | 1`.)
+
+LZO1X decompression reuses `pak_archive.lzo_decompress` (DLL-accelerated, pure
+-Python fallback) — no second codec.
+
+**Names are the interesting part: the index has NO string table.** Every entry
+is keyed by hash alone, so extraction needs a dictionary of candidate paths to
+hash back. The hash was identified by brute-forcing candidates against real
+paths — plain reflected CRC-32 (zlib's) of the lowercased backslash path,
+100% on 2,000 samples; case/separator normalisation is what makes a generated
+path resolve, so `path_hash` does both. `assets/fc2_filelist.txt.gz` ships
+**138,976 verified paths** (0.45 MB gzipped; every one confirmed present in a
+retail archive) and resolves **97.62% of `worlds.fat`** — the archive that
+holds `levels/` and `worlds/`, i.e. everything the level scanner needs.
+Unresolved entries are still written, to `__Unknown/<hash>.bin`; dropping them
+would quietly lose data. Coverage of `common.fat`/`patch.fat` is low (24% /
+2%) because the filelist was built from `worlds.dat` — extend it if those are
+ever needed.
+
+Tests: `tests/test_fc2_fat_archive.py` (synthetic archives, no game data).
 - **`QMessageBox` parents go through `_as_parent`**, which returns None for a
   non-widget. Qt raises `TypeError` rather than ignoring a bad parent, and a
   *parentless modal* box segfaults outright on the offscreen platform — so

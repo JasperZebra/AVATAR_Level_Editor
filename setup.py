@@ -25,6 +25,8 @@ directories_to_include = [
     'canvas',               # Canvas-related modules and resources
     'tools',                # FCBConverter and other conversion tools
     'icon',                 # Icons for the application
+    'assets',               # Bundled data files (fc2_filelist.txt.gz — the FAT
+                            # name dictionary; a FAT index stores only hashes)
     #'cache',                # Cache directory
     'thumbnails',           # Thumbnails directory
     # 'entities' removed — archetypes now come from the level's patch-folder
@@ -59,6 +61,7 @@ root_files = [
     'env_preset_copy.py',
     'pak_archive.py',
     'pak_ui.py',
+    'fc2_fat_archive.py',
     'ui_style_utils.py',
     'world_editor.py',
     'init.py',
@@ -456,7 +459,8 @@ build_options = {
         'movie_data',                   # ← moviedata.xml cutscene parser (Sequences tab)
         'object_library',
         'pak_archive',                  # ← PAK! v4 archive reader/writer
-        'pak_ui',                       # ← load-from-.pak / repack dialogs
+        'pak_ui',                       # ← load-from-archive / repack dialogs
+        'fc2_fat_archive',              # ← Dunia FAT v5 (.fat/.dat) reader (FC2)
         'sequence_export_import',       # ← cinematic bundle export/import
         'sequence_import_dialog',       # ← Sequences tab import dialog
         'sequence_link',                # ← keeps moviedata keys with their entity

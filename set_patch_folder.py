@@ -1869,11 +1869,11 @@ class PatchFolderManager:
         way the result is a FOLDER: a pak is unpacked and its output folder
         becomes the patch folder, so everything downstream is unchanged.
 
-        BOTH games get the same chooser — user rule: every feature applies to
-        Avatar AND Far Cry 2.  Only the archive half differs, because the two
-        games ship different containers: Avatar ``.pak`` (supported) and FC2
-        ``.fat``/``.dat`` (Dunia FAT v5, reader not built yet — picking it
-        explains that rather than pretending the option isn't there).
+        BOTH games get the same chooser AND both archive formats work — user
+        rule: every feature applies to Avatar and Far Cry 2.  Only the container
+        differs: Avatar ``.pak`` (:mod:`pak_archive`) and FC2 ``.fat``/``.dat``
+        (Dunia FAT v5, :mod:`fc2_fat_archive`).  Either way the result is a
+        FOLDER, so everything downstream is unchanged.
 
         Routing this through the ONE method every caller already uses (level
         selector, first-run prompt, menu handler) means no caller changes and
@@ -1882,10 +1882,7 @@ class PatchFolderManager:
         """
         choice = self._ask_data_source()
         if choice == 'archive':
-            if self.game_mode == "farcry2":
-                self._explain_fc2_archive_unsupported()
-                return False
-            folder = self._select_patch_folder_from_pak()
+            folder = self._select_patch_folder_from_archive()
             if not folder:
                 return False
             self.patch_folder = folder
@@ -1900,8 +1897,8 @@ class PatchFolderManager:
     # container name differs, so the labels are data rather than a code branch.
     _ARCHIVE_LABEL = {'farcry2': 'FAT Archive...'}
     _ARCHIVE_BLURB = {
-        'farcry2': "FAT archive — pick a .fat file (Far Cry 2's container). "
-                   "Not supported yet; see below.",
+        'farcry2': "FAT archive — pick a .fat file (e.g. worlds.fat); it is "
+                   "unpacked alongside its .dat and the resulting folder is used.",
     }
 
     def _archive_label(self):
@@ -1944,25 +1941,28 @@ class PatchFolderManager:
         _spf_log(f"data source chosen: {choice}")
         return choice
 
-    def _explain_fc2_archive_unsupported(self):
-        """FC2 offers the archive button for parity, but the reader isn't built.
+    def _select_patch_folder_from_archive(self):
+        """Unpack this game's archive format and return the folder. None = cancel.
 
-        Say so plainly instead of hiding the option — hiding it is what made
-        the two games' setup differ in the first place. The blocker is real and
-        worth stating: a Dunia FAT v5 index is 16 bytes per entry with NO
-        filenames, so unpacking alone yields hash-named files the level scanner
-        can't use.
+        The two games diverge ONLY here — `.pak` for Avatar, `.fat`/`.dat` for
+        FC2 — and both loaders share `pak_ui`'s destination/overwrite/progress
+        flow, so the user-visible sequence is identical.
         """
-        QMessageBox.information(
-            self.parent,
-            "Far Cry 2 Archives",
-            "Far Cry 2 ships .fat/.dat archives (Dunia FAT v5), which the "
-            "editor cannot unpack yet.\n\n"
-            "Its index stores only a hash per file — no names — so unpacking "
-            "would produce files the level scanner can't identify. Filename "
-            "recovery still has to be solved.\n\n"
-            "For now, unpack the archive with an external tool and choose "
-            "\"Unpacked Folder...\" instead.")
+        loader = ('load_patch_folder_from_fat' if self.game_mode == "farcry2"
+                  else 'load_patch_folder_from_pak')
+        try:
+            import pak_ui
+            fn = getattr(pak_ui, loader)
+        except Exception as exc:                       # noqa: BLE001
+            _spf_log(f"pak_ui.{loader} import failed: {exc}")
+            QMessageBox.critical(
+                self.parent, "Archive Support Unavailable",
+                f"Could not load the archive support module:\n\n{exc}")
+            return None
+
+        folder = fn(self.parent)
+        _spf_log(f"archive selection ({loader}) returned: {folder}")
+        return folder
 
     def _select_patch_folder_from_folder(self):
         """Browse for an already-unpacked patch folder. True when one was set."""
@@ -2000,21 +2000,6 @@ class PatchFolderManager:
         # after this returns, and calling both creates two progress dialogs.
         return True
 
-
-    def _select_patch_folder_from_pak(self):
-        """Pick a .pak, unpack it, and return the folder to use.  None on cancel."""
-        try:
-            from pak_ui import load_patch_folder_from_pak
-        except Exception as exc:                       # noqa: BLE001
-            _spf_log(f"pak_ui import failed: {exc}")
-            QMessageBox.critical(
-                self.parent, "PAK Support Unavailable",
-                f"Could not load the PAK archive support module:\n\n{exc}")
-            return None
-
-        folder = load_patch_folder_from_pak(self.parent)
-        _spf_log(f"pak selection returned: {folder}")
-        return folder
 
     def scan_patch_folder(self, show_progress=True):
         """

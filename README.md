@@ -17,7 +17,7 @@ A comprehensive level editor for modifying **Avatar: The Game** and **Far Cry 2*
 - **Interactive Canvas**: Color-coded entity visualization with adaptive grid system
 - **Sector Management**: Visual boundary display with violation detection; entities moved across sector (or FC2 cell) borders are re-homed to the correct sector file on save
 - **Terrain Editor**: In-app heightmap editing with brush tools and live preview — Avatar `.csdat` and Far Cry 2 `.sdat`
-- **PAK Archive Support** *(Avatar)*: Point the editor at either a `.pak` archive — it unpacks it and uses the resulting folder automatically — or a patch folder you have already unpacked, then repack when you're done, either in full or as a small mod archive containing only what you changed
+- **Archive Support** *(both games)*: Point the editor at an archive — Avatar `.pak` or Far Cry 2 `.fat`/`.dat` — and it unpacks it and uses the resulting folder automatically, or pick a patch folder you have already unpacked. Repacking to `.pak` (Avatar) then builds either a full archive or a small mod archive containing only what you changed
 
 ## Quick Start
 
@@ -38,10 +38,11 @@ A comprehensive level editor for modifying **Avatar: The Game** and **Far Cry 2*
 In the level selector, **Change Game Data...** asks which of the two you want —
 the same question in both games:
 
-- **PAK Archive...** *(Avatar)* — pick an archive such as `patch.pak`. The
-  editor unpacks it into a folder of the same name beside it (`patch.pak` →
-  `patch/`) and selects that folder automatically, so you don't need an external
-  tool to unpack the game first.
+- **PAK Archive...** *(Avatar)* / **FAT Archive...** *(Far Cry 2)* — pick an
+  archive such as `patch.pak` or `worlds.fat`. The editor unpacks it into a
+  folder of the same name beside it (`patch.pak` → `patch/`, `worlds.fat` →
+  `worlds/`) and selects that folder automatically, so you don't need an
+  external tool to unpack the game first.
 - **Unpacked Folder...** — pick a folder you have already extracted, containing
   the `worlds` and/or `levels` subdirectories.
 
@@ -49,10 +50,11 @@ Both end up at the same place: the editor always works against a folder, and
 the archive is only how the data arrives. Whichever you picked last becomes the
 default button next time.
 
-*(Far Cry 2 ships `.fat`/`.dat` archives instead. The button is there for it too,
-but unpacking them isn't implemented yet — their index stores only a hash per
-file, with no names — so for now use **Unpacked Folder...** with a folder you
-extracted using an external tool.)*
+*(A Far Cry 2 `.fat` index identifies its files by hash rather than by name, so
+the editor resolves them against a bundled list of known paths — about 97.6% of
+`worlds.fat`, which covers everything under `levels/` and `worlds/`. The handful
+it can't name are still extracted, into an `__Unknown/` folder. Repacking is
+Avatar-only for now.)*
 
 When you're finished editing, **File ▸ 📦 Repack Patch Folder to .pak...**
 builds an archive again, with two modes:
