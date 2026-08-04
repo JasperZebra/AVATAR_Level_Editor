@@ -63,6 +63,26 @@ MAT_DTYPE = np.dtype([
 ])  # 160 B, std430
 
 
+def effective_diffuse_tints(tint, tint_base, has_reflection, threshold=0.02):
+    """The diffuse tints a material should actually shade with.
+
+    Glass/chrome/polished-trim materials author BLACK diffuse tints on purpose —
+    in the game their whole colour comes from the reflection cubemap. When that
+    cubemap loaded, keep the authored black (the reflection pass supplies the
+    look). But when it did NOT load (missing/undecodable .xbt — cubemap decode
+    returns None), a black tint multiplies the diffuse texture to pure black:
+    the "black models in the canvas, fine in the mini previewer" bug (the
+    previewer draws the raw texture and ignores tints). In that case fall back
+    to white tints so the model shows its actual diffuse texture, matching the
+    previewer. Pure function (no GL) — unit-tested.
+    """
+    def _black(c):
+        return max(float(c[0]), float(c[1]), float(c[2])) < threshold
+    if not has_reflection and _black(tint) and _black(tint_base):
+        return (1.0, 1.0, 1.0), (1.0, 1.0, 1.0)
+    return tint, tint_base
+
+
 def _ver_ge(ver_str, major, minor):
     """Is the GL version string (e.g. '4.6.0 NVIDIA 595.79') >= major.minor?"""
     try:
@@ -485,8 +505,11 @@ void main(){
                                gl_ModelViewMatrix[1].xyz,
                                gl_ModelViewMatrix[2].xyz);
         vec3 Nw = normalize(N * eyeToWorld);   // v * M == transpose(M) * v
-        vec3 Vw = normalize(V * eyeToWorld);
-        vec3 refl = texture(samplerCube(m.hReflection), reflect(Vw, Nw)).rgb;
+        // Sample by the WORLD-SPACE NORMAL, not the view reflection: the
+        // reflection must stay anchored to the model in the world and never
+        // slide as the camera moves (user decision, Aug 2026). A view-dependent
+        // reflect(V, N) made reflections track the camera.
+        vec3 refl = texture(samplerCube(m.hReflection), Nw).rgb;
         refl *= v_mask.r * m.specBase.w * clamp(ambientL + diffuseL + specularL, 0.0, 1.0);
         color += specColor * refl;
     }
@@ -844,6 +867,9 @@ class GPUDrivenRenderer:
                 hr, fr = handle(slots.get('reflection'))
                 tint = p.get('tint', [1.0, 1.0, 1.0])
                 tbase = p.get('tint_base', tint)
+                # Black-tint + no reflection cubemap -> white tints, so the
+                # diffuse texture shows instead of a black model (see helper).
+                tint, tbase = effective_diffuse_tints(tint, tbase, fr > 0.5)
                 emis = p.get('emissive', [0.0, 0.0, 0.0])
                 spec = p.get('spec_color', [0.3, 0.3, 0.3])
                 sbase = p.get('spec_base', [0.0, 0.0, 0.0])

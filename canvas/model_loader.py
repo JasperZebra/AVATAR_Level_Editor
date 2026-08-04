@@ -3026,8 +3026,15 @@ class ModelLoader:
         else:
             glEnable(GL_CULL_FACE)
 
-        tn = p['tint']; glUniform3f(sh.u('u_tint'), tn[0], tn[1], tn[2])
-        tb = p.get('tint_base', tn); glUniform3f(sh.u('u_tint_base'), tb[0], tb[1], tb[2])
+        # Black-tint glass/chrome materials with NO loaded reflection cubemap
+        # fall back to white tints so their diffuse texture shows instead of a
+        # black model (previewer parity — see effective_diffuse_tints).
+        from gpu_driven_renderer import effective_diffuse_tints
+        tn, tb = effective_diffuse_tints(
+            p['tint'], p.get('tint_base', p['tint']),
+            bool(texs.get('reflection')))
+        glUniform3f(sh.u('u_tint'), tn[0], tn[1], tn[2])
+        glUniform3f(sh.u('u_tint_base'), tb[0], tb[1], tb[2])
         em = p['emissive']; glUniform3f(sh.u('u_emissive'), em[0], em[1], em[2])
         sc = p['spec_color']; glUniform3f(sh.u('u_spec_color'), sc[0], sc[1], sc[2])
         sb = p.get('spec_base', (0.0, 0.0, 0.0))

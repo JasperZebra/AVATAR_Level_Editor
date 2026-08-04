@@ -259,10 +259,11 @@ void main() {
                                gl_ModelViewMatrix[1].xyz,
                                gl_ModelViewMatrix[2].xyz);
         vec3 Nw = normalize(N * eyeToWorld);   // v * M == transpose(M) * v
-        vec3 Vw = normalize(V * eyeToWorld);
-        // Engine passes the TOWARD-camera vector as reflect()'s incident, so
-        // match it rather than the textbook -Vw.
-        vec3 refl = textureCube(u_reflection, reflect(Vw, Nw)).rgb;
+        // Sample by the WORLD-SPACE NORMAL, not the view reflection: the
+        // reflection must stay anchored to the model in the world and never
+        // slide as the camera moves (user decision, Aug 2026). A view-dependent
+        // reflect(V, N) made reflections track the camera.
+        vec3 refl = textureCube(u_reflection, Nw).rgb;
         refl *= v_mask.r * u_refl_power * clamp(ambientL + diffuseL + specularL, 0.0, 1.0);
         color += specColor * refl;
     }
