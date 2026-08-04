@@ -32,6 +32,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QPainter, QColor, QPen, QBrush
 from ui_style_utils import apply_checkbox_style
+# theme_settings is a root module (project root is on sys.path, like
+# ui_style_utils above) — every dialog follows the user's Light/Dark preference.
+from theme_settings import apply_dialog_theme
 
 
 # ── Per-game water material lists — (display_name, full_path_bytes) ──────────
@@ -322,9 +325,19 @@ class WaterEditorDialog(QDialog):
         self.setMinimumSize(900, 650)
 
         self.setup_ui()
+        # Follow the user's Light/Dark preference (re-invoked live on toggle).
+        apply_dialog_theme(self)
 
         if terrain_renderer and terrain_renderer.sdat_path:
             self.load_sdat_folder(terrain_renderer.sdat_path)
+
+    def _retheme(self, dark):
+        """Per-theme styling beyond the shared dialog stylesheet: the custom
+        checkbox indicator has its own per-theme QSS."""
+        try:
+            apply_checkbox_style(self.water_visible_chk, dark)
+        except Exception:
+            pass
 
     # -- UI ------------------------------------------------------------------
 

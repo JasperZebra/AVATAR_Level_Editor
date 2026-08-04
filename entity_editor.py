@@ -19,6 +19,7 @@ from PyQt5.QtGui import (QFont, QDoubleValidator, QIntValidator,
 from PyQt5.QtWidgets import QShortcut
 from PyQt5.QtCore import QRegularExpression
 from ui_style_utils import apply_checkbox_style
+from theme_settings import apply_dialog_theme
 
 # ---------------------------------------------------------------------------
 # Import BinHexConvert from tools/ (canonical conversion reference).
@@ -390,6 +391,124 @@ class StringInput(QLineEdit):
 
 
 # ============================================================================
+# THEMING
+# ============================================================================
+# The dialog follows the user's Light/Dark preference via
+# theme_settings.apply_dialog_theme (it used to hardcode a dark look). The
+# shared stylesheet covers the basic widgets; the accent styles below
+# (archetype/add/remove buttons, section frames, hex previews, XML editor)
+# switch with the theme through _retheme(), which rebuilds the dynamic editor
+# content so freshly created widgets re-pick their colors.
+
+# Compact toolbar buttons: size only — colors come from the dialog theme.
+_BTN_COMPACT = "QPushButton { font-size: 10px; padding: 1px 4px; }"
+
+_XML_EDITOR_STYLE = {
+    True:  ("QPlainTextEdit { background: #1a1a1a; color: #d4d4d4;"
+            " border: 1px solid #333; font-family: Consolas, monospace; }"),
+    False: ("QPlainTextEdit { background: #ffffff; color: #1e1e1e;"
+            " border: 1px solid #b0b0b0; font-family: Consolas, monospace; }"),
+}
+
+# Accent styles keyed by theme (True = dark). Light variants use darker ink
+# on pale washes so they stay readable on the light palette.
+_ACCENT = {
+    True: {
+        'arch_group':
+            "QGroupBox { font-size: 10px; color: #8ab4d4; border: 1px solid #2a4a6a;"
+            " border-radius: 4px; margin-top: 6px; padding: 6px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }",
+        'arch_add_btn':
+            "QPushButton { background: #1e2e3e; color: #8ab4d4; border: 1px solid #2a4a6a;"
+            " border-radius: 3px; padding: 3px 10px; font-size: 10px; text-align: left; }"
+            "QPushButton:hover { background: #2a3e52; }",
+        'add_field_btn':
+            "QPushButton { background: #1e2a1e; color: #7ec87e; border: 1px solid #2a4a2a;"
+            " border-radius: 3px; padding: 2px 8px; font-size: 9px; text-align: left; }"
+            "QPushButton:hover { background: #283828; }",
+        'add_obj_btn':
+            "QPushButton { background: #1a2a3a; color: #7aaac8; border: 1px solid #253a50;"
+            " border-radius: 3px; padding: 2px 8px; font-size: 9px; text-align: left; }"
+            "QPushButton:hover { background: #243448; }",
+        'arch_sub_group':
+            "QGroupBox { font-size: 9px; color: #8ab4d4; border: 1px dashed #2a4a6a;"
+            " border-radius: 3px; margin-top: 4px; padding: 4px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }",
+        'seat_group':
+            "QGroupBox { font-size: 9px; color: #aaa; border: 1px solid #3a3a3a;"
+            " border-radius: 3px; margin-top: 4px; padding: 4px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }",
+        'remove_btn':
+            "QPushButton { background: #3a2020; color: #c87e7e;"
+            " border: 1px solid #5a3030; border-radius: 3px;"
+            " padding: 2px 8px; font-size: 9px; }"
+            "QPushButton:hover { background: #4a2525; }",
+        'add_green_btn':
+            "QPushButton { background: #2a3a2a; color: #7ec87e; border: 1px solid #3a5a3a;"
+            " border-radius: 3px; padding: 3px 10px; font-size: 10px; }"
+            "QPushButton:hover { background: #3a4a3a; }"
+            "QPushButton:disabled { background: #2a2a2a; color: #555; border-color: #333; }",
+        'mat_group':
+            "QGroupBox { font-size: 10px; color: #c8d4e4; border: 1px solid #3a4a5a;"
+            " border-radius: 4px; margin-top: 6px; padding: 6px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }",
+        'slot_frame': "QFrame { border: 1px solid #3a4a5a; border-radius: 3px; }",
+        'slot_lbl':   "color: #8ab4d4; font-size: 9px; font-weight: bold;",
+        'row_lbl':    "color: #aaa; font-size: 9px;",
+        'hex_preview': "color: #484860; font-family: Consolas, monospace; font-size: 8px;",
+        'hex_input':  "color: #aaa;",
+        'find_err':   "color: #c87e7e; font-size: 9px;",
+    },
+    False: {
+        'arch_group':
+            "QGroupBox { font-size: 10px; color: #2a5a8a; border: 1px solid #a8c0d8;"
+            " border-radius: 4px; margin-top: 6px; padding: 6px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }",
+        'arch_add_btn':
+            "QPushButton { background: #e4eef8; color: #1e4a72; border: 1px solid #a8c0d8;"
+            " border-radius: 3px; padding: 3px 10px; font-size: 10px; text-align: left; }"
+            "QPushButton:hover { background: #d2e2f2; }",
+        'add_field_btn':
+            "QPushButton { background: #e8f4e8; color: #1e7a1e; border: 1px solid #9cc49c;"
+            " border-radius: 3px; padding: 2px 8px; font-size: 9px; text-align: left; }"
+            "QPushButton:hover { background: #d8ecd8; }",
+        'add_obj_btn':
+            "QPushButton { background: #e6eef6; color: #205a86; border: 1px solid #a8c0d8;"
+            " border-radius: 3px; padding: 2px 8px; font-size: 9px; text-align: left; }"
+            "QPushButton:hover { background: #d6e4f0; }",
+        'arch_sub_group':
+            "QGroupBox { font-size: 9px; color: #2a5a8a; border: 1px dashed #a8c0d8;"
+            " border-radius: 3px; margin-top: 4px; padding: 4px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }",
+        'seat_group':
+            "QGroupBox { font-size: 9px; color: #555; border: 1px solid #c0c0c0;"
+            " border-radius: 3px; margin-top: 4px; padding: 4px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }",
+        'remove_btn':
+            "QPushButton { background: #f6e4e4; color: #a03030;"
+            " border: 1px solid #d0a0a0; border-radius: 3px;"
+            " padding: 2px 8px; font-size: 9px; }"
+            "QPushButton:hover { background: #eed4d4; }",
+        'add_green_btn':
+            "QPushButton { background: #e8f4e8; color: #1e7a1e; border: 1px solid #9cc49c;"
+            " border-radius: 3px; padding: 3px 10px; font-size: 10px; }"
+            "QPushButton:hover { background: #d8ecd8; }"
+            "QPushButton:disabled { background: #ececec; color: #999; border-color: #ccc; }",
+        'mat_group':
+            "QGroupBox { font-size: 10px; color: #3a4a5a; border: 1px solid #b0c0d0;"
+            " border-radius: 4px; margin-top: 6px; padding: 6px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }",
+        'slot_frame': "QFrame { border: 1px solid #b0c0d0; border-radius: 3px; }",
+        'slot_lbl':   "color: #2a5a8a; font-size: 9px; font-weight: bold;",
+        'row_lbl':    "color: #666; font-size: 9px;",
+        'hex_preview': "color: #9898b0; font-family: Consolas, monospace; font-size: 8px;",
+        'hex_input':  "color: #666;",
+        'find_err':   "color: #a03030; font-size: 9px;",
+    },
+}
+
+
+# ============================================================================
 # ENTITY EDITOR WINDOW
 # ============================================================================
 
@@ -407,8 +526,27 @@ class EntityEditorWindow(QDialog):
         self.auto_save_timer.setSingleShot(True)
         self.auto_save_timer.timeout.connect(self.auto_save)
 
+        self._dark = True   # _retheme() re-picks from the user's preference
         self.setup_ui()
         self.setup_connections()
+        # Follow the user's Light/Dark preference (also calls _retheme;
+        # retheme_open_windows re-invokes it live when the main window's
+        # theme toggles).
+        apply_dialog_theme(self)
+
+    def _retheme(self, dark):
+        """Per-theme styling beyond the shared dialog stylesheet: the XML
+        editor, the header checkboxes, and the accent-styled dynamic widgets
+        (rebuilt via populate_all_views so their _ACCENT styles re-pick)."""
+        self._dark = bool(dark)
+        self.xml_editor.setStyleSheet(_XML_EDITOR_STYLE[self._dark])
+        for cb in (self.auto_update_checkbox, self.auto_save_checkbox):
+            apply_checkbox_style(cb, dark=self._dark)
+        try:
+            self.populate_all_views()
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
     # ------------------------------------------------------------------
     # UI setup
@@ -514,11 +652,7 @@ class EntityEditorWindow(QDialog):
         _close_btn.setToolTip("Clear search (Esc)")
         _close_btn.clicked.connect(self._hide_xml_find)
         for btn in (_prev_btn, _next_btn, _close_btn):
-            btn.setStyleSheet(
-                "QPushButton { background: #2a3a4a; color: #aaa; border: 1px solid #3a4a5a;"
-                " border-radius: 3px; font-size: 10px; }"
-                "QPushButton:hover { background: #3a4a5a; }"
-            )
+            btn.setStyleSheet(_BTN_COMPACT)   # colors come from the dialog theme
         xfb.addWidget(xfb_lbl)
         xfb.addWidget(self._xml_find_input)
         xfb.addWidget(self._xml_find_count)
@@ -529,10 +663,7 @@ class EntityEditorWindow(QDialog):
 
         self.xml_editor = QPlainTextEdit(self)
         self.xml_editor.setFont(QFont("Consolas", 9))
-        self.xml_editor.setStyleSheet(
-            "QPlainTextEdit { background: #1a1a1a; color: #d4d4d4;"
-            " border: 1px solid #333; font-family: Consolas, monospace; }"
-        )
+        self.xml_editor.setStyleSheet(_XML_EDITOR_STYLE[True])   # _retheme() re-styles
         self.xml_editor.setLineWrapMode(QPlainTextEdit.NoWrap)
         # Debounce timer — parse XML 1.5 s after the user stops typing
         self._xml_debounce = QTimer()
@@ -631,7 +762,7 @@ class EntityEditorWindow(QDialog):
         n = len(selections)
         self._xml_find_count.setText(f"{n} match{'es' if n != 1 else ''}" if n else "no matches")
         self._xml_find_count.setStyleSheet(
-            "color: #888; font-size: 9px;" if n else "color: #c87e7e; font-size: 9px;"
+            "color: #888; font-size: 9px;" if n else _ACCENT[self._dark]['find_err']
         )
 
         # Jump to first match
@@ -690,12 +821,12 @@ class EntityEditorWindow(QDialog):
         self.auto_update_checkbox = QCheckBox("Auto-update", self)
         self.auto_update_checkbox.setChecked(True)
         self.auto_update_checkbox.toggled.connect(self.toggle_auto_update)
-        apply_checkbox_style(self.auto_update_checkbox)
+        apply_checkbox_style(self.auto_update_checkbox, dark=self._dark)
 
         self.auto_save_checkbox = QCheckBox("Auto-save", self)
         self.auto_save_checkbox.setChecked(True)
         self.auto_save_checkbox.toggled.connect(self.toggle_auto_save)
-        apply_checkbox_style(self.auto_save_checkbox)
+        apply_checkbox_style(self.auto_save_checkbox, dark=self._dark)
 
         self.refresh_btn = QPushButton("Refresh", self)
         self.refresh_btn.setFixedWidth(70)
@@ -973,11 +1104,7 @@ class EntityEditorWindow(QDialog):
             return
 
         group = QGroupBox("Add from archetype", self)
-        group.setStyleSheet(
-            "QGroupBox { font-size: 10px; color: #8ab4d4; border: 1px solid #2a4a6a;"
-            " border-radius: 4px; margin-top: 6px; padding: 6px; }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }"
-        )
+        group.setStyleSheet(_ACCENT[self._dark]['arch_group'])
         vl = QVBoxLayout(group)
         vl.setContentsMargins(6, 10, 6, 6)
         vl.setSpacing(4)
@@ -1014,11 +1141,7 @@ class EntityEditorWindow(QDialog):
         for arch_comp in missing:
             comp_name = arch_comp.get('name', arch_comp.get('hash', '?'))
             btn = QPushButton(f"+ Add  {comp_name}", self)
-            btn.setStyleSheet(
-                "QPushButton { background: #1e2e3e; color: #8ab4d4; border: 1px solid #2a4a6a;"
-                " border-radius: 3px; padding: 3px 10px; font-size: 10px; text-align: left; }"
-                "QPushButton:hover { background: #2a3e52; }"
-            )
+            btn.setStyleSheet(_ACCENT[self._dark]['arch_add_btn'])
             btn.setFixedHeight(24)
             btn.clicked.connect(_make_add(arch_comp))
             vl.addWidget(btn)
@@ -1080,11 +1203,7 @@ class EntityEditorWindow(QDialog):
                         af.get('value-Vector3') or '')
                 label = f"+ field: {fname}" + (f"  =  {fval}" if fval else "")
                 btn = QPushButton(label, self)
-                btn.setStyleSheet(
-                    "QPushButton { background: #1e2a1e; color: #7ec87e; border: 1px solid #2a4a2a;"
-                    " border-radius: 3px; padding: 2px 8px; font-size: 9px; text-align: left; }"
-                    "QPushButton:hover { background: #283828; }"
-                )
+                btn.setStyleSheet(_ACCENT[self._dark]['add_field_btn'])
                 btn.setFixedHeight(22)
                 btn.clicked.connect(
                     (lambda ee=ent_elem, af=af: lambda _=False: _append_child(ee, af))()
@@ -1106,11 +1225,7 @@ class EntityEditorWindow(QDialog):
             for ao in missing_objs:
                 oname = ao.get('name', ao.get('hash', '?'))
                 btn = QPushButton(f"+ object: {oname}", self)
-                btn.setStyleSheet(
-                    "QPushButton { background: #1a2a3a; color: #7aaac8; border: 1px solid #253a50;"
-                    " border-radius: 3px; padding: 2px 8px; font-size: 9px; text-align: left; }"
-                    "QPushButton:hover { background: #243448; }"
-                )
+                btn.setStyleSheet(_ACCENT[self._dark]['add_obj_btn'])
                 btn.setFixedHeight(22)
                 btn.clicked.connect(
                     (lambda ee=ent_elem, ao=ao: lambda _=False: _append_child(ee, ao))()
@@ -1155,11 +1270,7 @@ class EntityEditorWindow(QDialog):
             return
 
         group = QGroupBox(f"Add to {comp_name} from archetype", self)
-        group.setStyleSheet(
-            "QGroupBox { font-size: 9px; color: #8ab4d4; border: 1px dashed #2a4a6a;"
-            " border-radius: 3px; margin-top: 4px; padding: 4px; }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }"
-        )
+        group.setStyleSheet(_ACCENT[self._dark]['arch_sub_group'])
         vl = QVBoxLayout(group)
         vl.setContentsMargins(6, 12, 6, 4)
         vl.setSpacing(3)
@@ -1413,11 +1524,7 @@ class EntityEditorWindow(QDialog):
                               if text_bone_field is not None else f'Seat {i+1}')
 
                 seat_frame = QGroupBox(f"Seat {i+1}: {seat_label}", self)
-                seat_frame.setStyleSheet(
-                    "QGroupBox { font-size: 9px; color: #aaa; border: 1px solid #3a3a3a;"
-                    " border-radius: 3px; margin-top: 4px; padding: 4px; }"
-                    "QGroupBox::title { subcontrol-origin: margin; left: 6px; }"
-                )
+                seat_frame.setStyleSheet(_ACCENT[self._dark]['seat_group'])
                 sf_vl = QVBoxLayout(seat_frame)
                 sf_vl.setContentsMargins(6, 10, 6, 4)
                 sf_vl.setSpacing(3)
@@ -1480,12 +1587,7 @@ class EntityEditorWindow(QDialog):
                 user_hl.addWidget(id_inp, 1)
 
                 rm_btn = QPushButton("× Remove Seat", self)
-                rm_btn.setStyleSheet(
-                    "QPushButton { background: #3a2020; color: #c87e7e;"
-                    " border: 1px solid #5a3030; border-radius: 3px;"
-                    " padding: 2px 8px; font-size: 9px; }"
-                    "QPushButton:hover { background: #4a2525; }"
-                )
+                rm_btn.setStyleSheet(_ACCENT[self._dark]['remove_btn'])
                 rm_btn.setFixedHeight(20)
 
                 def _remove_entry(_checked=False, c=container, e=entry, av=armed_vehicle):
@@ -1524,12 +1626,7 @@ class EntityEditorWindow(QDialog):
                 vl.addWidget(seat_frame)
 
         add_btn = QPushButton("+ Add Seat", self)
-        add_btn.setStyleSheet(
-            "QPushButton { background: #2a3a2a; color: #7ec87e; border: 1px solid #3a5a3a;"
-            " border-radius: 3px; padding: 3px 10px; font-size: 10px; }"
-            "QPushButton:hover { background: #3a4a3a; }"
-            "QPushButton:disabled { background: #2a2a2a; color: #555; border-color: #333; }"
-        )
+        add_btn.setStyleSheet(_ACCENT[self._dark]['add_green_btn'])
         add_btn.setFixedHeight(24)
         add_btn.clicked.connect(_add_user)
         vl.addWidget(add_btn)
@@ -1544,11 +1641,7 @@ class EntityEditorWindow(QDialog):
         mat_overrides = skin_elem.find("object[@name='MaterialOverrides']")
 
         group = QGroupBox("Material Overrides", self)
-        group.setStyleSheet(
-            "QGroupBox { font-size: 10px; color: #c8d4e4; border: 1px solid #3a4a5a;"
-            " border-radius: 4px; margin-top: 6px; padding: 6px; }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }"
-        )
+        group.setStyleSheet(_ACCENT[self._dark]['mat_group'])
         vl = QVBoxLayout(group)
         vl.setContentsMargins(8, 6, 8, 6)
         vl.setSpacing(4)
@@ -1567,13 +1660,13 @@ class EntityEditorWindow(QDialog):
 
                 slot_frame = QFrame(self)
                 slot_frame.setFrameShape(QFrame.StyledPanel)
-                slot_frame.setStyleSheet("QFrame { border: 1px solid #3a4a5a; border-radius: 3px; }")
+                slot_frame.setStyleSheet(_ACCENT[self._dark]['slot_frame'])
                 sf_vl = QVBoxLayout(slot_frame)
                 sf_vl.setContentsMargins(6, 4, 6, 4)
                 sf_vl.setSpacing(3)
 
                 slot_lbl = QLabel(f"Slot {i}", self)
-                slot_lbl.setStyleSheet("color: #8ab4d4; font-size: 9px; font-weight: bold;")
+                slot_lbl.setStyleSheet(_ACCENT[self._dark]['slot_lbl'])
                 sf_vl.addWidget(slot_lbl)
 
                 def _make_path_row(row_label, fs, fh):
@@ -1583,7 +1676,7 @@ class EntityEditorWindow(QDialog):
                     rl.setSpacing(4)
                     lbl = QLabel(row_label, self)
                     lbl.setFixedWidth(65)
-                    lbl.setStyleSheet("color: #aaa; font-size: 9px;")
+                    lbl.setStyleSheet(_ACCENT[self._dark]['row_lbl'])
                     inp = QLineEdit(self)
                     inp.setStyleSheet("font-size: 9px;")
                     current = fs.get('value-String', '') if fs is not None else ''
@@ -1617,12 +1710,7 @@ class EntityEditorWindow(QDialog):
                 sf_vl.addWidget(_make_path_row("Override:", f_over_str, f_over_hash))
 
                 rm_btn = QPushButton("× Remove Slot", self)
-                rm_btn.setStyleSheet(
-                    "QPushButton { background: #3a2020; color: #c87e7e;"
-                    " border: 1px solid #5a3030; border-radius: 3px;"
-                    " padding: 2px 8px; font-size: 9px; }"
-                    "QPushButton:hover { background: #4a2525; }"
-                )
+                rm_btn.setStyleSheet(_ACCENT[self._dark]['remove_btn'])
                 rm_btn.setFixedHeight(20)
 
                 def _remove_slot(_checked=False, mo=mat_overrides, m=mat):
@@ -1698,11 +1786,7 @@ class EntityEditorWindow(QDialog):
                 traceback.print_exc()
 
         add_btn = QPushButton("+ Add Material Slot", self)
-        add_btn.setStyleSheet(
-            "QPushButton { background: #1e2e3e; color: #7ec87e; border: 1px solid #2a5a2a;"
-            " border-radius: 3px; padding: 3px 10px; font-size: 10px; }"
-            "QPushButton:hover { background: #2a3e2a; }"
-        )
+        add_btn.setStyleSheet(_ACCENT[self._dark]['add_green_btn'])
         add_btn.setFixedHeight(24)
         add_btn.clicked.connect(_add_slot)
         vl.addWidget(add_btn)
@@ -1824,9 +1908,7 @@ class EntityEditorWindow(QDialog):
 
             # Live BinHex preview label (col 2) — skipped for booleans/checkboxes
             hex_lbl = QLabel(self)
-            hex_lbl.setStyleSheet(
-                "color: #484860; font-family: Consolas, monospace; font-size: 8px;"
-            )
+            hex_lbl.setStyleSheet(_ACCENT[self._dark]['hex_preview'])
             hex_lbl.setToolTip("BinHex (updates as you type)")
 
             def _update_hex(fe=field, hl=hex_lbl):
@@ -2091,13 +2173,13 @@ class EntityEditorWindow(QDialog):
                 self.schedule_auto_save()
 
             checkbox.toggled.connect(on_toggle)
-            apply_checkbox_style(checkbox)
+            apply_checkbox_style(checkbox, dark=self._dark)
             return checkbox
 
         # Multi-byte raw hex — editable hex field
         inp = QLineEdit(binhex or "", self)
         inp.setFont(QFont("Consolas", 9))
-        inp.setStyleSheet("color: #aaa;")
+        inp.setStyleSheet(_ACCENT[self._dark]['hex_input'])
         inp.setPlaceholderText("hex bytes (e.g. 0A1B2C3D)")
         inp.setValidator(QRegularExpressionValidator(
             QRegularExpression(r'[0-9a-fA-F]*'), inp
@@ -2398,12 +2480,7 @@ class EntityEditorWindow(QDialog):
         # × Remove button when this is an item inside a list container
         if list_parent is not None:
             rm_btn = QPushButton("× Remove", self)
-            rm_btn.setStyleSheet(
-                "QPushButton { background: #3a2020; color: #c87e7e;"
-                " border: 1px solid #5a3030; border-radius: 3px;"
-                " padding: 2px 8px; font-size: 9px; }"
-                "QPushButton:hover { background: #4a2525; }"
-            )
+            rm_btn.setStyleSheet(_ACCENT[self._dark]['remove_btn'])
             rm_btn.setFixedHeight(20)
 
             def _remove(_checked=False, lp=list_parent, el=elem):
@@ -2468,11 +2545,7 @@ class EntityEditorWindow(QDialog):
     def _add_list_item_button(self, parent_layout, container_elem, item_name: str):
         """Append an 'Add <item_name>' button that clones the last list entry."""
         btn = QPushButton(f"+ Add {item_name}", self)
-        btn.setStyleSheet(
-            "QPushButton { background: #2a3a2a; color: #7ec87e; border: 1px solid #3a5a3a;"
-            " border-radius: 3px; padding: 3px 10px; font-size: 10px; }"
-            "QPushButton:hover { background: #3a4a3a; }"
-        )
+        btn.setStyleSheet(_ACCENT[self._dark]['add_green_btn'])
         btn.setFixedHeight(24)
 
         def _add_item():
@@ -2666,7 +2739,7 @@ class EntityEditorWindow(QDialog):
 
         checkbox.setChecked(get_bool())
         checkbox.toggled.connect(set_bool)
-        apply_checkbox_style(checkbox)
+        apply_checkbox_style(checkbox, dark=self._dark)
         return checkbox
 
     def create_integer_field(self, field_elem, value_attr):

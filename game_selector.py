@@ -5,13 +5,18 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPixmap
 
+from theme_settings import apply_dialog_theme
+
 class GameSelectorDialog(QDialog):
     """Dialog for selecting which game to edit"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.selected_game = None
         self.setup_ui()
+        # Follow the user's Light/Dark preference (the game buttons keep their
+        # own brand colors; everything else comes from the shared theme).
+        apply_dialog_theme(self)
     
     def setup_ui(self):
         """Setup the game selection UI"""
@@ -32,7 +37,7 @@ class GameSelectorDialog(QDialog):
         subtitle_label = QLabel("Choose which game's levels you want to edit")
         subtitle_label.setFont(QFont("Arial", 12))
         subtitle_label.setAlignment(Qt.AlignCenter)
-        subtitle_label.setStyleSheet("color: #666;")
+        subtitle_label.setStyleSheet("color: #888;")   # dim, readable on both themes
         layout.addWidget(subtitle_label)
         
         layout.addSpacing(20)

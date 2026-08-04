@@ -14,6 +14,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QIcon, QColor
 from data_models import Entity
 from ui_style_utils import apply_checkbox_style
+from theme_settings import apply_dialog_theme
 import time
 
 
@@ -179,6 +180,9 @@ class EntityExportDialog(QDialog):
         
         self.setup_ui()
         self.load_existing_collections()
+        # Follow the user's Light/Dark preference (the main window's theme
+        # toggle re-themes this live via retheme_open_windows).
+        apply_dialog_theme(self)
         
     def setup_ui(self):
         """Setup the export dialog UI"""
@@ -931,6 +935,9 @@ class EntityImportDialog(QDialog):
         
         self.setup_ui()
         self.load_collections()
+        # Follow the user's Light/Dark preference (the main window's theme
+        # toggle re-themes this live via retheme_open_windows).
+        apply_dialog_theme(self)
     
     def setup_ui(self):
         """Setup the import dialog UI - WITH PER-ENTITY TARGET ASSIGNMENT"""
@@ -1081,7 +1088,7 @@ class EntityImportDialog(QDialog):
 
         # Layer info label
         layer_info_label = QLabel("")
-        layer_info_label.setStyleSheet("color: #666; font-size: 9pt;")
+        layer_info_label.setStyleSheet("color: #888; font-size: 9pt;")   # readable on both themes
         layer_info_label.setWordWrap(True)
         dialog_layout.addWidget(layer_info_label)
 

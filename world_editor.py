@@ -18,8 +18,8 @@ preset objects defined in the sibling ``<name>.managers.xml`` (inside the
 DataBaseItemManager). This editor reads that catalog and offers each slot as a
 dropdown of the presets of the matching class, instead of a raw GUID string.
 
-UI/architecture mirrors entity_editor.py (dark theme, scroll area, search,
-debounced auto-save).
+UI/architecture mirrors entity_editor.py (user's light/dark theme via
+theme_settings.apply_dialog_theme, scroll area, search, debounced auto-save).
 """
 
 import os
@@ -36,6 +36,21 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QFont, QImage, QPixmap
+
+from theme_settings import apply_dialog_theme
+
+# Theming — the dialog follows the user's Light/Dark preference via
+# apply_dialog_theme (it used to hardcode a dark stylesheet). The shared
+# stylesheet covers the basic widgets; the texture-thumbnail tiles below are
+# the only per-theme extras, restyled live through _retheme().
+_WE_STYLES = {
+    True:  {'thumb': ("background: #15151e; border: 1px solid #34344a;"
+                      " border-radius: 4px; color: #666; font-size: 9px;"),
+            'cap':   "color: #8a9a8a; font-size: 9px; font-weight: normal;"},
+    False: {'thumb': ("background: #e8e8ee; border: 1px solid #b8b8c8;"
+                      " border-radius: 4px; color: #888; font-size: 9px;"),
+            'cap':   "color: #4a6a4a; font-size: 9px; font-weight: normal;"},
+}
 
 # Layer texture slots that get an XBT thumbnail preview: (attr, caption, is_normal)
 _TEX_SLOTS = [('Texture', 'Diffuse', False), ('NormalMap', 'Normal', True),
@@ -187,6 +202,8 @@ class WorldEditorWindow(QDialog):
         self._rows = []      # (search_text, label, widget, group)
         self._groups = []
         self._backup_made = False
+        self._dark = True            # _retheme() re-picks from the user's preference
+        self._themed_labels = []     # (widget, _WE_STYLES key) — restyled on _retheme
 
         self._autosave = QTimer(self)
         self._autosave.setSingleShot(True)
@@ -196,26 +213,25 @@ class WorldEditorWindow(QDialog):
         self.setMinimumSize(760, 560)
         self.resize(1000, 820)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-        self.setStyleSheet(
-            "QDialog { background: #1e1e28; }"
-            "QLabel { color: #c8c8d4; }"
-            "QGroupBox { color: #9aa4d0; border: 1px solid #34344a; border-radius: 4px;"
-            " margin-top: 8px; font-weight: bold; }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }"
-            "QLineEdit, QComboBox, QPlainTextEdit { background: #262633; color: #e0e0ea;"
-            " border: 1px solid #3a3a4e; border-radius: 3px; padding: 2px 4px; font-size: 11px; }"
-            "QComboBox QAbstractItemView { background: #262633; color: #e0e0ea;"
-            " selection-background-color: #0078d7; }"
-            "QPushButton { background: #2a3a4a; color: #cfe0f0; border: 1px solid #3a4a5a;"
-            " border-radius: 3px; padding: 4px 10px; }"
-            "QPushButton:hover { background: #35506a; }"
-            "QTabBar::tab { background: #23232f; color: #b8b8c8; padding: 5px 12px; }"
-            "QTabBar::tab:selected { background: #2f2f45; color: #ffffff; }"
-        )
 
         self._build_ui()
+        # Follow the user's Light/Dark preference (also calls _retheme;
+        # retheme_open_windows re-invokes it live when the main window's
+        # theme toggles).
+        apply_dialog_theme(self)
         if game_xml_path:
             self.load(game_xml_path)
+
+    def _retheme(self, dark):
+        """Per-theme styling beyond the shared dialog stylesheet: the XBT
+        thumbnail tiles and their captions (everything else inherits)."""
+        self._dark = bool(dark)
+        styles = _WE_STYLES[self._dark]
+        for w, key in self._themed_labels:
+            try:
+                w.setStyleSheet(styles[key])
+            except RuntimeError:
+                pass   # widget was deleted by a tab rebuild
 
     # ------------------------------------------------------------------ UI
 
@@ -322,6 +338,7 @@ class WorldEditorWindow(QDialog):
         self.tabs.clear()
         self._rows = []
         self._groups = []
+        self._themed_labels = []
         for tag, label, icon in _TAB_FOR_SECTION:
             el = self.root.find(tag) if self.root is not None else None
             if el is None:
@@ -613,13 +630,13 @@ class WorldEditorWindow(QDialog):
             thumb = QLabel()
             thumb.setFixedSize(_THUMB_PX, _THUMB_PX)
             thumb.setAlignment(Qt.AlignCenter)
-            thumb.setStyleSheet(
-                "background: #15151e; border: 1px solid #34344a; border-radius: 4px;"
-                " color: #666; font-size: 9px;")
+            thumb.setStyleSheet(_WE_STYLES[self._dark]['thumb'])
+            self._themed_labels.append((thumb, 'thumb'))
             self._refresh_thumb(thumb, elem.get(name), is_normal)
             cap_lbl = QLabel(cap)
             cap_lbl.setAlignment(Qt.AlignCenter)
-            cap_lbl.setStyleSheet("color: #8a9a8a; font-size: 9px; font-weight: normal;")
+            cap_lbl.setStyleSheet(_WE_STYLES[self._dark]['cap'])
+            self._themed_labels.append((cap_lbl, 'cap'))
             col.addWidget(thumb, 0, Qt.AlignCenter)
             col.addWidget(cap_lbl)
             row.addLayout(col)

@@ -21,6 +21,8 @@ from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread, QTimer, QPropertyAnimat
 from PyQt5.QtGui import QPixmap, QIcon, QPainter, QFont, QColor
 from PyQt5.QtWidgets import QAction
 
+from theme_settings import apply_dialog_theme
+
 # Configuration file for storing patch folder path
 PATCH_CONFIG_FILE = "patch_config.json"
 
@@ -1106,6 +1108,18 @@ class LevelSelectorDialog(QDialog):
         print(f"[DEBUG] LevelSelectorDialog initialized with {len(self.levels_data)} levels")
 
         self.setup_ui()
+        # Follow the user's Light/Dark preference (theme_settings is the one
+        # place dialogs get their theme from; the main window's toggle
+        # re-themes this live via retheme_open_windows → _retheme).
+        apply_dialog_theme(self)
+
+    def _retheme(self, dark):
+        """Per-theme styling beyond the shared dialog stylesheet: the
+        missing-resources warning stays red but readable on both themes."""
+        lbl = getattr(self, '_no_resource_label', None)
+        if lbl is not None:
+            lbl.setStyleSheet(
+                f"color: {'#ff6b6b' if dark else '#c0392b'}; font-size: 11px;")
 
     def setup_ui(self):
         """Setup the complete user interface"""
@@ -1113,50 +1127,20 @@ class LevelSelectorDialog(QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(15, 15, 15, 15)
 
-        # Determine theme colors based on parent's theme
-        is_dark = False
-        if self.parent() and hasattr(self.parent(), 'force_dark_theme'):
-            is_dark = self.parent().force_dark_theme
-        
-        # Define theme colors
-        if is_dark:
-            colors = {
-                'bg': '#2b2b2b',
-                'bg_alt': '#1e1e1e',
-                'button': '#404040',
-                'button_hover': '#4a4a4a',
-                'button_pressed': '#353535',
-                'input': '#353535',
-                'border': '#555555',
-                'text': '#ffffff',
-                'text_secondary': '#888888',
-                'accent': '#0d7377',
-            }
-        else:
-            colors = {
-                'bg': '#f0f0f0',
-                'bg_alt': '#ffffff',
-                'button': '#e0e0e0',
-                'button_hover': '#d0d0d0',
-                'button_pressed': '#c0c0c0',
-                'input': '#ffffff',
-                'border': '#b0b0b0',
-                'text': '#000000',
-                'text_secondary': '#666666',
-                'accent': '#0078d7',
-            }
+        # Colors come from the shared dialog theme (apply_dialog_theme in
+        # __init__ follows the user's Light/Dark preference); only sizing and
+        # both-theme-readable dim grays are styled inline here.
 
         # Header with patch folder info
         header_layout = QVBoxLayout()
         header_label = QLabel("Select a Level to Load")
         header_label.setAlignment(Qt.AlignCenter)
-        header_label.setStyleSheet(f"""
-            QLabel {{
-                font-size: 16px; 
-                font-weight: bold; 
+        header_label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: bold;
                 padding: 10px;
-                color: {colors['text']};
-            }}
+            }
         """)
         header_layout.addWidget(header_label)
         
@@ -1173,7 +1157,7 @@ class LevelSelectorDialog(QDialog):
                 if len(display_path) > 60:
                     display_path = "..." + display_path[-57:]
                 folder_label = QLabel(f"Patch: {display_path}")
-                folder_label.setStyleSheet(f"color: {colors['text_secondary']}; font-size: 11px;")
+                folder_label.setStyleSheet("color: #888; font-size: 11px;")
                 folder_label.setToolTip(patch_folder)  # Show full path on hover
                 patch_info_layout.addWidget(folder_label)
         
@@ -1185,14 +1169,15 @@ class LevelSelectorDialog(QDialog):
                 if len(display_resource) > 60:
                     display_resource = "..." + display_resource[-57:]
                 resource_label = QLabel(f"Resources: {display_resource}")
-                resource_label.setStyleSheet(f"color: {colors['text_secondary']}; font-size: 11px;")
+                resource_label.setStyleSheet("color: #888; font-size: 11px;")
                 resource_label.setToolTip(resource_folder)
                 patch_info_layout.addWidget(resource_label)
             else:
                 no_resource_label = QLabel("Resources: Not Set")
-                no_resource_label.setStyleSheet(f"color: #ff6b6b; font-size: 11px;")
+                no_resource_label.setStyleSheet("color: #ff6b6b; font-size: 11px;")
                 no_resource_label.setToolTip("3D models will not be loaded without a resource folder")
                 patch_info_layout.addWidget(no_resource_label)
+                self._no_resource_label = no_resource_label   # _retheme() recolors
         
         patch_info_layout.addSpacing(10)
         
@@ -1207,44 +1192,12 @@ class LevelSelectorDialog(QDialog):
             "Choose a .pak archive (unpacked on selection) or an "
             "already-unpacked patch folder")
         change_folder_btn.clicked.connect(self.on_change_patch_folder)
-        change_folder_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {colors['button']};
-                border: 1px solid {colors['border']};
-                border-radius: 4px;
-                padding: 5px 10px;
-                color: {colors['text']};
-            }}
-            QPushButton:hover {{
-                background-color: {colors['button_hover']};
-                border: 1px solid {colors['accent']};
-            }}
-            QPushButton:pressed {{
-                background-color: {colors['button_pressed']};
-            }}
-        """)
         patch_info_layout.addWidget(change_folder_btn)
 
-        # Change Resource Folder button (NEW)
+        # Change Resource Folder button (NEW) — colors come from the dialog theme
         change_resource_btn = QPushButton("Set Resource Folder...")
         change_resource_btn.setMaximumWidth(180)
         change_resource_btn.clicked.connect(self.on_change_resource_folder)
-        change_resource_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {colors['button']};
-                border: 1px solid {colors['border']};
-                border-radius: 4px;
-                padding: 5px 10px;
-                color: {colors['text']};
-            }}
-            QPushButton:hover {{
-                background-color: {colors['button_hover']};
-                border: 1px solid {colors['accent']};
-            }}
-            QPushButton:pressed {{
-                background-color: {colors['button_pressed']};
-            }}
-        """)
         patch_info_layout.addWidget(change_resource_btn)
         
         patch_info_layout.addStretch()
@@ -1256,7 +1209,7 @@ class LevelSelectorDialog(QDialog):
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet(f"background-color: {colors['border']};")
+        separator.setStyleSheet("background-color: #888;")   # visible on both themes
         layout.addWidget(separator)
 
         # Filter and search controls
@@ -1265,46 +1218,19 @@ class LevelSelectorDialog(QDialog):
         
         # Filter dropdown
         filter_label = QLabel("Filter:")
-        filter_label.setStyleSheet(f"color: {colors['text']}; font-weight: bold;")
+        filter_label.setStyleSheet("font-weight: bold;")
         filter_layout.addWidget(filter_label)
-        
+
         self.filter_combo = QComboBox()
         self.filter_combo.addItems([
-            "All Levels", 
-            "Complete Levels", 
-            "World Only", 
-            "Has Terrain", 
+            "All Levels",
+            "Complete Levels",
+            "World Only",
+            "Has Terrain",
             "Has Objects"
         ])
-        self.filter_combo.setStyleSheet(f"""
-            QComboBox {{
-                background-color: {colors['input']};
-                border: 1px solid {colors['border']};
-                border-radius: 4px;
-                padding: 5px;
-                color: {colors['text']};
-                min-width: 150px;
-            }}
-            QComboBox:hover {{
-                border: 1px solid {colors['accent']};
-            }}
-            QComboBox::drop-down {{
-                border: none;
-            }}
-            QComboBox::down-arrow {{
-                image: none;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 5px solid {colors['text']};
-                margin-right: 5px;
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: {colors['input']};
-                border: 1px solid {colors['border']};
-                selection-background-color: {colors['accent']};
-                color: {colors['text']};
-            }}
-        """)
+        # Size only — colors come from the dialog theme
+        self.filter_combo.setStyleSheet("QComboBox { min-width: 150px; padding: 5px; }")
         self.filter_combo.currentTextChanged.connect(self.apply_filter)
         filter_layout.addWidget(self.filter_combo)
 
@@ -1312,23 +1238,13 @@ class LevelSelectorDialog(QDialog):
 
         # Search box
         search_label = QLabel("Search:")
-        search_label.setStyleSheet(f"color: {colors['text']}; font-weight: bold;")
+        search_label.setStyleSheet("font-weight: bold;")
         filter_layout.addWidget(search_label)
-        
+
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search levels...")
-        self.search_input.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: {colors['input']};
-                border: 1px solid {colors['border']};
-                border-radius: 4px;
-                padding: 5px;
-                color: {colors['text']};
-            }}
-            QLineEdit:focus {{
-                border: 1px solid {colors['accent']};
-            }}
-        """)
+        # Size only — colors come from the dialog theme
+        self.search_input.setStyleSheet("QLineEdit { padding: 5px; }")
         self.search_input.textChanged.connect(self.apply_filter)
         filter_layout.addWidget(self.search_input, 1)  # Stretch factor of 1
 
@@ -1337,35 +1253,15 @@ class LevelSelectorDialog(QDialog):
         # Level count label
         self.count_label = QLabel()
         self.count_label.setAlignment(Qt.AlignCenter)
-        self.count_label.setStyleSheet(f"color: {colors['text_secondary']}; font-size: 11px; padding: 5px;")
+        self.count_label.setStyleSheet("color: #888; font-size: 11px; padding: 5px;")
         layout.addWidget(self.count_label)
 
         # Scroll area for level buttons
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet(f"""
-            QScrollArea {{
-                border: 1px solid {colors['border']};
-                background-color: {colors['bg_alt']};
-            }}
-            QScrollBar:vertical {{
-                background-color: {colors['button']};
-                width: 12px;
-                border: none;
-            }}
-            QScrollBar::handle:vertical {{
-                background-color: {colors['border']};
-                border-radius: 6px;
-                min-height: 20px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background-color: {colors['accent']};
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0px;
-            }}
-        """)
-        
+        # Scroll area + scrollbar colors come from the dialog theme
+
+
         container = QWidget()
         self.grid_layout = QGridLayout(container)
         self.grid_layout.setSpacing(15)
@@ -1379,23 +1275,8 @@ class LevelSelectorDialog(QDialog):
         
         cancel_button = QPushButton("Cancel")
         cancel_button.setMinimumWidth(100)
-        cancel_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {colors['button']};
-                border: 1px solid {colors['border']};
-                border-radius: 4px;
-                padding: 8px 16px;
-                color: {colors['text']};
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: {colors['button_hover']};
-                border: 1px solid {colors['accent']};
-            }}
-            QPushButton:pressed {{
-                background-color: {colors['button_pressed']};
-            }}
-        """)
+        # Size/weight only — colors come from the dialog theme
+        cancel_button.setStyleSheet("QPushButton { padding: 8px 16px; font-weight: bold; }")
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(cancel_button)
         

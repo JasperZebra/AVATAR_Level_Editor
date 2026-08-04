@@ -32,6 +32,8 @@ from PyQt5.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout,
 import sequence_export_import as sx
 import sequence_link as sl
 import sequence_placement
+# Both dialogs follow the user's Light/Dark preference via apply_dialog_theme.
+from theme_settings import apply_dialog_theme
 
 
 SEQUENCES_DIRNAME = "sequences"
@@ -57,6 +59,8 @@ class SequenceExportDialog(QDialog):
         self.resize(620, 520)
         self._build()
         self._load_sequences()
+        # Follow the user's Light/Dark preference (re-invoked live on toggle).
+        apply_dialog_theme(self)
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -177,6 +181,8 @@ class SequenceImportDialog(QDialog):
         self.resize(660, 640)
         self._build()
         self._load_bundles()
+        # Follow the user's Light/Dark preference (re-invoked live on toggle).
+        apply_dialog_theme(self)
 
     def _build(self):
         layout = QVBoxLayout(self)

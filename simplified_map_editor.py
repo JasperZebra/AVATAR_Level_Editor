@@ -14704,6 +14704,15 @@ class SimplifiedMapEditor(QMainWindow):
         if hasattr(self, 'entity_tree'):
             self.force_refresh_entity_tree_colors()
 
+        # Re-theme every open themed dialog/tool window live (they all style
+        # themselves via theme_settings.apply_dialog_theme).
+        try:
+            from theme_settings import retheme_open_windows
+            retheme_open_windows(self.force_dark_theme)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
     def apply_theme(self):
         """Apply the selected theme to the application"""
         if self.force_dark_theme:

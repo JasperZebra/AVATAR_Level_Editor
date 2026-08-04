@@ -99,22 +99,40 @@ class _SaveWorker(QThread):
 # XML syntax highlighter (applied lazily by Qt — no lag on large files)
 # ---------------------------------------------------------------------------
 
+# Syntax + tree item colors per theme (VS Code-ish dark; darker ink on light).
+_SYNTAX = {
+    True:  {'tag': '#4EC9B0', 'attr': '#9CDCFE', 'val': '#CE9178',
+            'comment': '#6A9955', 'hex': '#666666'},
+    False: {'tag': '#0B7261', 'attr': '#0451A5', 'val': '#A31515',
+            'comment': '#008000', 'hex': '#999999'},
+}
+_ITEM_COLORS = {
+    True:  {'obj': '#4EC9B0', 'obj2': '#B5CEA8', 'name': '#9CDCFE',
+            'val': '#d4d4d4', 'ro': '#8a8a8a', 'dim': '#666666'},
+    False: {'obj': '#0B7261', 'obj2': '#4B7A2F', 'name': '#0451A5',
+            'val': '#1e1e1e', 'ro': '#777777', 'dim': '#999999'},
+}
+
+
 class _XmlHighlighter(QSyntaxHighlighter):
-    def __init__(self, doc):
+    def __init__(self, doc, dark=True):
         super().__init__(doc)
+        self._rules = []
+        self.set_dark(dark)
+
+    def set_dark(self, dark):
         import re
-        _tag     = QTextCharFormat(); _tag.setForeground(QColor("#4EC9B0"))
-        _attr    = QTextCharFormat(); _attr.setForeground(QColor("#9CDCFE"))
-        _val     = QTextCharFormat(); _val.setForeground(QColor("#CE9178"))
-        _comment = QTextCharFormat(); _comment.setForeground(QColor("#6A9955"))
-        _hex     = QTextCharFormat(); _hex.setForeground(QColor("#666666"))
+        c = _SYNTAX[bool(dark)]
+        def _fmt(color):
+            f = QTextCharFormat(); f.setForeground(QColor(color)); return f
         self._rules = [
-            (re.compile(r'<!--.*?-->', re.DOTALL), _comment),
-            (re.compile(r'</?[\w:.-]+'),            _tag),
-            (re.compile(r'\s[\w:.-]+='),             _attr),
-            (re.compile(r'"[^"]*"'),                 _val),
-            (re.compile(r'>[0-9A-Fa-f]{8,}<'),       _hex),
+            (re.compile(r'<!--.*?-->', re.DOTALL), _fmt(c['comment'])),
+            (re.compile(r'</?[\w:.-]+'),            _fmt(c['tag'])),
+            (re.compile(r'\s[\w:.-]+='),             _fmt(c['attr'])),
+            (re.compile(r'"[^"]*"'),                 _fmt(c['val'])),
+            (re.compile(r'>[0-9A-Fa-f]{8,}<'),       _fmt(c['hex'])),
         ]
+        self.rehighlight()
 
     def highlightBlock(self, text):
         for pat, fmt in self._rules:
@@ -205,46 +223,23 @@ def _resync_binhex(root_elem):
 
 
 # ---------------------------------------------------------------------------
-# Dark theme — the dialog hardcodes light text colors (#d4d4d4, #9CDCFE, …),
-# so without an explicit dark stylesheet the system light palette rendered
-# white-on-white trees that only became readable when a row was selected.
+# Theming — the dialog follows the user's Light/Dark preference via
+# theme_settings.apply_dialog_theme (it used to hardcode a dark stylesheet,
+# and before that no stylesheet at all — white-on-white on the light palette).
+# Tree item + syntax colors switch with the theme through _retheme().
 # ---------------------------------------------------------------------------
 
-_DARK_STYLE = """
-QDialog, QWidget { background: #1e1e1e; color: #d4d4d4; }
-QTreeWidget {
-    background: #252526; alternate-background-color: #2c2c2d;
-    color: #d4d4d4; border: 1px solid #3a3a3a;
-    selection-background-color: #094771;
+from theme_settings import apply_dialog_theme
+
+# Compact toolbar buttons: size only — colors come from the dialog theme.
+_BTN_COMPACT = "QPushButton { font-size: 10px; padding: 1px 4px; }"
+
+_HEADER_STYLE = {
+    True:  ("font-weight: bold; font-size: 12px; color: #ccc;"
+            " padding: 5px 8px; background: #1e2a38; border-bottom: 1px solid #333;"),
+    False: ("font-weight: bold; font-size: 12px; color: #1e2a38;"
+            " padding: 5px 8px; background: #d6e4f0; border-bottom: 1px solid #b0c4d8;"),
 }
-QTreeWidget::item { min-height: 18px; }
-QTreeWidget::item:selected { background: #094771; color: #ffffff; }
-QHeaderView::section {
-    background: #2d2d30; color: #cccccc; border: none;
-    border-right: 1px solid #3a3a3a; border-bottom: 1px solid #3a3a3a;
-    padding: 3px 6px; font-size: 10px;
-}
-QLineEdit {
-    background: #2d2d30; color: #d4d4d4; border: 1px solid #3a4a5a;
-    border-radius: 3px; padding: 2px 4px; selection-background-color: #094771;
-}
-QPlainTextEdit { background: #1a1a1a; color: #d4d4d4; border: 1px solid #333; }
-QTabWidget::pane { border: 1px solid #3a3a3a; background: #1e1e1e; }
-QTabBar::tab {
-    background: #2d2d30; color: #aaaaaa; padding: 5px 14px;
-    border: 1px solid #3a3a3a; border-bottom: none;
-    border-top-left-radius: 3px; border-top-right-radius: 3px;
-}
-QTabBar::tab:selected { background: #1e2a38; color: #ffffff; }
-QTabBar::tab:hover { background: #3a4a5a; }
-QSplitter::handle { background: #2d2d30; }
-QProgressBar { background: #2d2d30; border: 1px solid #3a3a3a; border-radius: 3px; }
-QProgressBar::chunk { background: #094771; }
-QScrollBar:vertical { background: #1e1e1e; width: 12px; }
-QScrollBar::handle:vertical { background: #3a3a3a; border-radius: 4px; min-height: 24px; }
-QScrollBar:horizontal { background: #1e1e1e; height: 12px; }
-QScrollBar::handle:horizontal { background: #3a3a3a; border-radius: 4px; min-width: 24px; }
-"""
 
 
 # ---------------------------------------------------------------------------
@@ -274,45 +269,46 @@ def _field_type(field_elem):
 _FIELD_ROLE = Qt.UserRole + 1   # simple-tree items: the backing <field> element
 
 
-def _make_field_item(parent_item, field):
+def _make_field_item(parent_item, field, colors):
     """One field row: shows name/value, carries the backing element, and is
     flagged editable (value column) when the field is a simple scalar."""
     name  = field.get('name') or field.get('hash', '?')
     value = _field_value(field)
     ftype = _field_type(field)
     fi = QTreeWidgetItem(parent_item, [name, value])
-    fi.setForeground(0, QColor("#9CDCFE"))
+    fi.setForeground(0, QColor(colors['name']))
     if _field_is_editable(field):
         fi.setData(0, _FIELD_ROLE, field)
         fi.setFlags(fi.flags() | Qt.ItemIsEditable)
-        fi.setForeground(1, QColor("#d4d4d4"))
+        fi.setForeground(1, QColor(colors['val']))
         tip = f"Type: {ftype} — click to edit (BinHex updates automatically)"
     else:
-        fi.setForeground(1, QColor("#8a8a8a"))
+        fi.setForeground(1, QColor(colors['ro']))
         tip = (f"Type: {ftype} — read-only (structural field)" if ftype
                else "read-only (structural field)")
     fi.setToolTip(1, tip)
     return fi
 
 
-def _add_elem_to_tree(elem, parent_item, depth=0):
+def _add_elem_to_tree(elem, parent_item, depth=0, colors=None):
     """Recursively add an FCB <object> and its children to a QTreeWidget item."""
+    colors = colors or _ITEM_COLORS[True]
     title = elem.get('name') or elem.get('hash', 'object')
     obj_item = QTreeWidgetItem(parent_item, [title, ""])
     obj_item.setExpanded(depth < 2)
-    obj_item.setForeground(0, QColor("#4EC9B0") if depth == 0 else QColor("#B5CEA8"))
+    obj_item.setForeground(0, QColor(colors['obj'] if depth == 0 else colors['obj2']))
 
     for field in elem.findall("field"):
-        _make_field_item(obj_item, field)
+        _make_field_item(obj_item, field, colors)
 
     if depth < 5:
         for child in elem.findall("object"):
-            _add_elem_to_tree(child, obj_item, depth + 1)
+            _add_elem_to_tree(child, obj_item, depth + 1, colors)
     else:
         children = elem.findall("object")
         if children:
             note = QTreeWidgetItem(obj_item, [f"… {len(children)} nested object(s)", ""])
-            note.setForeground(0, QColor("#666"))
+            note.setForeground(0, QColor(colors['dim']))
 
 
 _XML_DISPLAY_LIMIT = 300_000   # chars; beyond this the XML tab shows a notice
@@ -329,7 +325,6 @@ class EntityLibraryBrowserDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Entity Library Browser")
         self.resize(1350, 860)
-        self.setStyleSheet(_DARK_STYLE)
 
         self._xml_root        = None
         self._file_path       = None
@@ -341,11 +336,45 @@ class EntityLibraryBrowserDialog(QDialog):
         self._filter_matches  = []   # list of visible prototype QTreeWidgetItems
         self._filter_index    = -1   # current position in _filter_matches
         self._suppress_item_changed = False
+        self._item_colors     = _ITEM_COLORS[True]   # _retheme() re-picks
 
         self._setup_ui()
+        # Follow the user's Light/Dark preference (also calls _retheme, which
+        # sets the header/xml/item colors; retheme_open_windows re-invokes it
+        # live when the main window's theme toggles).
+        self._dark = True
+        apply_dialog_theme(self)
 
         if file_path and os.path.exists(file_path):
             self._start_load(file_path)
+
+    def _retheme(self, dark):
+        """Per-theme styling beyond the shared dialog stylesheet: header bar,
+        XML editor font/colors, syntax highlighter, and tree item colors
+        (repopulates the visible trees so their foregrounds switch too)."""
+        self._dark = bool(dark)
+        self._item_colors = _ITEM_COLORS[self._dark]
+        self._header.setStyleSheet(_HEADER_STYLE[self._dark])
+        if self._dark:
+            self._xml_view.setStyleSheet(
+                "QPlainTextEdit { background: #1a1a1a; color: #d4d4d4;"
+                " border: 1px solid #333; font-family: Consolas, monospace; }")
+        else:
+            self._xml_view.setStyleSheet(
+                "QPlainTextEdit { background: #ffffff; color: #1e1e1e;"
+                " border: 1px solid #b0b0b0; font-family: Consolas, monospace; }")
+        self._xml_highlighter.set_dark(self._dark)
+        # Refresh tree item colors for the current content.
+        if self._xml_root is not None:
+            self._repaint_left_tree_colors()
+        key = getattr(self, '_current_item_key', None)
+        if key is not None and key in self._proto_items:
+            self._refresh_simple_tab(self._proto_items[key][1])
+
+    def _repaint_left_tree_colors(self):
+        for i in range(self._entity_tree.topLevelItemCount()):
+            self._entity_tree.topLevelItem(i).setForeground(
+                0, QColor(self._item_colors['obj']))
 
     # ------------------------------------------------------------------
     # UI
@@ -407,12 +436,7 @@ class EntityLibraryBrowserDialog(QDialog):
         self._search.textChanged.connect(self._filter_entity_tree)
         self._search.returnPressed.connect(lambda: self._step_filter(+1))
 
-        _btn_style = (
-            "QPushButton { background: #2a3a4a; color: #aaa; border: 1px solid #3a4a5a;"
-            " border-radius: 3px; font-size: 10px; padding: 1px 4px; }"
-            "QPushButton:hover { background: #3a4a5a; }"
-            "QPushButton:disabled { color: #555; }"
-        )
+        _btn_style = _BTN_COMPACT   # colors come from the dialog theme
         self._prev_btn = QPushButton("▲")
         self._prev_btn.setFixedSize(22, 22)
         self._prev_btn.setToolTip("Previous match")
@@ -468,9 +492,7 @@ class EntityLibraryBrowserDialog(QDialog):
         rl.setSpacing(0)
 
         self._header = QLabel("Select a prototype from the list")
-        self._header.setStyleSheet(
-            "font-weight: bold; font-size: 12px; color: #ccc;"
-            " padding: 5px 8px; background: #1e2a38; border-bottom: 1px solid #333;")
+        self._header.setStyleSheet(_HEADER_STYLE[True])   # _retheme() re-styles
         rl.addWidget(self._header)
 
         self._tabs = QTabWidget()
@@ -493,12 +515,7 @@ class EntityLibraryBrowserDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        _btn_style = (
-            "QPushButton { background: #2a3a4a; color: #aaa; border: 1px solid #3a4a5a;"
-            " border-radius: 3px; font-size: 10px; padding: 1px 4px; }"
-            "QPushButton:hover { background: #3a4a5a; }"
-            "QPushButton:disabled { color: #555; }"
-        )
+        _btn_style = _BTN_COMPACT   # colors come from the dialog theme
 
         # Toolbar row: search + nav + expand/collapse
         srow = QHBoxLayout()
@@ -590,12 +607,7 @@ class EntityLibraryBrowserDialog(QDialog):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(4)
 
-        _btn_style = (
-            "QPushButton { background: #2a3a4a; color: #aaa; border: 1px solid #3a4a5a;"
-            " border-radius: 3px; font-size: 10px; padding: 1px 4px; }"
-            "QPushButton:hover { background: #3a4a5a; }"
-            "QPushButton:disabled { color: #555; }"
-        )
+        _btn_style = _BTN_COMPACT   # colors come from the dialog theme
 
         toolbar = QHBoxLayout()
         toolbar.setSpacing(3)
@@ -670,7 +682,7 @@ class EntityLibraryBrowserDialog(QDialog):
             "QPlainTextEdit { background: #1a1a1a; color: #d4d4d4;"
             " border: 1px solid #333; font-family: Consolas, monospace; }")
         self._xml_view.setLineWrapMode(QPlainTextEdit.NoWrap)
-        _XmlHighlighter(self._xml_view.document())
+        self._xml_highlighter = _XmlHighlighter(self._xml_view.document())
         layout.addWidget(self._xml_view, 1)
         self._xml_truncated = False
 
@@ -757,7 +769,7 @@ class EntityLibraryBrowserDialog(QDialog):
             lib_item.setExpanded(True)
             lib_item.setFlags(lib_item.flags() & ~Qt.ItemIsSelectable)
             f = lib_item.font(0); f.setBold(True); lib_item.setFont(0, f)
-            lib_item.setForeground(0, QColor("#4EC9B0"))
+            lib_item.setForeground(0, QColor(self._item_colors['obj']))
 
             for proto_elem in lib_elem.findall("object[@name='EntityPrototype']"):
                 pf = proto_elem.find("field[@name='Name']")
@@ -825,26 +837,27 @@ class EntityLibraryBrowserDialog(QDialog):
             return
 
         # Properties group — direct <field> children of Entity
+        colors = self._item_colors
         direct_fields = entity_elem.findall("field")
         if direct_fields:
             props_item = QTreeWidgetItem(self._simple_tree, ["Properties", ""])
             props_item.setExpanded(True)
             f = props_item.font(0); f.setBold(True); props_item.setFont(0, f)
-            props_item.setForeground(0, QColor("#aaaaaa"))
+            props_item.setForeground(0, QColor(colors['ro']))
             for field in direct_fields:
-                _make_field_item(props_item, field)
+                _make_field_item(props_item, field, colors)
 
         # Components
         components_elem = entity_elem.find("object[@name='Components']")
         if components_elem is not None:
             for comp in components_elem:
                 if comp.tag == 'object':
-                    _add_elem_to_tree(comp, self._simple_tree)
+                    _add_elem_to_tree(comp, self._simple_tree, colors=colors)
 
         # Other direct child objects
         for child in entity_elem.findall("object"):
             if child.get('name') != 'Components':
-                _add_elem_to_tree(child, self._simple_tree)
+                _add_elem_to_tree(child, self._simple_tree, colors=colors)
 
         self._simple_tree.setUpdatesEnabled(True)
         self._suppress_item_changed = False

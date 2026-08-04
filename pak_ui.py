@@ -35,6 +35,7 @@ from PyQt5.QtWidgets import (
 )
 
 import pak_archive as pak
+from theme_settings import apply_dialog_theme
 
 PAK_FILTER = "PAK archives (*.pak);;All files (*)"
 
@@ -570,6 +571,10 @@ class RepackDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+        # Follow the user's Light/Dark preference (the main window's theme
+        # toggle re-themes this live via retheme_open_windows).
+        apply_dialog_theme(self)
 
     def _browse(self):
         chosen, _ = QFileDialog.getSaveFileName(

@@ -29,6 +29,13 @@ from entity_editor import (
     enum_to_binhex, compute_hash32_to_binhex,
 )
 from data_models import Entity
+# theme_settings is a root module (project root is on sys.path, like
+# entity_editor / data_models above) — dialogs follow the user's theme.
+from theme_settings import apply_dialog_theme, is_dark_theme
+
+# "Spawn point configured" tick on the Set Spawn Point button: same green
+# meaning, darker ink in light mode.
+_SPAWN_OK_COLOR = {True: '#4c4', False: '#2e7d32'}
 
 # ── Fixed XML fragments (enum option blocks) ─────────────────────────────────
 
@@ -405,6 +412,9 @@ class SpawnPointPickerDialog(QDialog):
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
 
+        # Follow the user's Light/Dark preference (re-invoked live on toggle).
+        apply_dialog_theme(self)
+
     def _populate_existing(self):
         for entity in getattr(self.editor, 'entities', []):
             if 'NPCSpawnPoint' in entity.name:
@@ -520,7 +530,8 @@ class WaveRowWidget(QWidget):
                 self._spawn_pos = (dlg.result_x, dlg.result_y, dlg.result_z)
                 self._spawn_radius = dlg.result_radius
             self.sp_btn.setText(f'✓ {self._spawn_name}')
-            self.sp_btn.setStyleSheet('color: #4c4;')
+            self.sp_btn.setStyleSheet(
+                f'color: {_SPAWN_OK_COLOR[is_dark_theme(self)]};')
 
     def get_data(self):
         return {
@@ -594,6 +605,20 @@ class MPSpawnCreatorDialog(QDialog):
 
         # Start with one blank wave
         self._add_wave()
+
+        # Follow the user's Light/Dark preference (re-invoked live on toggle).
+        apply_dialog_theme(self)
+
+    def _retheme(self, dark):
+        """Per-theme styling the shared dialog stylesheet can't express:
+        re-tint the green "configured" tick on each wave row's button."""
+        try:
+            color = _SPAWN_OK_COLOR[bool(dark)]
+            for row in self._wave_rows:
+                if row._spawn_mode is not None:
+                    row.sp_btn.setStyleSheet(f'color: {color};')
+        except Exception:
+            pass
 
     # ── section builders ──────────────────────────────────────────────────────
 

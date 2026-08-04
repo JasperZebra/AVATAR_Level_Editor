@@ -41,6 +41,13 @@ _TERRAIN_OFFSET = 708          # Avatar .csdat (FC2 .sdat uses 592 — see Terra
 _GRID_SIZE = 65
 _PREVIEW_STRIDE = 2   # downsample combined map for 3D mesh (1040/2 = 520 verts/side)
 
+# theme_settings is a root module (project root is on sys.path) — the dialog
+# follows the user's Light/Dark preference via apply_dialog_theme.
+from theme_settings import apply_dialog_theme
+
+# Unsaved-sectors warning label: same orange meaning, darker ink in light mode.
+_DIRTY_LABEL_COLOR = {True: '#f0a040', False: '#b45f06'}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -945,10 +952,21 @@ class TerrainEditorDialog(QDialog):
         self._flush_timer.timeout.connect(self._flush_main_canvas)
 
         self._setup_ui()
+        # Follow the user's Light/Dark preference (re-invoked live on toggle).
+        apply_dialog_theme(self)
 
         # Auto-load if terrain renderer already has a path
         if terrain_renderer and terrain_renderer.sdat_path:
             self.load_terrain(terrain_renderer.sdat_path)
+
+    def _retheme(self, dark):
+        """Per-theme styling the shared dialog stylesheet can't express:
+        the orange unsaved-sectors label keeps its warning colour readable."""
+        try:
+            self._dirty_label.setStyleSheet(
+                f"color: {_DIRTY_LABEL_COLOR[bool(dark)]};")
+        except Exception:
+            pass
 
     # -- UI construction -----------------------------------------------------
 
@@ -1004,8 +1022,7 @@ class TerrainEditorDialog(QDialog):
 
         lay.addStretch()
 
-        self._dirty_label = QLabel("")
-        self._dirty_label.setStyleSheet("color: #f0a040;")
+        self._dirty_label = QLabel("")   # colour set per-theme in _retheme()
         lay.addWidget(self._dirty_label)
 
         return bar
