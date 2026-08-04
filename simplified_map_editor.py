@@ -16708,31 +16708,41 @@ class EnhancedProgressDialog(QDialog):
         self.progress_bar.setValue(0)
         layout.addWidget(self.progress_bar)
         
-        # Log box
+        # Log box (console look; colors set per theme in _retheme)
         self.log_box = QTextEdit()
         self.log_box.setReadOnly(True)
         self.log_box.setMinimumHeight(200)
         self.log_box.setMaximumHeight(320)
-        self.log_box.setStyleSheet("""
-            QTextEdit {
-                background-color: #333333;
-                color: #d4d4d4;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 16px;
-                border: 1px solid #3e3e3e;
-                border-radius: 8px;
-                padding: 8px;
-            }
-        """)
         layout.addWidget(self.log_box)
-        
+
         # Cancel button
         self.cancel_button = QPushButton("Cancel")
         layout.addWidget(self.cancel_button)
-        
+
         self.was_cancelled = False
         self.is_complete = False  # Track if operation completed
         self.cancel_button.clicked.connect(self.on_cancel)
+
+        # Follow the user's Light/Dark preference. This dialog also shows at
+        # STARTUP, before the main window exists — apply_dialog_theme then
+        # falls back to the saved editor_config.json preference. Guarded: the
+        # boot progress dialog must never be what kills startup.
+        try:
+            from theme_settings import apply_dialog_theme
+            apply_dialog_theme(self)
+        except Exception:
+            self._retheme(True)   # at least make the log box readable
+
+    def _retheme(self, dark):
+        """Theme hook (called by apply_dialog_theme + live toggles): the
+        console-style log box keeps its look in both themes."""
+        if dark:
+            colors = "background-color: #333333; color: #d4d4d4; border: 1px solid #3e3e3e;"
+        else:
+            colors = "background-color: #ffffff; color: #1e1e1e; border: 1px solid #b0b0b0;"
+        self.log_box.setStyleSheet(
+            "QTextEdit { %s font-family: 'Consolas', 'Courier New', monospace;"
+            " font-size: 16px; border-radius: 8px; padding: 8px; }" % colors)
 
     def closeEvent(self, event):
         # Don't call shutdown_cache_manager here - it blocks the UI
