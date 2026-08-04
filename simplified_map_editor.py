@@ -2090,9 +2090,10 @@ class SimplifiedMapEditor(QMainWindow):
             return f"{int(mins) // 60:02d}:{int(mins) % 60:02d}"
 
         def _on_dn_enable(state):
+            # PyQt5: stateChanged passes an int and Qt.Checked compares as one.
+            # `.Checked.value` is PyQt6 syntax — AttributeError in a slot = abort.
             if hasattr(self, 'canvas'):
-                self.canvas.set_day_night_enabled(state == _Qt.Checked.value
-                                                  if isinstance(state, int) else bool(state))
+                self.canvas.set_day_night_enabled(state == _Qt.Checked)
 
         def _on_dn_play(checked):
             self._daynight_play_btn.setText("⏸ Pause" if checked else "▶ Play")
@@ -2119,9 +2120,9 @@ class SimplifiedMapEditor(QMainWindow):
         _light_vbox.addLayout(_gr_row)
 
         def _on_dn_godrays(state):
+            # Same PyQt5 int-state contract as _on_dn_enable above.
             if hasattr(self, 'canvas') and hasattr(self.canvas, 'set_god_rays_enabled'):
-                self.canvas.set_god_rays_enabled(state == _Qt.Checked.value
-                                                 if isinstance(state, int) else bool(state))
+                self.canvas.set_god_rays_enabled(state == _Qt.Checked)
 
         self._daynight_godrays_cb.stateChanged.connect(_on_dn_godrays)
 
