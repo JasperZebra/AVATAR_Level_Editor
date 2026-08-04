@@ -438,12 +438,12 @@ class WaterPlaneRenderer:
         for sector_num, wdi in wd.items():
             if not getattr(wdi, 'has_water', False):
                 continue
-            hm = sdd.get(sector_num)
-            um = umm.get(sector_num)
             wy = float(getattr(wdi, 'water_height', 0.0))
-            geom = self._get_submerged_geometry(hm, um, wy, is_fc2, (cell_idx, sector_num))
-            if geom == 'SKIP':
-                continue
+            # Water is ALWAYS the sector's full square plane. The submerged-cell
+            # clipping (_get_submerged_geometry) carved it into ragged spans
+            # following the terrain — rejected by the user (Aug 2026): every
+            # watered sector draws one flat square quad, like it originally did.
+            geom = 'FULL'
 
             # This sector's water tint = its material's WaterColor (from the xbm).
             wc = _water_color_for(getattr(wdi, 'material_path', None))
