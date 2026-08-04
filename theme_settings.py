@@ -12,6 +12,20 @@ import json
 import os
 
 
+def _safe_print(msg):
+    """Console-safe print: glyphs like ✓/⚠/🌙 raise UnicodeEncodeError on a
+    cp1252 stdout (and print can fail entirely under pythonw/frozen builds
+    where stdout is None). Theme loading must NEVER die on a log line — it
+    runs inside dialog constructors."""
+    try:
+        print(msg)
+    except Exception:
+        try:
+            print(msg.encode('ascii', 'replace').decode('ascii'))
+        except Exception:
+            pass
+
+
 class ThemeSettings:
     """Manages theme preferences with JSON persistence"""
     
@@ -25,10 +39,10 @@ class ThemeSettings:
             if os.path.exists(self.config_file):
                 with open(self.config_file, 'r') as f:
                     settings = json.load(f)
-                    print(f"✓ Loaded theme settings from {self.config_file}")
+                    _safe_print(f"✓ Loaded theme settings from {self.config_file}")
                     return settings
         except Exception as e:
-            print(f"⚠ Could not load settings: {e}")
+            _safe_print(f"⚠ Could not load settings: {e}")
         
         # Return default settings
         return {
@@ -54,10 +68,10 @@ class ThemeSettings:
             self.settings = on_disk
             with open(self.config_file, 'w') as f:
                 json.dump(self.settings, f, indent=4)
-            print(f"✓ Saved theme settings to {self.config_file}")
+            _safe_print(f"✓ Saved theme settings to {self.config_file}")
             return True
         except Exception as e:
-            print(f"⚠ Could not save settings: {e}")
+            _safe_print(f"⚠ Could not save settings: {e}")
             return False
     
     def get_dark_theme(self):
@@ -68,7 +82,7 @@ class ThemeSettings:
         """Set dark theme preference and save"""
         self.settings['force_dark_theme'] = enabled
         self._save_settings()
-        print(f"{'🌙' if enabled else '☀️'} Theme set to {'Dark' if enabled else 'Light'} mode")
+        _safe_print(f"{'🌙' if enabled else '☀️'} Theme set to {'Dark' if enabled else 'Light'} mode")
     
     def get_show_welcome(self):
         """Get show welcome screen preference"""
@@ -182,7 +196,10 @@ def is_dark_theme(widget=None):
             w = w.parent() if callable(getattr(w, 'parent', None)) else None
     except Exception:
         pass
-    return ThemeSettings().get_dark_theme()
+    try:
+        return ThemeSettings().get_dark_theme()
+    except Exception:
+        return False   # theme resolution must never crash a dialog constructor
 
 
 def dialog_stylesheet(dark):
