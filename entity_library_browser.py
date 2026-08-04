@@ -592,6 +592,13 @@ class EntityLibraryBrowserDialog(QDialog):
         self._simple_tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._simple_tree.itemClicked.connect(self._on_simple_clicked)
         self._simple_tree.itemChanged.connect(self._on_simple_item_changed)
+        # Rows tall enough for the inline value editor: with default-height
+        # rows the QLineEdit's border+padding clipped the text vertically the
+        # moment a cell was clicked. Size-only rules — colors stay with the
+        # dialog theme.
+        self._simple_tree.setStyleSheet(
+            "QTreeWidget::item { min-height: 26px; }"
+            "QTreeWidget QLineEdit { padding: 1px 4px; margin: 0px; min-height: 22px; }")
         header = self._simple_tree.header()
         header.setSectionResizeMode(0, QHeaderView.Interactive)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
