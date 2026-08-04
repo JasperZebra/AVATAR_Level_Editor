@@ -104,6 +104,26 @@ impact: <impact of this change>
 reference: <reference to this change in the docs if applicable>
 ```
 
+### 8. Every Change Applies to BOTH Games (Avatar AND Far Cry 2)
+
+**Anything done for Avatar is done for Far Cry 2 too, and vice versa — no exceptions without the user's explicit sign-off.** Bug fixes, features, rendering changes, crash hardening, format work: before calling a task complete, verify the FC2 side gets the same treatment, so a fix on one side never leaves a crash or regression waiting on the other.
+
+How to comply in practice:
+- **Prefer shared code paths** — a change in shared code (shaders, `water_plane_renderer`, the slot guards, the entity browser) covers both games automatically; confirm the touched path really is shared rather than assuming.
+- **Game-aware code needs both branches checked** — anything that branches on `game_mode` / `is_fc2` / file extension (`.csdat` vs `.sdat`, 16 vs 80 sector stride, water-block offsets) must be updated and reasoned through for BOTH branches (see the "FC2 parity" and "FC2 terrain" sections below for the known traps).
+- **Ground-truth FC2 against real data** — the unpacked FC2 data at the user's `...MODDING` folder is configured for exactly this.
+- **If true parity is impossible** (engine genuinely lacks the feature, e.g. MP Spawn creator), disable the action gracefully on the FC2 side with an explanatory label — never leave it able to crash — and record the exception in this file.
+
+Worked example (Aug 2026 fixes): square water planes, world-anchored reflections, the black-model tint guard, and the slot-hardening sweep are all in shared code — both games got them at once. Known standing gap: `tools/create_sector.py` still assumes the Avatar grid (`sector_xy = id % 16`, IDs 0–255) — using it on an FC2 world (80-wide grid, IDs like 2592) writes wrong X/Y headers; it needs the `sector_grid_stride` treatment before FC2 sector creation is offered.
+
+### 9. Every Fix Applies to BOTH View Modes (2D AND 3D)
+
+**2D mode IS the 3D scene rendered through a top-down orthographic camera** (see "2D view IS the 3D scene, seen top-down"). So a rendering/interaction fix made in one mode must be made — or verified already covered — in the other, in the same task.
+
+- Shared-scene changes (shaders, models, textures, water, terrain) usually cover both automatically, BUT shaders must handle **both projections**: `gl_ProjectionMatrix[2][3]` is −1 under perspective (3D) and 0 under ortho (2D top-down) — view vectors, fresnel, and anything eye-relative must branch on it (see "The shading view vector must follow the PROJECTION"). A fix tested only in 3D can silently break 2D (the flat ambient-only models bug).
+- Mode-specific code still exists (QPainter overlays, 2D picking/labels, the ortho camera link) — when fixing one side, grep for the sibling path and apply the same fix there.
+- Test/verify in both modes before calling the task done; the 2D↔3D camera-link tests (`test_camera_link_2d_3d.py`, `test_topdown_ortho.py`, `test_topdown_view_vector.py`) show the established patterns.
+
 ---
 
 ## Testing
