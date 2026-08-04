@@ -294,36 +294,42 @@ class SequenceImportDialog(QDialog):
             self.strip_note.setText("")
 
     def _start_placement(self):
-        if self.bundle is None:
-            return
-        mode = self.mode.currentData()
-        cams = sx.camera_nodes(self.bundle)
+        try:
+            if self.bundle is None:
+                return
+            mode = self.mode.currentData()
+            cams = sx.camera_nodes(self.bundle)
 
-        if mode == sx.MODE_CUTSCENE and not cams:
-            QMessageBox.warning(self, "No camera",
-                                "This bundle has no cinematic camera. Pick "
-                                "'Scripted event' instead.")
-            return
-        if not self.graph_name.text().strip():
-            QMessageBox.warning(self, "Name needed",
-                                "Give the Lua graph a name.")
-            return
-        if mode == sx.MODE_SCRIPTED and cams:
-            sx.strip_camera_nodes(self.bundle)
+            if mode == sx.MODE_CUTSCENE and not cams:
+                QMessageBox.warning(self, "No camera",
+                                    "This bundle has no cinematic camera. Pick "
+                                    "'Scripted event' instead.")
+                return
+            if not self.graph_name.text().strip():
+                QMessageBox.warning(self, "Name needed",
+                                    "Give the Lua graph a name.")
+                return
+            if mode == sx.MODE_SCRIPTED and cams:
+                sx.strip_camera_nodes(self.bundle)
 
-        group = sl.PlacementGroup.from_bundle(self.bundle)
-        group.import_options = {
-            "mode": mode,
-            "graph_name": self.graph_name.text().strip(),
-            "doc_name": self.doc_name.text().strip() or "custom",
-            "trigger_id": self.trigger_id.text().strip(),
-            "once_only": self.once.isChecked(),
-            "camera_id": (cams[0].get("EntityId") if cams and
-                          mode == sx.MODE_CUTSCENE else None),
-        }
-        sequence_placement.begin(self.editor, group,
-                                 snap_to_terrain=self.snap.isChecked())
-        self.accept()
+            group = sl.PlacementGroup.from_bundle(self.bundle)
+            group.import_options = {
+                "mode": mode,
+                "graph_name": self.graph_name.text().strip(),
+                "doc_name": self.doc_name.text().strip() or "custom",
+                "trigger_id": self.trigger_id.text().strip(),
+                "once_only": self.once.isChecked(),
+                "camera_id": (cams[0].get("EntityId") if cams and
+                              mode == sx.MODE_CUTSCENE else None),
+            }
+            sequence_placement.begin(self.editor, group,
+                                     snap_to_terrain=self.snap.isChecked())
+            self.accept()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Import sequence",
+                                f"Starting placement failed:\n{e}")
 
 
 # ── entry points, matching entity_export_import's naming ───────────────────────

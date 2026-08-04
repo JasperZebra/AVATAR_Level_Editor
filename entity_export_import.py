@@ -3150,13 +3150,19 @@ class EntityImportDialog(QDialog):
         )
         
         if folder_path:
-            # Check if it's a valid collection
-            xml_files = [f for f in os.listdir(folder_path) if f.endswith('.xml')]
-            if xml_files:
-                self.load_collection_from_path(folder_path)
-            else:
-                QMessageBox.warning(self, "Invalid Collection", 
-                                  "The selected folder does not contain any XML entity files.")
+            try:
+                # Check if it's a valid collection
+                xml_files = [f for f in os.listdir(folder_path) if f.endswith('.xml')]
+                if xml_files:
+                    self.load_collection_from_path(folder_path)
+                else:
+                    QMessageBox.warning(self, "Invalid Collection",
+                                      "The selected folder does not contain any XML entity files.")
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                QMessageBox.warning(self, "Browse for Collection",
+                                    f"Could not load collection from:\n{folder_path}\n\n{e}")
     
     def on_collection_selected(self, current, previous):
         """Handle collection selection"""

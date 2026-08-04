@@ -1078,6 +1078,23 @@ class SimplifiedMapEditor(QMainWindow):
             log("✓ Copy/paste system ready")
         except Exception as e:
             log(f"⚠ Could not setup copy/paste: {e}")
+            # The UI connects buttons/menus/shortcuts to these runtime-bound
+            # methods. If the setup failed they don't exist, and the first
+            # right-click or Ctrl+C would raise AttributeError out of a Qt
+            # slot — which ABORTS the app under PyQt5. Install no-op stubs
+            # that explain the problem instead.
+            def _cp_unavailable(*_a, **_k):
+                QMessageBox.warning(
+                    self, "Copy/Paste Unavailable",
+                    "The copy/paste system failed to initialize at startup — "
+                    "this action is disabled.\nCheck the console log for the "
+                    "original error.")
+            for _name in ('select_all_entities', 'copy_selected_entities',
+                          'duplicate_selected_entities',
+                          'delete_selected_entities', 'show_clipboard_info',
+                          'paste_entities'):
+                if not hasattr(self, _name):
+                    setattr(self, _name, _cp_unavailable)
 
         # Main UI (creates canvas and entity browser)
         # select_all_entities is already bound above so entity browser can reference it
@@ -3204,12 +3221,27 @@ class SimplifiedMapEditor(QMainWindow):
                 self.canvas._tp_feather = v
 
         def _save_tex_clicked():
-            if hasattr(self, 'canvas'):
-                self.canvas._save_texture_paint()
+            # PyQt5 aborts the app on an unhandled slot exception — the save
+            # writes XBTs + runs texconv, so plenty can raise.
+            try:
+                if hasattr(self, 'canvas'):
+                    self.canvas._save_texture_paint()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                QMessageBox.warning(self, "Terrain Painting",
+                                    f"Saving painted textures failed:\n{e}")
 
         def _refresh_tex_clicked():
-            if hasattr(self, 'canvas'):
-                self.canvas._refresh_texture_paint()
+            # The refresh path imports PIL (optional dep) inside the slot.
+            try:
+                if hasattr(self, 'canvas'):
+                    self.canvas._refresh_texture_paint()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                QMessageBox.warning(self, "Terrain Painting",
+                                    f"Refreshing painted textures failed:\n{e}")
 
         self._tp_size_slider.valueChanged.connect(_tp_size_changed)
         tp_sz_dec.clicked.connect(lambda: self._tp_size_slider.setValue(self._tp_size_slider.value() - 1))
@@ -3464,41 +3496,70 @@ class SimplifiedMapEditor(QMainWindow):
         
         layout.addLayout(item_layout)
 
+    def _load_tools_script(self, script_name):
+        """Import a GUI script from tools/ by file path, with a user-facing error
+        instead of a crash when it's missing or broken. PyQt5 ABORTS the whole
+        app on an unhandled exception inside a Qt slot, so the menu handlers
+        below must never let one escape (this is what made Enable All Sectors /
+        Create New Sector kill the editor). Returns the module or None."""
+        import importlib.util
+        script_path = os.path.join(os.path.dirname(__file__), "tools", script_name)
+        try:
+            if not os.path.isfile(script_path):
+                raise FileNotFoundError(f"Script not found: {script_path}")
+            spec = importlib.util.spec_from_file_location(script_name[:-3], script_path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(
+                self, "Tool unavailable",
+                f"Could not load tools\\{script_name}:\n{e}")
+            return None
+
     def open_enable_all_sectors(self):
         """Open the Enable All Sectors tool"""
-        import importlib.util
-        import os
-        script_path = os.path.join(os.path.dirname(__file__), "tools", "enable_all_sectors.py")
-        spec = importlib.util.spec_from_file_location("enable_all_sectors", script_path)
-        mod  = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        self._enable_sectors_win = mod.EnableAllSectorsWindow()
-        # Pre-fill the folder if a level is loaded
-        if hasattr(self, 'worldsectors_path') and self.worldsectors_path:
-            self._enable_sectors_win.dir_edit.setText(self.worldsectors_path)
-        self._enable_sectors_win.show()
+        try:
+            mod = self._load_tools_script("enable_all_sectors.py")
+            if mod is None:
+                return
+            self._enable_sectors_win = mod.EnableAllSectorsWindow()
+            # Pre-fill the folder if a level is loaded
+            if hasattr(self, 'worldsectors_path') and self.worldsectors_path:
+                self._enable_sectors_win.dir_edit.setText(self.worldsectors_path)
+            self._enable_sectors_win.show()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Enable All Sectors",
+                                f"Could not open the tool:\n{e}")
 
     def open_create_sector(self):
         """Open the Create New Sector tool"""
-        import importlib.util
-        import os
-        script_path = os.path.join(os.path.dirname(__file__), "tools", "create_sector.py")
-        spec = importlib.util.spec_from_file_location("create_sector", script_path)
-        mod  = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        ws = getattr(self, 'worldsectors_path', '') or ''
-        # Use the same worlds_folder the editor already resolved at load time
-        wg = ''
-        if getattr(self, 'worlds_folder', None):
-            candidate = os.path.join(self.worlds_folder, 'generated')
-            if os.path.isdir(candidate):
-                wg = candidate
-        self._create_sector_win = mod.CreateSectorWindow(
-            worldsectors_dir=ws,
-            worlds_generated_dir=wg,
-        )
-        self._create_sector_win.sectors_created.connect(self._load_new_worldsectors)
-        self._create_sector_win.show()
+        try:
+            mod = self._load_tools_script("create_sector.py")
+            if mod is None:
+                return
+            ws = getattr(self, 'worldsectors_path', '') or ''
+            # Use the same worlds_folder the editor already resolved at load time
+            wg = ''
+            if getattr(self, 'worlds_folder', None):
+                candidate = os.path.join(self.worlds_folder, 'generated')
+                if os.path.isdir(candidate):
+                    wg = candidate
+            self._create_sector_win = mod.CreateSectorWindow(
+                worldsectors_dir=ws,
+                worlds_generated_dir=wg,
+            )
+            self._create_sector_win.sectors_created.connect(self._load_new_worldsectors)
+            self._create_sector_win.show()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Create New Sector",
+                                f"Could not open the tool:\n{e}")
 
     def _load_new_worldsectors(self, sector_ids: list):
         """Load newly created worldsector XMLs into the editor without a full reload."""
@@ -3530,25 +3591,31 @@ class SimplifiedMapEditor(QMainWindow):
 
     def open_water_editor(self):
         """Open the water editor dialog with live 3D preview"""
-        from canvas.water_editor_dialog import show_water_editor
-        
-        # Get terrain renderer and canvas if available
-        terrain_renderer = None
-        canvas = None
-        
-        if hasattr(self, 'canvas'):
-            canvas = self.canvas
-            if hasattr(self.canvas, 'terrain_renderer'):
-                terrain_renderer = self.canvas.terrain_renderer
-        
-        # Show the dialog with live preview support (game-aware: FC2 .sdat vs
-        # Avatar .csdat, different water-block offsets)
-        show_water_editor(parent=self, terrain_renderer=terrain_renderer,
-                          canvas=canvas, game_mode=self.game_mode)
+        try:
+            from canvas.water_editor_dialog import show_water_editor
 
-        # Refresh canvas after editing
-        if canvas:
-            canvas.update()
+            # Get terrain renderer and canvas if available
+            terrain_renderer = None
+            canvas = None
+
+            if hasattr(self, 'canvas'):
+                canvas = self.canvas
+                if hasattr(self.canvas, 'terrain_renderer'):
+                    terrain_renderer = self.canvas.terrain_renderer
+
+            # Show the dialog with live preview support (game-aware: FC2 .sdat vs
+            # Avatar .csdat, different water-block offsets)
+            show_water_editor(parent=self, terrain_renderer=terrain_renderer,
+                              canvas=canvas, game_mode=self.game_mode)
+
+            # Refresh canvas after editing
+            if canvas:
+                canvas.update()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Water Editor",
+                                f"Could not open the Water Editor:\n{e}")
 
     def _find_game_xml(self):
         """Locate the current level's <name>.game.xml (WorldDescriptor).
@@ -3619,23 +3686,29 @@ class SimplifiedMapEditor(QMainWindow):
 
     def open_world_editor(self):
         """Open the World Editor on this level's .game.xml (WorldDescriptor)."""
-        from world_editor import show_world_editor
+        try:
+            from world_editor import show_world_editor
 
-        game_xml = self._find_game_xml()
-        if not game_xml:
-            reply = QMessageBox.question(
-                self, "World Editor",
-                "No .game.xml found for the loaded level.\n\n"
-                "Open one manually?",
-                QMessageBox.Yes | QMessageBox.No)
-            if reply != QMessageBox.Yes:
-                return
-            game_xml = None  # dialog offers a file picker
+            game_xml = self._find_game_xml()
+            if not game_xml:
+                reply = QMessageBox.question(
+                    self, "World Editor",
+                    "No .game.xml found for the loaded level.\n\n"
+                    "Open one manually?",
+                    QMessageBox.Yes | QMessageBox.No)
+                if reply != QMessageBox.Yes:
+                    return
+                game_xml = None  # dialog offers a file picker
 
-        canvas = getattr(self, 'canvas', None)
-        self._world_editor = show_world_editor(
-            parent=self, game_xml_path=game_xml,
-            game_mode=self.game_mode, canvas=canvas)
+            canvas = getattr(self, 'canvas', None)
+            self._world_editor = show_world_editor(
+                parent=self, game_xml_path=game_xml,
+                game_mode=self.game_mode, canvas=canvas)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "World Editor",
+                                f"Could not open the World Editor:\n{e}")
 
     def open_repack_pak(self):
         """Build a .pak from the current patch folder (all files, or just changes)."""
@@ -4077,10 +4150,16 @@ class SimplifiedMapEditor(QMainWindow):
 
     def open_entity_library_browser(self, file_path=None):
         """Open the Entity Library Browser dialog."""
-        from entity_library_browser import EntityLibraryBrowserDialog
-        dlg = EntityLibraryBrowserDialog(self, file_path=file_path)
-        dlg.setWindowModality(Qt.NonModal)
-        dlg.show()
+        try:
+            from entity_library_browser import EntityLibraryBrowserDialog
+            dlg = EntityLibraryBrowserDialog(self, file_path=file_path)
+            dlg.setWindowModality(Qt.NonModal)
+            dlg.show()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Entity Library Browser",
+                                f"Could not open the Entity Library Browser:\n{e}")
 
     def open_terrain_editor(self):
         """Open the terrain editor as a non-modal window."""
@@ -7741,18 +7820,28 @@ class SimplifiedMapEditor(QMainWindow):
         w.start()
 
     def _on_save_finished(self, main_converted, ws_converted, progress_dialog):
-        """Called on the main thread when SaveWorkerThread completes successfully."""
-        self.entities_modified = False
-        self.xml_tree_modified = False
-        if hasattr(self, 'worldsectors_modified'):
-            self.worldsectors_modified.clear()
+        """Called on the main thread when SaveWorkerThread completes successfully.
+        Queued Qt slot — an escaped exception here ABORTS the app right after a
+        successful save, so everything before the result dialog is guarded."""
+        try:
+            self.entities_modified = False
+            self.xml_tree_modified = False
+            if hasattr(self, 'worldsectors_modified'):
+                self.worldsectors_modified.clear()
 
-        if hasattr(self, 'update_entity_tree'):
-            self.update_entity_tree()
+            if hasattr(self, 'update_entity_tree'):
+                self.update_entity_tree()
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
-        progress_dialog.mark_complete()
-        progress_dialog.stop_icon()
-        progress_dialog.close()
+        try:
+            progress_dialog.mark_complete()
+            progress_dialog.stop_icon()
+            progress_dialog.close()
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
         if main_converted > 0 or ws_converted > 0:
             QMessageBox.information(
@@ -7774,9 +7863,13 @@ class SimplifiedMapEditor(QMainWindow):
 
     def _on_save_failed(self, error_msg, progress_dialog):
         """Called on the main thread when SaveWorkerThread raises an exception."""
-        progress_dialog.mark_complete()
-        progress_dialog.stop_icon()
-        progress_dialog.close()
+        try:
+            progress_dialog.mark_complete()
+            progress_dialog.stop_icon()
+            progress_dialog.close()
+        except Exception:
+            import traceback
+            traceback.print_exc()
         QMessageBox.critical(self, "Save Failed", f"Save failed: {error_msg}")
 
     def save_all_xml_files_before_conversion(self, log_callback=None):
@@ -9672,8 +9765,13 @@ class SimplifiedMapEditor(QMainWindow):
                 pos = (float(cc.target_x), float(cc.target_y), float(cc.target_z))
             except Exception:
                 pass
-        res = sx.add_node(bundle, name.strip(), eid, pos=pos)
-        self._sequence_save(md, "Added node '%s' to %s" % (res['added'], seq_name))
+        try:
+            res = sx.add_node(bundle, name.strip(), eid, pos=pos)
+            self._sequence_save(md, "Added node '%s' to %s" % (res['added'], seq_name))
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Sequences", "Adding the node failed:\n%s" % exc)
 
     def _seq_remove_node(self, seq_name, node_id):
         import sequence_export_import as sx
@@ -9689,10 +9787,11 @@ class SimplifiedMapEditor(QMainWindow):
             return
         try:
             res = sx.remove_node(bundle, node_id)
-        except KeyError as exc:
+            self._sequence_save(md, "Removed '%s' from %s" % (res['removed'], seq_name))
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
             QMessageBox.warning(self, "Sequences", str(exc))
-            return
-        self._sequence_save(md, "Removed '%s' from %s" % (res['removed'], seq_name))
 
     def _seq_remove_sequence(self, seq_name):
         """Delete a whole sequence from moviedata.xml.
@@ -9709,12 +9808,16 @@ class SimplifiedMapEditor(QMainWindow):
             return
         root = tree.getroot()
 
-        seq = md.get_sequence(seq_name)
-        n_nodes = len(seq.nodes) if seq is not None else 0
-        n_keys = sum(len(t.pos_keys) + len(t.rot_keys) + len(t.event_keys)
-                     + len(t.sound_keys)
-                     for n in (seq.nodes if seq is not None else [])
-                     for t in n.tracks.values())
+        try:
+            seq = md.get_sequence(seq_name)
+            n_nodes = len(seq.nodes) if seq is not None else 0
+            n_keys = sum(len(t.pos_keys) + len(t.rot_keys) + len(t.event_keys)
+                         + len(t.sound_keys)
+                         for n in (seq.nodes if seq is not None else [])
+                         for t in n.tracks.values())
+        except Exception:
+            # Odd node/track shape — the count is informational only.
+            n_nodes = n_keys = 0
         reply = QMessageBox.question(
             self, "Remove Sequence",
             "Delete the sequence '%s'?\n\n"
@@ -9728,23 +9831,24 @@ class SimplifiedMapEditor(QMainWindow):
 
         try:
             res = sx.remove_sequence(root, seq_name)
-        except KeyError as exc:
-            QMessageBox.warning(self, "Sequences", str(exc))
-            return
 
-        # This sequence is gone -- do not leave the canvas pointed at it.
-        if getattr(self, 'selected_movie_sequence', None) == seq_name:
-            self.selected_movie_sequence = None
-            self.selected_movie_node_id = None
-            if hasattr(self, 'cs_camera_preview'):
-                try:
-                    self.cs_camera_preview.set_sequence(None)
-                except Exception:
-                    pass
-        self._sequence_save(
-            md, "Removed sequence '%s' (%d nodes, %d keys, %d node defs)"
-                % (res['removed'], res['nodes_dropped'], res['keys_dropped'],
-                   len(res['node_defs_dropped'])))
+            # This sequence is gone -- do not leave the canvas pointed at it.
+            if getattr(self, 'selected_movie_sequence', None) == seq_name:
+                self.selected_movie_sequence = None
+                self.selected_movie_node_id = None
+                if hasattr(self, 'cs_camera_preview'):
+                    try:
+                        self.cs_camera_preview.set_sequence(None)
+                    except Exception:
+                        pass
+            self._sequence_save(
+                md, "Removed sequence '%s' (%d nodes, %d keys, %d node defs)"
+                    % (res['removed'], res['nodes_dropped'], res['keys_dropped'],
+                       len(res['node_defs_dropped'])))
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Sequences", str(exc))
 
     def _seq_duplicate_node(self, seq_name, node_id):
         from PyQt5.QtWidgets import QInputDialog
@@ -9769,36 +9873,42 @@ class SimplifiedMapEditor(QMainWindow):
         try:
             res = sx.duplicate_node(bundle, node_id, offset=offset,
                                     time_shift=delay, id_generator=gen)
-        except KeyError as exc:
+            self._sequence_save(
+                md, "Duplicated '%s' as '%s' (new EntityId %s)"
+                    % (res['source'], res['new_node'], res['entity_id']))
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
             QMessageBox.warning(self, "Sequences", str(exc))
-            return
-        self._sequence_save(
-            md, "Duplicated '%s' as '%s' (new EntityId %s)"
-                % (res['source'], res['new_node'], res['entity_id']))
 
     def _seq_strip_cameras(self, seq_name):
         import sequence_export_import as sx
         bundle, md = self._sequence_live_bundle(seq_name)
         if bundle is None:
             return
-        cams = sx.camera_nodes(bundle)
-        if not cams:
-            QMessageBox.information(self, "Sequences",
-                                    "This sequence has no cinematic cameras - "
-                                    "it is already a scripted event.")
-            return
-        reply = QMessageBox.question(
-            self, "Remove Cameras",
-            "Remove %d cinematic camera(s) from '%s'?\n\nEverything else keeps "
-            "its exact animation. The sequence will play without taking the "
-            "camera from the player, like the Hell's Gate flyovers."
-            % (len(cams), seq_name),
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply != QMessageBox.Yes:
-            return
-        removed = sx.strip_camera_nodes(bundle)
-        self._sequence_save(md, "Removed %d camera(s): %s"
-                                % (len(removed), ", ".join(removed)))
+        try:
+            cams = sx.camera_nodes(bundle)
+            if not cams:
+                QMessageBox.information(self, "Sequences",
+                                        "This sequence has no cinematic cameras - "
+                                        "it is already a scripted event.")
+                return
+            reply = QMessageBox.question(
+                self, "Remove Cameras",
+                "Remove %d cinematic camera(s) from '%s'?\n\nEverything else keeps "
+                "its exact animation. The sequence will play without taking the "
+                "camera from the player, like the Hell's Gate flyovers."
+                % (len(cams), seq_name),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply != QMessageBox.Yes:
+                return
+            removed = sx.strip_camera_nodes(bundle)
+            self._sequence_save(md, "Removed %d camera(s): %s"
+                                    % (len(removed), ", ".join(removed)))
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Sequences", str(exc))
 
     def _seq_rotate(self, seq_name, node_id):
         from PyQt5.QtWidgets import QInputDialog
@@ -9816,12 +9926,13 @@ class SimplifiedMapEditor(QMainWindow):
                 res = sx.rotate_node(bundle, node_id, deg)
             else:
                 res = sx.rotate_bundle(bundle, deg)
-        except KeyError as exc:
+            self._sequence_save(
+                md, "Rotated %s by %g deg (%d positions, %d orientations)"
+                    % (what, deg, res['positions_rotated'], res['orientations_rotated']))
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
             QMessageBox.warning(self, "Sequences", str(exc))
-            return
-        self._sequence_save(
-            md, "Rotated %s by %g deg (%d positions, %d orientations)"
-                % (what, deg, res['positions_rotated'], res['orientations_rotated']))
 
     def sequence_commit_hook(self, group):
         """Called when a placed sequence is dropped.
@@ -11724,11 +11835,17 @@ class SimplifiedMapEditor(QMainWindow):
                         "Add MP Spawn Point (Avatar only — FC2 uses different spawn entities)")
                 else:
                     def _open_mp_spawn(checked=False, _event=event):
-                        lpos = _event.localPos()
-                        wx, wy = self.canvas.screen_to_world(lpos.x(), lpos.y())
-                        from canvas.mp_spawn_creator import MPSpawnCreatorDialog
-                        dlg = MPSpawnCreatorDialog(self, wx, wy, parent=self)
-                        dlg.exec()
+                        try:
+                            lpos = _event.localPos()
+                            wx, wy = self.canvas.screen_to_world(lpos.x(), lpos.y())
+                            from canvas.mp_spawn_creator import MPSpawnCreatorDialog
+                            dlg = MPSpawnCreatorDialog(self, wx, wy, parent=self)
+                            dlg.exec()
+                        except Exception as e:
+                            import traceback
+                            traceback.print_exc()
+                            QMessageBox.warning(self, "MP Spawn Creator",
+                                                f"Could not open the MP Spawn Creator:\n{e}")
                     mp_spawn_action.triggered.connect(_open_mp_spawn)
 
             # Selection actions
@@ -13070,30 +13187,37 @@ class SimplifiedMapEditor(QMainWindow):
             print(f"Error fixing entity colors: {e}")
 
     def update_entity_tree(self):
-        """Update the entity tree with current entities and grouping, theme-aware"""
-        self.entity_tree.clear()
-        
-        if not self.entities:
-            return
-        
-        filter_text = self.entity_filter.text().lower()
-        if getattr(self.canvas, 'unified_mode', False):
-            self._populate_tree_by_sector(filter_text)
-        else:
-            self._populate_tree_by_source(filter_text)
+        """Update the entity tree with current entities and grouping, theme-aware.
+        Reached from Qt slots all over the app (save-finished, paste, filter,
+        refresh buttons) — PyQt5 aborts on an escaped slot exception, so one
+        malformed entity must degrade to a console traceback, not kill the app."""
+        try:
+            self.entity_tree.clear()
 
-        # Expand all group headers at every level
-        def expand_all(item):
-            item.setExpanded(True)
-            for i in range(item.childCount()):
-                expand_all(item.child(i))
+            if not self.entities:
+                return
 
-        for i in range(self.entity_tree.topLevelItemCount()):
-            expand_all(self.entity_tree.topLevelItem(i))
+            filter_text = self.entity_filter.text().lower()
+            if getattr(self.canvas, 'unified_mode', False):
+                self._populate_tree_by_sector(filter_text)
+            else:
+                self._populate_tree_by_source(filter_text)
 
-        # Keep mission layer tab in sync if it's currently visible
-        if hasattr(self, 'browser_tabs') and self.browser_tabs.currentIndex() == 1:
-            self.update_mission_layer_tree()
+            # Expand all group headers at every level
+            def expand_all(item):
+                item.setExpanded(True)
+                for i in range(item.childCount()):
+                    expand_all(item.child(i))
+
+            for i in range(self.entity_tree.topLevelItemCount()):
+                expand_all(self.entity_tree.topLevelItem(i))
+
+            # Keep mission layer tab in sync if it's currently visible
+            if hasattr(self, 'browser_tabs') and self.browser_tabs.currentIndex() == 1:
+                self.update_mission_layer_tree()
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
     def _populate_tree_by_type_enhanced(self, filter_text=""):
         type_groups = {}
@@ -14448,18 +14572,26 @@ class SimplifiedMapEditor(QMainWindow):
                     print(f"Full traceback:\n{error_details}")
                     return
             else:
-                # Editor already exists, just update the entity
+                # Editor already exists, just update the entity. set_entity
+                # rebuilds the whole property UI from the entity's XML — guard
+                # it like the creation path (PyQt5 aborts on slot exceptions).
                 print("=== Entity Editor window already exists ===")
-                if hasattr(self.canvas, 'selected') and self.canvas.selected:
-                    entity = self.canvas.selected[0]
-                    print(f"Entity Editor: Updating to entity '{entity.name}' (ID: {entity.id})")
-                    self.entity_editor.set_entity(entity)
-                elif hasattr(self.canvas, 'selected_entity') and self.canvas.selected_entity:
-                    entity = self.canvas.selected_entity
-                    print(f"Entity Editor: Updating to entity '{entity.name}' (ID: {entity.id})")
-                    self.entity_editor.set_entity(entity)
-                else:
-                    print("Entity Editor: No entity currently selected to update")
+                try:
+                    if hasattr(self.canvas, 'selected') and self.canvas.selected:
+                        entity = self.canvas.selected[0]
+                        print(f"Entity Editor: Updating to entity '{entity.name}' (ID: {entity.id})")
+                        self.entity_editor.set_entity(entity)
+                    elif hasattr(self.canvas, 'selected_entity') and self.canvas.selected_entity:
+                        entity = self.canvas.selected_entity
+                        print(f"Entity Editor: Updating to entity '{entity.name}' (ID: {entity.id})")
+                        self.entity_editor.set_entity(entity)
+                    else:
+                        print("Entity Editor: No entity currently selected to update")
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    QMessageBox.warning(self, "Entity Editor",
+                                        f"Could not load the selected entity:\n{e}")
             
             # Show and raise the window
             try:

@@ -1026,21 +1026,27 @@ def setup_complete_smart_system(editor):
         return existing_names
     
     def copy_selected_entities(self):
-        if not hasattr(self, 'canvas') or not hasattr(self.canvas, 'selected'):
+        try:
+            if not hasattr(self, 'canvas') or not hasattr(self.canvas, 'selected'):
+                return False
+
+            selected_entities = getattr(self.canvas, 'selected', [])
+            if not selected_entities:
+                self.status_bar.showMessage("No entities selected to copy")
+                return False
+
+            success = self.entity_clipboard.copy_entities(selected_entities)
+            if success:
+                self.status_bar.showMessage(f"Copied {len(selected_entities)} entities to clipboard")
+            else:
+                self.status_bar.showMessage("Failed to copy entities")
+
+            return success
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Copy Entities", f"Copy failed:\n{e}")
             return False
-            
-        selected_entities = getattr(self.canvas, 'selected', [])
-        if not selected_entities:
-            self.status_bar.showMessage("No entities selected to copy")
-            return False
-        
-        success = self.entity_clipboard.copy_entities(selected_entities)
-        if success:
-            self.status_bar.showMessage(f"Copied {len(selected_entities)} entities to clipboard")
-        else:
-            self.status_bar.showMessage("Failed to copy entities")
-        
-        return success
     
     def _add_entity_to_main_level_file(self, entity):
         """Insert a pasted entity into the correct MissionLayer of its original main-level file.
@@ -1104,211 +1110,217 @@ def setup_complete_smart_system(editor):
 
     def paste_entities(self, target_position=None, at_cursor=False):
         """Paste entities using import methodology with automatic +20 X/Y offset or cursor position - WITH SAFETY CHECKS"""
+        try:
         
-        print(f"\n{'='*70}")
-        print(f"PASTE SAFETY CHECK - STARTING")
-        print(f"{'='*70}")
-        
-        # CRITICAL: Store all original entity states BEFORE paste
-        original_states = {}
-        for entity in self.entities:
-            original_states[id(entity)] = {  # Use Python object id as key
-                'entity_obj': entity,
-                'x': entity.x,
-                'y': entity.y,
-                'z': entity.z,
-                'id': entity.id,
-                'name': entity.name
-            }
-        
-        print(f"📌 Saved {len(original_states)} original entity states")
-        
-        # Calculate target position if pasting at cursor
-        if at_cursor and hasattr(self, 'canvas') and hasattr(self.canvas, 'last_mouse_world_pos'):
-            target_position = self.canvas.last_mouse_world_pos
-        
-        # Bind the helper methods to the clipboard so it can access editor data
-        self.entity_clipboard._get_all_existing_entity_ids = lambda: self.get_all_existing_entity_ids()
-        self.entity_clipboard._get_all_existing_entity_names = lambda: self.get_all_existing_entity_names()
-        
-        # If no target position specified, apply automatic +20 X/Y offset
-        if target_position is None:
-            # Get clipboard data to calculate offset from first entity
-            clipboard_data = None
-            try:
-                from PyQt5.QtWidgets import QApplication
-                clipboard = QApplication.clipboard()
-                mime_data = clipboard.mimeData()
-                
-                if mime_data.hasFormat("application/x-avatar-entities-fcb"):
-                    json_string = mime_data.data("application/x-avatar-entities-fcb").data().decode()
-                    clipboard_data = json.loads(json_string)
-                elif mime_data.hasText():
-                    try:
-                        json_string = mime_data.text()
-                        clipboard_data = json.loads(json_string)
-                        if not (clipboard_data.get('type') in ['avatar_entities', 'avatar_entities_fcb'] and 'entities' in clipboard_data):
-                            clipboard_data = None
-                    except json.JSONDecodeError:
-                        clipboard_data = None
-                
-                if clipboard_data is None:
-                    clipboard_data = self.entity_clipboard.clipboard_data
-                
-                # Calculate automatic offset position
-                if clipboard_data and clipboard_data.get('entities'):
-                    first_entity = clipboard_data['entities'][0]
-                    target_position = (
-                        first_entity['x'] + 20,  # +20 on X axis
-                        first_entity['y'] + 20,  # +20 on Y axis  
-                        first_entity['z']        # Keep Z the same
-                    )
-                    print(f"Auto-offsetting paste by +20 X/Y: {target_position}")
-            except Exception as e:
-                print(f"Error calculating auto-offset: {e}")
-                target_position = None
-        
-        # Use import-style pasting
-        new_entities = self.entity_clipboard.paste_entities(
-            target_position=target_position,
-            id_generator=self.generate_new_entity_id,
-            name_generator=self.generate_unique_entity_name
-        )
-        
-        if not new_entities:
-            self.status_bar.showMessage("No entities to paste")
-            
-            # Still verify originals even on failure
             print(f"\n{'='*70}")
-            print(f"VERIFYING ORIGINALS AFTER FAILED PASTE")
+            print(f"PASTE SAFETY CHECK - STARTING")
             print(f"{'='*70}")
+        
+            # CRITICAL: Store all original entity states BEFORE paste
+            original_states = {}
+            for entity in self.entities:
+                original_states[id(entity)] = {  # Use Python object id as key
+                    'entity_obj': entity,
+                    'x': entity.x,
+                    'y': entity.y,
+                    'z': entity.z,
+                    'id': entity.id,
+                    'name': entity.name
+                }
+        
+            print(f"📌 Saved {len(original_states)} original entity states")
+        
+            # Calculate target position if pasting at cursor
+            if at_cursor and hasattr(self, 'canvas') and hasattr(self.canvas, 'last_mouse_world_pos'):
+                target_position = self.canvas.last_mouse_world_pos
+        
+            # Bind the helper methods to the clipboard so it can access editor data
+            self.entity_clipboard._get_all_existing_entity_ids = lambda: self.get_all_existing_entity_ids()
+            self.entity_clipboard._get_all_existing_entity_names = lambda: self.get_all_existing_entity_names()
+        
+            # If no target position specified, apply automatic +20 X/Y offset
+            if target_position is None:
+                # Get clipboard data to calculate offset from first entity
+                clipboard_data = None
+                try:
+                    from PyQt5.QtWidgets import QApplication
+                    clipboard = QApplication.clipboard()
+                    mime_data = clipboard.mimeData()
+                
+                    if mime_data.hasFormat("application/x-avatar-entities-fcb"):
+                        json_string = mime_data.data("application/x-avatar-entities-fcb").data().decode()
+                        clipboard_data = json.loads(json_string)
+                    elif mime_data.hasText():
+                        try:
+                            json_string = mime_data.text()
+                            clipboard_data = json.loads(json_string)
+                            if not (clipboard_data.get('type') in ['avatar_entities', 'avatar_entities_fcb'] and 'entities' in clipboard_data):
+                                clipboard_data = None
+                        except json.JSONDecodeError:
+                            clipboard_data = None
+                
+                    if clipboard_data is None:
+                        clipboard_data = self.entity_clipboard.clipboard_data
+                
+                    # Calculate automatic offset position
+                    if clipboard_data and clipboard_data.get('entities'):
+                        first_entity = clipboard_data['entities'][0]
+                        target_position = (
+                            first_entity['x'] + 20,  # +20 on X axis
+                            first_entity['y'] + 20,  # +20 on Y axis  
+                            first_entity['z']        # Keep Z the same
+                        )
+                        print(f"Auto-offsetting paste by +20 X/Y: {target_position}")
+                except Exception as e:
+                    print(f"Error calculating auto-offset: {e}")
+                    target_position = None
+        
+            # Use import-style pasting
+            new_entities = self.entity_clipboard.paste_entities(
+                target_position=target_position,
+                id_generator=self.generate_new_entity_id,
+                name_generator=self.generate_unique_entity_name
+            )
+        
+            if not new_entities:
+                self.status_bar.showMessage("No entities to paste")
             
+                # Still verify originals even on failure
+                print(f"\n{'='*70}")
+                print(f"VERIFYING ORIGINALS AFTER FAILED PASTE")
+                print(f"{'='*70}")
+            
+                corrupted = False
+                for obj_id, original_state in original_states.items():
+                    entity = original_state['entity_obj']
+                    if (entity.x != original_state['x'] or entity.y != original_state['y'] or 
+                        entity.z != original_state['z'] or entity.id != original_state['id'] or 
+                        entity.name != original_state['name']):
+                        print(f"🚨 BUG: Original {original_state['name']} was modified!")
+                        corrupted = True
+            
+                if not corrupted:
+                    print(f"✅ All originals safe after failed paste")
+            
+                return []
+        
+            print(f"\n=== ADDING PASTED ENTITIES TO EDITOR ===")
+        
+            # Process each entity using import-style approach
+            successfully_added = []
+            for i, entity in enumerate(new_entities):
+                print(f"\nProcessing entity {i+1}: {entity.name}")
+                print(f"  Entity ID: {entity.id}")
+                print(f"  Position: ({entity.x}, {entity.y}, {entity.z})")
+                print(f"  Has XML element: {hasattr(entity, 'xml_element') and entity.xml_element is not None}")
+            
+                # Add to main entities list
+                self.entities.append(entity)
+            
+                # Add to XML — route by source_file: main-level files stay in their file,
+                # worldsector entities go to the position-matched sector.
+                if hasattr(entity, 'xml_element') and entity.xml_element is not None:
+                    src = getattr(entity, 'source_file', '')
+                    if src in ('mapsdata', 'omnis', 'managers', 'sectorsdep'):
+                        print(f"  Routing to main-level file: {src}")
+                        success = self._add_entity_to_main_level_file(entity)
+                        if not success:
+                            print(f"  ⚠️ Failed to add to {src}, entity still in memory list")
+                        successfully_added.append(entity)
+                    else:
+                        # Find target worldsector file using position-based lookup in unified mode
+                        target_sector_file, target_sector_id = self._find_best_worldsector_for_entity(entity)
+
+                        if target_sector_file:
+                            print(f"  Adding to worldsector: {os.path.basename(target_sector_file)}")
+
+                            # Use the same method as import system
+                            success = self._add_entity_xml_to_sector(entity.xml_element, target_sector_file)
+                            if success:
+                                entity.source_file_path = target_sector_file
+                                entity.source_file = "worldsectors"
+                                entity.source_sector_id = target_sector_id
+                                # Keep source_layer from copy data (already set during paste)
+                                # Mark the sector dirty so unified save picks it up
+                                if target_sector_id >= 0 and hasattr(self, 'canvas'):
+                                    self.canvas.dirty_sectors.add(target_sector_id)
+                                successfully_added.append(entity)
+                                print(f"  ✅ Successfully added to worldsector (sector_id={target_sector_id})")
+                            else:
+                                print(f"  ⚠️ Failed to add to worldsector, but entity added to main list")
+                                successfully_added.append(entity)
+                        else:
+                            print(f"  ⚠️ No suitable worldsector found, adding to main list only")
+                            successfully_added.append(entity)
+                else:
+                    print(f"  Entity has no XML element, adding to main list only")
+                    successfully_added.append(entity)
+        
+            # Assign 3D models to the new entities so they appear immediately in 3D mode
+            if hasattr(self, 'canvas') and hasattr(self.canvas, 'model_loader') and new_entities:
+                try:
+                    self.canvas.model_loader.assign_models_to_entities(
+                        new_entities,
+                        game_mode=getattr(self, 'game_mode', 'avatar')
+                    )
+                except Exception as _me:
+                    print(f"Warning: could not assign models to pasted entities: {_me}")
+
+            # Update UI (center_view=False: paste doesn't reset camera)
+            self.canvas.set_entities(self.entities, center_view=False)
+            if hasattr(self, 'update_entity_tree'):
+                self.update_entity_tree()
+
+            # Select the pasted entities
+            self.canvas.selected = new_entities
+            self.canvas.selected_entity = new_entities[0] if new_entities else None
+            self.selected_entity = self.canvas.selected_entity
+
+            self.canvas.update()
+            if hasattr(self, 'update_ui_for_selected_entity'):
+                self.update_ui_for_selected_entity(self.selected_entity)
+        
+            self.status_bar.showMessage(f"Pasted {len(successfully_added)} entities")
+            print(f"=== PASTE COMPLETE: {len(successfully_added)} entities ===\n")
+        
+            # VERIFY: Check if originals were modified during paste
+            print(f"\n{'='*70}")
+            print(f"VERIFYING ORIGINALS AFTER PASTE")
+            print(f"{'='*70}")
+        
             corrupted = False
             for obj_id, original_state in original_states.items():
                 entity = original_state['entity_obj']
-                if (entity.x != original_state['x'] or entity.y != original_state['y'] or 
-                    entity.z != original_state['z'] or entity.id != original_state['id'] or 
-                    entity.name != original_state['name']):
-                    print(f"🚨 BUG: Original {original_state['name']} was modified!")
-                    corrupted = True
             
-            if not corrupted:
-                print(f"✅ All originals safe after failed paste")
-            
-            return []
-        
-        print(f"\n=== ADDING PASTED ENTITIES TO EDITOR ===")
-        
-        # Process each entity using import-style approach
-        successfully_added = []
-        for i, entity in enumerate(new_entities):
-            print(f"\nProcessing entity {i+1}: {entity.name}")
-            print(f"  Entity ID: {entity.id}")
-            print(f"  Position: ({entity.x}, {entity.y}, {entity.z})")
-            print(f"  Has XML element: {hasattr(entity, 'xml_element') and entity.xml_element is not None}")
-            
-            # Add to main entities list
-            self.entities.append(entity)
-            
-            # Add to XML — route by source_file: main-level files stay in their file,
-            # worldsector entities go to the position-matched sector.
-            if hasattr(entity, 'xml_element') and entity.xml_element is not None:
-                src = getattr(entity, 'source_file', '')
-                if src in ('mapsdata', 'omnis', 'managers', 'sectorsdep'):
-                    print(f"  Routing to main-level file: {src}")
-                    success = self._add_entity_to_main_level_file(entity)
-                    if not success:
-                        print(f"  ⚠️ Failed to add to {src}, entity still in memory list")
-                    successfully_added.append(entity)
-                else:
-                    # Find target worldsector file using position-based lookup in unified mode
-                    target_sector_file, target_sector_id = self._find_best_worldsector_for_entity(entity)
-
-                    if target_sector_file:
-                        print(f"  Adding to worldsector: {os.path.basename(target_sector_file)}")
-
-                        # Use the same method as import system
-                        success = self._add_entity_xml_to_sector(entity.xml_element, target_sector_file)
-                        if success:
-                            entity.source_file_path = target_sector_file
-                            entity.source_file = "worldsectors"
-                            entity.source_sector_id = target_sector_id
-                            # Keep source_layer from copy data (already set during paste)
-                            # Mark the sector dirty so unified save picks it up
-                            if target_sector_id >= 0 and hasattr(self, 'canvas'):
-                                self.canvas.dirty_sectors.add(target_sector_id)
-                            successfully_added.append(entity)
-                            print(f"  ✅ Successfully added to worldsector (sector_id={target_sector_id})")
-                        else:
-                            print(f"  ⚠️ Failed to add to worldsector, but entity added to main list")
-                            successfully_added.append(entity)
-                    else:
-                        print(f"  ⚠️ No suitable worldsector found, adding to main list only")
-                        successfully_added.append(entity)
-            else:
-                print(f"  Entity has no XML element, adding to main list only")
-                successfully_added.append(entity)
-        
-        # Assign 3D models to the new entities so they appear immediately in 3D mode
-        if hasattr(self, 'canvas') and hasattr(self.canvas, 'model_loader') and new_entities:
-            try:
-                self.canvas.model_loader.assign_models_to_entities(
-                    new_entities,
-                    game_mode=getattr(self, 'game_mode', 'avatar')
-                )
-            except Exception as _me:
-                print(f"Warning: could not assign models to pasted entities: {_me}")
-
-        # Update UI (center_view=False: paste doesn't reset camera)
-        self.canvas.set_entities(self.entities, center_view=False)
-        if hasattr(self, 'update_entity_tree'):
-            self.update_entity_tree()
-
-        # Select the pasted entities
-        self.canvas.selected = new_entities
-        self.canvas.selected_entity = new_entities[0] if new_entities else None
-        self.selected_entity = self.canvas.selected_entity
-
-        self.canvas.update()
-        if hasattr(self, 'update_ui_for_selected_entity'):
-            self.update_ui_for_selected_entity(self.selected_entity)
-        
-        self.status_bar.showMessage(f"Pasted {len(successfully_added)} entities")
-        print(f"=== PASTE COMPLETE: {len(successfully_added)} entities ===\n")
-        
-        # VERIFY: Check if originals were modified during paste
-        print(f"\n{'='*70}")
-        print(f"VERIFYING ORIGINALS AFTER PASTE")
-        print(f"{'='*70}")
-        
-        corrupted = False
-        for obj_id, original_state in original_states.items():
-            entity = original_state['entity_obj']
-            
-            # Check if this entity is still in the original list (not a new one)
-            if entity not in new_entities:
-                if (entity.x != original_state['x'] or 
-                    entity.y != original_state['y'] or
-                    entity.z != original_state['z'] or
-                    entity.id != original_state['id'] or
-                    entity.name != original_state['name']):
+                # Check if this entity is still in the original list (not a new one)
+                if entity not in new_entities:
+                    if (entity.x != original_state['x'] or 
+                        entity.y != original_state['y'] or
+                        entity.z != original_state['z'] or
+                        entity.id != original_state['id'] or
+                        entity.name != original_state['name']):
                     
-                    print(f"🚨 BUG DETECTED: Original entity was MODIFIED during paste!")
-                    print(f"  Entity: {original_state['name']}")
-                    print(f"  Position: ({original_state['x']:.1f}, {original_state['y']:.1f}, {original_state['z']:.1f}) → ({entity.x:.1f}, {entity.y:.1f}, {entity.z:.1f})")
-                    print(f"  ID: {original_state['id']} → {entity.id}")
-                    print(f"  Name: {original_state['name']} → {entity.name}")
-                    corrupted = True
-                else:
-                    print(f"✅ Original {entity.name} unchanged")
+                        print(f"🚨 BUG DETECTED: Original entity was MODIFIED during paste!")
+                        print(f"  Entity: {original_state['name']}")
+                        print(f"  Position: ({original_state['x']:.1f}, {original_state['y']:.1f}, {original_state['z']:.1f}) → ({entity.x:.1f}, {entity.y:.1f}, {entity.z:.1f})")
+                        print(f"  ID: {original_state['id']} → {entity.id}")
+                        print(f"  Name: {original_state['name']} → {entity.name}")
+                        corrupted = True
+                    else:
+                        print(f"✅ Original {entity.name} unchanged")
         
-        if corrupted:
-            print(f"\n🚨 CRITICAL BUG: Original entities were corrupted during paste!")
-            print(f"   The paste operation modified entities it shouldn't have touched!")
-        else:
-            print(f"\n✅ SUCCESS: All original entities remain unchanged - paste is safe!")
+            if corrupted:
+                print(f"\n🚨 CRITICAL BUG: Original entities were corrupted during paste!")
+                print(f"   The paste operation modified entities it shouldn't have touched!")
+            else:
+                print(f"\n✅ SUCCESS: All original entities remain unchanged - paste is safe!")
         
-        return new_entities
+            return new_entities
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Paste Entities", f"Paste failed:\n{e}")
+            return []
 
     def _find_best_worldsector_for_entity(self, entity):
         """Find the best worldsector file for an entity.
@@ -2088,23 +2100,30 @@ def setup_complete_smart_system(editor):
     
     def show_clipboard_info(self):
         """Show clipboard information"""
-        info = self.entity_clipboard.get_clipboard_info()
-        if info is None:
-            self.status_bar.showMessage("No entity data in clipboard")
-            return
-        
-        entity_names = info['entities'][:5]
-        if len(info['entities']) > 5:
-            entity_names.append(f"... and {len(info['entities']) - 5} more")
-        
-        QMessageBox.information(
-            self,
-            "Clipboard Contents",
-            f"Entity count: {info['count']}\n"
-            f"Version: {info['version']}\n"
-            f"Copied: {info.get('copy_date', 'unknown')}\n\n"
-            f"Entities:\n" + "\n".join([f"• {name}" for name in entity_names])
-        )
+        try:
+            info = self.entity_clipboard.get_clipboard_info()
+            if info is None:
+                self.status_bar.showMessage("No entity data in clipboard")
+                return
+
+            entity_names = info['entities'][:5]
+            if len(info['entities']) > 5:
+                entity_names.append(f"... and {len(info['entities']) - 5} more")
+
+            QMessageBox.information(
+                self,
+                "Clipboard Contents",
+                f"Entity count: {info['count']}\n"
+                f"Version: {info['version']}\n"
+                f"Copied: {info.get('copy_date', 'unknown')}\n\n"
+                f"Entities:\n" + "\n".join([f"• {name}" for name in entity_names])
+            )
+        except Exception as e:
+            # Clipboard blobs from older versions may miss keys — don't crash on them
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Clipboard Contents",
+                                f"Could not read clipboard info:\n{e}")
     
     # Bind methods to editor
     editor.generate_new_entity_id = types.MethodType(generate_new_entity_id, editor)

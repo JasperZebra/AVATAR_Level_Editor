@@ -1283,34 +1283,39 @@ class TerrainEditorDialog(QDialog):
         )
 
     def _save_terrain(self):
-        if self._td.combined is None:
-            QMessageBox.warning(self, "No Terrain", "Load a terrain first.")
-            return
-        n = len(self._td.dirty_sectors)
-        if n == 0:
-            QMessageBox.information(self, "Nothing to Save", "No unsaved changes.")
-            return
-        reply = QMessageBox.question(
-            self, "Save Terrain",
-            f"Write {n} modified sector(s) to disk?\n\n"
-            f"This overwrites the {self._td.file_ext} files.",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if reply != QMessageBox.Yes:
-            return
-        written, failed = self._td.save_dirty_sectors()
-        self._update_dirty_label()
-        # Push final update to main canvas after save
-        self._flush_main_canvas()
-        if self._terrain_renderer and self._canvas:
-            if hasattr(self._canvas, 'terrain_renderer'):
-                # Re-read files so main canvas has canonical data
-                self._canvas.terrain_renderer.load_sdat_folder(self._td.sdat_path)
-                self._canvas.update()
-        msg = f"Saved {written} sector(s)."
-        if failed:
-            msg += f"\n{failed} sector(s) failed to write."
-        QMessageBox.information(self, "Save Complete", msg)
+        try:
+            if self._td.combined is None:
+                QMessageBox.warning(self, "No Terrain", "Load a terrain first.")
+                return
+            n = len(self._td.dirty_sectors)
+            if n == 0:
+                QMessageBox.information(self, "Nothing to Save", "No unsaved changes.")
+                return
+            reply = QMessageBox.question(
+                self, "Save Terrain",
+                f"Write {n} modified sector(s) to disk?\n\n"
+                f"This overwrites the {self._td.file_ext} files.",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+            written, failed = self._td.save_dirty_sectors()
+            self._update_dirty_label()
+            # Push final update to main canvas after save
+            self._flush_main_canvas()
+            if self._terrain_renderer and self._canvas:
+                if hasattr(self._canvas, 'terrain_renderer'):
+                    # Re-read files so main canvas has canonical data
+                    self._canvas.terrain_renderer.load_sdat_folder(self._td.sdat_path)
+                    self._canvas.update()
+            msg = f"Saved {written} sector(s)."
+            if failed:
+                msg += f"\n{failed} sector(s) failed to write."
+            QMessageBox.information(self, "Save Complete", msg)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Save Terrain", f"Saving terrain failed:\n{e}")
 
     # -- Undo / Redo ---------------------------------------------------------
 

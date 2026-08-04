@@ -1293,95 +1293,99 @@ class EntityEditorWindow(QDialog):
 
         def _add_user():
             nonlocal container, armed_vehicle
-            if armed_vehicle is None:
-                return
-
-            # Enforce hidSize cap
-            max_s = _get_max_seats()
-            if max_s is not None and container is not None:
-                current = len(container.findall('object'))
-                if current >= max_s:
+            try:
+                if armed_vehicle is None:
                     return
 
-            if container is None:
-                av_children = list(armed_vehicle)
-                inter = armed_vehicle.text or '\n          '
-                pre_close = av_children[-1].tail if av_children else inter
-                if av_children:
-                    av_children[-1].tail = inter
-                container = ET.SubElement(armed_vehicle, 'object')
-                container.set('hash', 'DA330543')
-                container.set('name', 'InitialUsers')
-                container.text = inter + '  '
-                container.tail = pre_close
+                # Enforce hidSize cap
+                max_s = _get_max_seats()
+                if max_s is not None and container is not None:
+                    current = len(container.findall('object'))
+                    if current >= max_s:
+                        return
 
-                # Add hidSize field when creating a fresh container
-                size_f = ET.SubElement(container, 'field')
-                size_f.set('hash', '10CA06AB')
-                size_f.set('name', 'hidSize')
-                size_f.set('value-Int32', '1')
-                size_f.set('type', 'BinHex')
-                size_f.text = '01000000'
-                size_f.tail = container.text
+                if container is None:
+                    av_children = list(armed_vehicle)
+                    inter = armed_vehicle.text or '\n          '
+                    pre_close = av_children[-1].tail if av_children else inter
+                    if av_children:
+                        av_children[-1].tail = inter
+                    container = ET.SubElement(armed_vehicle, 'object')
+                    container.set('hash', 'DA330543')
+                    container.set('name', 'InitialUsers')
+                    container.text = inter + '  '
+                    container.tail = pre_close
 
-            # Update hidSize to match new count
-            size_field = container.find("field[@name='hidSize']")
+                    # Add hidSize field when creating a fresh container
+                    size_f = ET.SubElement(container, 'field')
+                    size_f.set('hash', '10CA06AB')
+                    size_f.set('name', 'hidSize')
+                    size_f.set('value-Int32', '1')
+                    size_f.set('type', 'BinHex')
+                    size_f.text = '01000000'
+                    size_f.tail = container.text
 
-            # --- add one seat entry ---
-            c_children = [c for c in container if c.tag == 'object']
-            entry_indent = container.text or '\n            '
-            all_c = list(container)
-            pre_close_c = all_c[-1].tail if all_c else entry_indent
-            if all_c:
-                all_c[-1].tail = entry_indent
+                # Update hidSize to match new count
+                size_field = container.find("field[@name='hidSize']")
 
-            # Pick a seat name for the new entry — prefer archetype data
-            seat_idx = len(c_children)
-            archetype_seats = self._get_archetype_seat_bones()
-            if seat_idx < len(archetype_seats) and archetype_seats[seat_idx]:
-                seat_name = archetype_seats[seat_idx]
-            elif seat_idx == 0:
-                seat_name = 'Pilot_SitPoint_01'
-            else:
-                seat_name = f'SITPOINT{seat_idx:02d}'
-            entry_hash = 'F11D51B2'
+                # --- add one seat entry ---
+                c_children = [c for c in container if c.tag == 'object']
+                entry_indent = container.text or '\n            '
+                all_c = list(container)
+                pre_close_c = all_c[-1].tail if all_c else entry_indent
+                if all_c:
+                    all_c[-1].tail = entry_indent
 
-            entry = ET.SubElement(container, 'object')
-            entry.set('hash', entry_hash)
-            entry.tail = pre_close_c
-            field_indent = entry_indent + '  '
-            entry.text = field_indent
+                # Pick a seat name for the new entry — prefer archetype data
+                seat_idx = len(c_children)
+                archetype_seats = self._get_archetype_seat_bones()
+                if seat_idx < len(archetype_seats) and archetype_seats[seat_idx]:
+                    seat_name = archetype_seats[seat_idx]
+                elif seat_idx == 0:
+                    seat_name = 'Pilot_SitPoint_01'
+                else:
+                    seat_name = f'SITPOINT{seat_idx:02d}'
+                entry_hash = 'F11D51B2'
 
-            text_bone_f = ET.SubElement(entry, 'field')
-            text_bone_f.set('hash', 'AA8D91B9')
-            text_bone_f.set('name', 'text_SeatBone')
-            text_bone_f.set('value-String', seat_name)
-            text_bone_f.set('type', 'BinHex')
-            text_bone_f.text = string_to_binhex(seat_name)
-            text_bone_f.tail = field_indent
+                entry = ET.SubElement(container, 'object')
+                entry.set('hash', entry_hash)
+                entry.tail = pre_close_c
+                field_indent = entry_indent + '  '
+                entry.text = field_indent
 
-            bone_f = ET.SubElement(entry, 'field')
-            bone_f.set('hash', '1CCF1DAB')
-            bone_f.set('name', 'SeatBone')
-            bone_f.set('value-ComputeHash32', seat_name)
-            bone_f.set('type', 'BinHex')
-            bone_f.text = compute_hash32_to_binhex(seat_name)
-            bone_f.tail = field_indent
+                text_bone_f = ET.SubElement(entry, 'field')
+                text_bone_f.set('hash', 'AA8D91B9')
+                text_bone_f.set('name', 'text_SeatBone')
+                text_bone_f.set('value-String', seat_name)
+                text_bone_f.set('type', 'BinHex')
+                text_bone_f.text = string_to_binhex(seat_name)
+                text_bone_f.tail = field_indent
 
-            ent_f = ET.SubElement(entry, 'field')
-            ent_f.set('hash', '76AB3272')
-            ent_f.set('name', 'entUser')
-            ent_f.set('type', 'BinHex')
-            ent_f.text = 'FFFFFFFFFFFFFFFF'
-            ent_f.tail = entry_indent
+                bone_f = ET.SubElement(entry, 'field')
+                bone_f.set('hash', '1CCF1DAB')
+                bone_f.set('name', 'SeatBone')
+                bone_f.set('value-ComputeHash32', seat_name)
+                bone_f.set('type', 'BinHex')
+                bone_f.text = compute_hash32_to_binhex(seat_name)
+                bone_f.tail = field_indent
 
-            # Sync hidSize to total seat count
-            if size_field is not None:
-                new_count = len([c for c in container if c.tag == 'object'])
-                size_field.set('value-Int32', str(new_count))
-                size_field.text = struct.pack('<i', new_count).hex().upper()
+                ent_f = ET.SubElement(entry, 'field')
+                ent_f.set('hash', '76AB3272')
+                ent_f.set('name', 'entUser')
+                ent_f.set('type', 'BinHex')
+                ent_f.text = 'FFFFFFFFFFFFFFFF'
+                ent_f.tail = entry_indent
 
-            _rebuild()
+                # Sync hidSize to total seat count
+                if size_field is not None:
+                    new_count = len([c for c in container if c.tag == 'object'])
+                    size_field.set('value-Int32', str(new_count))
+                    size_field.text = struct.pack('<i', new_count).hex().upper()
+
+                _rebuild()
+            except Exception:
+                import traceback
+                traceback.print_exc()
 
         # ── Per-seat rows ────────────────────────────────────────────────────
         if container is not None:
@@ -1485,29 +1489,33 @@ class EntityEditorWindow(QDialog):
                 rm_btn.setFixedHeight(20)
 
                 def _remove_entry(_checked=False, c=container, e=entry, av=armed_vehicle):
-                    siblings = list(c)
-                    idx = siblings.index(e)
-                    was_last = (idx == len(siblings) - 1)
-                    c.remove(e)
-                    remaining = list(c)
-                    if was_last and remaining:
-                        remaining[-1].tail = e.tail
-                    if not remaining and av is not None:
-                        av_siblings = list(av)
-                        c_idx = av_siblings.index(c)
-                        was_last_av = (c_idx == len(av_siblings) - 1)
-                        av.remove(c)
-                        av_remaining = list(av)
-                        if was_last_av and av_remaining:
-                            av_remaining[-1].tail = c.tail
-                    else:
-                        # Sync hidSize
-                        sf2 = c.find("field[@name='hidSize']")
-                        if sf2 is not None:
-                            new_count = len([ch for ch in c if ch.tag == 'object'])
-                            sf2.set('value-Int32', str(new_count))
-                            sf2.text = struct.pack('<i', new_count).hex().upper()
-                    _rebuild()
+                    try:
+                        siblings = list(c)
+                        idx = siblings.index(e)
+                        was_last = (idx == len(siblings) - 1)
+                        c.remove(e)
+                        remaining = list(c)
+                        if was_last and remaining:
+                            remaining[-1].tail = e.tail
+                        if not remaining and av is not None:
+                            av_siblings = list(av)
+                            c_idx = av_siblings.index(c)
+                            was_last_av = (c_idx == len(av_siblings) - 1)
+                            av.remove(c)
+                            av_remaining = list(av)
+                            if was_last_av and av_remaining:
+                                av_remaining[-1].tail = c.tail
+                        else:
+                            # Sync hidSize
+                            sf2 = c.find("field[@name='hidSize']")
+                            if sf2 is not None:
+                                new_count = len([ch for ch in c if ch.tag == 'object'])
+                                sf2.set('value-Int32', str(new_count))
+                                sf2.text = struct.pack('<i', new_count).hex().upper()
+                        _rebuild()
+                    except Exception:
+                        import traceback
+                        traceback.print_exc()
 
                 rm_btn.clicked.connect(_remove_entry)
                 user_hl.addWidget(rm_btn)
@@ -1618,13 +1626,17 @@ class EntityEditorWindow(QDialog):
                 rm_btn.setFixedHeight(20)
 
                 def _remove_slot(_checked=False, mo=mat_overrides, m=mat):
-                    remaining = [c for c in mo if c.get('name') == 'Material']
-                    pre_close = remaining[-1].tail if remaining else None
-                    mo.remove(m)
-                    new_remaining = [c for c in mo if c.get('name') == 'Material']
-                    if new_remaining and pre_close is not None:
-                        new_remaining[-1].tail = pre_close
-                    _rebuild()
+                    try:
+                        remaining = [c for c in mo if c.get('name') == 'Material']
+                        pre_close = remaining[-1].tail if remaining else None
+                        mo.remove(m)
+                        new_remaining = [c for c in mo if c.get('name') == 'Material']
+                        if new_remaining and pre_close is not None:
+                            new_remaining[-1].tail = pre_close
+                        _rebuild()
+                    except Exception:
+                        import traceback
+                        traceback.print_exc()
 
                 rm_btn.clicked.connect(_remove_slot)
                 sf_vl.addWidget(rm_btn)
@@ -1632,54 +1644,58 @@ class EntityEditorWindow(QDialog):
 
         def _add_slot():
             nonlocal mat_overrides
-            if mat_overrides is None:
-                mat_overrides = ET.SubElement(skin_elem, 'object')
-                mat_overrides.set('hash', '0FA60B61')
-                mat_overrides.set('name', 'MaterialOverrides')
-                mat_overrides.text = '\n          '
-                mat_overrides.tail = '\n        '
+            try:
+                if mat_overrides is None:
+                    mat_overrides = ET.SubElement(skin_elem, 'object')
+                    mat_overrides.set('hash', '0FA60B61')
+                    mat_overrides.set('name', 'MaterialOverrides')
+                    mat_overrides.text = '\n          '
+                    mat_overrides.tail = '\n        '
 
-            existing = mat_overrides.findall("object[@name='Material']")
-            entry_indent = mat_overrides.text or '\n          '
-            pre_close = existing[-1].tail if existing else (mat_overrides.tail or '\n        ')
+                existing = mat_overrides.findall("object[@name='Material']")
+                entry_indent = mat_overrides.text or '\n          '
+                pre_close = existing[-1].tail if existing else (mat_overrides.tail or '\n        ')
 
-            mat = ET.SubElement(mat_overrides, 'object')
-            mat.set('hash', '85C817C3')
-            mat.set('name', 'Material')
-            fi = entry_indent + '  '
-            mat.text = fi
+                mat = ET.SubElement(mat_overrides, 'object')
+                mat.set('hash', '85C817C3')
+                mat.set('name', 'Material')
+                fi = entry_indent + '  '
+                mat.text = fi
 
-            f1 = ET.SubElement(mat, 'field')
-            f1.set('hash', 'DD2929AC')
-            f1.set('type', 'BinHex')
-            f1.text = '00'
-            f1.tail = fi
+                f1 = ET.SubElement(mat, 'field')
+                f1.set('hash', 'DD2929AC')
+                f1.set('type', 'BinHex')
+                f1.text = '00'
+                f1.tail = fi
 
-            f2 = ET.SubElement(mat, 'field')
-            f2.set('hash', 'E1C0931D')
-            f2.set('name', 'fileOriginalMaterial')
-            f2.set('type', 'BinHex')
-            f2.text = 'FFFFFFFF'
-            f2.tail = fi
+                f2 = ET.SubElement(mat, 'field')
+                f2.set('hash', 'E1C0931D')
+                f2.set('name', 'fileOriginalMaterial')
+                f2.set('type', 'BinHex')
+                f2.text = 'FFFFFFFF'
+                f2.tail = fi
 
-            f3 = ET.SubElement(mat, 'field')
-            f3.set('hash', '148E2F84')
-            f3.set('type', 'BinHex')
-            f3.text = '00'
-            f3.tail = fi
+                f3 = ET.SubElement(mat, 'field')
+                f3.set('hash', '148E2F84')
+                f3.set('type', 'BinHex')
+                f3.text = '00'
+                f3.tail = fi
 
-            f4 = ET.SubElement(mat, 'field')
-            f4.set('hash', '28679535')
-            f4.set('name', 'fileMaterialOverride')
-            f4.set('type', 'BinHex')
-            f4.text = 'FFFFFFFF'
-            f4.tail = entry_indent
+                f4 = ET.SubElement(mat, 'field')
+                f4.set('hash', '28679535')
+                f4.set('name', 'fileMaterialOverride')
+                f4.set('type', 'BinHex')
+                f4.text = 'FFFFFFFF'
+                f4.tail = entry_indent
 
-            if existing:
-                existing[-1].tail = entry_indent
-            mat.tail = pre_close
+                if existing:
+                    existing[-1].tail = entry_indent
+                mat.tail = pre_close
 
-            _rebuild()
+                _rebuild()
+            except Exception:
+                import traceback
+                traceback.print_exc()
 
         add_btn = QPushButton("+ Add Material Slot", self)
         add_btn.setStyleSheet(
@@ -2460,63 +2476,67 @@ class EntityEditorWindow(QDialog):
         btn.setFixedHeight(24)
 
         def _add_item():
-            import xml.etree.ElementTree as ET
-            children = container_elem.findall(f"object[@name='{item_name}']")
-            if children:
-                # Always clone the FIRST child — it's the original/complete template.
-                # Using the last child risks copying a previously-broken duplicate.
-                # ET.tostring drops the tail of the root element, so we must set it
-                # manually. The last child's tail is the "pre-close" whitespace that
-                # puts the parent's </object> on its own indented line.
-                # container_elem.text is the "inter-sibling" whitespace — the indent
-                # that comes before each item inside the container.
-                pre_close_tail = children[-1].tail
-                inter_tail = container_elem.text  # e.g. "\n              "
+            try:
+                import xml.etree.ElementTree as ET
+                children = container_elem.findall(f"object[@name='{item_name}']")
+                if children:
+                    # Always clone the FIRST child — it's the original/complete template.
+                    # Using the last child risks copying a previously-broken duplicate.
+                    # ET.tostring drops the tail of the root element, so we must set it
+                    # manually. The last child's tail is the "pre-close" whitespace that
+                    # puts the parent's </object> on its own indented line.
+                    # container_elem.text is the "inter-sibling" whitespace — the indent
+                    # that comes before each item inside the container.
+                    pre_close_tail = children[-1].tail
+                    inter_tail = container_elem.text  # e.g. "\n              "
 
-                new_item = self._xml_deepcopy(children[0])
-                new_item.tail = pre_close_tail   # new last → pre-close whitespace
+                    new_item = self._xml_deepcopy(children[0])
+                    new_item.tail = pre_close_tail   # new last → pre-close whitespace
 
-                # The previous last child is now a middle sibling; give it the
-                # inter-sibling indent so the next <object> starts on the right line.
-                children[-1].tail = inter_tail
-                # Reset field VALUES to zero/empty; preserve type attributes
-                for field in new_item.iter('field'):
-                    va = self.get_value_attribute(field)
-                    if va == 'value-Int32':
-                        field.set(va, '0')
-                        field.text = '00000000'
-                    elif va == 'value-UInt32':
-                        field.set(va, '0')
-                        field.text = '00000000'
-                    elif va == 'value-Float32':
-                        field.set(va, '0.0')
-                        field.text = '00000000'
-                    elif va in ('value-Hash32', 'value-Hash64'):
-                        field.set(va, '0')
-                        field.text = '00000000' if va == 'value-Hash32' else '0000000000000000'
-                    elif va == 'value-ComputeHash32':
-                        field.set(va, '')
-                        field.text = '00000000'
-                    elif va == 'value-String':
-                        field.set(va, '')
-                        field.text = '00'
-                    elif va == 'value-Id64':
-                        field.set(va, '0')
-                        field.text = '0000000000000000'
-                    elif va == 'value-Boolean':
-                        field.set(va, 'False')
-                        field.text = '00'
-                    elif va == 'value-Enum':
-                        field.set(va, '0')
-                        field.text = '00000000'
-                    # bare BinHex (no value-* attr): leave as-is
-            else:
-                new_item = ET.Element('object')
-                new_item.set('name', item_name)
+                    # The previous last child is now a middle sibling; give it the
+                    # inter-sibling indent so the next <object> starts on the right line.
+                    children[-1].tail = inter_tail
+                    # Reset field VALUES to zero/empty; preserve type attributes
+                    for field in new_item.iter('field'):
+                        va = self.get_value_attribute(field)
+                        if va == 'value-Int32':
+                            field.set(va, '0')
+                            field.text = '00000000'
+                        elif va == 'value-UInt32':
+                            field.set(va, '0')
+                            field.text = '00000000'
+                        elif va == 'value-Float32':
+                            field.set(va, '0.0')
+                            field.text = '00000000'
+                        elif va in ('value-Hash32', 'value-Hash64'):
+                            field.set(va, '0')
+                            field.text = '00000000' if va == 'value-Hash32' else '0000000000000000'
+                        elif va == 'value-ComputeHash32':
+                            field.set(va, '')
+                            field.text = '00000000'
+                        elif va == 'value-String':
+                            field.set(va, '')
+                            field.text = '00'
+                        elif va == 'value-Id64':
+                            field.set(va, '0')
+                            field.text = '0000000000000000'
+                        elif va == 'value-Boolean':
+                            field.set(va, 'False')
+                            field.text = '00'
+                        elif va == 'value-Enum':
+                            field.set(va, '0')
+                            field.text = '00000000'
+                        # bare BinHex (no value-* attr): leave as-is
+                else:
+                    new_item = ET.Element('object')
+                    new_item.set('name', item_name)
 
-            container_elem.append(new_item)
-            self.schedule_auto_save()
-            self.populate_all_views()
+                container_elem.append(new_item)
+                self.schedule_auto_save()
+                self.populate_all_views()
+            except Exception:
+                import traceback
+                traceback.print_exc()
 
         btn.clicked.connect(_add_item)
         parent_layout.addWidget(btn)

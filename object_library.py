@@ -29,7 +29,7 @@ import xml.etree.ElementTree as ET
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QLabel,
-    QScrollArea, QGridLayout, QToolButton, QButtonGroup,
+    QScrollArea, QGridLayout, QToolButton, QButtonGroup, QMessageBox,
 )
 from PyQt5.QtCore import Qt, QSize, QTimer
 from PyQt5.QtGui import QIcon
@@ -643,7 +643,14 @@ class ObjectLibraryWidget(QWidget):
             self._update_info()
             return
         b, name, cache = self._queue.pop(0)
-        img = render_archetype_thumb(self.editor, name, _THUMB)
+        try:
+            img = render_archetype_thumb(self.editor, name, _THUMB)
+        except Exception:
+            # A crashing model loader must not abort the editor (timer slot).
+            # Treat it as "no renderable model" so it is never retried.
+            import traceback
+            traceback.print_exc()
+            img = None
         if img is not None and not img.isNull():
             try:
                 img.save(cache)
@@ -663,9 +670,14 @@ class ObjectLibraryWidget(QWidget):
 
     def _on_click(self, b):
         name = b.property('arch_name')
-        ent = place_archetype(self.editor, name)
-        if ent is not None:
-            self._info.setText(f"Placed {ent.name}. Drag into position, Ctrl+S to save.")
+        try:
+            ent = place_archetype(self.editor, name)
+            if ent is not None:
+                self._info.setText(f"Placed {ent.name}. Drag into position, Ctrl+S to save.")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Place Object", f"Placing {name} failed:\n{e}")
 
 
 def build_object_library_tab(editor):

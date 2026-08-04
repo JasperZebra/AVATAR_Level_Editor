@@ -269,8 +269,14 @@ class WorldEditorWindow(QDialog):
         path, _ = QFileDialog.getOpenFileName(
             self, "Open WorldDescriptor", "", "Game XML (*.game.xml);;All files (*)")
         if path:
-            self.managers_xml_path = path.replace('.game.xml', '.managers.xml')
-            self.load(path)
+            try:
+                self.managers_xml_path = path.replace('.game.xml', '.managers.xml')
+                self.load(path)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                QMessageBox.warning(self, "Open WorldDescriptor",
+                                    f"Could not open:\n{path}\n\n{e}")
 
     def load(self, path):
         self._binary = False
@@ -304,7 +310,13 @@ class WorldEditorWindow(QDialog):
         self._title.setText(f"🌍 {os.path.basename(path)}")
         mgr = os.path.basename(self.managers_xml_path) if self.managers_xml_path and os.path.isfile(self.managers_xml_path) else "none"
         self._set_status(f"{fmt} · {npresets} presets from {mgr}")
-        self._rebuild_tabs()
+        try:
+            self._rebuild_tabs()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "Parse error",
+                                 f"Could not build editor UI for:\n{path}\n\n{e}")
 
     def _rebuild_tabs(self):
         self.tabs.clear()
