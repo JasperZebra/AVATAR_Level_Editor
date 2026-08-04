@@ -1,0 +1,3 @@
+; avatar_cmds.txt - F11 runs these lines.
+; Left empty deliberately: it was last used to drive the mp_* warp
+; experiments and a stray F11 should not re-run them.

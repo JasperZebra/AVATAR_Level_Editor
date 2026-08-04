@@ -5,6 +5,26 @@ __pycache__/
 # excluded directory, so a negation under "tools/" would never take effect.
 tools/*
 !tools/camera_tool_project/
+# The injected console DLL and its reverse-engineering notes are real source too
+# (single-instance unlock, per-instance profiles, the live editor link), so they
+# are version-controlled for the same reason camera_tool_project is. Same
+# "tools/*" + negation trick as above.
+!tools/console_dll/
+!tools/DevAccess/
+!tools/rte_tool/
+# ...but NOT the heavy generated parts of them. Source is ~1.5 MB across 35
+# files; these are 4.5 MB and rebuilt constantly, and binaries in git never
+# shrink again.
+tools/console_dll/console_dll/archive/
+tools/console_dll/console_dll/dist/*.dll
+tools/console_dll/console_dll/dist/*.map
+# dist/inject.py and dist/install.bat ARE tracked - they are how you load the
+# thing, and shipping the injector as readable Python is deliberate (an unknown
+# .exe that injects into a game process reads as malware at a glance).
+tools/**/*.log
+# Runtime caches and per-machine state the DLL writes next to itself.
+tools/rte_tool/rte_config.json
+tools/console_dll/console_dll/data/console_dump.txt
 mass_exported_objects/
 # exported sequence bundles are user data, like objects/ above
 sequences/

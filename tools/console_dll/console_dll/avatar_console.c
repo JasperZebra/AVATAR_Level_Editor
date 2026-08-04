@@ -1,0 +1,20256 @@
+﻿/*
+ * avatar_console.dll - main-thread console command execution for
+ * Avatar: The Game (2009), PC retail 1.02.  32-bit.
+ *
+ * Background (see ../CONSOLE_GATE.md and ../MAINTHREAD_HOOK.md):
+ *   The console's TOGGLE was deleted from retail - `toggle_console` is received,
+ *   hash-matched against crc32("toggle_console")=0xD4989D79, then branched to a
+ *   bare epilogue.  But the interpreter is entirely intact: g_console exists,
+ *   its UI object carries the correct vtable, and CConsole::UpdateUI runs every
+ *   frame.  So we don't need the window - we call ExecuteLine ourselves.
+ *
+ * Why a VTABLE swap and not an inline hook:
+ *   The engine invokes UpdateUI virtually - `mov ecx,[0x111CA4B4]` then
+ *   `call [vtable+4]`.  Replacing that one function pointer needs no trampoline,
+ *   no byte patching, and no relocation of the relative `je` inside the
+ *   prologue.  Strictly less to get wrong.
+ *
+ * Threading contract (this is the part that crashed us before):
+ *   The hotkey thread NEVER touches engine state.  It only pushes strings onto a
+ *   lock-protected queue.  The detour - which runs on the main thread, once per
+ *   frame, with ECX already holding g_console - pops and executes them.
+ *   An earlier attempt called the dispatcher from a CreateRemoteThread thread and
+ *   crashed the game instantly.
+ */
+
+/* Built as C++ (/TP): __thiscall is a C++ calling convention and MSVC rejects
+   it in C mode with a wall of "syntax error: missing ')' before '*'". */
+#include <windows.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>     /* strtoul/atof/malloc - the editor link needs these */
+#include <string.h>
+#include <wctype.h>
+#include <math.h>
+#include <d3d9.h>
+
+/* ---- addresses (Dunia.dll loads at its preferred base 0x10000000, verified) -- */
+/* ---- IMAGE REBASE ---------------------------------------------------------
+   Every engine address below is written as it appears in the decompile, i.e.
+   relative to Dunia.dll's PREFERRED base 0x10000000. The loader does not always
+   honour that - one launch put it at 0x02290000, and the first hardcoded read
+   crashed the game before the hook was installed. g_rebase is added to every one
+   of them, including the vtable identity constants: those compare against
+   POINTERS stored in the process, which the loader relocated too, so a constant
+   that did not move would fail every integrity check closed. */
+#define DUNIA_PREFERRED 0x10000000u
+static unsigned long g_rebase = 0;
+
+#define G_CONSOLE_PTR   (0x111CA4B4u + g_rebase)   /* void** g_console                        */
+#define FN_UPDATE_UI    (0x100A75E0u + g_rebase)   /* CConsole::UpdateUI(float)  vtable slot 1 */
+#define FN_STR_CTOR     (0x10003E20u + g_rebase)   /* DuniaString::ctor(const char*)           */
+#define FN_STR_DTOR     (0x10EC2F90u + g_rebase)   /* DuniaString::dtor()                      */
+#define FN_EXEC_LINE    (0x100AE5F0u + g_rebase)   /* CConsole::ExecuteLine(DuniaString*)      */
+#define FN_SET_UIACTIVE (0x100A7790u + g_rebase)   /* CConsole::SetUIActive(bool)              */
+#define FN_PRINTF       (0x100AC0C0u + g_rebase)   /* CConsole::Printf - CDECL, writes buffer   */
+#define VT_CCONSOLE     (0x110197FCu + g_rebase)   /* expected CConsole vtable                 */
+
+#define UI_OFFSET       0x78          /* g_console->m_pUI                         */
+#define UI_VTABLE_EXP   (0x11142220u + g_rebase)   /* expected CFCXConsole vtable              */
+/* CFCXConsole::SetActive's one-shot guard; 0 means the console was never opened.
+   THIS WAS DEREFERENCED RAW, without + g_rebase, in two diagnostics. It read
+   correctly for as long as Dunia.dll happened to load at its preferred base
+   0x10000000 - which is most of the time, so it never showed. The first launch
+   that placed Dunia at 0x02270000 turned it into a read of 0x1125AE40 in
+   unmapped memory and took the process down on frame 1, before the console had
+   been opened at all. Every engine address in this file goes through g_rebase;
+   these two did not. */
+#define G_SETACT_GUARD  (0x1125AE40u + g_rebase)
+
+#define LOG_PATH  "avatar_console_dll.log"
+
+typedef void* (__thiscall *fnStrCtor )(void* s, const char* cstr);
+typedef void  (__thiscall *fnStrDtor )(void* s);
+typedef void  (__thiscall *fnExecLine)(void* console, void* s);
+typedef void  (__thiscall *fnSetUIAct)(void* console, int active);
+typedef void  (__fastcall *fnUpdateUI)(void* thisptr, void* edx, float dt);
+/* Printf is CDECL, not thiscall - caller cleans. Getting this wrong corrupts the stack. */
+typedef void  (__cdecl   *fnPrintf  )(void* console, int flags, const char* fmt, ...);
+
+static fnUpdateUI  g_origUpdateUI = 0;
+static void**      g_vtable       = 0;
+static void*       g_lastConsole  = 0;
+static HMODULE     g_self         = 0;
+static char        g_dir[MAX_PATH];
+
+/* AUTO-LOAD MODE. 1 when this image was loaded by the game's own loader because
+   it is sitting next to Avatar.exe under the name dinput8.dll, 0 when it was
+   pushed in by inject.py. Set in DllMain from our own file name - ONE binary,
+   two workflows, decided at run time rather than at build time, so there is only
+   ever one thing to build and one thing to keep in step.
+
+   It is not cosmetic. In proxy mode Dunia.dll's import thunk for
+   DirectInput8Create points INTO this module, so the several places that used to
+   answer "something is wrong, unload me" with FreeLibraryAndExitThread would
+   unmap the code that thunk jumps to. The game would then die on its next
+   controller poll, with the log ending in a tidy line that says we left cleanly.
+   See SelfUnload(). */
+static volatile long g_proxy = 0;
+
+/* ---- command queue --------------------------------------------------------- */
+#define QMAX 64
+#define QLEN 256
+static char             g_queue[QMAX][QLEN];
+static volatile long    g_qHead = 0, g_qTail = 0;
+static CRITICAL_SECTION g_cs;
+/* REMOVED: g_wantUI, g_wantPanel, g_watch. Leftovers from the staged bring-up
+   of the engine console ("stage 3 panel poke", "stage 4 SetUIActive"). Nothing
+   ever set any of the three - the hotkeys that once did are long gone - so the
+   two branches that consumed them in the per-frame detour could never run. The
+   branches went with them; see the note where they used to be. */
+static volatile long    g_wantSmoke = 0;
+static volatile long    g_wantClose = 0;  /* CLOSE the console again */
+/* Bumped once per frame by the detour. The watchdog on the hotkey thread
+   watches it to tell a stalled frame loop apart from a bug in our own code. */
+static volatile long    g_frames    = 0;
+/* Set by the unload path on the worker thread; performed by the detour on the
+   MAIN thread. Restoring game state means engine calls, and those may not run
+   from the worker - doing so crashed two threads at once on End while driving. */
+static volatile long    g_wantRestoreAll = 0;
+static volatile long    g_shutdown  = 0;   /* set on unload; overlay thread exits */
+static volatile long    g_pickerOpen = 0;  /* the spawn window is on screen */
+static volatile long    g_pkTrace    = 0;  /* `picktrace` - log panel clicks  */
+static volatile long    g_pickOnClick    = 1;   /* click-to-pick while console open */
+static void PickAtCursor(void* console, int quiet);
+/* In-game (D3D9) rendering. Defined with the overlay code far below, but the
+   console dispatch and the unload path both need them up here. */
+static volatile long    g_ingame    = 0;   /* off unless asked */
+static int  InstallPresentHook(void);
+static void RemovePresentHook(void);
+/* Staged console output. Printf must only be called from the main thread, but
+   the hotkey thread has things worth saying (fly speed). It leaves them here and
+   the detour prints them. */
+static char             g_note[160] = {0};
+static volatile long    g_haveNote  = 0;
+static volatile long    g_wantFree  = 0;  /* release a clipped mouse cursor */
+
+static volatile long    g_ourPanel  = 0;  /* OUR console, not the engine's */
+static volatile long    g_blockGame = 1;  /* disable the game window while typing (F5) */
+static volatile long    g_gameDisabled = 0;
+static volatile long    g_ownInput  = 1;  /* our input line vs the engine's (F8) */
+
+static volatile long g_consoleOpen = 0;  /* cached by the overlay thread */
+/* Declared early: SetGameInput's "never block while the console is closed"
+   invariant has a second legitimate reason to block - driving a creature, where
+   the player must receive no input at all so it plays no animations. */
+static volatile long g_drive = 0;
+static HWND          g_gameWnd     = 0;
+static void logf_(const char* fmt, ...);   /* fwd decl - defined below */
+/* Bracket a region that deliberately dereferences unvalidated engine pointers
+   inside __try/__except. Defined with the crash reporter, which is the only
+   consumer; declared here because the engine walks come first in the file. */
+static void ProbeEnter(void);
+static void ProbeLeave(void);
+static HWND  g_gameWndFwd(void);
+static HWND  g_focusWndFwd(void);
+
+/* A disabled window gets no keyboard or mouse input, but GetAsyncKeyState - our
+   input path - still works. That is exactly the asymmetry we need: we keep
+   reading the keyboard while the game stops reacting to it. */
+/* Installed on the GAME's own window. Runs on the game's UI thread, so it does
+   nothing but decide whether to pass a message on - no engine calls, no locks,
+   no logging in the common path.
+
+   Only mouse BUTTONS are eaten, never WM_MOUSEMOVE: movement is harmless and
+   swallowing it would upset the game's own cursor bookkeeping. */
+static WNDPROC g_gameProcOrig = 0;
+static volatile long g_gameMoving = 0;   /* the user is dragging/resizing it */
+
+static HWND g_ovlFwd(void);
+/* "Is our application in front?" - defined just below, but GameWndProc needs it
+   to decide whether a click on the game window is a return from another
+   application or a click from inside our own. */
+static int  AppHasFocus(void);
+
+/* Which of our windows is this, in one word, for the activation traces. The
+   foreground oscillation these exist to diagnose is between exactly two of
+   them, and a bare HWND in a log does not say which. */
+static const char* WndTag(HWND h)
+{
+    if (!h)                 return "none";
+    if (h == g_gameWnd)     return "GAME";
+    if (h == g_focusWndFwd()) return "FOCUS";
+    if (h == g_ovlFwd())    return "OVERLAY";
+    return "foreign";
+}
+
+/* ---- click-to-pick gating -------------------------------------------------
+   Click-to-pick reads the mouse with GetAsyncKeyState, which reports the
+   PHYSICAL button and knows nothing about focus or cursor position. The comment
+   further down says so plainly ("does not care that the message was eaten") -
+   that property is what makes the picker work while our console eats the
+   window's own mouse messages, but nothing bounded it.
+
+   So a left click ANYWHERE on the desktop - another app, another monitor - fired
+   a pick in the game whenever the console was open. The only positional test
+   was `onPanel`, which compared pt.y against the panel height and never checked
+   pt.x at all, nor that the cursor was inside the client rect: a click far to
+   the left, to the right, or below the window passed every guard.
+
+   Two conditions are needed and both were missing:
+     1. the cursor is genuinely inside the game's client area, and
+     2. the foreground window is the game or one of OURS.
+   The second cannot just be `== g_gameWnd`: opening the console deliberately
+   moves the foreground to g_focusWnd so DirectInput releases the mouse, so
+   requiring the game window would disable picking exactly when it is used. */
+static int PickForegroundIsOurs(void)
+{
+    HWND fg = GetForegroundWindow(), root;
+    if (!fg) return 0;
+    if (fg == g_gameWnd || fg == g_focusWndFwd() || fg == g_ovlFwd())
+        return 1;
+    /* A child or owned window of ours. There are no child controls left to
+       reach this way - the picker's hidden EDIT and LISTBOX are gone - but the
+       game may well own dialogs of its own, and clicking one of those is still
+       "our application in front". */
+    root = GetAncestor(fg, GA_ROOTOWNER);
+    return (root && (root == g_gameWnd || root == g_focusWndFwd() ||
+                     root == g_ovlFwd()));
+}
+
+/* -> 1 if the cursor is inside the game's client area; *pOnPanel gets whether
+   it is over our console panel. Returns 0 (and picking must not fire) when the
+   cursor is outside the window entirely. */
+static int PickCursorInGame(int* pOnPanel)
+{
+    POINT pt;
+    RECT  rc;
+    if (pOnPanel) *pOnPanel = 0;
+    if (!g_gameWnd || !GetCursorPos(&pt) || !GetClientRect(g_gameWnd, &rc))
+        return 0;
+    if (!ScreenToClient(g_gameWnd, &pt)) return 0;
+    if (pt.x < 0 || pt.y < 0 || pt.x >= rc.right || pt.y >= rc.bottom)
+        return 0;                    /* outside the game window - not our click */
+    if (pOnPanel && rc.bottom > 0 &&
+        pt.y < (LONG)(300.0 * (double)rc.bottom / 576.0))
+        *pOnPanel = 1;               /* the panel is 300 of 576 UI units tall */
+    return 1;
+}
+
+/* The in-frame picker's input, declared here because GameWndProc and
+   InputThread are both defined long before the picker code.
+   PkClick/PkWheel/PkDrag take BACKBUFFER pixels - see PkClientToBB.
+   PkPollMouse is the ONLY producer of button events for the panel; it is called
+   from InputThread's 8ms poll. Why polling and not window messages is set out at
+   its definition. */
+static int  PkKey(int vk);
+static int  PkChar(int ch);
+static int  PkClick(int bx, int by);
+static int  PkWheel(int bx, int by, int delta);
+static int  PkDrag(int bx, int by, int down);
+static void PkPollMouse(void);
+static void PkClientToBB(int cx, int cy, int* bx, int* by);
+
+static LRESULT CALLBACK GameWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    /* UNCONDITIONAL, ahead of every gate. The earlier traces were all INSIDE
+       `if (g_ourPanel || g_drive)` and `if (g_pickerOpen)`, so silence was
+       ambiguous: it could mean the message never arrived, or that it arrived
+       and a gate was false. This separates the two - if these lines appear the
+       message reaches us and the gates are the problem; if they do not, the
+       message is being consumed before our proc runs at all. */
+    if (g_pkTrace && (m == WM_MOUSEACTIVATE || m == WM_LBUTTONDOWN ||
+                      m == WM_LBUTTONUP || m == WM_NCLBUTTONDOWN))
+        logf_("[pick] GameWndProc msg=%s ourPanel=%ld drive=%ld pickerOpen=%ld",
+              m == WM_MOUSEACTIVATE ? "MOUSEACTIVATE" :
+              m == WM_LBUTTONDOWN   ? "LBUTTONDOWN"   :
+              m == WM_LBUTTONUP     ? "LBUTTONUP"     : "NCLBUTTONDOWN",
+              g_ourPanel, g_drive, g_pickerOpen);
+
+    /* ---- ACTIVATION TRACE ---------------------------------------------------
+       MEASURED: every click on the panel is followed within 0-32ms by the input
+       thread logging "game input blocked", i.e. the game had taken the
+       foreground back and we grabbed it again. Nineteen clicks, nineteen
+       grabs. That oscillation is the full-frame refresh and the one-second
+       audio dip the user reported - Dunia ducks and re-primes audio on an
+       activation change - and it is also what lets the game's mouselook warp
+       the cursor out from under the click poll.
+
+       What is NOT yet established is WHO moves it. No mouse message of any kind
+       reaches this procedure, and WM_MOUSEACTIVATE is the only way Windows
+       click-activates a window - so the system is not doing it on our behalf,
+       which leaves the game doing it to itself from its own input handling.
+       These four messages, plus the foreground watcher in InputThread, are what
+       will say so: WM_ACTIVATE/WM_NCACTIVATE name the window being switched to
+       and from, and the pair of timestamps separates one flip from a fight. */
+    if (g_pkTrace && (m == WM_ACTIVATE || m == WM_ACTIVATEAPP ||
+                      m == WM_NCACTIVATE || m == WM_SETFOCUS ||
+                      m == WM_KILLFOCUS)) {
+        HWND other = (HWND)l;
+        logf_("[act ] game wnd %s w=%08lX other=%p(%s) fg=%p(%s)",
+              m == WM_ACTIVATE    ? "WM_ACTIVATE"    :
+              m == WM_ACTIVATEAPP ? "WM_ACTIVATEAPP" :
+              m == WM_NCACTIVATE  ? "WM_NCACTIVATE"  :
+              m == WM_SETFOCUS    ? "WM_SETFOCUS"    : "WM_KILLFOCUS",
+              (unsigned long)w,
+              (void*)other, WndTag(other),
+              (void*)GetForegroundWindow(), WndTag(GetForegroundWindow()));
+    }
+
+    /* Clicking the game brings the WHOLE app forward, not half of it. The game
+       window and our focus window are separate top-level windows, so raising one
+       used to leave the other behind whatever else was on screen. Raise the
+       sibling without activating it - activation stays wherever the window
+       manager put it, only the z-order is corrected.
+       The picker used to be raised here as a third top-level window. It no
+       longer exists as a window at all; it is painted into the game's own back
+       buffer, so it comes forward with the game by construction. */
+    if (m == WM_ACTIVATEAPP && w) {
+        HWND f = g_focusWndFwd();
+        SetWindowPos(h, HWND_TOP, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        if (f && IsWindow(f) && IsWindowVisible(f))
+            SetWindowPos(f, HWND_TOP, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+    /* Dragging and resizing the game window must keep working. Suppress the
+       foreground re-assert while the user is doing it, or we would yank the
+       focus mid-drag and cancel it. */
+    if (m == WM_ENTERSIZEMOVE) {
+        InterlockedExchange(&g_gameMoving, 1);
+        /* Take the overlay off screen for the duration. A layered window cannot
+           be repositioned in step with a drag from a 15Hz thread - it trails,
+           snaps, and eventually stops updating altogether. Better to have it
+           absent for the second you are dragging than smeared across the
+           desktop. It comes back on WM_EXITSIZEMOVE. */
+        if (g_ovlFwd() && IsWindow(g_ovlFwd())) ShowWindow(g_ovlFwd(), SW_HIDE);
+    }
+    if (m == WM_EXITSIZEMOVE) InterlockedExchange(&g_gameMoving, 0);
+
+    /* THE SPINNING CURSOR, settled instead of guessed at.
+       Giving OUR window classes a cursor did not fix it, because the pointer
+       you are looking at sits over the GAME's window, and its shape is decided
+       by the game's window class - which we do not control. Whatever raised the
+       "application starting" spinner, it then persists, because nothing ever
+       answers WM_SETCURSOR with anything else.
+
+       So we answer it. This is exactly what chaining the game's WndProc is good
+       for: while our console is up, the cursor over the game's client area is
+       an arrow because we say so. Returning TRUE stops the original proc
+       putting it back. */
+    if (m == WM_SETCURSOR && (g_ourPanel || g_pickerOpen) &&
+        LOWORD(l) == HTCLIENT) {
+        static HCURSOR arrow = 0;
+        if (!arrow) arrow = LoadCursorW(0, (LPCWSTR)IDC_ARROW);
+        if (arrow) { SetCursor(arrow); return TRUE; }
+    }
+
+    if (g_ourPanel || g_drive) {
+        switch (m) {
+        case WM_MOUSEACTIVATE: {
+            /* THE TITLE BAR. Eating every activation also ate clicks on the
+               caption and the borders, which is why the window could not be
+               moved or resized at all. Non-client clicks are window management,
+               not gameplay - let them through untouched. */
+            int ht = LOWORD(l);
+            if (ht != HTCLIENT)
+                return CallWindowProcW(g_gameProcOrig, h, m, w, l);
+
+            /* NO MORE ...ANDEAT, ANYWHERE. Both answers here used to carry it -
+               MA_NOACTIVATEANDEAT if we already had the foreground,
+               MA_ACTIVATEANDEAT if we did not - and ...ANDEAT tells Windows to
+               DISCARD the mouse message rather than deliver it. That was the
+               single most destructive line in this subsystem: it meant a click
+               on the game's client area could never become a WM_LBUTTONDOWN for
+               anyone, ourselves included, and it was doing that in service of a
+               job it was not actually doing. What stops the game reacting to
+               input while our console is up is the FOREGROUND being held by
+               g_focusWnd, which unacquires DirectInput - SetGameInput says so in
+               its own comment, and that is the mechanism that was measured to
+               work. Discarding messages added nothing to it.
+
+               What is left is the minimum that is still true:
+                 - we already have the foreground: MA_NOACTIVATE. Do not let the
+                   click move the foreground off g_focusWnd and back onto the
+                   game window, because that re-acquires DirectInput and gives
+                   the game the keyboard for the up-to-400ms until the input
+                   thread notices and takes it back. The message is still
+                   delivered; we simply decline the activation.
+                 - we do NOT have the foreground: pass it to the original proc
+                   and let the system activate normally. The user is clicking to
+                   bring the game back from behind another application and is
+                   entitled to have that work. This is half of "the user must be
+                   able to leave and come back".
+               The panel does not need a special case here any more: its mouse is
+               polled, not delivered, so no answer to this message can help or
+               hinder it. See PkPollMouse. */
+            if (AppHasFocus()) return MA_NOACTIVATE;
+            return CallWindowProcW(g_gameProcOrig, h, m, w, l);
+        }
+
+        /* THE WHEEL IS THE ONE THING THAT CANNOT BE POLLED. There is no
+           GetAsyncKeyState for it, so it stays a message - and on the evidence
+           (see PkPollMouse: no mouse message of any kind was ever observed
+           arriving here) this probably never fires. It is kept because it costs
+           nothing, it is correct if the evidence is ever contradicted, and
+           losing it would leave no wheel support at all. PgUp/PgDn in PkKey
+           scroll the list from the keyboard and do not depend on any of this.
+
+           Delivered in SCREEN space, unlike every other mouse message, then
+           converted the same way the poll converts: client -> backbuffer. */
+        case WM_MOUSEWHEEL: {
+            POINT pt;
+            int   bx, by;
+            pt.x = (short)LOWORD(l); pt.y = (short)HIWORD(l);
+            ScreenToClient(h, &pt);
+            PkClientToBB(pt.x, pt.y, &bx, &by);
+            PkWheel(bx, by, (short)HIWORD(w));
+            return 0;
+        }
+
+        /* Buttons are swallowed, movement is not. That is what the comment at
+           the top of this file has always claimed and what the code did not do -
+           it swallowed WM_MOUSEMOVE as well, in order to feed a drag handler
+           that now lives in the poll. Movement is harmless and eating it upsets
+           the game's own cursor bookkeeping, so it falls through untouched.
+
+           The button swallow is belt-and-braces and is documented as such: the
+           foreground grab is what actually stops the game reacting. If the
+           messages really never arrive it does nothing; if they do, it stops a
+           click on our panel also firing a weapon. It costs one comparison. */
+        case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDOWN: case WM_RBUTTONUP: case WM_RBUTTONDBLCLK:
+        case WM_MBUTTONDOWN: case WM_MBUTTONUP: case WM_MBUTTONDBLCLK:
+            if (g_pkTrace)
+                logf_("[pick] button msg %u swallowed on game wnd at (%d,%d)",
+                      m, (short)LOWORD(l), (short)HIWORD(l));
+            return 0;
+        }
+    }
+    return CallWindowProcW(g_gameProcOrig, h, m, w, l);
+}
+
+static void InstallGameWndProc(HWND h)
+{
+    if (g_gameProcOrig || !h || !IsWindow(h)) return;
+    g_gameProcOrig = (WNDPROC)SetWindowLongPtrW(h, GWLP_WNDPROC, (LONG_PTR)GameWndProc);
+    /* The old wording here was "clicks are eaten, not refused", which described
+       the MA_NOACTIVATEANDEAT that is gone. Nothing is eaten now: button
+       messages are swallowed as belt-and-braces, activation is declined rather
+       than discarded, and the panel's own mouse is polled. A log line that
+       describes behaviour the code no longer has is exactly what sent two
+       earlier sessions down the wrong path. */
+    logf_("[in  ] game WndProc chained (was %p) - button messages swallowed, "
+          "activation declined while our UI is up",
+          (void*)g_gameProcOrig);
+}
+
+static void RemoveGameWndProc(HWND h)
+{
+    if (!g_gameProcOrig) return;
+    if (h && IsWindow(h))
+        SetWindowLongPtrW(h, GWLP_WNDPROC, (LONG_PTR)g_gameProcOrig);
+    g_gameProcOrig = 0;
+    logf_("[in  ] game WndProc restored");
+}
+
+/* Is OUR application in front? GetAsyncKeyState is system-wide - it does not
+   care which window has focus - so every key and mouse button we poll was being
+   read while the user was clicking around in other applications. Alt-tab to a
+   browser and left-click a link, and the creature you were driving attacked.
+   Same for WASD: typing elsewhere steered it. Everything polled must go through
+   this. */
+/* THE ONE DEFINITION OF "OUR APPLICATION IS IN FRONT". It used to have three
+   near-copies that disagreed - this one, PickForegroundIsOurs, and the `mine`
+   test inside InputThread - and the disagreement was a real bug: `mine` did not
+   list the picker window, so typing died the moment you clicked a category.
+   That window is gone now, but the lesson stands, so InputThread calls this
+   instead of rolling its own, and PickForegroundIsOurs is now a documented
+   SUPERSET of it (it also accepts owned windows) rather than a rival. */
+static int AppHasFocus(void)
+{
+    HWND fg = GetForegroundWindow();
+    if (!fg) return 0;
+    return (fg == g_gameWndFwd() || fg == g_focusWndFwd() || fg == g_ovlFwd());
+}
+
+static void SetGameInput(int enabled)
+{
+    HWND h = g_gameWndFwd();
+    HWND f = g_focusWndFwd();
+    if (!h || !IsWindow(h)) return;
+
+    /* INVARIANT: never block while the console is closed. The input thread's
+       re-assert samples g_ourPanel and can act up to 400ms later, so a close
+       landing inside that window used to be undone immediately - which is the
+       half-second hitch on F10 (a foreground fight, not the level loader).
+       Enforcing it here makes the race harmless instead of timing-sensitive. */
+    /* Blocking is legitimate for exactly two reasons: our console is open, or we
+       are driving a creature and the player must receive nothing (otherwise it
+       plays walk and jump animations from the same keys that steer the
+       creature).
+
+       g_pickerOpen IS DELIBERATELY NOT HERE, and that is a correction. It was
+       added on the reasoning that the picker owns a text field so it should own
+       the keyboard too. The reasoning was fine and the consequence was not: the
+       block path moves the foreground to g_focusWnd and the input thread
+       RE-ASSERTS it every 400ms, so with the picker open the foreground was
+       being yanked to an invisible window twice a second. The picker could not
+       be dragged or closed, and the user could not alt-tab out of the game at
+       all.
+
+       The picker does not need it for two independent reasons. Its KEYBOARD
+       comes from InputThread's poll, which runs whenever our application is in
+       front and does not care which of our windows holds the focus. Its MOUSE
+       comes from PkPollMouse, which is a poll for the same reason. Neither
+       consults the foreground for anything except "is this application in
+       front at all", so there is nothing here for the picker to gain and, as
+       measured, a great deal for it to lose. */
+    if (!enabled && !g_ourPanel && !g_drive) return;
+
+    /* ...and the mirror of that rule, which was missing: DO NOT RE-ENABLE THE
+       GAME'S KEYBOARD WHILE OUR CONSOLE IS OPEN.
+
+       Only the disable path was guarded. Anything that called SetGameInput(1)
+       with the panel up - the foreground-returned path does exactly that -
+       handed the keyboard back to the game while the console was still
+       accepting text. Every movement key then did both jobs: WASD walked the
+       character AND typed into the input line, which is why a command came out
+       as "adw advS". The log shows it plainly, "F9 OPEN console" followed
+       immediately by "game input RE-ENABLED (foreground returned)".
+
+       The close path clears g_ourPanel BEFORE calling SetGameInput(1), so
+       gating on it here cannot strand the game with input disabled.
+
+       THE PICKER IS NOT GATED HERE, and it was tried. Adding it stopped the
+       keyboard being handed back while the spawn/entity panel was up, which
+       sounded right, but this guard only has teeth because the block path
+       takes the foreground - and taking it every 400ms made the panel
+       undraggable, its close box unclickable, and the whole desktop
+       unreachable. The panel gets its keyboard and its mouse from InputThread's
+       poll instead, which seizes nothing from anyone. (It is moot in practice
+       anyway: the panel can only be open while the console is, so g_ourPanel
+       above already covers every case the picker would have added.) */
+    if (enabled && g_ourPanel) return;
+
+    if (enabled && g_gameDisabled) {
+        EnableWindow(h, TRUE);         /* harmless no-op now; undoes older builds */
+        /* hand foreground back to the game so DirectInput re-acquires */
+        SetForegroundWindow(h);
+        SetFocus(h);
+        if (f && IsWindow(f)) ShowWindow(f, SW_HIDE);
+        InterlockedExchange(&g_gameDisabled, 0);
+        logf_("[in  ] game input RE-ENABLED (foreground returned)");
+    } else if (!enabled && !g_gameDisabled) {
+        /* EnableWindow alone did NOT stop input - the game uses DirectInput/raw
+           input, which ignores the disabled state. Taking FOREGROUND does work,
+           because foreground-cooperative DirectInput devices unacquire. */
+        /* THE BEEP. Windows plays the default error sound when a click lands on
+           a DISABLED window, and click-to-pick means clicking the game window on
+           purpose. So the game window is never disabled - it is left enabled and
+           simply ignored, which is silent.
+
+           GameWndProc still swallows button messages while our UI is up, but as
+           belt-and-braces only, and it no longer answers WM_MOUSEACTIVATE with
+           anything carrying ...ANDEAT. That flag told Windows to DISCARD the
+           click, so a WM_LBUTTONDOWN could never be generated for anyone,
+           ourselves included. What holds the foreground is the call below, not
+           that flag.
+
+           Everything of ours that reads the mouse - click-to-pick on the frame
+           detour, PkPollMouse on the input thread - polls GetAsyncKeyState,
+           which does not care about focus, activation or messages at all. */
+        if (f && IsWindow(f)) {
+            /* Only if it is not already up. This runs from the 400ms re-assert,
+               so it used to re-show an already-visible layered window several
+               times a second, and every ShowWindow is a window-manager event on
+               a window that is fighting for the foreground. */
+            if (!IsWindowVisible(f)) ShowWindow(f, SW_SHOWNOACTIVATE);
+            SetForegroundWindow(f);
+            /* SetFocus is thread-local and this runs on the INPUT thread, which
+               does not own f - so it is a silent no-op here and is kept only
+               for the path that does own it. SetForegroundWindow already gives
+               focus to the window it activates, which is the load-bearing
+               half. */
+            SetFocus(f);
+        }
+        InterlockedExchange(&g_gameDisabled, 1);
+        {   /* READ IT BACK. This line used to assert that the foreground had
+               moved without ever checking, and it is printed several times a
+               second during the oscillation - so if SetForegroundWindow were
+               being refused (Windows restricts it, and a refusal flashes the
+               taskbar instead of switching) the log would have said "moved"
+               every time regardless. Now it says which actually happened. */
+            HWND now = GetForegroundWindow();
+            logf_("[in  ] game input blocked (foreground %s %p(%s), now %p(%s))",
+                  (now == f) ? "moved to" : "REFUSED - wanted",
+                  (void*)f, WndTag(f), (void*)now, WndTag(now));
+        }
+    }
+}
+
+/* ---- TEXT-RENDER FIX (HYPOTHESIS) -------------------------------------------
+ * RE result: nothing in CFCXConsole::Draw gates the text. Draw runs, converts the
+ * UTF-16 ring lines correctly, and QUEUES GLYPHS - its text batch has grown to
+ * ~3072 entry slots. Printf's output is genuinely in the ring at g_console+0x0C
+ * (our "DEVACCESS printf test" string was read back out of it), and typing
+ * already works (pUI+0x60 held keystrokes, cursor at +0x7C). The break is
+ * strictly DOWNSTREAM: the queued batch is never rasterised.
+ *
+ * The one structural anomaly: CFCXConsole::Update stores -1.1f into the TEXT
+ * batch's +0x38 (0x10EF3B01) while the QUAD batch - the panel background, which
+ * DOES render - gets -1.0f (0x10EF3B0E). Ctor default is 0.0f and every other
+ * live text batch in the process reads 0.0. That store is the only site in 16 MB
+ * of .text writing -1.1f there.
+ *
+ * So: overwrite it after the original UpdateUI returns (Update rewrites it every
+ * frame). Data only - no engine call. Guarded on the batch looking like we expect.
+ */
+#define TEXT_POOL_ANCHOR (0x11178C68u + g_rebase)
+
+/* Validate a pointer before dereferencing it. The first version of this fix
+   guarded on FIELD VALUES but read them through an unvalidated pool[slot]
+   pointer - if that entry is not a real object, the guard read itself faults.
+   That crashed the game. Never dereference a derived pointer without this. */
+static int Readable(const void* p, SIZE_T n)
+{
+    MEMORY_BASIC_INFORMATION mbi;
+    if (!p) return 0;
+    if (VirtualQuery(p, &mbi, sizeof(mbi)) != sizeof(mbi)) return 0;
+    if (mbi.State != MEM_COMMIT) return 0;
+    if (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) return 0;
+    if (!(mbi.Protect & (PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY |
+                         PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE))) return 0;
+    /* must not straddle the end of the region */
+    return ((const char*)p + n) <= ((const char*)mbi.BaseAddress + mbi.RegionSize);
+}
+
+/* REMOVED: ApplyTextFix(), and g_textMode/g_textLogged with it. It was the
+   "+0x38 hypothesis" - the attempt to make the engine rasterise its own console
+   glyphs by poking the render batch's +0x38 float. The README and the TEXT
+   OVERLAY header below both record that the hypothesis was TESTED AND
+   FALSIFIED, and drawing the text ourselves is what shipped instead. Nothing
+   called this function in any session: no dispatch entry, no hotkey, no caller
+   at all. The addressing it worked out is worth one line if anyone revisits the
+   idea - the batch is the return of 0x100758B0, three dereferences past
+   TEXT_POOL_ANCHOR+8 (inner = *(pool+8), base = *inner, batch = base[pUI+0x80]);
+   indexing after the FIRST deref yields the slot count 0x1D, not a pointer, and
+   dereferencing that is what crashed the game the first time round. */
+
+/* ---- GameProfile location, for the self-verifying smoke test ----------------
+ * gfx_ShowFPS / qc_ShowPlayerPos turned out to be DEAD in this build (user
+ * tested both via CVar write and via XML - no effect), so "nothing appeared"
+ * would prove nothing about whether ExecuteLine worked. Instead we drive a CVar
+ * whose storage we can read back:  cheat_GodMode at profile_base + 0xF4.
+ *
+ * profile_base is found by fingerprinting three adjacent constants from
+ * defaultgameconfig.xml, the same trick the Python tooling uses:
+ *     Rarity_1 = 16580352, Rarity_2 = 38655, Rarity_3 = 13593087
+ * Rarity_1's reflection descriptor gives field offset 0x20, so
+ *     base = (Rarity_1 address) - 0x20   and   GodMode = base + 0xF4.
+ */
+#define RAR1 16580352u
+#define RAR2 38655u
+#define RAR3 13593087u
+#define OFF_RARITY1 0x20
+#define OFF_GODMODE 0xF4
+
+static unsigned char* FindProfileBase(void)
+{
+    MEMORY_BASIC_INFORMATION mbi;
+    unsigned char* addr = 0;
+    unsigned char* found = 0;
+    int hits = 0;
+
+    while (VirtualQuery(addr, &mbi, sizeof(mbi)) == sizeof(mbi)) {
+        unsigned char* base = (unsigned char*)mbi.BaseAddress;
+        SIZE_T size = mbi.RegionSize;
+        if (size == 0) break;
+        if (mbi.State == MEM_COMMIT &&
+            (mbi.Protect == PAGE_READWRITE || mbi.Protect == PAGE_READONLY) &&
+            size <= 64u * 1024u * 1024u) {
+            SIZE_T i;
+            for (i = 0; i + 4 <= size; i += 4) {
+                if (*(unsigned long*)(base + i) == RAR1) {
+                    SIZE_T lo = (i > 256) ? i - 256 : 0;
+                    SIZE_T hi = (i + 256 + 4 <= size) ? i + 256 : size - 4;
+                    SIZE_T j; int f2 = 0, f3 = 0;
+                    for (j = lo; j + 4 <= hi; j += 4) {
+                        unsigned long v = *(unsigned long*)(base + j);
+                        if (v == RAR2) f2 = 1;
+                        if (v == RAR3) f3 = 1;
+                    }
+                    if (f2 && f3) { found = base + i - OFF_RARITY1; ++hits; }
+                }
+            }
+        }
+        addr = base + size;
+        if (addr < base) break;               /* wrap guard */
+    }
+    return (hits == 1) ? found : 0;           /* insist on a unique match */
+}
+
+/* Milliseconds since load, on every line. Without this a freeze is invisible in
+   the log: the detour stops writing, and "no lines" reads exactly the same as
+   "nothing happened". */
+static DWORD g_t0 = 0;
+
+static void LogEchoPush(const char* line);
+
+static void logf_(const char* fmt, ...)
+{
+    char path[MAX_PATH];
+    char echo[220];
+    va_list ap;
+    FILE* f;
+    /* Format once for the mirror BEFORE the file write, so a failed fopen does
+       not also cost the in-game line - the case where you most want to see it. */
+    va_start(ap, fmt);
+    _vsnprintf(echo, sizeof(echo) - 1, fmt, ap);
+    echo[sizeof(echo) - 1] = 0;
+    va_end(ap);
+    LogEchoPush(echo);
+
+    _snprintf(path, sizeof(path), "%s\\%s", g_dir, LOG_PATH);
+    f = fopen(path, "a");
+    if (!f) return;
+    fprintf(f, "%8lu %s\n", (unsigned long)(GetTickCount() - g_t0), echo);
+    fclose(f);
+}
+
+
+/* ---- verbose echo: logf_ mirrored into the panel --------------------------
+   Everything this DLL knows goes through logf_ - which signal was sent, which
+   clip it resolved to, why a command did nothing - but logf_ writes to a FILE.
+   From inside the game that is invisible, so "nothing happened" and "something
+   happened and was logged" look identical.
+
+   This mirrors those lines into the console panel. It is a RING written by any
+   thread and drained on the main thread, because logf_ is called from the input
+   poll and the worker as well as from the frame hook, and FN_PRINTF may only be
+   touched by the main thread.
+
+   Off by default - it is genuinely verbose - and toggled with F1 or `verbose`. */
+#define LOGECHO_MAX 128
+#define LOGECHO_LEN 220
+static volatile long g_logEcho = 0;      /* mirror on/off                     */
+/* g_cs IS DELETED BEFORE THE LAST logf_ ON THE UNLOAD PATH. That line was
+   harmless for as long as logf_ only wrote to a file; the moment it also
+   pushed to the echo ring it became EnterCriticalSection on a destroyed
+   lock, which is undefined behaviour and crashed the game on End. The flag
+   is cleared before every DeleteCriticalSection, so late logging degrades
+   to file-only instead of faulting. */
+static volatile long g_csAlive = 0;
+static char  g_leRing[LOGECHO_MAX][LOGECHO_LEN];
+static int   g_leHead = 0, g_leTail = 0;
+static int   g_leDropped = 0;
+
+static void LogEchoPush(const char* line)
+{
+    if (!g_logEcho || !g_csAlive) return;
+    EnterCriticalSection(&g_cs);
+    if (((g_leHead + 1) % LOGECHO_MAX) != g_leTail) {
+        strncpy(g_leRing[g_leHead], line, LOGECHO_LEN - 1);
+        g_leRing[g_leHead][LOGECHO_LEN - 1] = 0;
+        g_leHead = (g_leHead + 1) % LOGECHO_MAX;
+    } else {
+        ++g_leDropped;   /* say so rather than silently losing lines */
+    }
+    LeaveCriticalSection(&g_cs);
+}
+
+static int LogEchoPop(char* out)
+{
+    int got = 0;
+    if (!g_csAlive) return 0;
+    EnterCriticalSection(&g_cs);
+    if (g_leTail != g_leHead) {
+        strncpy(out, g_leRing[g_leTail], LOGECHO_LEN - 1);
+        out[LOGECHO_LEN - 1] = 0;
+        g_leTail = (g_leTail + 1) % LOGECHO_MAX;
+        got = 1;
+    }
+    LeaveCriticalSection(&g_cs);
+    return got;
+}
+
+static void QueuePush(const char* line)
+{
+    if (!g_csAlive) return;
+    EnterCriticalSection(&g_cs);
+    if (((g_qHead + 1) % QMAX) != g_qTail) {
+        strncpy(g_queue[g_qHead], line, QLEN - 1);
+        g_queue[g_qHead][QLEN - 1] = 0;
+        g_qHead = (g_qHead + 1) % QMAX;
+    }
+    LeaveCriticalSection(&g_cs);
+}
+
+static int QueuePop(char* out)
+{
+    int got = 0;
+    if (!g_csAlive) return 0;
+    EnterCriticalSection(&g_cs);
+    if (g_qTail != g_qHead) {
+        /* QLEN - 1 and an explicit terminator, like LogEchoPop. Copying the full
+           QLEN left the result unterminated for any entry that filled the slot;
+           it was in bounds only because QueuePush happens to terminate and the
+           one caller's buffer is exactly QLEN. That is a coincidence, not a
+           contract, and the next push path would have paid for it. */
+        strncpy(out, g_queue[g_qTail], QLEN - 1);
+        out[QLEN - 1] = 0;
+        g_qTail = (g_qTail + 1) % QMAX;
+        got = 1;
+    }
+    LeaveCriticalSection(&g_cs);
+    return got;
+}
+
+/* ---- the engine's own three-call idiom, byte-identical to code at 0x100AE6E7 */
+static void RunConsoleLine(void* console, const char* line)
+{
+    unsigned char s[0x20];
+    memset(s, 0, sizeof(s));
+    ((fnStrCtor )FN_STR_CTOR )(s, line);
+    ((fnExecLine)FN_EXEC_LINE)(console, s);
+    ((fnStrDtor )FN_STR_DTOR )(s);
+}
+
+
+/* ==================== NOCLIP / FREE-FLY ==================== */
+
+/* CEntity::SetPosition - declared here because the noclip tick uses it too.
+   ret 0xC, floats BY VALUE, broadcasts to every component. */
+#define FN_ENT_SETPOS   (0x101B5180u + g_rebase)
+typedef void (__thiscall *fnEntSetPos)(void* ent, float x, float y, float z);
+
+#define PLAYERLIST_PTR   (0x111E61F8u + g_rebase)
+#define OFF_ENT_CHECK    0x34
+#define OFF_ENT_XFORM    0x40      /* row-major 4x4; row3 (+0x70) = position */
+#define OFF_ENT_POS      0x70
+#define OFF_ENT_COMPS    0xC0
+#define OFF_ENT_COMPN    0xC4
+#define VT_CHARPHYS      (0x11044D00u + g_rebase)
+/* CStaticPhysComponent. BOUNDS.md 346/349: its GetWorldBounds (0x102CE710)
+   forwards to a physics proxy at comp+0xC0 through THAT object's vtable +0x64,
+   which is how we know a static keeps its own proxy - and therefore its own
+   idea of where it is - independently of the entity transform. */
+#define VT_STATICPHYS    (0x11046858u + g_rebase)
+/* Seen on exactly the entities `bring` cannot move (corp_fence_rempart_01_72/
+   73/75, corner_12) where the movable ones carry VT_STATICPHYS. Same family,
+   different class - probed, not called, until its layout is confirmed. */
+#define VT_PHYS_SIBLING  (0x11046AE0u + g_rebase)
+#define OFF_STATIC_PROXY 0xC0
+#define FN_SETDIRTY      (0x101B27A0u + g_rebase)   /* __thiscall CEntity::SetTransformDirty  */
+#define FN_SETPHYSEN     (0x102B34C0u + g_rebase)   /* __thiscall SetPhysicsEnabled(comp,int) */
+
+typedef void (__thiscall *fnSetDirty )(void* entity);
+typedef void (__thiscall *fnSetPhysEn)(void* comp, int enabled);
+
+static volatile long g_noclip = 0;
+static float         g_flyPos[3];      /* float mirror handed to the engine */
+/* Accumulate in DOUBLE. In float, the per-frame increment falls below the
+   representable step (X * 2^-23) once you are far enough from the origin and
+   every addition rounds back to where it started - motion stops dead. That is
+   what "the camera froze outside the map" was. */
+static double        g_flyAcc[3];
+static int           g_flyPosValid = 0;
+static void*         g_noclipEnt   = 0;   /* entity noclip was enabled on */
+/* Flight speed in milli-units per frame. Wheel up/down scales it; a long keeps
+   it atomic between the message pump and the render detour. */
+static volatile long g_flySpeedM = 450;
+/* 20 was 1.2 units/second - still moving, but indistinguishable from
+   frozen, and nothing on screen said why. */
+#define FLY_MIN_M   100
+#define FLY_MAX_M   40000
+static volatile long g_wantNoclip = 0;  /* 1=on 2=off, consumed in the detour */
+static void*         g_physComp = 0;
+
+/* Resolve the local player entity. Every hop is validated - an earlier
+   one-dereference-short slip in this project crashed the game outright. */
+static void* g_lastInner = 0;   /* CPlayer, needed for the camera chain */
+
+/* Why this stopped working after changing worlds, and why it was invisible.
+
+   Six hops, each returning 0 on failure with no way to tell which one gave up.
+   After a warp to sp_dustbowl_hg_rb_01 the whole thing returned 0 and noclip,
+   freecam and spawn-near-player all reported their own separate symptom for one
+   shared cause.
+
+   Two changes:
+     - It only ever read element 0 of the player list. The list is engine-level,
+       allocated once at engine init and NOT rebuilt per world, so after a second
+       LoadWorld the live local player need not still be the first entry. Walk
+       every entry and take the first that passes the integrity check.
+     - Record which hop failed, so "not resolvable" stops being one message for
+       six different faults. Logged once per distinct reason - this runs every
+       frame from the noclip path and must never spam. */
+static const char* g_plFail = 0;
+static void* FindPlayerByName(void);   /* defined with the entity-map walk */
+
+static void* GetPlayerEntity(void)
+{
+    void *lst, *arr, *wrapper, *inner, *node, *ent;
+    unsigned long n, i;
+    const char* why = "unknown";
+
+    if (!Readable((void*)PLAYERLIST_PTR, 4)) { why = "list ptr unreadable"; goto fail; }
+    lst = *(void**)PLAYERLIST_PTR;      if (!Readable(lst, 0x10)) { why = "list unreadable"; goto fail; }
+    arr = *(void**)((char*)lst + 4);    if (!Readable(arr, 4))    { why = "array unreadable"; goto fail; }
+    n   = *(unsigned long*)((char*)lst + 8);
+    if (n == 0)   { why = "player list is EMPTY"; goto fail; }
+    if (n > 64) n = 64;                 /* a corrupt count must not walk memory */
+    if (!Readable(arr, n * 4)) { why = "array shorter than its count"; goto fail; }
+
+    for (i = 0; i < n; ++i) {
+        wrapper = ((void**)arr)[i];             if (!Readable(wrapper, 0x10)) { why = "wrapper unreadable"; continue; }
+        inner   = *(void**)((char*)wrapper + 4); if (!Readable(inner, 0x10))  { why = "inner unreadable";   continue; }
+        node    = *(void**)((char*)inner + 8);   if (!Readable(node, 0x10))   { why = "ref node NULL - no pawn"; continue; }
+        ent     = *(void**)((char*)node + 0x0C); if (!Readable(ent, 0x100))   { why = "entity unreadable";  continue; }
+        if (*(void**)((char*)ent + OFF_ENT_CHECK) != node) { why = "entity+0x34 != node"; continue; }
+        if (i != 0) logf_("[player] resolved at index %lu of %lu, not 0", i, n);
+        g_lastInner = inner;
+        return ent;
+    }
+
+fail:
+    if (g_plFail != why) {      /* pointer compare: these are all literals */
+        g_plFail = why;
+        logf_("[player] NOT resolvable via the list: %s", why);
+    }
+    /* LAST RESORT: find the body in the entity map instead.
+       Measured, not assumed - after `warp sp_hometree` the list walk failed with
+       "entity+0x34 != node" while the picker, standing in the same spot, listed
+       `player.MainCharacter.PawnPlayerCorp` right there. The player is alive and
+       in the world; only the player LIST is stale, still holding the ref node
+       from before the world change.
+
+       So stop insisting on the list. The entity map is rebuilt with the world
+       and is the thing that is actually correct after a warp. This costs one
+       tree walk and only runs when the fast path has already failed. */
+    {
+        void* ent = FindPlayerByName();
+        if (ent) {
+            static void* said = 0;
+            if (said != ent) {
+                said = ent;
+                logf_("[player] recovered %p from the entity map "
+                      "(the player list is stale after the warp)", ent);
+            }
+            return ent;      /* g_lastInner stays as-is: see GetCameraEntity */
+        }
+    }
+    return 0;
+}
+
+/* The integrity check kept from the original, stated once here because it is the
+   subtle part: the back-pointer must equal the THIRD-level node, not data[0].
+   Comparing against the wrapper (as a first version did) fails every time and
+   silently disables noclip. Live: entity+0x34 == node. */
+
+/* Find the CCharacterPhysComponent by vtable in the entity's component array. */
+static void* GetPhysComponent(void* ent)
+{
+    void** comps;
+    int n, i;
+    if (!Readable(ent, 0xD0)) return 0;
+    comps = *(void***)((char*)ent + OFF_ENT_COMPS);
+    n     = *(int*)((char*)ent + OFF_ENT_COMPN);
+    if (n < 0 || n > 256 || !Readable(comps, (SIZE_T)n * 4)) return 0;
+    for (i = 0; i < n; ++i) {
+        void* c = comps[i];
+        if (Readable(c, 4) && *(unsigned long*)c == VT_CHARPHYS) return c;
+    }
+    return 0;
+}
+
+/* Active camera CEntity, or NULL. Call AFTER GetPlayerEntity so g_lastInner is
+   current. Every hop validated - the one-deref-short slip has bitten this
+   project three times. */
+#define OFF_CAM_IDX   0xD0
+#define OFF_CAM_ARR   0xD8
+#define OFF_CAM_CNT   0xDC
+#define CAM_STRIDE    24
+
+static void* GetCameraEntity(void)
+{
+    void*  inner = g_lastInner;
+    void*  arr;
+    void*  node;
+    void*  cam;
+    int    idx, cnt;
+
+    if (!Readable(inner, 0xE0)) return 0;
+    idx = *(int*)((char*)inner + OFF_CAM_IDX);
+    arr = *(void**)((char*)inner + OFF_CAM_ARR);
+    cnt = *(int*)((char*)inner + OFF_CAM_CNT);
+    if (idx < 0 || cnt <= 0 || idx >= cnt || cnt > 64) return 0;   /* engine's own bounds test */
+    if (!Readable(arr, (SIZE_T)cnt * CAM_STRIDE)) return 0;
+
+    node = *(void**)((char*)arr + idx * CAM_STRIDE + 0x0C);
+    if (!Readable(node, 0x10)) return 0;
+    cam = *(void**)((char*)node + 0x0C);
+    if (!Readable(cam, 0x100)) return 0;
+
+    if (*(void**)((char*)cam + 0x34) != node) return 0;            /* back-pointer */
+    if (*(unsigned long*)((char*)cam + 0x90) & 0x10) return 0;     /* engine rejects this */
+    return cam;
+}
+
+static void NoclipSet(int on)
+{
+    void* ent;
+
+    /* ---- OFF MUST ALWAYS SUCCEED ----------------------------------------
+       The first version resolved the player entity first and bailed if that
+       failed - so when a map change rebuilt the entity, noclip could no longer
+       be switched off, leaving the position pinned to stale coordinates with no
+       way out. Disabling now has NO preconditions; restoring physics is
+       best-effort on top. */
+    if (!on) {
+        InterlockedExchange(&g_noclip, 0);
+        g_flyPosValid = 0;
+        ent = GetPlayerEntity();
+        if (ent && g_physComp) {
+            void* pc = GetPhysComponent(ent);
+            if (pc && pc == g_physComp)          /* only if it is still the SAME one */
+                ((fnSetPhysEn)FN_SETPHYSEN)(pc, 1);
+            else
+                logf_("[fly ] phys component changed - not touching the stale one");
+        }
+        g_physComp  = 0;
+        g_noclipEnt = 0;
+        logf_("[fly ] noclip OFF");
+        return;
+    }
+
+    ent = GetPlayerEntity();
+    if (!ent) { logf_("[fly ] player entity not resolvable - noclip NOT enabled"); return; }
+    g_physComp = GetPhysComponent(ent);
+    if (!g_physComp) { logf_("[fly ] CCharacterPhysComponent not found - noclip NOT enabled"); return; }
+    ((fnSetPhysEn)FN_SETPHYSEN)(g_physComp, 0);
+    {
+        float* p0 = (float*)((char*)ent + OFF_ENT_POS);
+        int i0;
+        for (i0 = 0; i0 < 3; ++i0) { g_flyAcc[i0] = p0[i0]; g_flyPos[i0] = p0[i0]; }
+        g_flyPosValid = 1;
+    }
+    g_noclipEnt = ent;
+    InterlockedExchange(&g_noclip, 1);
+    logf_("[fly ] noclip ON entity=%p physComp=%p camera=%p speed=%ld.%03ld (PgUp/PgDn)",
+          ent, g_physComp, GetCameraEntity(), g_flySpeedM / 1000, g_flySpeedM % 1000);
+}
+
+/* Called from the detour - main thread, once per frame. */
+static void NoclipTick(void)
+{
+    void* ent;
+    float* m;
+    float* pos;
+    float fwd[3], rgt[3];
+    float spd = (float)g_flySpeedM / 1000.0f;
+    int   moved = 0;
+
+    if (!g_noclip) return;
+
+    /* THREE SILENT RETURNS, one symptom: "noclip is on and nothing moves."
+       Noclip was ON for three seconds and produced no [diag] at all, which means
+       the tick bailed before reaching it - but not which of these did it. Say so
+       once per distinct reason; it costs nothing while flying normally. */
+    {
+        static const char* lastWhy = 0;
+        const char* why = 0;
+        if (g_consoleOpen)                        why = "console is open (not flying while you type)";
+        else if (GetForegroundWindow() != g_gameWnd) why = "game window is not in the foreground";
+        if (why) {
+            if (lastWhy != why) { lastWhy = why; logf_("[fly ] tick idle: %s", why); }
+            return;
+        }
+        lastWhy = 0;
+    }
+
+    ent = GetPlayerEntity();
+    if (!ent) {
+        static int said = 0;
+        if (!said) { said = 1; logf_("[fly ] tick idle: no player entity"); }
+        return;
+    }
+
+    /* WORLD CHANGE GUARD.
+       On a map change or save load the player entity is rebuilt. Without this we
+       would keep overwriting the NEW entity's position with coordinates captured
+       in the OLD world - dumping the player somewhere arbitrary, which is exactly
+       what "the camera panned to an unknown area" was. g_physComp also points at
+       the old, now-freed physics component, so we must NOT call into it. Drop all
+       state silently and let the user re-enable. */
+    if (g_noclipEnt && ent != g_noclipEnt) {
+        InterlockedExchange(&g_noclip, 0);
+        g_flyPosValid = 0;
+        g_physComp    = 0;      /* stale - never call SetPhysicsEnabled on it */
+        g_noclipEnt   = 0;
+        logf_("[fly ] player entity changed (world/save load) - noclip auto-disabled");
+        return;
+    }
+
+    pos = (float*)((char*)ent + OFF_ENT_POS);
+
+    /* Fly along the CAMERA's facing, not the character's. Same CEntity layout,
+       so the row offsets are unchanged. Falls back to the character transform if
+       the camera cannot be resolved, rather than refusing to move. */
+    {
+        void* cam = GetCameraEntity();
+        m = (float*)((char*)(cam ? cam : ent) + OFF_ENT_XFORM);
+
+        /* ---- FREEZE DIAGNOSTICS ------------------------------------------
+           "The camera froze when I went outside the map" has now happened
+           twice and we have no numbers for it, only the symptom. Three things
+           could produce it and they are distinguishable from data:
+             engine rejecting our write   -> pos[] read back != what we wrote
+             camera entity going away     -> cam == NULL, or its cull bit set
+             entity no longer updated     -> both fine, camera matrix frozen
+           So dump all three at 2 Hz while flying, and shout once when the
+           camera matrix stops changing while we are still moving. Costs
+           nothing when noclip is off, which is the default. */
+        {
+            static float lastCam[3]  = {0, 0, 0};
+            static int   camStuck    = 0;
+            static int   tick        = 0;
+            static int   shouted     = 0;
+            const float* cpos = cam ? (const float*)((char*)cam + OFF_ENT_POS) : 0;
+
+            if (cpos && cpos[0] == lastCam[0] && cpos[1] == lastCam[1] &&
+                        cpos[2] == lastCam[2]) {
+                ++camStuck;
+            } else {
+                camStuck = 0;
+                shouted  = 0;
+                if (cpos) { lastCam[0]=cpos[0]; lastCam[1]=cpos[1]; lastCam[2]=cpos[2]; }
+            }
+
+            if (++tick >= 30) {                 /* detour: once per frame */
+                tick = 0;
+                logf_("[diag] fly=(%.1f %.1f %.1f) ent=(%.1f %.1f %.1f) "
+                      "cam=%p camPos=(%.1f %.1f %.1f) flags=%08lX stuck=%d",
+                      g_flyPos[0], g_flyPos[1], g_flyPos[2],
+                      pos[0], pos[1], pos[2], cam,
+                      cpos ? cpos[0] : 0.0f, cpos ? cpos[1] : 0.0f, cpos ? cpos[2] : 0.0f,
+                      Readable(cam, 0x94) ? *(unsigned long*)((char*)cam + 0x90) : 0UL,
+                      camStuck);
+            }
+            {   /* edge-triggered - this runs 40x a second, do not spam it */
+                static int hadCam = 1;
+                if (!cam && hadCam)
+                    logf_("[diag] camera entity UNRESOLVABLE at (%.1f %.1f %.1f) "
+                          "- flying on the character transform now",
+                          g_flyPos[0], g_flyPos[1], g_flyPos[2]);
+                hadCam = (cam != 0);
+            }
+            if (camStuck == 60 && !shouted) {    /* ~1s of no camera movement */
+                shouted = 1;
+                logf_("[diag] CAMERA FROZE at fly=(%.1f %.1f %.1f) ent=(%.1f %.1f %.1f) "
+                      "cam=%p entFlags=%08lX",
+                      g_flyPos[0], g_flyPos[1], g_flyPos[2], pos[0], pos[1], pos[2], cam,
+                      Readable(ent, 0x94) ? *(unsigned long*)((char*)ent + 0x90) : 0UL);
+            }
+        }
+    }
+    rgt[0] = m[0]; rgt[1] = m[1]; rgt[2] = m[2];        /* row 0 - right   */
+    fwd[0] = m[4]; fwd[1] = m[5]; fwd[2] = m[6];        /* row 1 - forward */
+
+    /* Ctrl is descend now, so the slow modifier moved to Alt. */
+    if (GetAsyncKeyState(VK_SHIFT) < 0) spd *= 4.0f;
+    if (GetAsyncKeyState(VK_MENU)  < 0) spd *= 0.25f;
+
+    /* Accumulate into OUR position, then OVERWRITE the entity's.
+       Reading the entity and adding to it (as a first version did) folds in
+       whatever the character's own movement wrote that frame - the walk/run
+       animation still authors position even with the physics proxy removed - so
+       flying drifted sideways in whatever direction the character was stepping.
+       Keeping our own authoritative value discards that contribution entirely. */
+    if (!g_flyPosValid) {
+        int i0;
+        for (i0 = 0; i0 < 3; ++i0) { g_flyAcc[i0] = pos[i0]; g_flyPos[i0] = pos[i0]; }
+        g_flyPosValid = 1;
+    }
+
+    /* All accumulation in double - see g_flyAcc. */
+    if (GetAsyncKeyState('W') < 0) { g_flyAcc[0]+=(double)fwd[0]*spd; g_flyAcc[1]+=(double)fwd[1]*spd; g_flyAcc[2]+=(double)fwd[2]*spd; moved=1; }
+    if (GetAsyncKeyState('S') < 0) { g_flyAcc[0]-=(double)fwd[0]*spd; g_flyAcc[1]-=(double)fwd[1]*spd; g_flyAcc[2]-=(double)fwd[2]*spd; moved=1; }
+    if (GetAsyncKeyState('D') < 0) { g_flyAcc[0]+=(double)rgt[0]*spd; g_flyAcc[1]+=(double)rgt[1]*spd; g_flyAcc[2]+=(double)rgt[2]*spd; moved=1; }
+    if (GetAsyncKeyState('A') < 0) { g_flyAcc[0]-=(double)rgt[0]*spd; g_flyAcc[1]-=(double)rgt[1]*spd; g_flyAcc[2]-=(double)rgt[2]*spd; moved=1; }
+    if (GetAsyncKeyState(VK_SPACE) < 0) { g_flyAcc[2] += spd; moved = 1; }   /* Z-up */
+    /* Left Ctrl descends, mirroring Space. X kept as an alternate. */
+    if (GetAsyncKeyState(VK_LCONTROL) < 0 || GetAsyncKeyState('X') < 0) {
+        g_flyAcc[2] -= spd; moved = 1;
+    }
+    (void)moved;
+
+    /* SANITY GUARD. If our tracked position has gone non-finite or absurd -
+       which is what dumped the player to Z=-1250 after a world change - stop
+       writing rather than pinning them somewhere impossible. */
+    {
+        int i2, bad = 0;
+        for (i2 = 0; i2 < 3; ++i2) {
+            double v = g_flyAcc[i2];
+            if (!(v > -1.0e6 && v < 1.0e6)) bad = 1;      /* false for NaN too */
+        }
+        if (bad) {
+            /* g_flyAcc, not g_flyPos. The guard TESTS g_flyAcc, and g_flyPos is
+               only assigned from it further down - so it still held the last
+               GOOD value and this line printed three valid numbers every time it
+               fired, which is the one case where it had to print the bad ones. */
+            logf_("[fly ] tracked position invalid (%f %f %f) - noclip auto-disabled",
+                  g_flyAcc[0], g_flyAcc[1], g_flyAcc[2]);
+            NoclipSet(0);
+            return;
+        }
+    }
+
+    /* Write every frame, not only when a key is held - that is what cancels the
+       character's own motion while hovering. The engine's storage is float32, so
+       far from the origin the written value only changes once the double has
+       accumulated past half a float step: visibly steppy out there, but never
+       stuck, which is the best float32 storage allows. */
+    g_flyPos[0] = (float)g_flyAcc[0];
+    g_flyPos[1] = (float)g_flyAcc[1];
+    g_flyPos[2] = (float)g_flyAcc[2];
+
+    /* ---- tell the entity it moved, the engine's way ------------------------
+       CEntity::SetPosition -> SetTransform broadcasts to EVERY component via
+       vtable slot 20 and handles the dirty flag itself. Our previous approach
+       wrote +0x70 directly and then hand-synced the two physics proxies at
+       physComp+0x190/+0x194 - two objects, where the broadcast reaches all of
+       them. Audio emitters, AI perception, attachment slots and the skeleton
+       root were never being told, which is the likeliest reason the weapons and
+       the body still disagreed after the proxy fix.
+
+       The raw path is kept as a fallback rather than deleted: it is what has been
+       shipping and it does work, just incompletely. */
+    if (Readable((const void*)FN_ENT_SETPOS, 8)) {
+        static int said = 0;
+        if (!said) { said = 1; logf_("[fly ] using CEntity::SetPosition broadcast"); }
+        __try {
+            ((fnEntSetPos)FN_ENT_SETPOS)(ent, g_flyPos[0], g_flyPos[1], g_flyPos[2]);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            logf_("[fly ] SetPosition faulted - noclip off");
+            NoclipSet(0);
+        }
+        return;
+    }
+
+    /* ---- fallback: raw write + manual two-proxy sync -----------------------
+       Reference: CCharacterPhysComponent's TeleportEnd handler at 0x102B7A80.
+       Vtable slot +0x68 is SetPosition(const Vec3*), __thiscall, ret 4.
+       TRAP: the two proxies have DIFFERENT vtables (0x11057278 / 0x11057198), so
+       +0x68 resolves to different thunks - dispatch per object, never hardcode
+       one address. Neither setter consults the physics-enabled flag, so a
+       disabled proxy still accepts the write. */
+    {
+        static int said = 0;
+        if (!said) { said = 1; logf_("[fly ] FALLBACK: raw write + proxy sync"); }
+    }
+    pos[0] = g_flyPos[0]; pos[1] = g_flyPos[1]; pos[2] = g_flyPos[2];
+    ((fnSetDirty)FN_SETDIRTY)(ent);
+    if (g_physComp && Readable(g_physComp, 0x1F0)) {
+        int k;
+        void* proxies[2];
+        proxies[0] = *(void**)((char*)g_physComp + 0x190);
+        proxies[1] = *(void**)((char*)g_physComp + 0x194);
+        for (k = 0; k < 2; ++k) {
+            void*  px = proxies[k];
+            void** vt;
+            if (!Readable(px, 4)) continue;
+            vt = *(void***)px;
+            if (!Readable(vt, 0x6C)) continue;
+            {
+                void* fn = vt[0x68 / 4];
+                if (!Readable(fn, 1)) continue;
+                ((void (__thiscall *)(void*, const float*))fn)(px, g_flyPos);
+            }
+        }
+    }
+}
+/* =========================================================== */
+
+
+/* Case-insensitive substring - _stristr is not portable across CRT versions. */
+static const char* Stristr(const char* hay, const char* needle)
+{
+    size_t n = strlen(needle);
+    if (!n) return hay;
+    for (; *hay; ++hay)
+        if (_strnicmp(hay, needle, n) == 0) return hay;
+    return 0;
+}
+
+/* ==================== warp <world>  +  modhelp ==================== */
+/* Our own output is drawn in a warm accent against the pale-blue default, using
+   the engine's OWN line markup (control char + RRGGBB) that DrawMarkupLine
+   already understands - so no overlay change is needed to colour it.
+   MUST be two adjacent literals: "\x01FFC864" is one hex escape in C.
+
+   THE PALETTE, and why these three values.
+
+   The panel is dark navy with pale-blue engine text; our output is the gold
+   FFC864, which sits at hue 35 degrees. The literal colour-wheel complement of
+   that gold is a blue around 215 degrees - which is exactly where the background
+   and the default text already live, so it would disappear. The TRIADIC partner
+   at ~280 degrees is a purple, which is both principled and where the eye wants
+   to go anyway.
+
+   UC = C08CD8 is HSV(281, 35%, 85%): a muted orchid. 35% saturation is the part
+   that keeps it off the neon-magenta end. Its perceived luminance is 164 against
+   the gold's 204, so what you typed reads clearly but sits a step quieter than
+   what the console answered - which is the right hierarchy, since you already
+   know what you typed.
+
+   PC = 7A8899 is a dim slate for the "> " chevron only. It is structure, not
+   content, and at luminance 134 it frames the command without competing.
+
+   DrawMarkupLine handles several runs per line, so one echo can carry both. */
+#define AC_HEX "FFC864"          /* console output - warm gold                */
+#define PC_HEX "7A8899"          /* the "> " chevron - dim slate              */
+#define UC_HEX "C08CD8"          /* what YOU typed - muted orchid             */
+#define AC "\x01" AC_HEX
+#define PC "\x01" PC_HEX
+#define UC "\x01" UC_HEX
+/* Same orchid for the line being typed at the bottom of the panel, so a command
+   does not change colour the instant you press Enter. */
+#define UC_RGB RGB(0xC0, 0x8C, 0xD8)
+
+/* load_level is dead code (no LoadLevel in the Game reflection table), so we call
+   the native loader ourselves. See LEVELLOAD.md. */
+#define G_PGAME_PTR    (0x1122BBCCu + g_rebase)
+#define VT_CBTZGAME    (0x110C6970u + g_rebase)
+/* REMOVED: FN_LOADWORLD / VT_SLOT_LOADW. Superseded by FN_CHANGEWORLD - the
+   engine-path warp - and unused since. */
+
+/* The engine's own entry point. LoadWorld is child 3 of a 7-child composite that
+   is operation 11 of a 13-operation context switch - calling it directly was
+   always going to leave twelve things undone. This is the front door. */
+#define FN_CHANGEWORLD  (0x1063E610u + g_rebase)   /* GameChangeWorldDefaultSpawnPoint       */
+
+/* BY VALUE: 0x1C bytes of CryStringBase pushed on the stack, and the CALLEE
+   destroys the copy. Hence no dtor call at our end - for a name long enough to
+   escape the small-string buffer we share its heap pointer, and destructing
+   after the call would be a double free. */
+typedef struct { unsigned char b[0x1C]; } DuniaStrVal;
+typedef void (__cdecl *fnChangeWorld)(DuniaStrVal world);
+
+/* ---- the SPAWN POINT the world change lands on -----------------------------
+   FN_CHANGEWORLD above is `GameChangeWorldDefaultSpawnPoint`, and "Default" is
+   the whole problem. Disassembled out of the running game (the shipped
+   Dunia.dll is packed, so the bytes only exist in memory):
+
+       1063E610  push ecx / push ebx / push esi
+       1063E613  or ecx, 0xffffffff ; push ecx     <- spawn id, low  = -1
+       1063E617  or eax, 0xffffffff ; push eax     <- spawn id, high = -1
+                 ... builds a DuniaString from the world name ...
+       1063E657  call 0x1063E4E0                   <- the REAL change-world
+       1063E69A  ret
+
+   and inside that, at 1063E557, the pair is read straight back off the stack
+   and handed on:
+
+       mov edx,[esp+0x11c] / mov eax,[esp+0x118] / push edx / push eax
+       call 0x107A8C30
+
+   So the engine's actual entry point is ChangeWorld(world, lo, hi) and the
+   wrapper pins the id to the -1/-1 "you pick one" sentinel.
+
+   A single-player world has a default to pick. A multiplayer world does not:
+   its spawn points are `SpawnPoints.*.Multi`, placed by the map and resolved
+   by an MP spawn-point service that only exists inside a real match - which a
+   warp never starts. MEASURED: `sp_hometree.mapsdata.fcb` contains ZERO
+   `SpawnPoints.*.Multi`; every `mp_*` world contains dozens.
+
+   ---- THAT REASONING WAS WRONG, AND SO IS THE FIX BELOW. -------------------
+   Naming a real `SpawnPoints.*.Multi` id does NOT stop the hang. `warp
+   mp_bluelagoon_rb_01` and `warp mp_bluelagoon_rb_01 default` (which forces the
+   -1/-1 sentinel back) were run side by side against a live operation-tree
+   walker and they hang IDENTICALLY, at the same operation, indefinitely.
+
+   What actually hangs, read out of the running game rather than reasoned about:
+   the load-world operation chain stops at `CFCXOnLoadWorldOp`, which stays in
+   state 1 forever. Its per-frame Update `vt[0x2C]` is `0x1058A800`, a bare
+   `ret 4`, and its timeout `[op+0x70]` is 0.0 - so it does nothing each frame
+   and has no deadline. It can only be finished by a `CDependenciesService`
+   callback that an `mp_*` world never produces. Writing 2 into `[op+0x60]`
+   resumes the chain in the next frame, which is what proves it is the cause and
+   not a symptom. Two more operations behind it (`CFCXOnPostLoadWorldOp`,
+   `CTravelStopOperation`) stall the same way.
+
+   Force all three and the world does come up - with 42 entities, every one of
+   them a spawn point, and no pawn. `CPlayer::Spawn` (what `respawn` calls)
+   runs against a real spawn-point coordinate and returns having created
+   nothing, because pawn creation is a game-mode service and there is no match.
+   See MULTIPLAYER.md S10 for the full measurement.
+
+   The `[wdog] no detour` line above is also a red herring: the frame loop is
+   NOT stopped. The main thread is in `FUN_100b81c0`, an ordinary frame-rate
+   limiter doing Sleep(1); the whole process burns ~0.2 s of CPU per 5 s. The
+   engine is idling in a modal loading loop, correctly, forever.
+
+   THE CODE BELOW IS KEPT ANYWAY, deliberately. A real id is not worse than
+   -1/-1, the fallback is intact, and `warp <world> default` needs both paths to
+   exist so anyone re-testing this can compare them. But it is not a fix and
+   must not be described as one.
+
+   The ids are static map data, so they are extracted offline - see
+   `mp_spawnpoints.py`, which reads each world's `mapsdata.fcb` and prefers a
+   *Start* point because that is where a match actually begins and is therefore
+   the one most likely to have ground under it. Spectator points are never
+   chosen; they can sit off the map. */
+#define FN_CHANGEWORLD_AT (0x1063E4E0u + g_rebase)   /* ChangeWorld(world,lo,hi) */
+typedef void (__cdecl *fnChangeWorldAt)(DuniaStrVal world,
+                                        unsigned long lo, unsigned long hi);
+#include "mp_spawns.h"
+
+/* -> the spawn point for this world, or 0 if it is not a known mp_* world. */
+static const MpSpawn* MpSpawnFor(const char* world)
+{
+    int i;
+    if (!world || !*world) return 0;
+    for (i = 0; i < MP_SPAWN_COUNT; ++i)
+        if (_stricmp(g_mpSpawns[i].world, world) == 0)
+            return &g_mpSpawns[i];
+    return 0;
+}
+
+/* ---- what CFCXPostLoadWorldOp::DoExecute does, minus the parts we cannot
+   safely reproduce. Without this a warped-into world has no input action map,
+   so no movement, no camera and no pause menu. See restore_input notes. */
+/* CORRECTED. This was declared __cdecl(const char* xml, int extra) and called with
+   the path as arg1 - which is why `fixinput` faulted every time at "load action
+   map". It is __thiscall(container, path1, path2): ECX must hold the input
+   container, and the path is the FIRST STACK argument, not the first argument.
+   Ghidra printed a two-argument signature because it lost the ECX parameter, and
+   we took that at face value. */
+#define FN_LOADACTIONMAP (0x101DE6A0u + g_rebase)   /* __thiscall(this, path1, path2) */
+#define FN_INPUT_STASH   (0x101A1BB0u + g_rebase)   /* __fastcall(holder) save bindings    */
+#define FN_INPUT_APPLY   (0x101A2760u + g_rebase)   /* __fastcall(holder) re-apply them    */
+#define ACTIONMAP_SINGLE "Config\\InputActionMapSingle.xml"
+#define OFF_PLAYER_INPUT 0xEC
+
+typedef unsigned char (__thiscall *fnLoadActionMap)(void* container,
+                                                   const char* path1,
+                                                   const char* path2);
+typedef void          (__fastcall *fnInputHolder  )(void* holder);
+
+/* Walk the player list and hand each player's input holder to fn. Returns the
+   number of players it reached. Every hop validated - this runs on the main
+   thread with the world half-built. */
+static int ForEachPlayerInput(unsigned long fnAddr)
+{
+    void*  lst = *(void**)PLAYERLIST_PTR;
+    void** arr;
+    unsigned long count, i;
+    int done = 0;
+
+    if (!Readable(lst, 0x10)) return 0;
+    arr   = *(void***)((char*)lst + 4);
+    count = *(unsigned long*)((char*)lst + 8);
+    if (count == 0 || count > 8) return 0;
+    if (!Readable(arr, (SIZE_T)count * 4)) return 0;
+
+    for (i = 0; i < count; ++i) {
+        void* p = arr[i];
+        void* inner;
+        if (!Readable(p, 0x10)) continue;
+        inner = *(void**)((char*)p + 4);
+        if (!Readable(inner, OFF_PLAYER_INPUT + 0x40)) continue;
+        ((fnInputHolder)fnAddr)((char*)inner + OFF_PLAYER_INPUT);
+        ++done;
+    }
+    return done;
+}
+
+/* The input-mapper object the action-map loader needs. CFCXPostLoadWorldOp
+   destroys and recreates it before loading the XML; skipping that is what
+   faulted at 0x101DD85F reading [0]+8. */
+/* WRONG GLOBAL - kept only so the difference is visible. `fixinput` step 3 used
+   this as the `this` for LoadActionMap. The ENGINE loads the same XML with
+   ecx = [0x111E7254] at 0x106D9910 (inside CFCXPostLoadWorldOp), four
+   instructions away from a use of 0x111E7268 in the same function. They are two
+   different globals with disjoint writers.
+
+   So `fixinput` was destroying the action-map container the engine had just
+   built and reloading the XML into a DIFFERENT container - which is why it
+   reported all four steps succeeding and returned 1, and control stayed dead.
+   A step that "succeeds" against the wrong object is the worst kind of green
+   tick. See WARP_CONTROL.md. */
+#define G_INPUTMAP_WRONG (0x111E7268u + g_rebase)
+#define G_INPUTMAP_PTR   (0x111E7254u + g_rebase)
+#define FN_ALLOC         (0x100EE250u + g_rebase)   /* cdecl(size, align) -> void*        */
+#define FN_INPUTMAP_CTOR (0x101DE790u + g_rebase)   /* __fastcall(this): 4 stores, no more */
+#define INPUTMAP_VTABLE  (0x1103770Cu + g_rebase)   /* what the ctor writes to [0]         */
+
+typedef void* (__cdecl    *fnAlloc    )(unsigned int size, unsigned int align);
+typedef void  (__fastcall *fnMapCtor  )(void* self);
+typedef void  (__thiscall *fnScalarDel)(void* self, int flags);
+
+/* Returns 1 if a usable object is in place. */
+static int RebuildInputMapper(void)
+{
+    void** slot = (void**)G_INPUTMAP_PTR;
+    void*  old  = *slot;
+    void*  p;
+
+    /* Readable(old), not just `if (old)`. Reading old's vtable pointer is itself
+       a dereference of an engine pointer, and the whole point of Readable (see
+       its comment) is that a guard which reads through an unvalidated pointer
+       faults in the guard. The __try in RestoreInput was catching this rather
+       than the check preventing it. */
+    if (Readable(old, 4)) {
+        void** vt = *(void***)old;
+        if (Readable(vt, 4) && Readable(vt[0], 1))
+            ((fnScalarDel)vt[0])(old, 1);          /* slot 0, arg 1 = also free */
+        else
+            logf_("[input] old mapper %p unusable - leaking it rather than "
+                  "calling through a bad vtable", old);
+    }
+    *slot = 0;
+
+    p = ((fnAlloc)FN_ALLOC)(0x10, 0);
+    if (!p) { logf_("[input] allocator returned NULL"); return 0; }
+    ((fnMapCtor)FN_INPUTMAP_CTOR)(p);
+
+    /* The ctor is four stores. Read them back instead of assuming - a wrong
+       calling convention here would leave a plausible-looking corpse. */
+    if (!Readable(p, 0x10) || *(unsigned long*)p != INPUTMAP_VTABLE) {
+        logf_("[input] ctor did not take: [0]=%08lX expected %08lX",
+              Readable(p, 4) ? *(unsigned long*)p : 0UL,
+              (unsigned long)INPUTMAP_VTABLE);
+        return 0;
+    }
+    *slot = p;
+    logf_("[input] mapper rebuilt at %p (was %p)", p, old);
+    return 1;
+}
+
+/* Announce every step BEFORE it runs. The previous version logged once, after
+   all three calls, so a fault inside said nothing about which call it was. */
+static void RestoreInput(void* console)
+{
+    int stashed = -1, applied = -1;
+    unsigned int ok = 0;
+    const char* step = "(none)";
+
+    __try {
+        step = "stash bindings";
+        logf_("[input] step 1: stashing bindings");
+        stashed = ForEachPlayerInput(FN_INPUT_STASH);
+        logf_("[input] step 1 done: %d player(s)", stashed);
+
+        step = "rebuild mapper";
+        logf_("[input] step 2: rebuilding the input mapper");
+        if (!RebuildInputMapper()) {
+            logf_("[input] step 2 FAILED - not loading the action map");
+            if (console)
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "input: could not rebuild the input mapper - aborted\n");
+            return;
+        }
+
+        step = "load action map";
+        {
+            /* `this` is the input container we just rebuilt in step 2 - the same
+               object CFCXPostLoadWorldOp recreates before loading the XML. The
+               engine passes 0 for path2 (its caller is FUN_107AEB60, whose whole
+               body is `return 0`). */
+            void* container = *(void**)G_INPUTMAP_PTR;
+            logf_("[input] step 3: loading %s into container %p",
+                  ACTIONMAP_SINGLE, container);
+            if (!Readable(container, 0x10)) {
+                logf_("[input] step 3 ABORTED: container not readable");
+                if (console)
+                    ((fnPrintf)FN_PRINTF)(console, 0, AC
+                        "input: no input container - aborted\n");
+                return;
+            }
+            ok = ((fnLoadActionMap)FN_LOADACTIONMAP)(container, ACTIONMAP_SINGLE, 0) & 0xFF;
+        }
+        logf_("[input] step 3 done: returned %u", ok);
+
+        step = "re-apply bindings";
+        logf_("[input] step 4: re-applying bindings");
+        applied = ForEachPlayerInput(FN_INPUT_APPLY);
+        logf_("[input] step 4 done: %d player(s)", applied);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[input] *** FAULTED during \"%s\" - caught, but the input subsystem "
+              "is now in an unknown state. Restart the game.", step);
+        if (console)
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "input: FAULTED during \"%s\" - caught. Restart the game.\n", step);
+        return;
+    }
+
+    if (console)
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "input: reloaded %s (%d player%s, result %u)\n", ACTIONMAP_SINGLE,
+            applied, (applied == 1) ? "" : "s", ok);
+}
+
+/* REMOVED: the post-load placement block (g_postWarp, g_postWarpXY,
+   POSTWARP_FRAMES, POSTWARP_Z). It was meant to drop the pawn at a safe height
+   a couple of seconds after a warp, and no code was ever written to arm it -
+   nothing assigned g_postWarp, so the counter sat at 0 for every session. The
+   job it describes is now done by PostWarpTick/RepairPlayerList (which repair
+   the player list and the camera) plus `tp`, and the crash reporter used to
+   print g_postWarp as if it meant something, which was worse than not printing
+   it. */
+
+/* The directories under Data\worlds, read off disk - not guessed. There are 40;
+   sp_pascal_rf04 is left out because it is the one world that ships without a
+   generated\<name>.game.xml, so LoadWorld can only ever return false for it.
+   Checked against disk for all 40, not spot-checked. */
+static const char* const g_worlds[] = {
+    "sp_hometree","sp_pascal_fm_01","sp_pascal_rf_03",
+    "sp_plainsofgoliath_of_fm_01","sp_hellsgate_01","sp_coualthighlands_of_rf_01",
+    "sp_drifting_sierra_fm_01","sp_dustbowl_hg_rb_01","sp_gravesbog_rb_of_01",
+    "sp_jeannormand_df_01","sp_nancy_of_02","sp_needlehills_rb_fm_01",
+    "sp_philippe_rf_rb_01","sp_sebastien_rb_02","sp_vaderashallow_rf_fm_01",
+    "sp_bonusmap_01",
+    "mp_ancientgrounds_03","mp_bluelagoon_rb_01","mp_brokencage_rf_01",
+    "mp_dustbowl_rb_01","mp_fogswamp_rb_01","mp_forsakencaldera_rf_01",
+    "mp_gravesbog_rb_01","mp_hellsgate_02","mp_hometree","mp_jeannormand_of_01",
+    "mp_jeannormand_rf_02","mp_kowecave_fm_01","mp_kowevillage_fm_01",
+    "mp_mridge_df_01","mp_needlehills_rb_01","mp_ps3map",
+    "mp_vaderashollow_fm_01","mp_verdantpinnacle_fm_01",
+    "coop_pascal_01","menu","z_anim_creatures","z_dev_orouleau","z_mpgamemodes"
+};
+#define NWORLDS ((int)(sizeof(g_worlds) / sizeof(g_worlds[0])))
+
+static int IsMp(const char* w) { return w[0] == 'm' && w[1] == 'p' && w[2] == '_'; }
+static int IsSp(const char* w) { return w[0] == 's' && w[1] == 'p' && w[2] == '_'; }
+
+static void WarpUsage(void* c, const char* why)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    int i;
+    if (why) P_(c, 0, AC "%s\n", why);
+    P_(c, 0, AC "warp <world>   change world, the way the game does it\n");
+    P_(c, 0, AC "  Uses the engine's own GameChangeWorldDefaultSpawnPoint, so it\n"
+                "  spawns you properly and restores your controls.\n");
+    P_(c, 0, AC "warp <world> default\n");
+    P_(c, 0, AC "  Use the engine's -1/-1 spawn-point sentinel even on an mp_*\n"
+                "  world we have a real id for. DIAGNOSTIC: the id decides which\n"
+                "  branch CFCXOnLoadWorldOp takes. See MULTIPLAYER.md.\n");
+    P_(c, 0, AC "warp <TAB>     cycle through world names\n");
+    P_(c, 0, AC "warp list      print every world name\n");
+    P_(c, 0, AC "warp ?         this text\n");
+    P_(c, 0, AC "  load_level does nothing in retail; this calls the engine loader.\n");
+    P_(c, 0, AC "  Noclip is switched off for you before the load.\n");
+    P_(c, 0, AC "  WARNING: this can still crash. Save first.\n");
+    P_(c, 0, AC "  You keep your old coordinates across a load, so warp drops you\n");
+    P_(c, 0, AC "  over the middle of the new world in free-fly. 'tp' to move.\n");
+    P_(c, 0, AC "single player:\n");
+    for (i = 0; i < NWORLDS; ++i)
+        if (IsSp(g_worlds[i])) P_(c, 0, AC "  %s\n", g_worlds[i]);
+}
+
+static void WarpList(void* c)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    int i;
+    P_(c, 0, AC "single player:\n");
+    for (i = 0; i < NWORLDS; ++i) if (IsSp(g_worlds[i])) P_(c, 0, AC "  %s\n", g_worlds[i]);
+    P_(c, 0, AC "multiplayer (may load with no player):\n");
+    for (i = 0; i < NWORLDS; ++i) if (IsMp(g_worlds[i])) P_(c, 0, AC "  %s\n", g_worlds[i]);
+    P_(c, 0, AC "other:\n");
+    for (i = 0; i < NWORLDS; ++i)
+        if (!IsSp(g_worlds[i]) && !IsMp(g_worlds[i])) P_(c, 0, AC "  %s\n", g_worlds[i]);
+}
+
+/* `?` only lists commands the ENGINE registered, so anything this DLL adds is
+   invisible there. modhelp is the discovery path for it. */
+static void ModHelp(void* c)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    P_(c, 0, AC "--- added by avatar_console.dll  (built " __DATE__ " " __TIME__ ") ---\n");
+    P_(c, 0, AC "warp <world>   change world (engine's own path)\n");
+    P_(c, 0, AC "warp <TAB>     cycle through world names\n");
+    P_(c, 0, AC "warp list      list every world name\n");
+    P_(c, 0, AC "resurrect [nm] undo a kill - puts health back on a body\n");
+    P_(c, 0, AC "               (aka 'revive'; cannot undo 'delete')\n");
+    P_(c, 0, AC "facing         stop the driven creature turning to face you\n");
+    P_(c, 0, AC "               ('facing probe' watches only, 'facing off')\n");
+    P_(c, 0, AC "editorlink     live link to the GUI level editor (status)\n");
+    P_(c, 0, AC "               \\\\.\\pipe\\avatar_editor - 'editorlink off' closes it\n");
+    P_(c, 0, AC "agentinfo      what steers the selection, and can we take it?\n");
+    P_(c, 0, AC "vehinfo        does the selected vehicle really have seats?\n");
+    P_(c, 0, AC "tp <x> <y> <z> move the player there (Z is up)\n");
+    P_(c, 0, AC "tp             move the player to the active camera\n");
+    P_(c, 0, AC "               (in freecam: brings your body to the freecam)\n");
+    P_(c, 0, AC "vehenter [n]   board the thing you last spawned\n");
+    P_(c, 0, AC "               n = seat type: 1 driver (default), 3 passenger\n");
+    P_(c, 0, AC "vehexit        get out    vehstatus - what am I in?\n");
+    P_(c, 0, AC "freecam        detached camera - the body stays put (toggle)\n");
+    P_(c, 0, AC "camspeed <n>   freecam speed - in freecam, hold Shift/LCtrl to ramp\n");
+    P_(c, 0, AC "firstperson    the game's own first-person camera (toggle)\n");
+    P_(c, 0, AC "fpoffset x y z nudge the camera off its bone - 'where the nose is'\n");
+    P_(c, 0, AC "fpfov <deg>    first-person field of view (5..170)\n");
+    P_(c, 0, AC "save           request the game's autosave (overwrites your slot)\n");
+    P_(c, 0, AC "fixinput       reload the input bindings (no control? try this)\n");
+    P_(c, 0, AC "fixcam         put the view back on the player\n");
+    P_(c, 0, AC "ingame         draw the console INSIDE the game (screen-capture)\n");
+    P_(c, 0, AC "spawn <arch>   create an entity in front of you\n");
+    P_(c, 0, AC "spawn_list <t> search what THIS level can spawn (live table)\n");
+    P_(c, 0, AC "freeze         stop the world; rendering and the console keep going\n");
+    P_(c, 0, AC "timescale <n>  1 normal, 0.25 slow motion, 0 stopped\n");
+    P_(c, 0, AC "freecam        fly; sectors stay on the PLAYER (good for peeking)\n");
+    P_(c, 0, AC "freecam 1      fly, and the sectors follow the CAMERA instead\n");
+    P_(c, 0, AC "anchor [on|off] who is streaming sectors, and is the ground loaded\n");
+    P_(c, 0, AC "spawn          open the SEARCH BOX - type, click, Enter spawns\n");
+    P_(c, 0, AC "spawn_all      merge the full archetype library into this level\n");
+    P_(c, 0, AC "respawn [x y z] give the player a NEW BODY when the pawn is gone\n");
+    P_(c, 0, AC "mkpawn [x y z]  create a pawn on one of this world's own spawn\n"
+                "                points - finds the REAL CPlayer by vtable scan\n");
+    P_(c, 0, AC "               (no coords = wherever the free camera is)\n");
+    P_(c, 0, AC "--- diagnostics (all read-only) ---\n");
+    P_(c, 0, AC "playerinfo     is the pawn we control alive? + can respawn run?\n");
+    P_(c, 0, AC "actmap         what action maps are pushed on the player?\n");
+    P_(c, 0, AC "pick           select what the CROSSHAIR points at\n");
+    P_(c, 0, AC "               (console open: just CLICK the thing instead)\n");
+    P_(c, 0, AC "               RIGHT-click cycles through what is under the cursor\n");
+    P_(c, 0, AC "pickfov <deg>  tune cursor picking   pickclick - toggle it\n");
+    P_(c, 0, AC "kill           kill the picked entity, and say so if it refuses\n");
+    /* `grab` used to be advertised here and was implemented NOWHERE - no
+       dispatch entry, no numpad handler, no state. Typing it fell through to the
+       engine, which does not know the name either, so it printed an error and
+       looked like a broken command. The thing it described - moving a picked
+       entity live - is done by `ents` (its Bring button) and by the editor's
+       `move` verb over the link, so the honest line names those instead. */
+    P_(c, 0, AC "               ('ents' has Bring/Go to; the editor moves by drag)\n");
+    P_(c, 0, AC "entbox         does the picked entity have a bounding box? (read-only)\n");
+    P_(c, 0, AC "delete         DESTROY the picked entity outright, components and all\n");
+    P_(c, 0, AC "ents           BROWSE live entities: search, click, then act\n");
+    P_(c, 0, AC "entlist [text] list every live entity - id, class, name, position\n");
+    P_(c, 0, AC "pawntype       switch between Avatar and RDA body (link-bed swap)\n");
+    P_(c, 0, AC "animinfo       is the animation dependency graph still alive?\n");
+    P_(c, 0, AC "gamelog [off]  mirror the ENGINE's own log to a file\n");
+    P_(c, 0, AC "entflag [set|clear <hex>|undo]  read/poke the pawn's flag word\n");
+    P_(c, 0, AC "rcprobe [range]  cast a physics ray and report what it hit\n");
+    P_(c, 0, AC "fpdiag / fpbody / fpaim / fpfov   first-person diagnostics + tuning\n");
+    P_(c, 0, AC "streaming      is the dynamic-load kill switch set? (after a warp)\n");
+    P_(c, 0, AC "fixplayer      is the player list stale? ('fixplayer force' writes)\n");
+    P_(c, 0, AC "allsectors [n|off]  raise the streaming radii (see the warning it prints)\n");
+    P_(c, 0, AC "mergelib <path>  merge one entity library into the live table\n");
+    P_(c, 0, AC "fixcontrol     re-point the player at its pawn ('fixcontrol undo')\n");
+    P_(c, 0, AC "mountinfo      is the last spawned thing rideable?\n");
+    P_(c, 0, AC "beastinfo      can this creature be driven by us?\n");
+    P_(c, 0, AC "drive          steer the creature you last spawned (WASD)\n");
+    P_(c, 0, AC "drivespeed <n> how fast it walks\n");
+    P_(c, 0, AC "drivecam <h> <d>  chase-camera height and distance\n");
+    P_(c, 0, AC "attack [signal]   make the driven creature attack (left mouse)\n");
+    P_(c, 0, AC "aisignal <name>   send ONE raw signal - no unlock, no follow-up\n");
+    P_(c, 0, AC "drivesignal <s>   which attack signal left mouse sends\n");
+    P_(c, 0, AC "drivecalm         suspend the creature's combat AI (toggle)\n");
+    P_(c, 0, AC "drivelock [off|agent|last|aim|soft|hard]  stop its brain\n");
+    P_(c, 0, AC "                  agent = the ENGINE skips the AI (agent+0x1C4)\n");
+    P_(c, 0, AC "driveturn [n|off] clamp CAnimal max angular velocity (probe)\n");
+    P_(c, 0, AC "planets        probe the sky-planet registry\n");
+    P_(c, 0, AC "trace [now|fast|off]  log all state, and every change, to a file\n");
+    P_(c, 0, AC "modhelp        this text\n");
+    P_(c, 0, AC "keys: F7 overlay  F8 noclip  F9 console  F10 dump\n");
+    P_(c, 0, AC "      F1 verbose log echo         (or the 'verbose' command)\n");
+    P_(c, 0, AC "      F12 self-test  Pause panic  End unload\n");
+    P_(c, 0, AC "fly:  WASD along the camera, Space up, LCtrl down, PgUp/PgDn speed\n");
+}
+
+
+/* ==================== spawn <archetype> ==================== */
+#define G_ENTSYS_PTR    (0x111E634Cu + g_rebase)   /* CEntitySystem*, NULL before a level loads */
+#define G_ARCHMGR_PTR   (0x111E7414u + g_rebase)   /* archetype manager                          */
+#define VT_ARCHMGR      (0x11038398u + g_rebase)   /* its vtable - identity check                */
+#define FN_CREATE_ARCH  (0x101B0020u + g_rebase)   /* CEntitySystem::CreateEntityFromArchetype   */
+/* REMOVED: SPAWN_FILE. The file-backed name list lost to the live archetype
+   table (see SpawnList) and the define outlived it, unused. */
+#define SPAWN_AHEAD     6.0f          /* metres in front of the player              */
+#define SPAWN_UP        1.5f
+/* Read on the main thread; toggled from the INPUT thread, where the panel's
+   click handling now lives. Hence volatile and Interlocked, not a plain int. */
+static volatile long g_spawnGround = 1;   /* sit spawns on the floor */
+
+typedef void (__thiscall *fnCreateArch)(void* esys, void** node, const void* str,
+                                        int a, int b, int c);
+
+
+/* ---- the live archetype table -------------------------------------------
+   An MSVC hash_map<u32, Archetype*> embedded in the manager, cleared and
+   rebuilt on every world load - so it IS the current level's spawnable set. */
+#define ARCH_LIST_HEAD  0x20      /* _Myhead: pointer to the list sentinel */
+#define ARCH_LIST_COUNT 0x24
+#define ARCH_NODE_NEXT  0x00
+#define ARCH_NODE_PREV  0x04
+#define ARCH_NODE_HASH  0x08
+#define ARCH_NODE_VALUE 0x0C
+#define FN_ARCH_NAME    (0x101F29E0u + g_rebase)  /* const char* __thiscall(mgr, const u32*) */
+
+/* The current world, e.g. "z_dev_orouleau". CryStringBase with small-string
+   optimisation: below capacity 0x10 the characters are INLINE, and reading +0x04
+   as a pointer would hand back the text itself reinterpreted as an address. */
+#define G_WORLDCTX_PTR  (0x111CAB8Cu + g_rebase)
+#define OFF_WORLD_STR   0xC4
+
+typedef const char* (__thiscall *fnArchName)(void* mgr, const unsigned long* hash);
+
+static const char* WorldName(void)
+{
+    void* ctx = *(void**)G_WORLDCTX_PTR;
+    const char* buf;
+    int cap;
+    if (!Readable(ctx, OFF_WORLD_STR + 0x20)) return "?";
+    cap = *(int*)((char*)ctx + OFF_WORLD_STR + 0x18);
+    buf = (cap >= 0x10) ? *(const char* const*)((char*)ctx + OFF_WORLD_STR + 4)
+                        :  (const char*)       ((char*)ctx + OFF_WORLD_STR + 4);
+    if (!Readable(buf, 1)) return "?";
+    return buf;
+}
+
+static void* ArchManager(void)
+{
+    void* mgr = *(void**)G_ARCHMGR_PTR;
+    if (!Readable(mgr, 0x40) || *(unsigned long*)mgr != VT_ARCHMGR) return 0;
+    return mgr;
+}
+
+/* Read-only walk. Four loads per entry, no engine call in the traversal itself,
+   and three independent termination guards - an unterminated walk inside the
+   per-frame detour would hang the game, which is worse than crashing it. */
+static int ArchEnumerate(void* console, const char* needle)
+{
+    void* mgr = ArchManager();
+    void *head, *node, *prev;
+    unsigned long count, i;
+    int hits = 0, shown = 0;
+
+    if (!mgr) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn_list: no archetype manager - are you loaded into a level?\n");
+        return -1;
+    }
+    head  = *(void**)((char*)mgr + ARCH_LIST_HEAD);
+    count = *(unsigned long*)((char*)mgr + ARCH_LIST_COUNT);
+    if (!Readable(head, 0x10) || count > 200000) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "spawn_list: table not readable\n");
+        return -1;
+    }
+
+    prev = head;
+    node = *(void**)((char*)head + ARCH_NODE_NEXT);
+    for (i = 0; i < count + 64 && node && node != head; ++i) {
+        void* arch;
+        unsigned long hash;
+        const char* nm = 0;
+
+        if (!Readable(node, 0x10)) break;
+        if (*(void**)((char*)node + ARCH_NODE_PREV) != prev) break;  /* list intact? */
+        hash = *(unsigned long*)((char*)node + ARCH_NODE_HASH);
+        arch = *(void**)((char*)node + ARCH_NODE_VALUE);
+
+        /* 0x101F29E0 does not null-check the value pointer, so we do. */
+        if (Readable(arch, 4) && Readable(*(void**)arch, 4 * 54)) {
+            __try { nm = ((fnArchName)FN_ARCH_NAME)(mgr, &hash); }
+            __except (EXCEPTION_EXECUTE_HANDLER) { nm = 0; }
+        }
+        if (nm && Readable(nm, 1) && (!needle || !*needle || Stristr(nm, needle))) {
+            ++hits;
+            if (shown < 40) { ((fnPrintf)FN_PRINTF)(console, 0, AC "  %s\n", nm); ++shown; }
+        }
+        prev = node;
+        node = *(void**)((char*)node + ARCH_NODE_NEXT);
+    }
+
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "spawn_list: %d of %lu archetype(s) in %s%s\n",
+        hits, count, WorldName(),
+        (hits > shown) ? " - showing the first 40, narrow the search" : "");
+    return hits;
+}
+
+/* ---- archetype snapshot, for the spawn picker window ----------------------
+   Same walk as ArchEnumerate, but it copies the names into memory of OUR OWN
+   instead of printing them.
+
+   Why a snapshot rather than letting the picker read the table directly: the
+   name lookup (FN_ARCH_NAME) is an ENGINE CALL, and engine calls are
+   main-thread-only - that rule has deadlocked and crashed this project twice
+   already. The picker paints on the overlay thread and takes its input on the
+   input thread, so neither may touch the table. Both read this array instead,
+   which is plain memory we own, and which is refreshed on the main thread
+   whenever the picker is opened. */
+#define ARCH_MAX  8192
+#define ARCH_NLEN 96
+
+static char          g_archNames[ARCH_MAX][ARCH_NLEN];
+static void*         g_archVt[ARCH_MAX];   /* the archetype object's vtable      */
+static void*         g_entityVt     = 0;   /* which vtable means "is an entity"  */
+static volatile long g_archCount    = 0;
+static volatile long g_wantArchSnap = 0;   /* main thread: please refresh       */
+static volatile long g_archReady    = 0;   /* overlay thread: snapshot is valid */
+static volatile long g_wantPicker   = 0;   /* overlay thread: please show it    */
+/* g_pickerOpen is declared up with the other flags - GameWndProc's cursor
+   override needs it, and that sits near the top of the file. */
+static volatile long g_wantSpawn    = 0;   /* main thread: please spawn         */
+static char          g_pendingSpawn[ARCH_NLEN];
+
+/* ---- live entity snapshot, for the entity browser -------------------------
+   Same discipline as the archetype snapshot: the walk and the name reads are
+   engine work, so they happen on the MAIN thread and the window only ever reads
+   the arrays we leave behind.
+
+   We keep the entity pointer, its ref node and its 64-bit id. The pointer is
+   what the actions need, the ref node is what `delete` needs, and the id is the
+   only one of the three that stays meaningful if the entity is destroyed and
+   something else lands on the same address - so every action re-validates the
+   pointer before using it. */
+#define ENT_MAX  4096
+#define ENT_NLEN 96
+
+typedef struct {
+    char          name[ENT_NLEN];
+    char          cls[40];
+    void*         ent;
+    void*         ref;
+    unsigned long lo, hi;
+    float         pos[3];
+} EntRow;
+
+static EntRow        g_entRows[ENT_MAX];
+static volatile long g_entCount    = 0;
+static volatile long g_wantEntSnap = 0;
+/* DO THE ROWS CURRENTLY CARRY NAMES AND CLASS IDS?
+   `poslist` - the editor's auto-refresh hot path, polled several times a second -
+   calls EntSnapshotEx(0), which fills these same shared rows and BLANKS every
+   name, because names are immutable and the editor fetches them once from
+   `listx`. The entity browser renders g_entRows[i].name and skips rows whose
+   name is empty, so an open browser went blank the moment the editor polled -
+   two features, one buffer, no flag saying which of them last wrote it. This is
+   that flag; the browser asks for a proper snapshot rather than drawing a hole. */
+static volatile long g_entMetaValid  = 0;
+static volatile long g_entRefillWait = 0;   /* overlay thread: refill when it lands */
+
+/* The window has two modes. Mode 0 lists ARCHETYPES to spawn; mode 1 lists the
+   LIVE ENTITIES already in the world, so you can find something by name instead
+   of hunting for it with the crosshair - which is impossible when it is buried
+   in scenery, or 80 metres long. Same window, same look, same search box; only
+   the list source and the bottom row of buttons differ. */
+#define PK_MODE_SPAWN 0
+#define PK_MODE_ENTS  1
+#define PK_NACT       6
+/* REMOVED with the picker window: ID_PICK_A0 (and, further down, ID_PICK_ED,
+   ID_PICK_LB, ID_PICK_B0, ID_PICK_SP, ID_PICK_GR, PICK_CLASS and the nine CLR_*
+   colours). They were Win32 control identifiers and the palette the window's
+   owner-drawn buttons were painted with. The in-frame panel identifies its
+   buttons by index into kActNames / kCatNames and paints with the PKV_* palette
+   further down. */
+
+static int g_pickMode = PK_MODE_SPAWN;
+
+static const char* const kActNames[PK_NACT] =
+    { "SELECT", "GO TO", "BRING", "ENTER", "KILL", "DELETE" };
+
+/* Requests the main thread performs - the window may not call the engine. */
+static volatile long g_entAction = -1;   /* index into kActNames */
+static void*         g_entActEnt = 0;
+static void*         g_entActRef = 0;
+static unsigned long g_entActLo = 0, g_entActHi = 0;
+static char          g_entActName[ENT_NLEN] = "";
+
+static void ArchSnapshot(void)
+{
+    void* mgr = ArchManager();
+    void *head, *node, *prev;
+    unsigned long count, i;
+    long n = 0;
+
+    InterlockedExchange(&g_archCount, 0);
+    if (!mgr) return;
+    head  = *(void**)((char*)mgr + ARCH_LIST_HEAD);
+    count = *(unsigned long*)((char*)mgr + ARCH_LIST_COUNT);
+    if (!Readable(head, 0x10) || count > 200000) return;
+
+    prev = head;
+    node = *(void**)((char*)head + ARCH_NODE_NEXT);
+    for (i = 0; i < count + 64 && node && node != head && n < ARCH_MAX; ++i) {
+        void* arch;
+        unsigned long hash;
+        const char* nm = 0;
+
+        if (!Readable(node, 0x10)) break;
+        if (*(void**)((char*)node + ARCH_NODE_PREV) != prev) break;
+        hash = *(unsigned long*)((char*)node + ARCH_NODE_HASH);
+        arch = *(void**)((char*)node + ARCH_NODE_VALUE);
+
+        if (Readable(arch, 4) && Readable(*(void**)arch, 4 * 54)) {
+            __try { nm = ((fnArchName)FN_ARCH_NAME)(mgr, &hash); }
+            __except (EXCEPTION_EXECUTE_HANDLER) { nm = 0; }
+        }
+        if (nm && Readable(nm, 1)) {
+            strncpy(g_archNames[n], nm, ARCH_NLEN - 1);
+            g_archNames[n][ARCH_NLEN - 1] = 0;
+            g_archVt[n] = *(void**)arch;
+            ++n;
+        }
+        prev = node;
+        node = *(void**)((char*)node + ARCH_NODE_NEXT);
+    }
+    InterlockedExchange(&g_archCount, n);
+
+    /* Work out which vtable means "this archetype is an ENTITY".
+       The table is not all entities: it also holds pure DATA archetypes -
+       Curves.*, WeaponProperties.*, Metagame.*, tables.* - and spawning one of
+       those creates an object the sector code then walks into and dies on. That
+       is the crash: `Curves.StimEffectCurves.FireDamageVehicleMP` spawned, then
+       ACCESS_VIOLATION at 100AF2A1 inside the streaming path a moment later.
+
+       Rather than trusting a name list, take the vtable of something we KNOW is
+       an entity - a `vehicle.` / `Animals.` / `enemy_archetypes.` archetype - and
+       treat that vtable as the definition. Self-calibrating, and it survives
+       names we have never seen. The name check below is the fallback for when no
+       seed is present, and a second line of defence when it is. */
+    g_entityVt = 0;
+    {
+        long k, same = 0;
+        for (k = 0; k < n && !g_entityVt; ++k) {
+            const char* s = g_archNames[k];
+            if (_strnicmp(s, "vehicle.", 8) == 0 ||
+                _strnicmp(s, "Animals.", 8) == 0 ||
+                _strnicmp(s, "enemy_archetypes.", 17) == 0)
+                g_entityVt = g_archVt[k];
+        }
+        for (k = 0; k < n; ++k) if (g_archVt[k] == g_entityVt) ++same;
+        logf_("[pick] archetype snapshot: %ld name(s) in %s; entity vtable %p "
+              "matches %ld of them", n, WorldName(), g_entityVt, same);
+        if (!g_entityVt)
+            logf_("[pick] no seed archetype on this map - falling back to the "
+                  "name filter alone");
+        else if (same == n)
+            logf_("[pick] every archetype shares that vtable, so it does not "
+                  "discriminate - the name filter is doing the work");
+    }
+}
+
+/* Is entry `i` something it is safe to offer in the picker?
+   Two independent tests, because either one alone has a failure mode: the
+   vtable test says nothing if the engine gives every archetype the same class,
+   and the name test only knows the families we have actually seen. */
+static int NameLooksLikeData(const char* s)
+{
+    if (!s || !s[0]) return 1;
+    if (_strnicmp(s, "Curves.",           7) == 0) return 1;
+    if (_strnicmp(s, "WeaponProperties.",17) == 0) return 1;
+    if (_strnicmp(s, "Metagame.",         9) == 0) return 1;
+    if (_strnicmp(s, "tables.",           7) == 0) return 1;
+    if (_strnicmp(s, "player.",           7) == 0) return 1;
+    if (Stristr(s, "MovementCurves"))              return 1;
+    return 0;
+}
+
+static int ArchIsEntity(long i)
+{
+    if (i < 0 || i >= g_archCount) return 0;
+    if (NameLooksLikeData(g_archNames[i])) return 0;
+    if (g_entityVt && g_archVt[i] != g_entityVt) return 0;
+    return 1;
+}
+
+
+/* ---- merge an extra entity library into the live table --------------------
+   Lets us spawn archetypes this level never registered. See SPAWN_CROSSLEVEL.md. */
+#define VT_FCBFILE        (0x1101DD00u + g_rebase)  /* the library object's vtable            */
+#define FN_FCB_CTOR       (0x10101C80u + g_rebase)  /* __thiscall(mem)                        */
+#define FN_ADDLIBRARY     (0x101F3060u + g_rebase)  /* __thiscall(mgr, void** pHandle)        */
+/* DANGER: 0x101F3020 is the same function except it CLEARS the whole table
+   first. Never call it at runtime - it would wipe the map the entity system is
+   reading from. The two differ by one hex digit; do not "tidy" this. */
+#define OFF_MGR_VEC_COUNT 0x08
+#define OFF_FCB_REFCOUNT  0x04
+#define FCB_VT_LOAD       0x48         /* slot 18: bool Load(const char* path)   */
+#define FCB_VT_RELEASE    0x04         /* slot  1: release, arg 1 = delete       */
+#define OFF_WORLD_GENDIR  0x11C        /* worlds\<w>\generated, SSO cap at +0x130 */
+
+typedef void* (__thiscall *fnFcbCtor   )(void* mem);
+typedef char  (__thiscall *fnFcbLoad   )(void* fcb, const char* path);
+typedef void  (__thiscall *fnFcbRelease)(void* fcb, int flags);
+typedef void  (__thiscall *fnAddLibrary)(void* mgr, void** pHandle);
+
+static char g_mergedFor[64] = {0};     /* the world we last merged for */
+
+static const char* GeneratedDir(void)
+{
+    char* ctx = (char*)*(void**)G_WORLDCTX_PTR;
+    const char* p;
+    if (!Readable(ctx, OFF_WORLD_GENDIR + 0x20)) return 0;
+    p = (*(unsigned long*)(ctx + 0x130) >= 0x10) ? *(char**)(ctx + OFF_WORLD_GENDIR)
+                                                 :  (char*) (ctx + OFF_WORLD_GENDIR);
+    if (!Readable(p, 1) || !*p) return 0;
+    return p;
+}
+
+static void ReleaseFcb(void* p)
+{
+    unsigned long* rc;
+    if (!Readable(p, 8)) return;
+    rc = (unsigned long*)((char*)p + OFF_FCB_REFCOUNT);
+    if (*rc == 0) return;
+    if (--(*rc) == 0) {
+        void** vt = *(void***)p;
+        if (Readable(vt, FCB_VT_RELEASE + 4))
+            ((fnFcbRelease)vt[FCB_VT_RELEASE / 4])(p, 1);
+    }
+}
+
+
+
+
+/* ==================== vehicles ====================
+   VehicleUserGetIn takes plain entity ids - no proximity, no prompt, no Lua.
+   Every internal hop is null-checked and every failure path is a bare `ret`, so
+   a bad call no-ops instead of crashing. See POSSESSION.md. */
+#define FN_VEH_GETIN   (0x10A88C40u + g_rebase)
+#define FN_VEH_GETOUT  (0x10A88E10u + g_rebase)
+#define FN_VEH_CURRENT (0x10A86FF0u + g_rebase)
+/* The entity id lives on the ENTITY, not on the ref node. The node is 0x18 bytes
+   {idLo@0, idHi@4, refcount@8, CEntity*@0xC}; the old project note claiming the
+   id sat at node+0x10 was wrong and would read two words past it. */
+#define OFF_ENT_ID     0x10
+
+/* __cdecl: the CALLER cleans. These end in a bare `ret` with no immediate -
+   declaring them __stdcall would corrupt the stack on every call. */
+typedef void (__cdecl *fnVehGetIn  )(unsigned long vLo, unsigned long vHi,
+                                     unsigned long pLo, unsigned long pHi,
+                                     int bAttach, int seat);
+typedef void (__cdecl *fnVehGetOut )(unsigned long vLo, unsigned long vHi,
+                                     unsigned long pLo, unsigned long pHi, int bDetach);
+typedef void (__cdecl *fnVehCurrent)(unsigned long* out2,
+                                     unsigned long pLo, unsigned long pHi);
+
+/* defined up top so SpawnArchetypeGo can record into it */
+static void* g_lastSpawn = 0;
+static char  g_lastSpawnName[192] = {0};
+
+static int EntityId(void* ent, unsigned long* lo, unsigned long* hi)
+{
+    if (!Readable(ent, OFF_ENT_ID + 8)) return 0;
+    *lo = *(unsigned long*)((char*)ent + OFF_ENT_ID);
+    *hi = *(unsigned long*)((char*)ent + OFF_ENT_ID + 4);
+    return 1;
+}
+
+/* The vehicle the player is currently in, or 0 in *lo/*hi. Read-only. */
+static int CurrentVehicle(unsigned long* vLo, unsigned long* vHi)
+{
+    unsigned long out[2] = {0xFFFFFFFFu, 0xFFFFFFFFu};
+    unsigned long pLo, pHi;
+    void* pl = GetPlayerEntity();
+    *vLo = *vHi = 0xFFFFFFFFu;
+    if (!pl || !EntityId(pl, &pLo, &pHi)) return 0;
+    __try { ((fnVehCurrent)FN_VEH_CURRENT)(out, pLo, pHi); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    *vLo = out[0]; *vHi = out[1];
+    return !(out[0] == 0xFFFFFFFFu && out[1] == 0xFFFFFFFFu);
+}
+
+/* Unconditional, like every other recovery path here: safe to call when not
+   seated, and it never reads anything we cached. */
+static void VehExit(void* console)
+{
+    unsigned long vLo, vHi, pLo, pHi;
+    void* pl = GetPlayerEntity();
+    if (!pl || !EntityId(pl, &pLo, &pHi)) return;
+    if (!CurrentVehicle(&vLo, &vHi)) {
+        if (console) ((fnPrintf)FN_PRINTF)(console, 0, AC "vehexit: not in a vehicle\n");
+        return;
+    }
+    __try { ((fnVehGetOut)FN_VEH_GETOUT)(vLo, vHi, pLo, pHi, 1); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { logf_("[veh] *** fault leaving"); return; }
+    logf_("[veh] out of %08lX:%08lX", vHi, vLo);
+    if (console) ((fnPrintf)FN_PRINTF)(console, 0, AC "vehexit: out\n");
+}
+
+static void VehStatus(void* console)
+{
+    unsigned long vLo, vHi, sLo = 0, sHi = 0;
+    int seated = CurrentVehicle(&vLo, &vHi);
+    int haveSpawn = (g_lastSpawn && EntityId(g_lastSpawn, &sLo, &sHi));
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "vehstatus: %s%s\n  last spawned entity: %s\n",
+        seated ? "in vehicle id " : "not in a vehicle", "",
+        haveSpawn ? "yes" : "none this session");
+    if (seated)
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "  vehicle id %08lX:%08lX\n", vHi, vLo);
+    if (haveSpawn)
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "  spawn id   %08lX:%08lX\n", sHi, sLo);
+}
+
+/* ---- the Thanator's missing driving action map ----------------------------
+   PLAY_AS.md's surprise finding: the Thanator IS rideable. Only CThanatorAgent
+   and CDirehorseAgent override the mount slot with real code, it carries the
+   CBtzHybridAnimal component, and the shipped game has NPCs riding them. One
+   thing is missing - the reflected property `sDrivingActionMap`, which is
+   non-empty on exactly ONE archetype in all 39 world libraries (the Direhorse,
+   "direhorse"). Without it the engine pushes an empty action map and you sit on
+   a Thanator with no controls.
+
+   We supply the string, on the COMPONENT INSTANCE rather than the archetype, so
+   it affects only the creature you spawned and dies with it. That is also the
+   variant the doc prefers over pushing the map ourselves, because the state
+   machine's own push and pop then stay symmetric and nothing is left on the
+   input stack when you dismount.
+
+   The 0x1C-byte MSVC std::string at +0x1AC: buffer +0x1B0, length +0x1C0,
+   capacity +0x1C4. THE PRECONDITION IS NOT OPTIONAL - we write only into an
+   empty small-string buffer (len 0, cap 0x0F). If capacity is 0x10 or more the
+   buffer is a heap pointer and writing over it would corrupt the heap. */
+#define OFF_HYB_MAPBUF 0x1B0
+#define OFF_HYB_MAPLEN 0x1C0
+#define OFF_HYB_MAPCAP 0x1C4
+/* Same function and class id the drive/mountinfo code uses further down; named
+   separately only because those macros are declared after this point. */
+#define FN_GETCOMP_VEH  (0x101B79E0u + g_rebase)
+#define CID_HYBRID_VEH  (0x11220BC0u + g_rebase)
+typedef void* (__thiscall *fnGetCompVeh)(void* ent, const void* classId);
+
+static int ThanatorGiveActionMap(void* console, void* ent)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void* hyb = 0;
+    unsigned long len, cap;
+
+    if (!Readable(ent, 0x100)) return 0;
+    __try { hyb = ((fnGetCompVeh)FN_GETCOMP_VEH)(ent, (const void*)CID_HYBRID_VEH); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    if (!Readable(hyb, OFF_HYB_MAPCAP + 4)) return 0;      /* not a mountable animal */
+
+    len = *(unsigned long*)((char*)hyb + OFF_HYB_MAPLEN);
+    cap = *(unsigned long*)((char*)hyb + OFF_HYB_MAPCAP);
+    if (len != 0) return 0;                                 /* already has one */
+
+    if (cap != 0x0F) {
+        P_(console, 0, AC
+           "vehenter: this mount has no driving action map and its string is\n"
+           "  heap-allocated (cap %lu) - refusing to write into it. You would\n"
+           "  ride with no controls; 'actmap' can push one by hand.\n", cap);
+        logf_("[veh] hybrid %p empty map but cap=%lu - not writing", hyb, cap);
+        return 0;
+    }
+
+    memcpy((char*)hyb + OFF_HYB_MAPBUF, "direhorse", 10);   /* 9 + NUL, inline */
+    *(unsigned long*)((char*)hyb + OFF_HYB_MAPLEN) = 9;     /* capacity unchanged */
+    logf_("[veh] hybrid %p: sDrivingActionMap was empty -> \"direhorse\"", hyb);
+    P_(console, 0, AC
+       "vehenter: this mount shipped with no driving action map - gave it\n"
+       "  'direhorse' so you get controls. It lives on this creature only.\n");
+    return 1;
+}
+
+
+/* SEAT TYPE IS THE FIFTH ARGUMENT, and hardcoding it to 1 is what made every
+   passenger seat look broken.
+
+   Proven in game, same session, same library:
+     Valkyrie_Seated  4 seats hidSeatType 3 (passenger)  -> seated=0
+     Valkyrie_Pilot   1 seat  hidSeatType 1 (driver)     -> seated=1
+
+   1 is the DRIVER type, so asking for it on a vehicle that only has passenger
+   seats is refused - correctly, and silently. Now selectable:
+       vehenter      board a driver seat   (unchanged default)
+       vehenter 3    board a passenger seat
+   Anything else is passed through as-is so other seat types can be probed. */
+static void VehEnter(void* console, int seatType)
+{
+    unsigned long vLo, vHi, pLo, pHi;
+    void* pl = GetPlayerEntity();
+
+    if (!pl || !EntityId(pl, &pLo, &pHi)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "vehenter: no player entity\n"); return;
+    }
+    if (!g_lastSpawn || !EntityId(g_lastSpawn, &vLo, &vHi)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "vehenter: nothing spawned yet - try 'spawn Avatar.ATV_Drivable' first\n");
+        return;
+    }
+    {   /* leaving one vehicle to board another is the engine's business, but
+           doing it in that order keeps our own state honest */
+        unsigned long cLo, cHi;
+        if (CurrentVehicle(&cLo, &cHi)) VehExit(0);
+    }
+
+    /* Must happen BEFORE the call - the state machine reads the finished string
+       when it pushes the driver's map. */
+    ThanatorGiveActionMap(console, g_lastSpawn);
+
+    logf_("[veh] enter %08lX:%08lX as %08lX:%08lX seatType=%d",
+          vHi, vLo, pHi, pLo, seatType);
+    __try { ((fnVehGetIn)FN_VEH_GETIN)(vLo, vHi, pLo, pHi, seatType, -1); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[veh] *** fault entering");
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "vehenter: faulted - caught\n");
+        return;
+    }
+    {
+        unsigned long cLo, cHi;
+        int ok = CurrentVehicle(&cLo, &cHi);
+        /* AC is a string literal that concatenates with what follows it, so it
+           cannot precede a ternary - pass the accent as its own %s argument. */
+        ((fnPrintf)FN_PRINTF)(console, 0, "%s%s", AC,
+            ok ? "vehenter: in. 'vehexit' to get out.\n"
+               : "vehenter: the call no-opped - that entity may not be a vehicle.\n");
+        logf_("[veh] after: seated=%d", ok);
+    }
+}
+/* ================================================== */
+
+/* ==================== freecam ====================
+   The camera array is a lazily-populated cache keyed by archetype name, not a
+   list of what the level placed - ask for a name it lacks and the engine spawns
+   that camera and activates it. See FREECAM.md. */
+#define FN_ACTIVATE_CAM   (0x101A3290u + g_rebase)   /* __thiscall(playerElem, const char*) ret 4 */
+#define FN_CAMSTACK_UNLOCK (0x1024BBD0u + g_rebase)  /* __fastcall(camStack): [ecx+0x14] = 0      */
+#define FN_PAWNCAM_NAME   (0x104D9370u + g_rebase)   /* __fastcall(game) -> const char*, pure     */
+#define G_GAMEOBJ_PP      (0x112225D8u + g_rebase)
+#define OFF_INNER_CAMSTACK 0xC0
+#define OFF_CS_ACTIVEIDX   0x10
+#define OFF_CS_LOCKED      0x14
+#define OFF_CS_ARRAY       0x18
+#define OFF_CS_COUNT       0x1C
+#define CS_ENTRY_STRIDE    24
+#define CS_ENTRY_NODE      0x0C   /* the entry's node; entity at node+0x0C */
+#define CS_ENTRY_HASH      0x10
+#define FREECAM_NAME      "Cameras.Camera.Free"
+#define FREECAM_HASH      0x19CED71Fu   /* crc32("cameras.camera.free") */
+
+typedef void        (__thiscall *fnActivateCam )(void* elem, const char* name);
+typedef void        (__fastcall *fnCamUnlock   )(void* camStack);
+typedef const char* (__fastcall *fnPawnCamName )(void* game);
+
+static volatile long g_freecam = 0;
+/* Set from the hotkey thread, consumed by the detour on the main thread. */
+static volatile long g_wantFreecamOff = 0;
+
+/* The player-list ELEMENT - one dereference shallower than GetPlayerEntity().
+   Spelled out because being one hop off is this project's signature bug. */
+static void* GetPlayerElem(void)
+{
+    void*  list = *(void**)PLAYERLIST_PTR;
+    void** data;
+    void*  elem;
+    if (!Readable(list, 0x10)) return 0;
+    if (*(unsigned long*)((char*)list + 8) == 0) return 0;
+    data = *(void***)((char*)list + 4);
+    if (!Readable(data, 4)) return 0;
+    elem = data[0];
+    if (!Readable(elem, 8)) return 0;
+    if (!Readable(*(void**)((char*)elem + 4), OFF_INNER_CAMSTACK + 0x20)) return 0;
+    return elem;
+}
+
+/* ---- respawn: get a body back when the pawn is gone ------------------------
+   Why this exists: after the streaming tracker was corrupted (see the note in
+   SectorRadiiSet), `goto` reported "no player". That is not a figure of speech
+   about the model - GetPlayerEntity() walks
+       playerList -> arr -> wrapper -> inner(CPlayer) -> node(inner+8) -> ent(+0x0C)
+   and it fails at the last two hops when the pawn's ref node dies. The CPlayer
+   at `inner` is still perfectly alive. So there is an object to ask for a new
+   body even when there is no body.
+
+   The engine's own respawn is `IPlayer` vtable slot 2 = CPlayer::Spawn
+   0x10760EE0. Disassembled (Dunia_LIVE_DECRYPTED):
+
+     10760EE0  mov eax,[0x111E6F58] / cmp byte [eax+5],0 / je epilogue
+
+   The whole function is gated on that byte. CONTROLLED.md records its meaning as
+   UNKNOWN, suspected "MP mode active", and I assumed it would therefore read 0
+   in single player - which would have made Spawn a silent no-op.
+
+   MEASURED IN A LIVE SINGLE-PLAYER SESSION: byte+4 = 0, byte+5 = 1. So the
+   assumption was wrong: Spawn is NOT gated out, and +4/+5 are clearly not the
+   same signal. This is why the code below PREFERS vt[2] and only drops to vt[8]
+   when byte+5 actually reads 0.
+
+   All Spawn does is resolve an archetype into +0x198 and then tail into slot 8:
+
+     10760F0E  mov edx,[esi] / mov edx,[edx+0x20]     ; slot 8
+     10760F13..10760F24  push -1, push -1, push ang, push pos
+     10760F27  call edx                               ; vt8(pos, ang, -1, -1)
+
+   Slot 8 is 0x107612A0 - byte-identical in CPlayer's vtable (0x110AFF18+0x20)
+   and CFCXPlayer's (0x110A9818+0x20), so it is inherited and correct for either
+   concrete class. It carries NO game-mode gate of its own. Its two real
+   preconditions are both readable up front, which is the whole point:
+
+     107612A7  cmp [esi+0x1B8],0        / je bail    ; player service must exist
+     107612B5  cmp [esi+0x198],0xFFFFFFFF / je bail  ; archetype must not be poisoned
+
+   Both are checked before either entry point is used, so a refusal is a sentence
+   instead of nothing happening. Note the second is exactly the field
+   CONTROLLED.md warns SetSpawnPoint poisons - we never call SetSpawnPoint, but
+   we still check.
+
+   Spawn's own signature, from its argument loads (10760EEE, 10760F17,
+   10760F1F):   Spawn(Vec3* pos, Vec3* ang, u32* archRef)   __thiscall, ret 0xC.
+   Passing a pointer to the CURRENT, valid +0x198 makes its store a no-op and
+   lets it proceed - we are not choosing a new body, just asking for the one the
+   level already picked.
+
+   Arg1 IS a bare Vec3*, and my first reading of it was wrong. 0x107612CF reads
+   [edi+0],[+4],[+8] as floats - that part holds. But the result does NOT come
+   back in a fourth dword of the caller's struct:
+
+     107613D4  lea edx,[esp+0x4C]   ; esp is ret-0x48 here => this is ret+4,
+     107613D8  push edx             ;   the address of the caller's ARG1 SLOT
+     107613D9  call 0x10764BC0      ; ...which the callee OVERWRITES
+     107613DE  mov eax,[esp+0x44]   ; re-read that slot - now a ref node
+     107613E2  cmp [eax+0x0C],0     ; node+0x0C = CEntity*, the usual pattern
+
+   The create call writes its result into the caller's own stack slot, which we
+   cannot see from outside. So there is no out-parameter to read, and the first
+   version of this command reporting "out slot still 0" was measuring nothing.
+   Success is instead measured the only honest way available: sample the pawn
+   pointer through the CPlayer chain before and after, and compare.
+
+   Args 3/4 are a 64-bit id pair; -1,-1 means "use the default at +0x194"
+   (0x10761394: `mov eax,[esp+0x4C] / and eax,[esp+0x50] / cmp eax,-1 / jne`),
+   so we pass -1,-1 exactly as the wrapper does. */
+#define OFF_PL_ARCHREF   0x198   /* archetype ref for the next respawn        */
+#define OFF_PL_IDPAIR    0x194   /* default id pair consumed when args are -1 */
+#define OFF_PL_SERVICE   0x1B8   /* player service; null => vt8 bails         */
+#define PL_VT_SPAWNSLOT  0x20    /* vtable slot 8                             */
+#define G_MODEOBJ_PP     (0x111E6F58u + g_rebase)
+
+#define PL_VT_SPAWN      0x08    /* vtable slot 2 - CPlayer::Spawn 0x10760EE0 */
+
+/* slot 2: Spawn(Vec3* pos, Vec3* ang, u32* archRef) */
+typedef void (__thiscall *fnPlayerSpawn)(void* player, float* pos, float* ang,
+                                         unsigned long* archRef);
+/* slot 8: the worker Spawn tails into, called with (pos, ang, -1, -1) */
+typedef void (__thiscall *fnPlayerSpawnSlot)(void* player, float* pos,
+                                             float* ang, unsigned long lo,
+                                             unsigned long hi);
+
+/* The CPlayer itself. Deliberately does NOT require a pawn - that is the whole
+   reason this is separate from GetPlayerEntity(). */
+static void* GetPlayerObject(void)
+{
+    void*  list;
+    void** data;
+    void*  elem;
+    void*  inner;
+    /* The guard has to come BEFORE the read it guards. This used to load `list`
+       in its declaration and then test the slot on the next line, which made the
+       check dead as written. GetPlayerEntity does it in this order. */
+    if (!Readable((void*)PLAYERLIST_PTR, 4)) return 0;
+    list = *(void**)PLAYERLIST_PTR;
+    if (!Readable(list, 0x10)) return 0;
+    if (*(unsigned long*)((char*)list + 8) == 0) return 0;
+    data = *(void***)((char*)list + 4);
+    if (!Readable(data, 4)) return 0;
+    elem = data[0];
+    if (!Readable(elem, 8)) return 0;
+    inner = *(void**)((char*)elem + 4);
+    if (!Readable(inner, OFF_PL_SERVICE + 4)) return 0;
+    return inner;
+}
+
+/* Read-only probe, printed as a tail section of `playerinfo`. Nothing here
+   writes or calls anything - this is the step I skipped on the picking bug and
+   on the sector radii, both times to my cost.
+
+   It is a SEPARATE function rather than more lines inside PlayerInfo() because
+   PlayerInfo() returns early the moment a hop is unreadable - and a dead pawn is
+   exactly when those early returns fire. The readiness report has to survive
+   that, so the dispatcher calls both. */
+static void RespawnReadiness(void* console)
+{
+    void *pl, *vt, *svc, *node, *ent, *mode;
+    unsigned long arch, lo = 0, hi = 0;
+    unsigned char b4 = 0xFF, b5 = 0xFF;
+    int haveMode = 0;
+
+    pl = GetPlayerObject();
+    if (!pl) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "playerinfo: no CPlayer at all - the player list is empty.\n"
+            "  Nothing can respawn you from in here; reload a checkpoint.\n");
+        return;
+    }
+    vt   = *(void**)pl;
+    svc  = *(void**)((char*)pl + OFF_PL_SERVICE);
+    arch = *(unsigned long*)((char*)pl + OFF_PL_ARCHREF);
+    if (Readable((void*)((char*)pl + OFF_PL_IDPAIR), 8)) {
+        lo = *(unsigned long*)((char*)pl + OFF_PL_IDPAIR);
+        hi = *(unsigned long*)((char*)pl + OFF_PL_IDPAIR + 4);
+    }
+    node = Readable((char*)pl + 8, 4) ? *(void**)((char*)pl + 8) : 0;
+    ent  = (node && Readable(node, 0x10)) ? *(void**)((char*)node + 0x0C) : 0;
+
+    if (Readable((void*)G_MODEOBJ_PP, 4)) {
+        mode = *(void**)G_MODEOBJ_PP;
+        if (Readable(mode, 8)) {
+            b4 = *(unsigned char*)((char*)mode + 4);
+            b5 = *(unsigned char*)((char*)mode + 5);
+            haveMode = 1;
+        }
+    }
+
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "CPlayer      %08X  vtable %08X\n"
+        "  pawn node  %08X   pawn entity %08X   %s\n"
+        "  +0x198     %08X   archetype for the next respawn %s\n"
+        "  +0x194     %08X:%08X  default id pair\n"
+        "  +0x1B8     %08X   player service %s\n",
+        (unsigned)(size_t)pl, (unsigned)(size_t)vt,
+        (unsigned)(size_t)node, (unsigned)(size_t)ent,
+        ent ? "- you have a body" : "- NO BODY (this is what 'no player' means)",
+        arch, (arch == 0xFFFFFFFFu) ? "** POISONED **" : "(valid)",
+        lo, hi,
+        (unsigned)(size_t)svc, svc ? "(present)" : "** NULL **");
+
+    if (haveMode)
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "  mode obj   %08X  byte+4 = %u   byte+5 = %u\n"
+            "    byte+5 gates CPlayer::Spawn (vt[2]) ENTIRELY. If it reads 0,\n"
+            "    the engine's own respawn is a silent no-op - which is why\n"
+            "    'respawn' calls vt[8] (0x107612A0) directly instead.\n",
+            (unsigned)(size_t)mode, (unsigned)b4, (unsigned)b5);
+    else
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "  mode obj   unreadable\n");
+
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "  -> respawn %s\n",
+        (svc && arch != 0xFFFFFFFFu)
+            ? "should be able to run (both preconditions met)"
+            : "CANNOT run - see the starred line above");
+    logf_("[plr] pl=%08X vt=%08X node=%08X ent=%08X arch=%08X svc=%08X b4=%u b5=%u",
+          (unsigned)(size_t)pl, (unsigned)(size_t)vt, (unsigned)(size_t)node,
+          (unsigned)(size_t)ent, arch, (unsigned)(size_t)svc,
+          (unsigned)b4, (unsigned)b5);
+}
+
+/* Set by the console thread, drained by the detour on the main thread - the
+   engine is main-thread-only and spawning a pawn is emphatically an engine
+   call. */
+static volatile long  g_wantRespawn = 0;
+static float          g_respawnAt[3];
+static int            g_respawnHavePos = 0;
+
+/* ============================================================================
+ * THE PLAYER LIST DOES NOT CONTAIN A CPlayer, AND `respawn` HAS BEEN CALLING
+ * THE WRONG FUNCTION ON THE WRONG OBJECT.
+ *
+ * MEASURED, live, in both a healthy single-player session and an mp_* world:
+ * `GetPlayerObject()` walks [0x111E61F8] -> data[0] -> +4 and returns an object
+ * whose vtable is 0x11033F04. That vtable has TWELVE slots and its slot 2 is
+ * 0x101A2F20. It is a CPlayerElem. The two real player vtables are:
+ *
+ *     0x110AFF18  CPlayer     18 slots, slot 2 = 0x10760EE0 (Spawn)
+ *     0x110A9818  CFCXPlayer  18 slots, slot 2 = 0x10760EE0, slot 8 = 0x107612A0
+ *
+ * So every `respawn` ever run through this DLL called 0x101A2F20, not Spawn.
+ * That is why it "runs and returns and nothing happens" - and it is why the
+ * mp_* pawn experiment looked hopeless when it is not.
+ *
+ * A whole-process scan finds EXACTLY ONE object of either class, and it is
+ * present in an mp_* world just as it is in single player:
+ *
+ *     single player      CFCXPlayer 3C9E3CE0  +0x194 = 189EE2E0 (the pawn node,
+ *                        the same pointer the CPlayerElem holds at +8)
+ *                        +0x198 = 5D0A7859 (archetype)  +0x1B8 = 38B1CFA0 (service)
+ *     mp_bluelagoon_rb_01 CFCXPlayer 3CC8F020  +0x198 = 43354828  +0x1B8 = 39D97EB0
+ *
+ * BOTH of the worker's documented preconditions - service non-null, archetype
+ * not 0xFFFFFFFF - are satisfied in the mp_* world, and the mode gate byte+5
+ * reads 1 there as well. Nothing static points at the object (a scan for
+ * pointers to it finds three referrers, all heap), so a vtable scan is the only
+ * way to reach it from out here.
+ * ========================================================================== */
+#define VT_CPLAYER     0x110AFF18u
+#define VT_CFCXPLAYER  0x110A9818u
+
+static void* g_realPlayer = 0;
+
+static int IsPlayerVt(unsigned long vt)
+{
+    return vt == (VT_CPLAYER + g_rebase) || vt == (VT_CFCXPLAYER + g_rebase);
+}
+
+/* -> the one CPlayer/CFCXPlayer in the process, or 0.
+   Cached, and the cache is revalidated by re-reading the vtable rather than
+   trusted: a world change frees and reallocates this object. */
+static void* FindRealPlayer(int verbose, void* console)
+{
+    MEMORY_BASIC_INFORMATION mbi;
+    unsigned char* probe = 0;
+    void* found = 0;
+    long hits = 0;
+    DWORD t0 = GetTickCount();
+
+    if (g_realPlayer && Readable(g_realPlayer, 4) &&
+        IsPlayerVt(*(unsigned long*)g_realPlayer))
+        return g_realPlayer;
+    g_realPlayer = 0;
+
+    while (VirtualQuery(probe, &mbi, sizeof(mbi)) == sizeof(mbi)) {
+        unsigned char* base = (unsigned char*)mbi.BaseAddress;
+        SIZE_T size = mbi.RegionSize;
+        DWORD prot = mbi.Protect & 0xFF;
+        if (size == 0) break;
+        /* Private read-write data only. Skipping images and read-only pages is
+           what keeps this well under a frame; the object is heap by
+           construction. */
+        if (mbi.State == MEM_COMMIT && !(mbi.Protect & PAGE_GUARD) &&
+            (prot == PAGE_READWRITE || prot == PAGE_EXECUTE_READWRITE) &&
+            size <= 0x4000000) {
+            __try {
+                unsigned long* q = (unsigned long*)base;
+                unsigned long* e = (unsigned long*)(base + (size & ~(SIZE_T)3));
+                for (; q < e; ++q) {
+                    if (IsPlayerVt(*q)) {
+                        if (!found) found = (void*)q;
+                        ++hits;
+                    }
+                }
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) { }
+        }
+        if (base + size < base) break;              /* address-space wrap */
+        probe = base + size;
+    }
+
+    g_realPlayer = found;
+    if (verbose && console)
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "player scan: %ld object(s) in %lu ms -> %08X\n",
+            hits, (unsigned long)(GetTickCount() - t0),
+            (unsigned)(size_t)found);
+    logf_("[pawn] scan: %ld hit(s) in %lums -> %08X", hits,
+          (unsigned long)(GetTickCount() - t0), (unsigned)(size_t)found);
+    return found;
+}
+
+/* On a CPlayer, +0x194 holds the pawn's ref NODE - MEASURED: in single player it
+   is bit-identical to the node the CPlayerElem carries at +8, and the pawn
+   entity hangs off node+0x0C exactly as everywhere else in this file. */
+#define OFF_CP_PAWNNODE 0x194
+
+static void* RealPlayerPawn(void* pl)
+{
+    void* node;
+    void* ent;
+    if (!Readable((char*)pl + OFF_CP_PAWNNODE, 4)) return 0;
+    node = *(void**)((char*)pl + OFF_CP_PAWNNODE);
+    if (!node || node == (void*)(size_t)0xFFFFFFFFu) return 0;
+    if (!Readable(node, 0x10)) return 0;
+    ent = *(void**)((char*)node + 0x0C);
+    return Readable(ent, 0x100) ? ent : 0;
+}
+
+static volatile long g_wantMkPawn = 0;
+static float         g_mkPawnAt[3];
+static int           g_mkPawnHavePos = 0;
+
+/* The pawn currently hanging off the CPlayer, or NULL. This is the ONLY thing
+   that can honestly answer "did a respawn work" from outside - see the note
+   above about the result landing in the engine's own stack slot. */
+static void* PawnOf(void* pl)
+{
+    void* node;
+    void* ent;
+    if (!Readable((char*)pl + 8, 4)) return 0;
+    node = *(void**)((char*)pl + 8);
+    if (!Readable(node, 0x10)) return 0;
+    ent = *(void**)((char*)node + 0x0C);
+    return Readable(ent, 0x100) ? ent : 0;
+}
+
+/* Runs ON THE MAIN THREAD. */
+static void DoRespawn(void* console)
+{
+    void* pl = GetPlayerObject();
+    void *svc, *mode, *before, *after;
+    unsigned long arch;
+    unsigned char b5 = 1;
+    float pos[3], ang[3];
+    int usedSlot8 = 0;
+
+    if (!pl) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "respawn: no CPlayer - reload a checkpoint.\n");
+        return;
+    }
+    svc  = *(void**)((char*)pl + OFF_PL_SERVICE);
+    arch = *(unsigned long*)((char*)pl + OFF_PL_ARCHREF);
+    if (!svc) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "respawn: player service (+0x1B8) is NULL - the spawn worker bails at\n"
+            "  its first test. Reload a checkpoint.\n");
+        return;
+    }
+    if (arch == 0xFFFFFFFFu) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "respawn: the respawn archetype (+0x198) is 0xFFFFFFFF - poisoned.\n"
+            "  The worker bails on exactly this. Nothing here can invent a valid\n"
+            "  archetype ref safely, so: reload a checkpoint.\n");
+        return;
+    }
+    if (Readable((void*)G_MODEOBJ_PP, 4)) {
+        mode = *(void**)G_MODEOBJ_PP;
+        if (Readable(mode, 8)) b5 = *(unsigned char*)((char*)mode + 5);
+    }
+
+    /* (0,0,0) is almost never a real place in this game's worlds, and with
+       byte+4 == 0 the worker only SEARCHES near the position you give it - if the
+       search finds nothing it keeps your value and very likely fails downstream.
+       Say so rather than letting it look like the call is broken. */
+    if (g_respawnAt[0] == 0.0f && g_respawnAt[1] == 0.0f && g_respawnAt[2] == 0.0f)
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "respawn: NOTE - target is (0,0,0), which is outside the playable\n"
+            "  area in every Avatar world. Move the free camera somewhere real, or\n"
+            "  pass coordinates. Trying anyway.\n");
+
+    pos[0] = g_respawnAt[0];
+    pos[1] = g_respawnAt[1];
+    pos[2] = g_respawnAt[2];
+    ang[0] = ang[1] = ang[2] = 0.0f;
+
+    before = PawnOf(pl);
+    logf_("[plr] respawn at (%.1f %.1f %.1f) arch=%08X b5=%u pawnBefore=%08X",
+          pos[0], pos[1], pos[2], arch, (unsigned)b5,
+          (unsigned)(size_t)before);
+
+    __try {
+        void** vt = *(void***)pl;
+        if (b5) {
+            /* The sanctioned entry point. Measured byte+5 = 1 in single player,
+               so it is not gated out; pass the CURRENT archetype so its store is
+               a no-op and it proceeds into the worker itself. */
+            fnPlayerSpawn f = (fnPlayerSpawn)*(void**)((char*)vt + PL_VT_SPAWN);
+            unsigned long ref = arch;
+            f(pl, pos, ang, &ref);
+        } else {
+            /* byte+5 == 0: vt[2] would return without doing anything at all, so
+               go straight to the worker it would have called. */
+            fnPlayerSpawnSlot f = (fnPlayerSpawnSlot)
+                *(void**)((char*)vt + PL_VT_SPAWNSLOT);
+            f(pl, pos, ang, 0xFFFFFFFFu, 0xFFFFFFFFu);
+            usedSlot8 = 1;
+        }
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "respawn: the spawn call FAULTED. Nothing known was changed.\n");
+        logf_("[plr] respawn faulted");
+        return;
+    }
+
+    after = PawnOf(pl);
+    logf_("[plr] respawn returned (%s) pawnAfter=%08X",
+          usedSlot8 ? "vt8" : "vt2", (unsigned)(size_t)after);
+
+    if (after && after != before) {
+        const float* p = (const float*)((char*)after + OFF_ENT_POS);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "respawn: NEW pawn %08X at (%.1f %.1f %.1f)  [%s]\n"
+            "  The old pawn was %08X.\n",
+            (unsigned)(size_t)after, p[0], p[1], p[2],
+            usedSlot8 ? "vt[8]" : "vt[2]", (unsigned)(size_t)before);
+    } else if (after) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "respawn: the call ran and returned, but the pawn is UNCHANGED\n"
+            "  (still %08X). Preconditions held, so something further in declined -\n"
+            "  most likely no valid spawn location near the target.\n",
+            (unsigned)(size_t)after);
+    } else {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "respawn: the call ran but there is still NO pawn.\n"
+            "  Try a target you know is solid ground - the position of an entity in\n"
+            "  'ents' works well. Otherwise reload a checkpoint.\n");
+    }
+}
+
+static void* GetCameraStack(void* elem)
+{
+    void* inner;
+    if (!Readable(elem, 8)) return 0;
+    inner = *(void**)((char*)elem + 4);
+    if (!Readable(inner, OFF_INNER_CAMSTACK + 0x20)) return 0;
+    return (char*)inner + OFF_INNER_CAMSTACK;
+}
+
+static unsigned long CamStackHash(void* cs, unsigned long* pIdx, unsigned long* pCnt)
+{
+    unsigned long idx, cnt;
+    void* arr;
+    *pIdx = *pCnt = 0;
+    if (!Readable(cs, 0x20)) return 0;
+    idx = *(unsigned long*)((char*)cs + OFF_CS_ACTIVEIDX);
+    cnt = *(unsigned long*)((char*)cs + OFF_CS_COUNT);
+    arr = *(void**)       ((char*)cs + OFF_CS_ARRAY);
+    *pIdx = idx; *pCnt = cnt;
+    if (!cnt || cnt > 64 || idx >= cnt) return 0;       /* also catches idx == -1 */
+    if (!Readable(arr, cnt * CS_ENTRY_STRIDE)) return 0;
+    return *(unsigned long*)((char*)arr + idx * CS_ENTRY_STRIDE + CS_ENTRY_HASH);
+}
+
+/* Defined further down with the world-change guard, which is where the camera
+   stack's stale-entry problem is analysed. Both callers need it. */
+static int RepairActiveCamera(char* cs);
+static int PoisonDeadCameraEntries(char* cs);
+
+/* Put the view back on the player's own camera. Re-resolves everything from
+   globals, so it is safe to call at any time and from any state - including when
+   no free camera was ever active and after a world change has rebuilt the pawn. */
+static void RestorePawnCamera(void)
+{
+    void *elem, *cs, *game;
+    const char* name = 0;
+
+    elem = GetPlayerElem();
+    if (!elem) { logf_("[cam ] no player element - cannot restore"); return; }
+    cs = GetCameraStack(elem);
+    if (!cs)   { logf_("[cam ] no camera stack - cannot restore"); return; }
+
+    __try {
+        ((fnCamUnlock)FN_CAMSTACK_UNLOCK)(cs);
+        game = *(void**)G_GAMEOBJ_PP;
+        if (Readable(game, 0x20)) name = ((fnPawnCamName)FN_PAWNCAM_NAME)(game);
+        if (!Readable(name, 1)) name = "Cameras.Camera.Third";
+        /* Clear the rubble FIRST. Activation is a name-hash lookup into a cache;
+           a stale entry for this very name would be "found" and reused, and no
+           new camera would ever be spawned. That is precisely what happened after
+           a world change: 1 entry, dead, and fixcam reporting success. */
+        PoisonDeadCameraEntries((char*)cs);
+        ((fnActivateCam)FN_ACTIVATE_CAM)(elem, name);
+        if (!RepairActiveCamera((char*)cs))
+            logf_("[cam ] restored to %s, but no live camera resolves", name);
+        else
+            logf_("[cam ] restored to %s", name);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[cam ] *** fault while restoring the camera");
+    }
+}
+
+/* UNCONDITIONAL. Replicates the shipped Game:SwitchToPlayerCamera (0x1092AE40):
+   re-resolves from globals, force-clears Locked, asks the game which pawn camera
+   is current. Reads nothing we stored, safe when no free camera was ever active. */
+static void FreecamAnchorStop_fwd(void);   /* defined with the streaming anchor */
+
+static void FreecamLeave(void* console)
+{
+    InterlockedExchange(&g_freecam, 0);       /* first: a fault here must not
+                                                 leave us believing we are in it */
+    /* No pre-checks. RestorePawnCamera re-resolves everything from globals and
+       copes with a missing player itself, and leaving must never have
+       preconditions - that rule has cost this project twice. */
+    RestorePawnCamera();
+    /* Hand streaming back to the player. Unconditional, like everything else in
+       here - leaving must never have preconditions. */
+    FreecamAnchorStop_fwd();
+    if (console) ((fnPrintf)FN_PRINTF)(console, 0, AC "freecam: off\n");
+}
+
+
+/* ---- freecam speed ------------------------------------------------------
+   The engine's own control is the mouse wheel (free_camera binds it to
+   camera_acceleration -> comp+0xCC -> ramps comp+0xC8). We drive comp+0xC8
+   directly as well, so PgUp/PgDn mean the same thing here as in noclip. */
+#define VT_CAMFREE     (0x1108F5E8u + g_rebase)  /* CCameraFreeComponent - identity check */
+#define OFF_CAM_SPEED  0xC8          /* the speed accumulator Update integrates */
+#define OFF_CAM_ACCEL  0xCC
+#define CAMSPD_MIN     1.0f
+#define CAMSPD_MAX     4000.0f
+
+static float g_camSpeed = 25.0f;
+
+/* Identity, not index: take the component whose vtable IS CCameraFreeComponent,
+   so an unexpected layout finds nothing instead of writing into a stranger.
+
+   IMPORTANT - this used to begin `if (!GetPlayerEntity()) return 0;`, and that
+   made every freecam extra (Q/E, the Shift/LCtrl ramp, PgUp/PgDn) stop working
+   after a world change: GetPlayerEntity refuses when the entity's back-pointer
+   does not match its node, which is exactly the post-warp state. The base free
+   camera kept working because the ENGINE drives that, so the failure looked like
+   "our controls vanished" rather than "our resolver bailed".
+
+   The camera does not need the player entity at all. Ask the camera stack for its
+   active component directly - the same call the engine uses - and fall back to
+   walking the camera entity only if that is unavailable. */
+#define FN_ACTIVE_CAM_COMP (0x10248F50u + g_rebase)  /* GetActiveCameraComponent */
+typedef void* (__fastcall *fnActiveCamComp)(void* camStack);
+
+static void* FindFreeCamComponent(void)
+{
+    void*  cam;
+    void** comps;
+    unsigned long n, i;
+
+    {   /* primary: straight off the camera stack, no entity chain involved */
+        void* elem = GetPlayerElem();
+        void* cs   = elem ? GetCameraStack(elem) : 0;
+        if (cs) {
+            void* c = 0;
+            __try { c = ((fnActiveCamComp)FN_ACTIVE_CAM_COMP)(cs); }
+            __except (EXCEPTION_EXECUTE_HANDLER) { c = 0; }
+            if (Readable(c, OFF_CAM_ACCEL + 4) && *(unsigned long*)c == VT_CAMFREE)
+                return c;
+        }
+    }
+
+    /* fallback: walk the camera entity's components */
+    if (!GetPlayerEntity()) return 0;         /* also refreshes g_lastInner */
+    cam = GetCameraEntity();
+    if (!Readable(cam, OFF_ENT_COMPN + 4)) return 0;
+    comps = *(void***)((char*)cam + OFF_ENT_COMPS);
+    n     = *(unsigned long*)((char*)cam + OFF_ENT_COMPN);
+    if (!n || n > 64 || !Readable(comps, n * 4)) return 0;
+    for (i = 0; i < n; ++i) {
+        void* c = comps[i];
+        if (!Readable(c, OFF_CAM_ACCEL + 4)) continue;
+        if (*(unsigned long*)c == VT_CAMFREE) return c;
+    }
+    return 0;
+}
+
+/* Per frame from the detour while freecam is on. Blender-style keys:
+   WASD from the engine's own action map, Q/E vertical, Shift/LCtrl ramp speed
+   for as long as they are held. */
+#define OFF_CAM_MOVEZ   0xBC        /* what camera_move_z drives */
+#define CAMSPD_RAMP     4.0f        /* multiply per second while Shift is held */
+
+static void FreecamTick(void)
+{
+    static int   tick    = 0;
+    static DWORD lastMs  = 0;
+    static int   heldZ   = 0;       /* did WE write the Z input last frame? */
+    void* c;
+    DWORD now = GetTickCount();
+    float dt;
+
+    if (!g_freecam) { lastMs = 0; return; }
+    c = FindFreeCamComponent();
+    if (!c) return;
+
+    dt = lastMs ? (float)(now - lastMs) / 1000.0f : 0.0f;
+    lastMs = now;
+    if (dt < 0.0f || dt > 0.25f) dt = 0.0f;   /* a hitch must not launch you */
+
+    if (!g_consoleOpen) {
+        /* HELD ramp, time-based. Frame-based would make the rate depend on the
+           scene - this game has logged everything from 60 to ~3000 fps. */
+        if (dt > 0.0f) {
+            int up   = (GetAsyncKeyState(VK_SHIFT)    & 0x8000) != 0;
+            int down = (GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0;
+            if (up != down) {
+                float f = (float)pow((double)CAMSPD_RAMP, (double)dt);
+                g_camSpeed = up ? g_camSpeed * f : g_camSpeed / f;
+                if (g_camSpeed < CAMSPD_MIN) g_camSpeed = CAMSPD_MIN;
+                if (g_camSpeed > CAMSPD_MAX) g_camSpeed = CAMSPD_MAX;
+            }
+        }
+
+        /* Q down / E up. Only write while held, plus one zero on release - a
+           blind zero every frame would also cancel the engine's own mouse
+           LB/RB up-down binding whenever the keys were idle. */
+        {
+            int e = (GetAsyncKeyState('E') & 0x8000) != 0;
+            int q = (GetAsyncKeyState('Q') & 0x8000) != 0;
+            if (e != q) {
+                *(float*)((char*)c + OFF_CAM_MOVEZ) = e ? 1.0f : -1.0f;
+                heldZ = 1;
+            } else if (heldZ) {
+                *(float*)((char*)c + OFF_CAM_MOVEZ) = 0.0f;
+                heldZ = 0;
+            }
+        }
+    }
+
+    /* Only when the number actually changes, and at most twice a second. The
+       first version logged every 30 frames, which at the ~500fps this game hits
+       is 15 fopen/fclose per second - a real drag, and it buried everything else
+       in the log under a thousand identical lines. */
+    {
+        static float lastLogged = -1.0f;
+        static DWORD lastLogAt  = 0;
+        float engine = *(float*)((char*)c + OFF_CAM_SPEED);
+        if (g_camSpeed != lastLogged && (now - lastLogAt) > 500) {
+            lastLogged = g_camSpeed;
+            lastLogAt  = now;
+            /* Read BEFORE writing: this is last frame's value after Update ramped
+               and clamped it. If it stops tracking the target, that is the clamp -
+               measured, not assumed. */
+            logf_("[freecam] speed target=%.1f engine=%.1f", g_camSpeed, engine);
+        }
+        (void)tick;
+    }
+    *(float*)((char*)c + OFF_CAM_SPEED) = g_camSpeed;
+}
+
+static void FreecamEnter(void* console)
+{
+    void *elem, *cs;
+    unsigned long idx, cnt, hash;
+
+    elem = GetPlayerElem();
+    if (!elem) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "freecam: no player - load a level first\n");
+        return;
+    }
+    cs = GetCameraStack(elem);
+    if (!cs) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "freecam: no camera stack\n"); return;
+    }
+    /* Same guard FirstPersonEnter has at the identical dereference, and for the
+       same reason it states: the stack can be mid-teardown and this read lands
+       in freed memory. GetCameraStack returning non-null is not the same as the
+       object still being alive. The two functions share this preamble and only
+       one of them checked. */
+    if (!Readable(cs, OFF_CS_LOCKED + 1)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "freecam: the camera stack is not readable - not switching\n");
+        return;
+    }
+    /* Entering is the discretionary direction - never steal a camera something
+       else is deliberately holding (a cutscene, say). Leaving is unconditional. */
+    if (*(unsigned char*)((char*)cs + OFF_CS_LOCKED)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "freecam: the camera is locked right now (cutscene?) - not switching\n");
+        return;
+    }
+
+    hash = CamStackHash(cs, &idx, &cnt);
+    logf_("[freecam] before: idx=%lu count=%lu hash=%08lX", idx, cnt, hash);
+
+    __try { ((fnActivateCam)FN_ACTIVATE_CAM)(elem, FREECAM_NAME); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[freecam] *** fault activating - restoring");
+        FreecamLeave(console);
+        return;
+    }
+
+    /* A missing archetype leaves the index untouched, so this IS the test - and
+       it does not require trusting what is on screen. */
+    hash = CamStackHash(cs, &idx, &cnt);
+    logf_("[freecam] after: idx=%lu count=%lu hash=%08lX (want %08lX)",
+          idx, cnt, hash, (unsigned long)FREECAM_HASH);
+    if (hash != FREECAM_HASH) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "freecam: did not activate (hash %08lX) - restoring\n", hash);
+        FreecamLeave(console);
+        return;
+    }
+
+    InterlockedExchange(&g_freecam, 1);
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "freecam: ON\n"
+        "  mouse look, WASD move, E up, Q down\n"
+        "  hold Shift to speed up, hold Left Ctrl to slow down (it ramps while held)\n"
+        "  PgUp/PgDn step it, 'camspeed <n>' sets it exactly\n"
+        "  The engine drives it via its own 'free_camera' action map.\n"
+        "  'freecam' again, or the PAUSE/BREAK key, to come back.\n"
+        "  NOT Escape - that is the game's pause menu, and opening it from\n"
+        "  freecam wedges the game. Escape now leaves freecam instead.\n");
+}
+/* ================================================= */
+
+
+/* ==================== first person ====================
+   The game HAS a first-person mode. F1 does not reach it and never can: the
+   `active_camerafirst` signal is not a stub like `toggle_console`, it is deleted -
+   the hash is stored into a lazy-init static and then compared nowhere at all
+   (one absolute reference in the whole image, versus two for toggle_console,
+   whose compare survived). See FIRSTPERSON.md section 1.
+
+   What IS alive is a single byte. 0x104D9370 picks the camera archetype name:
+
+       firstPerson = *(char*)(game + 0x50B6);        // the reflected "FirstPersonMode"
+       faction     = *(int *)(game + 0x40);
+       return firstPerson ? "Cameras.Camera.FirstAvatar" / "FirstCorp" / "First"
+                          : "Cameras.Camera.ThirdAvatar" / "ThirdCorp" / "Third";
+
+   and those three first-person strings are referenced from exactly one place each -
+   that function's own pointer table. So the byte is the entire mechanism.
+
+   RestorePawnCamera() already calls 0x104D9370 and activates whatever it returns.
+   That is why this feature is almost no code: we flip the byte and re-use the
+   restore path that has been shipping since FREECAM.md.
+
+   The pawn hide is the engine's own call, not a trick of ours. 0x105AEBF0 is the
+   engine's orphaned EnterFirstPerson and it does exactly two things - latch+hide
+   the pawn, then set the byte - so this is a faithful replication and not an
+   invention. We do not CALL 0x105AEBF0 because its counterpart 0x105B5230 also
+   resets camera angles on a different class, and an asymmetric enter/leave pair is
+   how this project has hurt itself before. Symmetric replication instead. */
+
+#define FN_GET_CAMCOMP    (0x106294F0u + g_rebase) /* __cdecl(void)->camComp|NULL, type-checked */
+#define FN_CAMCOMP_PAWN   (0x105B3270u + g_rebase) /* __thiscall(camComp)->CPawn comp|NULL      */
+#define FN_PAWN_SETFPVIS  (0x1073A0D0u + g_rebase) /* __thiscall(pawnComp, int bFirstPerson)    */
+#define OFF_GAME_FPMODE   0x50B6   /* reflected "FirstPersonMode" on *(void**)0x112225D8 */
+#define OFF_PAWN_SUB      0x28     /* 0x1026BA50 is literally: mov eax,[ecx+0x28]; ret   */
+#define OFF_PAWNSUB_LATCH 0x1D     /* bit 0 = "we hid the pawn"; prevents double-toggling */
+/* CCameraPawnComponent's vtable. CORRECTED: FIRSTPERSON.md gave 0x1108F6B8,
+   which belongs to a DIFFERENT class with a different property list. Because
+   both `fpoffset` and `fpfov` guard on this value before writing, the guard
+   fired every single time and NEITHER COMMAND HAS EVER WRITTEN ANYTHING - they
+   printed the current value and returned. See FIRSTPERSON_AIM.md. */
+#define VT_PAWNCAM        (0x1108F7F8u + g_rebase)
+/* +0x10C is the FOV OVERRIDE - the field ChangeFOV writes, honoured only while
+   it is > 0. The LIVE fov the camera is actually using is +0x108, which is what
+   the readout should show; writing +0x108 alone would be overwritten next tick. */
+#define OFF_CC_FOV        0x10C
+/* REMOVED: OFF_CC_FOV_LIVE. Only OFF_CC_FOV is ever written or read, so the
+   live-FOV read-back its comment asked for was never implemented. */
+#define OFF_CC_DBGOFFSET  0xC4     /* reflected vec3 "DebugOffset" - SetFPCameraOffsetX/Y/Z */
+
+#define FP_HASH_AVATAR    0x6A5C1BDEu   /* crc32("cameras.camera.firstavatar") */
+#define FP_HASH_CORP      0xE241F230u   /* crc32("cameras.camera.firstcorp")   */
+#define FP_HASH_PLAIN     0x8A924936u   /* crc32("cameras.camera.first")       */
+
+typedef void* (__cdecl    *fnGetCamComp )(void);
+typedef void* (__thiscall *fnCamCompPawn)(void* camComp);
+typedef void  (__thiscall *fnPawnSetFPVis)(void* pawnComp, int bFirstPerson);
+
+static volatile long g_firstperson = 0;
+static int           g_fpBodyHidden = 0;
+
+/* Hide or show the player's body, exactly as the engine does it.
+   Returns 1 if the pawn was found. The latch byte matters: 0x105AEBF0 checks it
+   before touching visibility, so a repeated call is a no-op rather than an
+   unbalanced hide. We keep that property. */
+static int FirstPersonSetPawnHidden(int hide)
+{
+    void *camComp, *pawnComp, *sub;
+    unsigned char* latch;
+
+    if (!Readable((const void*)FN_GET_CAMCOMP, 8)) return 0;
+    camComp = ((fnGetCamComp)FN_GET_CAMCOMP)();
+    /* 0x106294F0 already null-checks and type-checks against 0x11221BBC, but it
+       returns whatever camera is ACTIVE - in freecam that is not our class. */
+    if (!Readable(camComp, 0x30)) return 0;
+
+    pawnComp = ((fnCamCompPawn)FN_CAMCOMP_PAWN)(camComp);
+    if (!Readable(pawnComp, OFF_PAWN_SUB + 4)) return 0;
+
+    sub = *(void**)((char*)pawnComp + OFF_PAWN_SUB);
+    if (!Readable(sub, OFF_PAWNSUB_LATCH + 1)) return 0;
+    latch = (unsigned char*)sub + OFF_PAWNSUB_LATCH;
+
+    if (hide) {
+        if (*latch & 1) return 1;                 /* already hidden - leave it */
+        *latch |= 1;
+        ((fnPawnSetFPVis)FN_PAWN_SETFPVIS)(pawnComp, 1);   /* 1 = first person = hide */
+    } else {
+        if (!(*latch & 1)) return 1;
+        *latch &= (unsigned char)~1u;
+        ((fnPawnSetFPVis)FN_PAWN_SETFPVIS)(pawnComp, 0);
+    }
+    return 1;
+}
+
+/* The byte itself. Separated so a failure to reach the pawn never leaves the
+   flag and the camera disagreeing. */
+static int FirstPersonSetFlag(int on)
+{
+    void* game = *(void**)G_GAMEOBJ_PP;
+    if (!Readable(game, OFF_GAME_FPMODE + 1)) return 0;
+    *(unsigned char*)((char*)game + OFF_GAME_FPMODE) = (unsigned char)(on ? 1 : 0);
+    return 1;
+}
+
+/* ---- the aim/view coupling ------------------------------------------------
+   The first-person camera's orientation is
+       EulerFromQuat( GetOrientation(bodyPoint 0) * quat(comp+0xD0) )
+   and body point 0 is "Root" - the bone at the character's FEET. No mouse
+   input, no look angle and no aim angle appear anywhere in that chain: it is a
+   skeleton follower, not a camera. Meanwhile the shot aims at an unreflected
+   WORLD POINT written by the lock system, so the two share nothing. That is
+   the whole of "the camera points at the middle of the screen but he shoots
+   somewhere else". See FIRSTPERSON_AIM.md sections 2 and 3.
+
+   The cheap fix is one immediate operand - the body point index:
+
+       0x105AF4BE   6A 00   push 0        ; <- 0x105AF4BF is the byte
+
+   Body point 3 (UpperBack) is what the engine's OWN facing selector passes to
+   GetDirection (0x1003F886: push 3), so it is the best structural match.
+
+   What this buys and what it does not: the view will follow something that
+   turns with aim instead of the feet. It will NOT give exact crosshair
+   agreement, because a torso bone is animation-driven and only approximately
+   at the aim angle - expect lag and under-rotation in pitch. That is the
+   ceiling of a one-byte fix, and it is why the feature reads as unfinished
+   rather than broken. FIRSTPERSON_AIM.md section 6.7 has the exact route.
+
+   It is GLOBAL while patched, so it is applied on enter and restored on leave
+   under the same "leaving must always work" rule as everything else here. */
+#define FN_FP_BODYPOINT   (0x105AF4BFu + g_rebase)  /* the immediate byte */
+
+static unsigned char g_fpAimSaved = 0;
+static int           g_fpAimOn    = 0;
+/* Body point to read the camera orientation from. DEFAULT -1 = do not patch.
+   Point 3 (UpperBack) was the predicted best structural match - the engine's
+   own facing selector passes 3 to GetDirection - but IN GAME IT ROLLS THE VIEW
+   90 DEGREES. The bones are not in a common basis: Root happens to be upright,
+   UpperBack is not, and the quat->Euler conversion inherits whatever roll the
+   bone carries. Since the right index cannot be predicted from the name table,
+   it is tunable at runtime with `fpaim` instead of baked in, and OFF by default
+   so first person behaves as it did before this was added. */
+static int           g_fpAimPoint = -1;
+/* 0 = leave the engine alone, 1 = body-point patch (rolls; see fpaim),
+   2 = look-at coupling, the one that actually follows the aim. */
+static int           g_fpAimMode  = 2;
+
+static int FirstPersonAimPatch(int on)
+{
+    /* The 8 bytes at 0x105AF4BE are 6A 00 8B C8 FF D2 8D 44 - checked before
+       writing, because a wrong byte here corrupts the camera update for every
+       CCameraPawnComponent in the game. */
+    static const unsigned char kSig[8] =
+        { 0x6A, 0x00, 0x8B, 0xC8, 0xFF, 0xD2, 0x8D, 0x44 };
+    unsigned char* p = (unsigned char*)FN_FP_BODYPOINT;
+    DWORD old = 0;
+    if (!Readable((const void*)(FN_FP_BODYPOINT - 1), 8)) return 0;
+    if (on) {
+        if (g_fpAimPoint < 0) return 1;      /* off - leave the engine alone */
+        if (g_fpAimOn) return 1;
+        if (memcmp((const void*)(FN_FP_BODYPOINT - 1), kSig, 8) != 0) {
+            logf_("[fp  ] aim patch: signature mismatch at %p - NOT patching",
+                  (void*)(FN_FP_BODYPOINT - 1));
+            return 0;
+        }
+        if (!VirtualProtect(p, 1, PAGE_EXECUTE_READWRITE, &old)) return 0;
+        g_fpAimSaved = *p;
+        *p = (unsigned char)g_fpAimPoint;
+        VirtualProtect(p, 1, old, &old);
+        g_fpAimOn = 1;
+        logf_("[fp  ] aim patch ON: body point %u -> %u",
+              (unsigned)g_fpAimSaved, (unsigned)g_fpAimPoint);
+        return 1;
+    }
+    if (!g_fpAimOn) return 1;
+    /* g_fpAimOn must only be cleared when the byte really went back. It used to
+       be cleared unconditionally, outside this if - so a failed VirtualProtect
+       left our byte patched into Dunia's .text while the flag said it was not,
+       and the unload sweep (`if (g_fpAimOn) FirstPersonAimPatch(0)`) then had no
+       reason to look. That is a permanent modification to the game's code with
+       nothing left recording it. */
+    if (!VirtualProtect(p, 1, PAGE_EXECUTE_READWRITE, &old)) {
+        logf_("[fp  ] aim patch OFF FAILED: VirtualProtect %lu - the byte at %p "
+              "is STILL ours, leaving the flag set so the exit sweep retries",
+              GetLastError(), (void*)p);
+        return 0;
+    }
+    *p = g_fpAimSaved;
+    VirtualProtect(p, 1, old, &old);
+    g_fpAimOn = 0;
+    logf_("[fp  ] aim patch OFF (restored %u)", (unsigned)g_fpAimSaved);
+    return 1;
+}
+
+
+/* ---- aim coupling via the camera's own look-at list ----------------------
+   The body-point patch could never work and the user's testing showed why: the
+   camera is a FIXED forward point. Its orientation is the bone's, and a bone is
+   animation-driven - it does not carry the aim. Changing WHICH bone only picks a
+   different fixed direction (point 3 rolls the view 90 degrees, measured).
+
+   The real coupling exists because the shot is built from a WORLD POINT, not an
+   angle:
+
+       shot dir = normalize( pawnDataContainer[+0xA8] - muzzlePos )
+
+   and the camera base class has a look-at override, 0x10786AE0, that consumes a
+   world point and OVERWRITES the orientation quaternion outright - the one place
+   in the whole chain where an outside value steers the view without being
+   recomputed first. Feed the former into the latter and they agree by
+   construction: the camera looks exactly where the bullet is going.
+
+   The list lives at comp+0xB0 (array of entry pointers), +0xB4 (count),
+   +0xB8 (capacity), and is EMPTY in normal play - nothing in the shipped pawn
+   camera path ever adds an entry. So we supply our own one-entry list.
+
+   Entry layout (FIRSTPERSON_AIM.md 2.6):
+     +0x00/+0x04  EntityRef; BOTH 0xFFFFFFFF means "use the fixed world point"
+     +0x08..+0x10 that world point
+     +0x14        enabled byte - must stay non-zero, or 0x107867F0 frees the
+                  entries and empties the list. It would be freeing OUR memory
+                  with the engine's allocator, so this is not cosmetic.
+     +0x18/+0x1C  weight / target weight   } semantics UNKNOWN - set to 1.0,
+     +0x20        blend time remaining     } which is the only value that can
+     +0x24        saved weight             } mean "fully applied, now".
+
+   Ownership: we install our own storage and MUST take it back out before the
+   component can be destroyed, or the engine frees a pointer it never allocated.
+   FirstPersonLeave detaches unconditionally, on the same rule as everything else
+   in this feature. */
+/* Declared here because the per-frame tick below needs them, while their
+   definitions sit with the shot-branch block further down. */
+static void* FirstPersonPawn(void);
+static int   FirstPersonAimRay(float* pt);
+/* CPawnDataContainer, from its own property registrar. Mouse-driven. */
+#define OFF_PAWNSUB_AIMANG  0x6C
+#define OFF_PAWNSUB_LOOKANG 0x54
+#define OFF_PAWN_SHOTBRANCH  0x94
+static unsigned long g_fpBranchResets = 0;   /* times the engine put it back */
+
+#define OFF_CC_LOOKAT_ARR  0xB0
+#define OFF_CC_LOOKAT_CNT  0xB4
+#define OFF_CC_LOOKAT_CAP  0xB8
+#define OFF_PAWNSUB_AIMPT  0xA8   /* CPawnDataContainer world aim point, vec3 */
+
+static unsigned char  g_fpLookEntry[0x28];   /* one entry, ours */
+static void*          g_fpLookArr[1];        /* the one-pointer array, ours */
+static int            g_fpLookOn = 0;
+static void*          g_fpLookComp = 0;      /* the component we installed into */
+
+/* -> the live world aim point, or 0. Same component chain the pawn hide uses. */
+static float* FirstPersonAimPoint(void)
+{
+    void *camComp, *pawnComp, *sub;
+    if (!Readable((const void*)FN_GET_CAMCOMP, 8)) return 0;
+    camComp = ((fnGetCamComp)FN_GET_CAMCOMP)();
+    if (!Readable(camComp, 0x30)) return 0;
+    pawnComp = ((fnCamCompPawn)FN_CAMCOMP_PAWN)(camComp);
+    if (!Readable(pawnComp, OFF_PAWN_SUB + 4)) return 0;
+    sub = *(void**)((char*)pawnComp + OFF_PAWN_SUB);
+    if (!Readable(sub, OFF_PAWNSUB_AIMPT + 12)) return 0;
+    return (float*)((char*)sub + OFF_PAWNSUB_AIMPT);
+}
+
+static void FirstPersonLookDetach(void)
+{
+    void* c = g_fpLookComp;
+    g_fpLookOn = 0;
+    g_fpLookComp = 0;
+    if (!c || !Readable(c, OFF_CC_LOOKAT_CAP + 4)) return;
+    /* Only clear it if it is still OURS. If the engine repopulated the list we
+       must not stamp on whatever it put there. */
+    if (*(void**)((char*)c + OFF_CC_LOOKAT_ARR) == (void*)g_fpLookArr) {
+        *(void**)((char*)c + OFF_CC_LOOKAT_ARR) = 0;
+        *(unsigned long*)((char*)c + OFF_CC_LOOKAT_CNT) = 0;
+        *(unsigned long*)((char*)c + OFF_CC_LOOKAT_CAP) = 0;
+        logf_("[fp  ] look-at detached");
+    }
+}
+
+/* Per frame, main thread. Installs on first call and then only refreshes the
+   point. Cheap enough to run unconditionally while first person is on. */
+static void FirstPersonLookTickBody(void)
+{
+    void* camComp;
+    float* aim;
+    float* dst;
+
+    if (!g_firstperson) {
+        if (g_fpLookOn) FirstPersonLookDetach();
+        return;
+    }
+    if (g_fpAimMode == 3) {
+        /* +0x94 is defaulted to 1 by 0x1074BC41 in the pawn update, so a
+           one-time write survives at most a frame. Re-assert it here, on the
+           main thread, and count how often it had drifted back - that count is
+           the evidence for whether the engine is fighting us at all. */
+        void* pawn = FirstPersonPawn();
+        if (pawn) {
+            unsigned char* b = (unsigned char*)pawn + OFF_PAWN_SHOTBRANCH;
+            if (*b != 0) { ++g_fpBranchResets; *b = 0; }
+        }
+        return;
+    }
+    if (g_fpAimMode != 2) {
+        if (g_fpLookOn) FirstPersonLookDetach();
+        return;
+    }
+    if (!Readable((const void*)FN_GET_CAMCOMP, 8)) return;
+    camComp = ((fnGetCamComp)FN_GET_CAMCOMP)();
+    if (!Readable(camComp, OFF_CC_LOOKAT_CAP + 4)) { FirstPersonLookDetach(); return; }
+    if (*(unsigned long*)camComp != (unsigned long)VT_PAWNCAM) return;
+
+    {   /* Prefer the lock system's point when it has one - that is the exact
+           thing the bullet uses. It is empty in normal play, so fall back to
+           the ray rebuilt from AimAngles, which tracks the mouse. */
+        static float ray[3];
+        aim = FirstPersonAimPoint();
+        if (!aim || (aim[0] == 0.0f && aim[1] == 0.0f && aim[2] == 0.0f)) {
+            if (!FirstPersonAimRay(ray)) {
+                if (g_fpLookOn) FirstPersonLookDetach();
+                return;
+            }
+            aim = ray;
+        }
+    }
+
+    if (!g_fpLookOn || g_fpLookComp != camComp
+        || *(void**)((char*)camComp + OFF_CC_LOOKAT_ARR) != (void*)g_fpLookArr) {
+        /* THE COMPONENT CAN CHANGE UNDER US - a camera switch, a world change,
+           a fast travel. This used to install into the new one and simply
+           overwrite g_fpLookComp, which left the OLD component holding a
+           pointer to our static array with nothing that would ever clear it.
+           The log shows the leak plainly: 20 "attached" against 16 "detached".
+           A freed-and-reused component still carrying that pointer is engine
+           memory referencing DLL memory with no owner, which is exactly the
+           shape of crash being chased here. Let go of the old one first. */
+        if (g_fpLookOn && g_fpLookComp && g_fpLookComp != camComp)
+            FirstPersonLookDetach();
+        memset(g_fpLookEntry, 0, sizeof(g_fpLookEntry));
+        *(unsigned long*)(g_fpLookEntry + 0x00) = 0xFFFFFFFFu;  /* fixed point */
+        *(unsigned long*)(g_fpLookEntry + 0x04) = 0xFFFFFFFFu;
+        g_fpLookEntry[0x14] = 1;                                 /* enabled     */
+        *(float*)(g_fpLookEntry + 0x18) = 1.0f;                  /* weight      */
+        *(float*)(g_fpLookEntry + 0x1C) = 1.0f;                  /* target      */
+        *(float*)(g_fpLookEntry + 0x20) = 0.0f;                  /* no blend    */
+        *(float*)(g_fpLookEntry + 0x24) = 1.0f;
+        g_fpLookArr[0] = g_fpLookEntry;
+        *(void**)((char*)camComp + OFF_CC_LOOKAT_ARR) = (void*)g_fpLookArr;
+        *(unsigned long*)((char*)camComp + OFF_CC_LOOKAT_CNT) = 1;
+        *(unsigned long*)((char*)camComp + OFF_CC_LOOKAT_CAP) = 1;
+        g_fpLookComp = camComp;
+        g_fpLookOn = 1;
+        logf_("[fp  ] look-at attached on %p", camComp);
+    }
+    dst = (float*)(g_fpLookEntry + 0x08);
+    dst[0] = aim[0]; dst[1] = aim[1]; dst[2] = aim[2];
+}
+
+/* This runs EVERY FRAME and reads engine objects whose lifetime we do not
+   control - the camera component, the pawn, its data container. A FAST TRAVEL
+   tears all three down and rebuilds them, and there is no ordering guarantee
+   that our tick does not land in the middle of that. The individual Readable()
+   checks above narrow the window but cannot close it: the object can be freed
+   between the check and the read, and Readable only says the PAGE is mapped,
+   not that the object is still alive on it.
+
+   Reported symptom this exists for: "the game crashed when I went into first
+   person while fast travelling."
+
+   So the tick is fenced. A fault here becomes a graceful exit from first
+   person instead of taking the game down - only flags are touched in the
+   handler, never engine memory, because whatever we would write through is
+   exactly what just proved untrustworthy. The stale look-at pointer is left
+   for the engine's own teardown, which is rebuilding that component anyway. */
+static void FirstPersonLookTick(void)
+{
+    __try {
+        FirstPersonLookTickBody();
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        /* g_fpLookComp is KEPT. It used to be zeroed here along with g_fpLookOn,
+           and those two are the ONLY record that a pointer to g_fpLookArr - DLL
+           static memory - is sitting in an engine camera component. The unload
+           sweep's test is literally `if (g_fpLookOn || g_fpLookComp)`, and
+           FirstPersonLookDetach's own first act is to read g_fpLookComp. So one
+           faulting tick made the leak permanently invisible to both, and the
+           component kept a pointer into a DLL that is about to be unmapped -
+           which is the crash the sweep exists to prevent.
+           Nothing is written through it here: the handler still touches no
+           engine memory, exactly as the note above says. It only stops the tick
+           (g_fpLookOn = 0, so the next pass reinstalls rather than trusting the
+           old state) and leaves the address on record for the detach path, which
+           re-validates with Readable and an identity test before writing. */
+        g_fpLookOn   = 0;
+        g_firstperson = 0;
+        logf_("[fp  ] EXCEPTION in the per-frame tick (0x%08lX) - "
+              "first person disabled. A world change (fast travel?) most "
+              "likely freed the camera or pawn mid-frame.",
+              (unsigned long)GetExceptionCode());
+    }
+}
+
+
+/* ---- mode 3: make the SHOT follow the camera, instead of the reverse -------
+   GetShootDirection (0x10825D60) has two branches, selected by CPawn+0x94:
+
+     branch A (default, +0x94 != 0): normalize(dataContainer[+0xA8] - muzzle)
+                                     a world point written by the LOCK system
+     branch B (+0x94 == 0):          CPawnBaseBody::GetDirection(bodyPoint 0)
+
+   GetDirection(i) is literally the +Y axis of GetOrientation(i) - the very
+   quaternion the first-person camera already uses (FIRSTPERSON_AIM.md 3.1). So
+   in branch B the view and the shot agree BY CONSTRUCTION, same body point,
+   same quaternion, no per-frame work and nothing to keep in sync.
+
+   The catch, stated plainly: you then aim by turning the character, because
+   both follow the body. There is no independent vertical aim. That is a real
+   downgrade in control and an exact fix for the disagreement - which of those
+   matters more is the user's call, so it is a mode rather than the default.
+
+   One data byte, no .text write, and it is restored on leave. */
+static unsigned char g_fpBranchSaved = 0;
+static int           g_fpBranchOn    = 0;
+
+/* -> the CPawn the camera is driving, or 0. */
+static void* FirstPersonPawn(void)
+{
+    void *camComp, *pawnComp;
+    if (!Readable((const void*)FN_GET_CAMCOMP, 8)) return 0;
+    camComp = ((fnGetCamComp)FN_GET_CAMCOMP)();
+    if (!Readable(camComp, 0x30)) return 0;
+    pawnComp = ((fnCamCompPawn)FN_CAMCOMP_PAWN)(camComp);
+    if (!Readable(pawnComp, OFF_PAWN_SHOTBRANCH + 1)) return 0;
+    return pawnComp;
+}
+
+static int FirstPersonShotBranch(int useBodyDir)
+{
+    void* pawn = FirstPersonPawn();
+    unsigned char* b;
+    if (!pawn) return 0;
+    b = (unsigned char*)pawn + OFF_PAWN_SHOTBRANCH;
+    if (useBodyDir) {
+        if (g_fpBranchOn) return 1;
+        g_fpBranchSaved = *b;
+        *b = 0;
+        g_fpBranchOn = 1;
+        logf_("[fp  ] shot branch: %u -> 0 (body direction)", (unsigned)g_fpBranchSaved);
+        return 1;
+    }
+    if (!g_fpBranchOn) return 1;
+    *b = g_fpBranchSaved;
+    g_fpBranchOn = 0;
+    logf_("[fp  ] shot branch restored to %u", (unsigned)g_fpBranchSaved);
+    return 1;
+}
+
+/* Live watch on the two values that decide everything here. Answers "does the
+   aim point ever get written, and which branch is the shot actually taking" -
+   which no amount of static reading can, because both depend on what the lock
+   system is doing at that instant. */
+static void FirstPersonDiag(void* console)
+{
+    void* pawn = FirstPersonPawn();
+    void* sub;
+    float* aim;
+    if (!pawn) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpdiag: no first-person camera - run 'firstperson' first\n");
+        return;
+    }
+    sub = *(void**)((char*)pawn + OFF_PAWN_SUB);
+    if (!Readable(sub, OFF_PAWNSUB_AIMPT + 12)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "fpdiag: data container unreadable\n");
+        return;
+    }
+    aim = (float*)((char*)sub + OFF_PAWNSUB_AIMPT);
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "fpdiag: shot branch byte +0x94 = %u  (%s)\n"
+        "  aim point  = %.2f %.2f %.2f  %s\n"
+        "  look-at    = %s\n"
+        "  branch re-asserted %lu time(s) since 'fpaim body'\n"
+        "  aim angles = %.3f %.3f %.3f   look angles = %.3f %.3f %.3f\n"
+        "  The lock system's point is usually zero; the view then follows a ray\n"
+        "  rebuilt from the angles above, which DO track the mouse.\n",
+        (unsigned)*((unsigned char*)pawn + OFF_PAWN_SHOTBRANCH),
+        (*((unsigned char*)pawn + OFF_PAWN_SHOTBRANCH)
+            ? "A: world aim point" : "B: body direction"),
+        aim[0], aim[1], aim[2],
+        (aim[0] == 0.0f && aim[1] == 0.0f && aim[2] == 0.0f)
+            ? "(zero - no target)" : "(live)",
+        g_fpLookOn ? "attached" : "not attached", g_fpBranchResets,
+        ((float*)((char*)sub + OFF_PAWNSUB_AIMANG))[0],
+        ((float*)((char*)sub + OFF_PAWNSUB_AIMANG))[1],
+        ((float*)((char*)sub + OFF_PAWNSUB_AIMANG))[2],
+        ((float*)((char*)sub + OFF_PAWNSUB_LOOKANG))[0],
+        ((float*)((char*)sub + OFF_PAWNSUB_LOOKANG))[1],
+        ((float*)((char*)sub + OFF_PAWNSUB_LOOKANG))[2]);
+}
+
+
+/* ---- the aim point the LOCK system never provides -------------------------
+   Measured in game: dataContainer[+0xA8] stays (0,0,0) permanently. The lock
+   system only writes it when it has a hard target, which in normal play is
+   never, so the look-at had nothing to follow. That route was correct in
+   mechanism and empty in practice.
+
+   But the SAME container carries the mouse-driven values the camera ignores:
+
+       LookAngles  +0x54   AimAngles  +0x6C     (CPawnDataContainer registrar)
+
+   and FACING.md's correction says these are EULER ANGLES, produced by
+   0x1003DDF0 from a direction - not unit vectors. So a direction can be rebuilt
+   from them, and the look-at list takes a world POINT, which is a direction
+   plus any origin.
+
+   Project far along the ray and the origin barely matters: the engine computes
+   normalize(point - cameraPos), so with the point 10 km out, using the player's
+   entity position instead of the exact camera position leaves an angular error
+   of about the eye offset over 10 km - well under a pixel.
+
+   This is the one place an outside value steers the view without being
+   recomputed (2.6), fed by the one value that actually tracks the mouse. */
+#define FP_AIM_RANGE        10000.0f
+
+static int g_fpAimUseLook = 0;   /* 0 = AimAngles, 1 = LookAngles */
+
+/* Euler (radians) -> unit direction, Z up. The engine's own convention, taken
+   from the pairing of 0x1003DDF0 (direction -> angles) with its inverse: yaw
+   about Z, pitch raising +Z. If the view comes out mirrored or 90 degrees off,
+   this is the line to change - it is the one convention not confirmed. */
+/* Yaw offset applied to the rebuilt aim direction, radians.
+
+   The component order (pitch, roll, yaw) was read off live values, but the yaw
+   ZERO axis is a separate convention and was not: measured in game, the view
+   came out a quarter turn to the right of the character, i.e. the engine's yaw
+   0 is not the +X this builds from. +90 degrees corrects it.
+
+   Kept as a runtime value rather than folded into the constant because the sign
+   depends on handedness, and one `fpaim yaw -90` beats another rebuild. */
+static double g_fpYawOff   = 1.5707963267948966;   /* +90 deg */
+static double g_fpPitchSgn = 1.0;
+
+static void FpDirFromEuler(const float* a, float* out)
+{
+    /* Component order read off the LIVE values, not guessed. Standing roughly
+       level and facing a bit west, the container held
+
+           aim angles = -0.075  -0.000  -1.717
+
+       -1.717 rad is -98 degrees, which can only be a YAW; -0.075 rad is -4.3
+       degrees, a slight downward PITCH; and the middle term sat at exactly zero,
+       which is ROLL. So the layout is (pitch, roll, yaw) - my first version read
+       a[0] as yaw and a[1] as pitch and was wrong on both. */
+    double pitch = (double)a[0] * g_fpPitchSgn, yaw = (double)a[2] + g_fpYawOff;
+    double cp = cos(pitch);
+    out[0] = (float)(cos(yaw) * cp);
+    out[1] = (float)(sin(yaw) * cp);
+    out[2] = (float)(sin(pitch));
+}
+
+/* -> 1 and fills `pt` with a world point along the player's aim ray. */
+static int FirstPersonAimRay(float* pt)
+{
+    void *pawn, *sub, *ent;
+    float* ang;
+    float dir[3], *org;
+    pawn = FirstPersonPawn();
+    if (!pawn) return 0;
+    sub = *(void**)((char*)pawn + OFF_PAWN_SUB);
+    if (!Readable(sub, OFF_PAWNSUB_AIMANG + 12)) return 0;
+    ang = (float*)((char*)sub + (g_fpAimUseLook ? OFF_PAWNSUB_LOOKANG
+                                                : OFF_PAWNSUB_AIMANG));
+    ent = GetPlayerEntity();
+    if (!ent || !Readable(ent, OFF_ENT_POS + 12)) return 0;
+    org = (float*)((char*)ent + OFF_ENT_POS);
+    FpDirFromEuler(ang, dir);
+    if (dir[0] == 0.0f && dir[1] == 0.0f && dir[2] == 0.0f) return 0;
+    pt[0] = org[0] + dir[0] * FP_AIM_RANGE;
+    pt[1] = org[1] + dir[1] * FP_AIM_RANGE;
+    pt[2] = org[2] + dir[2] * FP_AIM_RANGE;
+    return 1;
+}
+
+
+/* ---- is the pawn hide what freezes the weapon? ---------------------------
+   Reported in game: in first person the gun stops tracking where you aim and
+   holds its last pose; leave first person and it immediately tracks again;
+   re-enter while it is pointing up and it stays up.
+
+   Two things happen on entry that could do that - hiding the pawn, and setting
+   the FirstPersonMode byte - and only one of them can be tested independently,
+   because the mode byte is what selects the camera in the first place. A hidden
+   character having its animation or IK skipped is the ordinary explanation for
+   a frozen pose, so this makes the hide toggleable while everything else stays
+   as it is.
+
+   It is also a usable state on its own: with the body visible you are looking
+   out from inside the head, which may or may not be acceptable depending on
+   what the rig does at that range - but the weapon will animate. */
+static void FirstPersonBody(void* console)
+{
+    int wantHidden;
+    if (!g_firstperson) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpbody: not in first person\n");
+        return;
+    }
+    wantHidden = !g_fpBodyHidden;
+    if (!FirstPersonSetPawnHidden(wantHidden)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpbody: could not reach the pawn\n");
+        return;
+    }
+    g_fpBodyHidden = wantHidden;
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "fpbody: body %s\n"
+        "  If the gun tracks your aim with the body VISIBLE and freezes when it\n"
+        "  is hidden, the hide is what stops the animation updating - and that\n"
+        "  is the bug, not the camera.\n",
+        wantHidden ? "hidden" : "visible");
+}
+
+/* Did the camera stack actually end up on a first-person archetype?
+   Same test FreecamEnter uses, and for the same reason: a missing archetype
+   leaves the active index untouched, so the hash IS the verification and it does
+   not require trusting what is on screen. */
+static int FirstPersonActiveHash(unsigned long* pHash)
+{
+    void* elem = GetPlayerElem();
+    void* cs;
+    unsigned long idx, cnt;
+    if (!elem) return 0;
+    cs = GetCameraStack(elem);
+    if (!cs) return 0;
+    *pHash = CamStackHash(cs, &idx, &cnt);
+    return 1;
+}
+
+static void FirstPersonLeave(void* console);
+
+/* ORDER MATTERS AND IS COUNTER-INTUITIVE. Unhide the body BEFORE clearing the
+   flag, because FirstPersonSetPawnHidden needs 0x106294F0, and 0x106294F0 only
+   returns a component while a CCameraPawnComponent is the ACTIVE camera - i.e.
+   only while we are still in first person. Clear the flag first and restore the
+   camera, and the body would stay invisible with no way left to reach it. */
+static void FirstPersonLeave(void* console)
+{
+    InterlockedExchange(&g_firstperson, 0);   /* first - a fault must not leave us
+                                                 believing we are still in it */
+    __try {
+        FirstPersonSetPawnHidden(0);          /* while the FP camera is still active */
+        g_fpBodyHidden = 0;
+        FirstPersonSetFlag(0);
+        FirstPersonAimPatch(0);               /* global while patched - never leave it */
+        FirstPersonLookDetach();              /* our memory - must not outlive us */
+        FirstPersonShotBranch(0);             /* restore the shot's own branch */
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[fp  ] *** fault while leaving - restoring the camera anyway");
+        FirstPersonAimPatch(0);
+        FirstPersonLookDetach();
+        FirstPersonShotBranch(0);
+    }
+    /* Unconditional, no preconditions. Leaving must always work - that rule has
+       cost this project twice. RestorePawnCamera re-resolves from globals. */
+    RestorePawnCamera();
+    if (console) ((fnPrintf)FN_PRINTF)(console, 0, AC "first person: off\n");
+}
+
+static void FirstPersonEnter(void* console)
+{
+    void *elem, *cs;
+    unsigned long hash = 0;
+    int gotPawn;
+
+    elem = GetPlayerElem();
+    if (!elem) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "firstperson: no player - load a level first\n");
+        return;
+    }
+    cs = GetCameraStack(elem);
+    if (!cs) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "firstperson: no camera stack\n"); return;
+    }
+    /* During a world change - fast travel is the one that bit - the stack can
+       be mid-teardown and this deref lands in freed memory. GetCameraStack
+       returning non-null is not the same as the object still being alive. */
+    if (!Readable(cs, OFF_CS_LOCKED + 1)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "firstperson: the camera stack is not readable right now "
+            "(loading or fast travelling?) - try again once you have arrived\n");
+        return;
+    }
+    /* Entering is the discretionary direction - never steal a camera something
+       else is deliberately holding. Leaving is unconditional. Same rule as freecam. */
+    if (*(unsigned char*)((char*)cs + OFF_CS_LOCKED)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "firstperson: the camera is locked right now (cutscene?) - not switching\n");
+        return;
+    }
+    if (g_freecam) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "firstperson: leave freecam first - it owns the camera right now\n");
+        return;
+    }
+    {   /* Mounted: this camera parents to a bone named `Camera`, and of
+           the 1,347 shipped skeletons exactly TWO have one - the Avatar
+           and Corp character rigs. No vehicle, mount or creature does, so
+           the attach falls back to the parent origin and the view ends up
+           on the roof. That is data, not something a patch can fix, so
+           refuse rather than show a broken camera. FIRSTPERSON_AIM.md 4.2. */
+        unsigned long vLo_fp, vHi_fp;
+        if (CurrentVehicle(&vLo_fp, &vHi_fp)) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "firstperson: you are in a vehicle or mount - refusing.\n"
+                "  No vehicle skeleton carries the `Camera` bone this camera\n"
+                "  attaches to, so the view would sit on the roof. Get out first.\n");
+            return;
+        }
+    }
+
+    __try {
+        if (!FirstPersonSetFlag(1)) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "firstperson: no game object - cannot set the mode\n");
+            FirstPersonLeave(console);
+            return;
+        }
+        /* This is the whole feature: RestorePawnCamera asks 0x104D9370 for the
+           name, and 0x104D9370 has just been told we are in first person. It
+           spawns cameras.Camera.First* and makes it the active camera. */
+        RestorePawnCamera();
+
+        /* THE BODY STAYS VISIBLE BY DEFAULT, and that is a measured decision.
+           `fpbody` isolated it in game: hiding the pawn STOPS ITS ANIMATION AND
+           IK UPDATING, and the weapon's aim is driven by the character's own
+           animation - not by the camera. So a hidden body means the gun freezes
+           in whatever pose it held and never tracks where you are aiming, which
+           is exactly what was reported. Visible body, and the weapon animates
+           correctly.
+
+           The engine's own EnterFirstPerson hides it, so the shipped feature
+           presumably had first-person view models to put in its place - and
+           those were never investigated and may not exist. Until they do, a
+           visible body that animates beats an invisible one with a dead gun.
+
+           `fpbody` still toggles it, and 0x106294F0 only resolves once the
+           First* camera is active, which is why this sits after the camera
+           switch either way. */
+        gotPawn = FirstPersonSetPawnHidden(0);
+        g_fpBodyHidden = 0;
+        if (g_fpAimMode == 1) FirstPersonAimPatch(1);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[fp  ] *** fault entering - restoring");
+        FirstPersonLeave(console);
+        return;
+    }
+
+    FirstPersonActiveHash(&hash);
+    logf_("[fp  ] active archetype hash = %08lX (want %08lX/%08lX/%08lX), pawn=%d",
+          hash, (unsigned long)FP_HASH_AVATAR, (unsigned long)FP_HASH_CORP,
+          (unsigned long)FP_HASH_PLAIN, gotPawn);
+
+    if (hash != FP_HASH_AVATAR && hash != FP_HASH_CORP && hash != FP_HASH_PLAIN) {
+        /* Should not happen - the archetypes are in all 78 entity libraries, byte
+           identical - but a locked or rebuilt stack could still refuse. And do
+           NOT leave the flag set on failure:
+           it would silently poison every later RestorePawnCamera. */
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "firstperson: the first-person camera did not activate (hash %08lX)\n"
+            "  Backing out cleanly.\n", hash);
+        FirstPersonLeave(console);
+        return;
+    }
+
+    InterlockedExchange(&g_firstperson, 1);
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "first person: ON  (%s)\n"
+        "  This is the game's own first-person camera, not a fake.\n"
+        "  Your body is hidden the same way the free camera hides it.\n"
+        "  'firstperson' again to come back.\n"
+        "  If the view sits wrong, nudge it: 'fpoffset <x> <y> <z>'\n",
+        gotPawn ? "body visible - 'fpbody' hides it, but that freezes the gun"
+                : "pawn not reachable");
+}
+
+/* The shipped `SetFPCameraOffsetX/Y/Z` console commands write a reflected vec3
+   named "DebugOffset" at camComp+0xC4, and the camera's own Update adds it to the
+   bone anchor every tick (0x105AECF0 -> CEntity set-local-position 0x101B2440).
+   So this is a DATA write on the main thread, not a per-frame fight with the
+   camera's recompute - which is the failure mode FREECAM.md section 0 warns about.
+
+   Axis convention is the component's local frame and is NOT verified in game;
+   Z is up everywhere else in this engine, so +Z raises and +Y is most likely
+   forward. Try one axis at a time. */
+static void FirstPersonOffset(void* console, int haveArgs,
+                              float x, float y, float z)
+{
+    void* camComp;
+    float* off;
+
+    if (!Readable((const void*)FN_GET_CAMCOMP, 8)) return;
+    camComp = ((fnGetCamComp)FN_GET_CAMCOMP)();
+    if (!Readable(camComp, OFF_CC_DBGOFFSET + 12)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpoffset: no camera component right now\n");
+        return;
+    }
+    /* Guard the class before writing an offset into it. 0x106294F0 type-checks
+       against 0x11221BBC, but that admits any camera of that family and only this
+       vtable is known to carry DebugOffset at 0xC4. */
+    if (*(unsigned long*)camComp != (unsigned long)VT_PAWNCAM) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpoffset: the active camera is not the pawn camera - not writing\n");
+        return;
+    }
+    off = (float*)((char*)camComp + OFF_CC_DBGOFFSET);
+    if (haveArgs) { off[0] = x; off[1] = y; off[2] = z; }
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "fpoffset: %.3f %.3f %.3f   (engine's own \"DebugOffset\", applied next tick)\n",
+        off[0], off[1], off[2]);
+    /* Show the component's other knob on the same readout, so "what can I
+       actually change in here?" is answerable without reading the docs. */
+    if (Readable(camComp, OFF_CC_FOV + 4))
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "  fov %.1f   ('fpfov <deg>')\n",
+            *(float*)((char*)camComp + OFF_CC_FOV));
+}
+
+/* Live control over which body point the first-person camera takes its
+   orientation from. Exists because the right index cannot be predicted: the
+   25-entry name table at 0x11176E90 names the points, but nothing says which
+   share a basis, and point 3 - the one the engine's own facing selector uses -
+   rolls the view 90 degrees in practice. Sweeping them in-game costs seconds;
+   guessing and rebuilding costs minutes each. `fpaim off` restores the byte. */
+static void FirstPersonAim(void* console, int haveArg, int pt)
+{
+    if (!haveArg) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpaim: mode %d  %s\n"
+            "  lookat  point the camera at the gun's own aim point (default)\n"
+            "  <n>     body point n instead - 3 UpperBack, 10 Neck, 11 Head\n"
+            "  body    make the SHOT follow the camera instead (exact, but\n"
+            "          you aim by turning the character)\n"
+            "  yaw <d> rotate the view d degrees (default +90)\n"
+            "  pitch   flip the pitch sign if up/down is inverted\n"
+            "  off     leave the engine alone\n",
+            g_fpAimMode,
+            g_fpAimMode == 2 ? (g_fpLookOn ? "(look-at attached)"
+                                           : "(look-at armed, no aim target yet)")
+            : g_fpAimMode == 1 ? "(body-point patch)" : "(off)");
+        return;
+    }
+    FirstPersonAimPatch(0);
+    FirstPersonLookDetach();
+    FirstPersonShotBranch(0);
+    if (pt == -4) {                       /* swap AimAngles <-> LookAngles */
+        g_fpAimUseLook = !g_fpAimUseLook;
+        g_fpAimMode = 2;
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpaim: now following %s\n",
+            g_fpAimUseLook ? "LookAngles (+0x54)" : "AimAngles (+0x6C)");
+        return;
+    }
+    if (pt == -3) {                       /* body: switch the SHOT instead */
+        g_fpAimMode = 3;
+        g_fpAimPoint = -1;
+        g_fpBranchResets = 0;
+        if (FirstPersonShotBranch(1))
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "fpaim: body mode. The SHOT now follows the same body direction\n"
+                "  the camera does, so they agree exactly. Trade-off: you aim by\n"
+                "  turning the character - there is no independent vertical aim.\n");
+        else
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "fpaim: no pawn right now - enter first person first\n");
+        return;
+    }
+    if (pt == -2) {                       /* lookat */
+        g_fpAimMode = 2;
+        g_fpAimPoint = -1;
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpaim: look-at mode. The camera will follow the point the shot is\n"
+            "  aimed at, so the two agree by construction. Falls back to the\n"
+            "  engine's own view whenever the aim system has no target.\n");
+        return;
+    }
+    if (pt < 0) {                         /* off */
+        g_fpAimMode = 0;
+        g_fpAimPoint = -1;
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpaim: off - the engine's own fixed forward view\n");
+        return;
+    }
+    g_fpAimMode = 1;                      /* body point */
+    g_fpAimPoint = pt;
+    if (!g_firstperson) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpaim: body point %d armed; applies when you enter first person\n", pt);
+        return;
+    }
+    if (FirstPersonAimPatch(1))
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpaim: body point %d live (a bone is animation-driven - expect a\n"
+            "  fixed offset, and point 3 rolls the view 90 degrees)\n", pt);
+    else
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpaim: patch refused - signature mismatch, nothing written\n");
+}
+
+/* FOV on the first-person camera component.
+
+   The same field the shipped `set_debug_fov` reaches through Game:ChangeFOV(),
+   written directly rather than through the Lua wrapper - one less layer to be
+   wrong about, and it reads the value back so a refused write is visible
+   instead of silent. CONFIRMED byte-for-byte at the ChangeFOV write
+   0x1062AB11 (camComponent+0x10C).
+
+   Like everything else on this component it does nothing in third person: the
+   accessor type-checks against CCameraPawnComponent and returns NULL unless a
+   First* camera is active. That is exactly why SetFPCameraOffsetX/Y/Z and
+   ChangeFOV have always looked broken - their name is literal. */
+static void FirstPersonFov(void* console, int haveArg, float deg)
+{
+    void* camComp;
+    float* fov;
+
+    if (!Readable((const void*)FN_GET_CAMCOMP, 8)) return;
+    camComp = ((fnGetCamComp)FN_GET_CAMCOMP)();
+    if (!Readable(camComp, OFF_CC_FOV + 4)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpfov: no first-person camera right now - run 'firstperson' first\n");
+        return;
+    }
+    if (*(unsigned long*)camComp != (unsigned long)VT_PAWNCAM) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "fpfov: the active camera is not the pawn camera - not writing\n");
+        return;
+    }
+    fov = (float*)((char*)camComp + OFF_CC_FOV);
+    if (haveArg) {
+        if (deg < 5.0f || deg > 170.0f) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "fpfov: %.1f is out of range - use 5..170\n", deg);
+            return;
+        }
+        *fov = deg;
+    }
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "fpfov: %.1f degrees   (the archetypes ship 80 as Avatar, 90 as RDA)\n",
+        *fov);
+}
+/* ================================================= */
+
+
+/* ==================== state tracer ====================
+   Reads only. Writes to its own file so the verbose diff cannot bury the main
+   log. See tracer.py notes. */
+#define TRACE_PATH   "avatar_console_trace.log"
+#define TRACE_WINDOW 0x100        /* bytes diffed on each watched object */
+
+static volatile long g_trace     = 0;   /* 0 off, 1 ~4Hz, 2 every frame */
+static unsigned char g_prevEnt[TRACE_WINDOW];
+static unsigned char g_prevInner[TRACE_WINDOW];
+static int           g_prevValid = 0;
+
+static void tracef_(const char* fmt, ...)
+{
+    char path[MAX_PATH];
+    va_list ap;
+    FILE* f;
+    _snprintf(path, sizeof(path), "%s\\" TRACE_PATH, g_dir);
+    f = fopen(path, "a");
+    if (!f) return;
+    fprintf(f, "%8lu ", (unsigned long)(GetTickCount() - g_t0));
+    va_start(ap, fmt);
+    vfprintf(f, fmt, ap);
+    va_end(ap);
+    fputc('\n', f);
+    fclose(f);
+}
+
+/* Log every dword that changed since the last sample. This is how we find fields
+   whose meaning we do not know: whatever flips at the moment the symptom appears
+   is the field we are looking for. */
+static void TraceDiff(const char* what, const void* now,
+                      unsigned char* prev, int* anyPrinted)
+{
+    int i;
+    if (!Readable(now, TRACE_WINDOW)) return;
+    for (i = 0; i < TRACE_WINDOW; i += 4) {
+        unsigned long a = *(const unsigned long*)((const char*)now + i);
+        unsigned long b = *(unsigned long*)(prev + i);
+        if (a != b) {
+            if (!*anyPrinted) { tracef_("---- changes ----"); *anyPrinted = 1; }
+            tracef_("  %s +0x%03X  %08lX -> %08lX   (float %.3f -> %.3f)",
+                    what, i, b, a, *(float*)&b, *(float*)&a);
+        }
+    }
+    memcpy(prev, now, TRACE_WINDOW);
+}
+
+static void TraceSnapshot(int withDiff)
+{
+    void*  lst   = *(void**)PLAYERLIST_PTR;
+    void** arr   = 0;
+    void*  elem  = 0;
+    void*  inner = 0;
+    void*  ent   = 0;
+    void*  node  = 0;              /* hoisted: the respawn detector needs it */
+    unsigned long count = 0;
+
+    tracef_("==== snapshot: world=\"%s\" frame=%ld noclip=%ld freecam=%ld ====",
+            WorldName(), g_frames, g_noclip, g_freecam);
+
+    if (!Readable(lst, 0x10)) { tracef_("  player list UNREADABLE (%p)", lst); return; }
+    count = *(unsigned long*)((char*)lst + 8);
+    arr   = *(void***)((char*)lst + 4);
+    tracef_("  playerList=%p count=%lu arr=%p", lst, count, arr);
+    if (count && Readable(arr, 4)) {
+        elem = arr[0];
+        tracef_("  elem=%p", elem);
+        if (Readable(elem, 8)) {
+            inner = *(void**)((char*)elem + 4);
+            tracef_("  inner(CPlayer)=%p", inner);
+        }
+    }
+    if (Readable(inner, 0x100)) {
+        node = *(void**)((char*)inner + 8);
+        tracef_("  node=%p", node);
+        if (Readable(node, 0x10)) {
+            ent = *(void**)((char*)node + 0x0C);
+            tracef_("  entity=%p  backptr=%s", ent,
+                    (Readable(ent, OFF_ENT_CHECK + 4) &&
+                     *(void**)((char*)ent + OFF_ENT_CHECK) == node) ? "OK" : "MISMATCH");
+        }
+        {   /* camera stack lives inside the CPlayer */
+            char* cs = (char*)inner + OFF_INNER_CAMSTACK;
+            if (Readable(cs, 0x20)) {
+                unsigned long idx = *(unsigned long*)(cs + OFF_CS_ACTIVEIDX);
+                unsigned long cnt = *(unsigned long*)(cs + OFF_CS_COUNT);
+                void*  carr = *(void**)(cs + OFF_CS_ARRAY);
+                tracef_("  camStack activeIdx=%ld count=%lu locked=%u arr=%p",
+                        (long)idx, cnt, *(unsigned char*)(cs + OFF_CS_LOCKED), carr);
+                if (carr && cnt && idx < cnt && Readable(carr, cnt * CS_ENTRY_STRIDE))
+                    tracef_("  camStack active entry hash=%08lX",
+                            *(unsigned long*)((char*)carr + idx * CS_ENTRY_STRIDE + CS_ENTRY_HASH));
+            }
+        }
+        if (Readable((char*)inner + OFF_PLAYER_INPUT, 0x40))
+            tracef_("  inputHolder=%p", (char*)inner + OFF_PLAYER_INPUT);
+    }
+    if (Readable(ent, 0x100)) {
+        const float* pos = (const float*)((char*)ent + OFF_ENT_POS);
+        tracef_("  entity DESTROYED-BIT=%lu",
+                (*(unsigned long*)((char*)ent + 0x90) >> 4) & 1);
+        tracef_("  entity pos=(%.1f %.1f %.1f) flags=%08lX comps=%lu",
+                pos[0], pos[1], pos[2],
+                *(unsigned long*)((char*)ent + 0x90),
+                *(unsigned long*)((char*)ent + OFF_ENT_COMPN));
+    }
+    {
+        void* game = *(void**)G_GAMEOBJ_PP;
+        if (Readable(game, 0x50))
+            /* +0x40 is the pawn-type selector (1 = Avatar, 2 = Soldier) and
+               +0x58 the autosave request byte - see PLAY_AS.md / SAVELOAD.md. */
+            tracef_("  gameObj=%p pawnTypeSel=%lu saveReq=%u", game,
+                    *(unsigned long*)((char*)game + 0x40),
+                    *(unsigned char*)((char*)game + 0x58));
+    }
+    tracef_("  inputContainer=%p  entSys=%p  archMgr=%p",
+            *(void**)G_INPUTMAP_PTR, *(void**)G_ENTSYS_PTR, *(void**)G_ARCHMGR_PTR);
+
+    /* RESPAWN DETECTOR. A once-per-second "twitch" is either the pawn being
+       rebuilt or its state machine restarting, and those are distinguishable:
+       a rebuild gives a NEW entity pointer, a state reset keeps the old one.
+       Calling that out explicitly beats hunting for it in the diff. */
+    {
+        static void* lastEnt  = 0;
+        static void* lastNode = 0;
+        if (lastEnt && ent != lastEnt)
+            tracef_("  *** ENTITY REPLACED %p -> %p  (the pawn is being REBUILT - "
+                    "respawn loop, not a state reset)", lastEnt, ent);
+        else if (lastNode && node != lastNode)
+            tracef_("  *** REF NODE REPLACED %p -> %p  (same entity, new node - "
+                    "the link is being re-made)", lastNode, node);
+        lastEnt  = ent;
+        lastNode = node;
+    }
+    {
+        unsigned long vLo, vHi;
+        tracef_("  inVehicle=%d", CurrentVehicle(&vLo, &vHi));
+    }
+
+    if (withDiff && Readable(ent, TRACE_WINDOW) && Readable(inner, TRACE_WINDOW)) {
+        int printed = 0;
+        if (!g_prevValid) {
+            memcpy(g_prevEnt,   ent,   TRACE_WINDOW);
+            memcpy(g_prevInner, inner, TRACE_WINDOW);
+            g_prevValid = 1;
+            tracef_("  (diff baseline captured)");
+        } else {
+            TraceDiff("entity", ent,   g_prevEnt,   &printed);
+            TraceDiff("player", inner, g_prevInner, &printed);
+        }
+    }
+}
+
+/* Called once per frame from the detour. */
+static void TraceTick(void)
+{
+    static int n = 0;
+    if (!g_trace) { n = 0; return; }
+    if (g_trace == 1 && ++n < 15) return;   /* ~4Hz at 60fps */
+    n = 0;
+    TraceSnapshot(1);
+}
+/* ====================================================== */
+
+
+/* ---- playerinfo: is the pawn we control actually alive? ----------------
+   The camera failed because the stack cached a pointer to a destroyed entity.
+   "Camera works, player cannot move" has the same shape one field over, so this
+   walks the control chain and reports LIVENESS at every hop, using the engine's
+   own destroyed test: [entity+0x90] bit 4. Read only. */
+static void PlayerInfo(void* console)
+{
+    void*  lst  = *(void**)PLAYERLIST_PTR;
+    void** arr;
+    void*  elem, *inner, *node, *ent;
+    unsigned long flags;
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+
+    if (!Readable(lst, 0x10)) { P_(console, 0, AC "playerinfo: no player list\n"); return; }
+    P_(console, 0, AC "playerinfo: list=%p count=%lu\n",
+       lst, *(unsigned long*)((char*)lst + 8));
+    arr = *(void***)((char*)lst + 4);
+    if (!Readable(arr, 4)) { P_(console, 0, AC "  array unreadable\n"); return; }
+    elem = arr[0];
+    if (!Readable(elem, 8)) { P_(console, 0, AC "  elem unreadable\n"); return; }
+    inner = *(void**)((char*)elem + 4);
+    P_(console, 0, AC "  elem=%p inner=%p\n", elem, inner);
+    if (!Readable(inner, 0x20)) { P_(console, 0, AC "  inner unreadable\n"); return; }
+
+    node = *(void**)((char*)inner + 8);          /* the controlled-entity ref */
+    P_(console, 0, AC "  controlledRef(inner+0x08)=%p\n", node);
+    if (!Readable(node, 0x10)) { P_(console, 0, AC "  ref unreadable - NOT CONTROLLING ANYTHING\n"); return; }
+
+    ent = *(void**)((char*)node + 0x0C);
+    if (!Readable(ent, 0x100)) { P_(console, 0, AC "  ref points at a dead entity\n"); return; }
+    flags = *(unsigned long*)((char*)ent + 0x90);
+    {
+        const float* pos = (const float*)((char*)ent + OFF_ENT_POS);
+        P_(console, 0, AC
+           "  entity=%p flags=%08lX %s\n"
+           "  pos=(%.1f %.1f %.1f) backptr=%s\n",
+           ent, flags,
+           ((flags >> 4) & 1) ? "*** DESTROYED - you are holding a corpse ***" : "alive",
+           pos[0], pos[1], pos[2],
+           (*(void**)((char*)ent + OFF_ENT_CHECK) == node) ? "OK" : "MISMATCH");
+    }
+    /* COMPONENT LIST. The pawn is alive, bound, movable and animated, and still
+       will not walk - so the question is what a NORMALLY loaded pawn has that
+       this one lacks. Printing each component's vtable makes that a diff instead
+       of an argument: run this on a fresh save, run it after a warp, compare. */
+    {
+        void** comps = *(void***)((char*)ent + OFF_ENT_COMPS);
+        unsigned long n = *(unsigned long*)((char*)ent + OFF_ENT_COMPN);
+        unsigned long i;
+        char line[128];
+        int col = 0;
+
+        P_(console, 0, AC "  components: %lu\n", n);
+        logf_("[pinfo] components=%lu", n);
+        line[0] = 0;
+        if (n && n <= 128 && Readable(comps, n * 4)) {
+            for (i = 0; i < n; ++i) {
+                void* c = comps[i];
+                unsigned long vt = Readable(c, 4) ? *(unsigned long*)c : 0;
+                char one[24];
+                _snprintf(one, sizeof(one), "%08lX ", vt);
+                strncat(line, one, sizeof(line) - strlen(line) - 1);
+                if (++col == 6) {
+                    P_(console, 0, AC "    %s\n", line);
+                    logf_("[pinfo]   %s", line);
+                    line[0] = 0; col = 0;
+                }
+            }
+            if (col) {
+                P_(console, 0, AC "    %s\n", line);
+                logf_("[pinfo]   %s", line);
+            }
+        }
+    }
+    logf_("[pinfo] elem=%p inner=%p ref=%p ent=%p flags=%08lX", elem, inner, node, ent, flags);
+}
+
+
+
+/* ---- beastinfo: can this creature be driven? ---------------------------
+   PURE READ. Every animal agent routes locomotion through ONE shared five-
+   instruction function - SetDesiredVelocity @ 0x10A8FF60, agent vtable slot
+   +0x128 - and nobody overrides it. So the plan is not to write the AI's output
+   fields (the brain rewrites them every tick) but to DETOUR THE SETTER, which
+   makes us the last writer by construction: no frame-ordering problem, no need
+   to suppress the AI, and animation/turning/physics keep working because the
+   move model still receives a well-formed velocity.
+
+   This confirms the mechanism is present on the thing you spawned before any of
+   that is built. Chain: entity -> CAIComponent (&0x111C20C8) -> agent at +0x18. */
+/* Declared here because beastinfo uses it and mountinfo (below) defines it. */
+#define FN_GET_COMPONENT_  (0x101B79E0u + g_rebase)
+typedef void* (__thiscall *fnGetComponent_)(void* ent, const void* classId);
+
+#define CID_AICOMPONENT   (0x111C20C8u + g_rebase)
+#define OFF_AICOMP_AGENT  0x18
+#define AGENT_SLOT_SETVEL 0x128
+/* Declared here rather than with the signal code below, because DriveRebind -
+   which runs earlier in this file - has to re-hook this slot too. */
+#define AGENT_SLOT_SIGNAL 0x148
+
+/* ---- EVERY vtable slot we patch, so EVERY one gets restored ----------------
+   BUG B1a/B1b (CREATURE_AUDIT.md). We tracked ONE vtable per hook. DriveRebind
+   patches a SECOND species vtable when the agent changes species - and for the
+   velocity slot it never updated g_driveVt, while for the signal slot it
+   overwrote g_sigVt and abandoned the first. Either way DriveStop restored one
+   slot and left the other pointing into a DLL about to be unloaded. That is a
+   crash with our name on it, and the exit sweep was only papering over it
+   ("agent velocity slot STILL ours - restoring").
+
+   A registry removes the class of bug rather than this instance: patch through
+   VtPatch, restore with VtRestoreAll, and the number of species vtables a
+   session touches stops mattering. Each entry remembers the hook it installed,
+   so restore only fires while the slot is still ours - if the engine swapped the
+   vtable underneath us we leave it alone instead of stamping a stale pointer. */
+#define VTPATCH_MAX 32
+static struct { void** slot; void* orig; void* hook; } g_vtPatch[VTPATCH_MAX];
+static int g_vtPatchN = 0;
+
+static int VtPatch(void** slot, void* hook)
+{
+    DWORD old;
+    int i;
+    if (!Readable(slot, sizeof(void*))) return 0;
+    if (*slot == hook) return 1;                      /* already ours */
+    for (i = 0; i < g_vtPatchN; ++i)
+        if (g_vtPatch[i].slot == slot) break;
+    if (i == g_vtPatchN) {
+        if (g_vtPatchN >= VTPATCH_MAX) {
+            logf_("[vt  ] patch table full (%d) - refusing to hook %p",
+                  VTPATCH_MAX, (void*)slot);
+            return 0;
+        }
+        g_vtPatch[g_vtPatchN].slot = slot;
+        g_vtPatch[g_vtPatchN].orig = *slot;
+        ++g_vtPatchN;
+    }
+    g_vtPatch[i].hook = hook;
+    if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) return 0;
+    *slot = hook;
+    VirtualProtect(slot, sizeof(void*), old, &old);
+    logf_("[vt  ] patched slot %p (was %p) - %d tracked",
+          (void*)slot, g_vtPatch[i].orig, g_vtPatchN);
+    return 1;
+}
+
+static void VtRestoreAll(void)
+{
+    DWORD old;
+    int i, n = 0;
+    for (i = g_vtPatchN - 1; i >= 0; --i) {
+        void** slot = g_vtPatch[i].slot;
+        if (Readable(slot, sizeof(void*)) && *slot == g_vtPatch[i].hook &&
+            VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) {
+            *slot = g_vtPatch[i].orig;
+            VirtualProtect(slot, sizeof(void*), old, &old);
+            ++n;
+        }
+    }
+    if (g_vtPatchN)
+        logf_("[vt  ] restored %d of %d patched slot(s)", n, g_vtPatchN);
+    g_vtPatchN = 0;
+}
+
+static void*         g_sigVt     = 0;   /* vtable whose signal slot we patched */
+static void*         g_sigOrig   = 0;   /* the original slot +0x148            */
+static int           g_ourSignal = 0;   /* this request is ours - let it pass  */
+static volatile long g_muteAI    = 1;   /* drop the AI's own requests          */
+static long          g_muted     = 0;   /* how many we have dropped            */
+static void __fastcall hkRequestSignal(void* agent, void* edx,
+                                       const unsigned long* hash);
+
+/* The creature's OWN top speed, so sprint cannot outrun its animation.
+   `GetSpeedForGait` is agent vt[+0x168] (base 0x10AB5120) - verified from the
+   bytes as __thiscall(agent, int gait), ret 4, float returned on the FPU stack.
+   Called through the vtable so a species override is used automatically. */
+#define AGENT_SLOT_GAITSPD 0x168
+typedef float (__thiscall *fnGaitSpeed)(void* agent, int gait);
+static float g_driveMax = 40.0f;      /* filled in at `drive` from the agent */
+static float g_driveWalk = 0.0f;      /* the creature's own WALK gait, same source */
+#define FN_SETDESIREDVEL  (0x10A8FF60u + g_rebase)
+
+/* ==================== drive: steer a creature ====================
+   Every animal agent reaches locomotion through the SAME function -
+   SetDesiredVelocity, agent vtable slot +0x128 - and nobody overrides it.
+
+   We do NOT write the AI's output fields: CTaskMoveTo::Update calls the setter
+   unconditionally every tick and would overwrite us. Instead we detour the
+   SETTER, which makes us the last writer by construction. No frame-ordering
+   problem, no need to suppress the AI, and animation/turning/physics keep working
+   because the movement model still receives a well-formed velocity - ours.
+
+   The vtable belongs to the agent's CLASS, so the detour sees every creature of
+   that species. It filters on `this` and passes everything else straight through
+   untouched. */
+static void*         g_driveAgent   = 0;   /* the one creature we steer */
+/* The ENTITY we are driving, tracked separately from g_lastSpawn. They used to be
+   the same variable, and once the mouse pick started setting g_lastSpawn (so that
+   clicking a creature and typing 'drive' would work), DriveRebind began following
+   whatever you last CLICKED. Picking a Samson while driving a Viperwolf silently
+   rebound the drive onto the Samson's half-built agent - see the crash record for
+   0x1026BA50 in the log. g_lastSpawn means "what a command acts on"; this means
+   "what we are steering right now". */
+static void*         g_driveEnt     = 0;
+static void*         g_driveVt      = 0;   /* its class vtable, for restore */
+static void*         g_driveOrig    = 0;   /* the original setter            */
+static float         g_driveSpeed   = 4.0f;
+/* g_drive is declared up with the input flags - SetGameInput needs it. */
+
+typedef void (__fastcall *fnSetDesiredVel)(void* agent, void* edx, const float* v);
+
+/* ---- which agent class is this? -------------------------------------------
+   Agent vtable slot 1 (+0x04) is the GetClassDesc thunk, and every one of them
+   has the same shape - a lazy-init guard followed by `push <name string>`:
+
+     1097F2E0  cmp  [0x112378B4], 0
+     1097F2E7  jne  +0x1E
+     1097F2E9  call 0x1097E3A0            ; parent's descriptor
+     1097F2EE  push eax
+     1097F2EF  push 0x110D2148            ; <-- the class NAME, at thunk+16
+     1097F2F4  mov  ecx, 0x112378B4
+     1097F2F9  call 0x100016B0
+
+   So the name is readable at runtime with no reflection call: check for the 0x68
+   `push imm32` opcode at thunk+15 and read the pointer after it. Shape-checked
+   rather than assumed, so an unexpected thunk returns NULL instead of garbage.
+
+   THIS IS WHAT CORRECTED THE HUMAN-DRIVING CLAIM. Scanning .rdata for aligned
+   references to the velocity setter 0x10A8FF60 finds it at +0x128 of TWENTY-ONE
+   agent vtables, and all twenty-one also share 0x10A8D790 at +0x148:
+
+     CPawnAgent CPawnBaseAgent CPawnHitAndRunAgent      <- the humanoids
+     CAnimalAgent CBaseAnimalAgent CBtzAnimalAgent
+     CViperwolfAgent CThanatorAgent CDirehorseAgent CHexapedeAgent
+     CTapirusAgent CStingbatAgent SturmbeestAgent HammerheadAgent
+     CHellfireWaspAgent TurretAgent PlantAgent CDroneBombAgent
+     CAutomaticTurretAgent SquidAgent ChaliceAgent
+
+   It is a BASE-class setter, not "the shared animal setter". I had told the user
+   humans would be refused by DriveStart's equality check; that was inference and
+   it was wrong - the check passes for CPawnAgent. What is genuinely different for
+   humans is `+0x208` (Update, overridden per class) and the signal vocabulary,
+   not the steering slot. */
+static const char* AgentClassName(void* agent)
+{
+    void** vt;
+    const unsigned char* thunk;
+    const char* s;
+    if (!Readable(agent, 4)) return 0;
+    vt = *(void***)agent;
+    if (!Readable(vt, 8)) return 0;
+    thunk = (const unsigned char*)vt[1];
+    if (!Readable((void*)thunk, 20)) return 0;
+    if (thunk[15] != 0x68) return 0;                  /* not the shape we know */
+    s = *(const char* const*)(thunk + 16);
+    if (!Readable((void*)s, 2)) return 0;
+    return s;
+}
+
+/* The camera entity WITHOUT going through GetPlayerEntity - that refuses on a
+   stale back-pointer, which is the post-warp state, and it is why the first
+   version fell back to world axes and gave W/D dead with S walking forward. */
+static void* GetCameraEntityDirect(void)
+{
+    void* elem = GetPlayerElem();
+    char* cs   = elem ? (char*)GetCameraStack(elem) : 0;
+    unsigned long idx, cnt;
+    void *arr, *node, *cam;
+
+    if (!Readable(cs, 0x20)) return 0;
+    idx = *(unsigned long*)(cs + OFF_CS_ACTIVEIDX);
+    cnt = *(unsigned long*)(cs + OFF_CS_COUNT);
+    arr = *(void**)(cs + OFF_CS_ARRAY);
+    if (!cnt || cnt > 64 || idx >= cnt) return 0;
+    if (!Readable(arr, cnt * CS_ENTRY_STRIDE)) return 0;
+    node = *(void**)((char*)arr + idx * CS_ENTRY_STRIDE + CS_ENTRY_NODE);
+    if (!Readable(node, 0x10)) return 0;
+    cam = *(void**)((char*)node + 0x0C);
+    if (!Readable(cam, OFF_ENT_XFORM + 0x30)) return 0;
+    if ((*(unsigned long*)((char*)cam + 0x90) >> 4) & 1) return 0;   /* destroyed */
+    return cam;
+}
+
+/* THE RUNAWAY. Drive works by substituting the velocity the AGENT asks for, so
+   it only works while the agent is still asking. Take the creature somewhere its
+   AI stops ticking - out of a resident sector, which is easy to do on Hell's
+   Gate - and our hook simply stops being called. Nothing resets the last
+   velocity we set, so the creature keeps running in that direction for ever and
+   the keys do nothing, because the keys only take effect inside a call that is
+   no longer happening.
+
+   So: stamp every call, and if the calls stop while we still believe we are
+   driving, the drive is over whether we like it or not. Zero the velocity
+   through the original setter and stop cleanly, rather than leaving the player
+   watching a creature disappear over the horizon with no way back. */
+static DWORD g_lastVelCall = 0;
+/* REMOVED: DRIVE_STALL_MS. The tick-count stall watchdog it belonged to was
+   replaced by the sector-residency test; the define had zero uses. */
+
+/* THE BUG THIS FIXES. The watchdog above could not tell two different states
+   apart, because both look like "no call for a second":
+
+     (a) the agent WAS asking for a velocity and stopped   <- a real runaway
+     (b) the agent has never asked once since we started   <- not a fault at all
+
+   (b) is the normal state of a calm, freshly-spawned creature. Our steering is
+   REACTIVE - we only get to substitute a velocity when some running task asks
+   for one - and a creature standing idle has no locomotion task running, so it
+   asks for nothing. Worse, muting its signals (the default) is what stops it
+   entering a behaviour that would ask. So `drive` on a calm creature armed the
+   watchdog, waited one second, saw nothing, and killed itself. That is exactly
+   the "AI stopped updating even though I just spawned it" report.
+
+   So the stall test now additionally requires that we have seen at least ONE
+   call this session. Without a first call there is nothing to have stopped. */
+#define DRIVE_LOST_MS 1500   /* how long "not resident" must persist to count */
+static DWORD         g_driveBadSince = 0;
+/* Set while the creature's ground is unloaded: keep the drive and the hooks alive
+   but pin the velocity at zero, so it cannot run off the way it used to. */
+static volatile long g_driveFrozen   = 0;
+/* Stable identity of the creature, so a drive can survive the entity being
+   streamed out and back. Pointers cannot do this - see EntWalkFind. */
+static unsigned long g_driveIdLo = 0, g_driveIdHi = 0;
+static int           g_driveHaveId = 0;
+static DWORD         g_driveRetryAt = 0;
+static void* EntWalkFind(void* wantEnt, unsigned long* pLo, unsigned long* pHi);
+static int  DriveAttachTo(void* ent, void* console);
+static volatile long g_velSeen    = 0;   /* the agent has asked at least once */
+static DWORD         g_driveBegan = 0;   /* for the "never asked" hint only   */
+static volatile long g_idleHinted = 0;
+static int  SectorResidentAt(const float* pos);   /* both defined further down */
+
+static void DriveStop(void* console);
+static int  DriveKeysToVel(float* mine);
+static void DrivePush(void);
+
+static DWORD g_attackUntil = 0;      /* velocity is the AI's until this tick */
+static DWORD g_attackHold  = 900;    /* ms; 'attackhold <ms>' tunes it */
+static DWORD g_attackEndAt = 0;      /* when to send the closing signal, if any */
+static char  g_attackEnd[64] = "";   /* e.g. Thanator_AttackEnd; "" = not needed */
+
+/* Build the velocity our keys are asking for. Returns 0 only when the creature
+   should be left to its own devices this frame (an attack in flight).
+
+   Factored out of the hook so the per-frame push in DrivePush() uses EXACTLY the
+   same code - two copies of the movement maths would drift apart, and the whole
+   reason the push exists is that the hook may never be called at all. */
+static int DriveKeysToVel(float* mine)
+{
+    float fwd[3] = {0,1,0}, rgt[3] = {1,0,0};
+    int   moving = 0;
+    void* cam;
+
+    /* THE ATTACK FLICKER, handled by the two callers rather than here: the attack
+       behaviour drives the creature itself, and two authorities writing
+       WorldSpeed each frame is the flicker - in the body and, because the camera
+       follows the body, in the view too. Both callers check g_attackUntil and
+       leave the AI alone while it runs; 'attackhold' tunes the window.
+
+       Hold still when the console is open OR when we are not the focused
+       application - otherwise typing in another window steers the creature,
+       because GetAsyncKeyState reads the keyboard regardless of focus. Note this
+       still returns 1: a deliberate ZERO is applied, so the creature stops
+       rather than coasting on the last vector. */
+    mine[0] = mine[1] = mine[2] = mine[3] = 0.0f;
+    if (g_consoleOpen || !AppHasFocus()) return 1;
+
+    cam = GetCameraEntityDirect();
+    if (Readable(cam, OFF_ENT_XFORM + 0x30)) {
+        const float* m = (const float*)((char*)cam + OFF_ENT_XFORM);
+        rgt[0]=m[0]; rgt[1]=m[1]; rgt[2]=m[2];
+        fwd[0]=m[4]; fwd[1]=m[5]; fwd[2]=m[6];
+    }
+    mine[0] = mine[1] = mine[2] = mine[3] = 0.0f;
+    if (GetAsyncKeyState('W') & 0x8000) { mine[0]+=fwd[0]; mine[1]+=fwd[1]; mine[2]+=fwd[2]; moving=1; }
+    if (GetAsyncKeyState('S') & 0x8000) { mine[0]-=fwd[0]; mine[1]-=fwd[1]; mine[2]-=fwd[2]; moving=1; }
+    if (GetAsyncKeyState('D') & 0x8000) { mine[0]+=rgt[0]; mine[1]+=rgt[1]; mine[2]+=rgt[2]; moving=1; }
+    if (GetAsyncKeyState('A') & 0x8000) { mine[0]-=rgt[0]; mine[1]-=rgt[1]; mine[2]-=rgt[2]; moving=1; }
+
+    /* Explicit vertical, for anything that flies. WASD already climbs when
+       you look up, because the vector is built from the camera's forward row
+       and that carries pitch - but "hold E to gain height while still
+       looking ahead" is what actually flies a creature. Harmless on ground
+       animals: their movement model discards the component it cannot use. */
+    if (GetAsyncKeyState('E') & 0x8000) { mine[2] += 1.0f; moving = 1; }
+    if (GetAsyncKeyState('Q') & 0x8000) { mine[2] -= 1.0f; moving = 1; }
+
+    {   /* normalise then scale - the AI passes normalize(delta)*speed, so a
+           well-formed vector is what the movement model expects */
+        float len = (float)sqrt(mine[0]*mine[0] + mine[1]*mine[1] + mine[2]*mine[2]);
+        if (moving && len > 0.0001f) {
+            float k = g_driveSpeed / len;
+            mine[0]*=k; mine[1]*=k; mine[2]*=k;
+        } else {
+            mine[0] = mine[1] = mine[2] = 0.0f;   /* stand still, do not drift */
+        }
+    }
+    return 1;
+}
+
+static void __fastcall hkSetDesiredVelocity(void* agent, void* edx, const float* v)
+{
+    float mine[4];
+
+    /* THE ORIGINAL CAN BE NULL WHILE WE ARE STILL INSTALLED.
+       DriveStop runs from the console thread, which this file establishes is NOT
+       the game thread, and it nulls g_driveOrig right after VtRestoreAll. If any
+       restore failed - VirtualProtect refused, or the engine swapped the vtable
+       so the "still ours" test declined - the slot keeps pointing here with
+       nothing behind it, and the next AI tick calls address 0. Two instructions
+       turn a crash into a dropped frame of steering. */
+    if (!g_driveOrig) return;
+
+    if (g_drive && agent == g_driveAgent) {
+        g_lastVelCall = GetTickCount();   /* proof the agent is still ticking */
+        InterlockedExchange(&g_velSeen, 1);   /* ...and that it ever started */
+
+        /* An attack in flight drives the creature itself; two authorities writing
+           WorldSpeed each frame is what produced the original flicker. Hand the
+           AI its own request straight back. */
+        if (g_attackUntil && GetTickCount() < g_attackUntil) {
+            ((fnSetDesiredVel)g_driveOrig)(agent, edx, v);
+            return;
+        }
+        g_attackUntil = 0;
+
+        if (!DriveKeysToVel(mine)) {
+            ((fnSetDesiredVel)g_driveOrig)(agent, edx, v);
+            return;
+        }
+        ((fnSetDesiredVel)g_driveOrig)(agent, edx, mine);
+        return;
+    }
+    ((fnSetDesiredVel)g_driveOrig)(agent, edx, v);
+}
+
+/* ---- push the velocity instead of waiting to be asked ----------------------
+   WHY THIS EXISTS. Steering was reactive: we only substituted a velocity when
+   some running AI task happened to ask for one. A calm creature runs no
+   locomotion task, asks for nothing, and therefore could not be steered at all -
+   which is exactly "WASD does not move it" on a freshly spawned Viperwolf.
+
+   Disassembling the setter shows there is nothing to wait for. `0x10A8FF60` is a
+   pure store, no task or behaviour involved:
+
+     10A8FF60  mov ecx,[ecx+0x260]    ; agent -> CPawn
+     10A8FF66  call 0x1026BA50        ; = mov eax,[ecx+0x28] -> pawn state block S
+     10A8FF6B  mov ecx,[esp+4]        ; arg1 = the vec3
+     10A8FF6F..10A8FF7F               ; S+0x0C = x, S+0x10 = y, S+0x14 = z
+     10A8FF82  ret 4
+
+   `S+0x0C` is the field `facinginfo` already prints as WorldSpeed, so this is
+   confirmed against our own working code, not just read off a listing. Whatever
+   consumes WorldSpeed is the movement model, and it does not care who wrote it.
+
+   So call the same setter ourselves every frame. This runs on the MAIN THREAD
+   from the per-frame detour, next to DriveHoldPlayer.
+
+   It stays out of the way during an attack: the attack behaviour drives the
+   creature itself, and two authorities writing WorldSpeed each frame is what
+   caused the original flicker. */
+static void DrivePush(void)
+{
+    float mine[4];
+    void* agent = g_driveAgent;
+
+    if (!g_drive || !agent || !g_driveOrig) return;
+    /* FROZEN MEANS DO NOT TOUCH IT. The earlier version still called the setter
+       every frame with a zero vector, which is a call THROUGH a pointer whose
+       object may already have been freed by the streamer - and Readable() cannot
+       tell the difference, because a freed block stays mapped. The creature was
+       already stopped once at the moment of freezing, while the agent was still
+       known good; from here we let go entirely until it is re-resolved by id. */
+    if (g_driveFrozen) return;
+    if (g_attackUntil && GetTickCount() < g_attackUntil) return;  /* its fight, not ours */
+    if (!Readable(agent, 0x264)) return;
+
+    /* VALIDATE THE CHAIN THE SETTER ITSELF WALKS. Readable(agent) is not enough:
+       it proves the agent's memory is mapped, not that the pointers inside it are
+       built. A freshly rebound agent had 5 at +0x260, so the setter's
+
+         mov ecx,[ecx+0x260]      ; CPawn  <- got 5
+         call 0x1026BA50          ; mov eax,[ecx+0x28] -> read 0x2D -> ACCESS_VIOLATION
+
+       faulted. The crash log named 0x1026BA50, ECX=5, reading 0000002D and the
+       return site 0x10A8FF6B inside the setter, which is how this was pinned down
+       rather than guessed. Walk the same two hops first and bail if either is not
+       a real pointer. */
+    {
+        void* pawn;
+        void* state;
+        if (!Readable((char*)agent + 0x260, 4)) return;
+        pawn = *(void**)((char*)agent + 0x260);
+        if (!Readable(pawn, 0x2C)) return;
+        state = *(void**)((char*)pawn + 0x28);
+        if (!Readable(state, 0x18)) return;      /* it writes +0x0C..+0x14 */
+    }
+
+    if (!DriveKeysToVel(mine)) return;
+
+    __try { ((fnSetDesiredVel)g_driveOrig)(agent, 0, mine); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        /* A bare InterlockedExchange(&g_drive, 0) here is what left the velocity
+           slot patched at unload - "agent velocity slot STILL ours" in the exit
+           sweep. Clearing the flag is not stopping; unhook properly. */
+        logf_("[drive] push faulted - stopping and unhooking");
+        DriveStop(0);
+    }
+}
+
+/* Pin the player while driving, so WASD moves ONLY the creature. Captured once
+   at `drive` and rewritten every frame - the same direct-position-write path
+   noclip uses, which we know moves (and holds) the pawn reliably. Mouse-look is
+   untouched, so the camera still turns and the creature stays camera-relative. */
+static float g_driveHold[3];
+static int   g_driveHoldValid = 0;
+
+/* Re-resolve the agent from the ENTITY every frame.
+   The hook matches on the agent instance, and the engine can hand a creature a
+   new agent - on an AI state change, or when it re-evaluates entities. The
+   pointer then stops matching, our substitution quietly stops applying, and the
+   brain gets its velocity back: the AI appears to "wake up". Binding to the
+   entity instead means we follow it across any agent swap. */
+static void DriveRebind(void)
+{
+    void* aiComp = 0;
+    void* agent;
+
+    if (!g_drive || !Readable(g_driveEnt, 0x100)) return;
+    __try { aiComp = ((fnGetComponent_)FN_GET_COMPONENT_)(g_driveEnt,
+                                                          (const void*)CID_AICOMPONENT); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return; }
+    if (!Readable(aiComp, OFF_AICOMP_AGENT + 4)) return;
+    agent = *(void**)((char*)aiComp + OFF_AICOMP_AGENT);
+    if (!Readable(agent, 4) || agent == g_driveAgent) return;
+
+    logf_("[drive] agent changed %p -> %p - rebinding (this is what used to look "
+          "like the AI waking up)", g_driveAgent, agent);
+    g_driveAgent = agent;
+
+    /* A new agent may be a different species vtable; make sure our hook is on it. */
+    {
+        void** vt = *(void***)agent;
+        if (Readable(vt, AGENT_SLOT_SETVEL + 4) &&
+            vt[AGENT_SLOT_SETVEL / 4] == (void*)FN_SETDESIREDVEL) {
+            /* Tracked now (B1a): the SECOND species vtable used to be patched
+               and never recorded, so DriveStop left this slot pointing at us. */
+            if (VtPatch(&vt[AGENT_SLOT_SETVEL / 4], (void*)hkSetDesiredVelocity))
+                logf_("[drive] hooked the new agent's vtable %p too", vt);
+        }
+        /* ...and its signal slot, or the AI gets its voice back on a rebind -
+           which is precisely the "it woke up again" symptom, one level deeper. */
+        if (Readable(&vt[AGENT_SLOT_SIGNAL / 4], 4) &&
+            vt[AGENT_SLOT_SIGNAL / 4] != (void*)hkRequestSignal) {
+            /* B1b: g_sigVt used to be OVERWRITTEN here, abandoning the previous
+               vtable's patched slot entirely. */
+            if (!g_sigOrig) g_sigOrig = vt[AGENT_SLOT_SIGNAL / 4];
+            if (VtPatch(&vt[AGENT_SLOT_SIGNAL / 4], (void*)hkRequestSignal))
+                logf_("[drive] signal slot re-hooked on vtable %p", vt);
+        }
+    }
+}
+
+/* Chase camera. CCameraFreeComponent::Update holds no position of its own - it
+   READS its entity's transform each frame, adds input, and writes it back. So the
+   entity transform is the authoritative state, and a write from here is simply
+   what the next Update starts from (at most one frame of lag). CEntity::SetPosition
+   replaces only the translation row, leaving rows 0-2 alone, so writing position
+   cannot disturb orientation and the shipped mouse-look keeps aiming the view.
+
+   Position = creature + up*height - cameraForward*distance, which makes it an
+   orbit camera the player aims with the mouse. */
+static volatile long g_driveCam    = 0;
+static float         g_driveCamH   = 3.0f;
+static float         g_driveCamD   = 7.0f;
+
+static void DriveCamTick(void)
+{
+    void* camEnt;
+    /* g_driveEnt, NOT g_lastSpawn. This file names the same defect twice - once
+       for DriveRebind and once inside hkAgentUpdate: "a mouse pick moves
+       g_lastSpawn, so the first version of this probe could silently start
+       reporting a DIFFERENT entity". The chase camera was the one place never
+       converted, so clicking anything while driving made the camera orbit
+       whatever you clicked.
+       It also broke the freeze invariant. When the streamer takes the sector
+       away, DriveHoldPlayer deliberately nulls g_driveEnt with the note "from
+       this moment nothing dereferences the agent or the entity: the streamer may
+       free either at any time and Readable() cannot tell us" - and this function
+       went on reading g_lastSpawn + OFF_ENT_POS every frame regardless. Reading
+       g_driveEnt means the camera simply holds its last position through a
+       freeze, which is what the freeze is for. */
+    void* beast = g_driveEnt;
+    const float *cm, *bp;
+    float pos[3];
+
+    /* Deliberately NOT `|| !beast` here: the camera and sprint KEYS are polled
+       below and must keep working through a freeze. The existing
+       `Readable(beast, ...)` further down already declines a NULL. */
+    if (!g_drive || !g_driveCam) return;
+
+    /* Camera and sprint keys are polled too, so they need the same focus gate -
+       otherwise holding Shift in another application ramps the creature's speed. */
+    if (!g_consoleOpen && AppHasFocus()) {
+        static DWORD lastMs = 0;
+        DWORD now = GetTickCount();
+        float dt  = lastMs ? (float)(now - lastMs) / 1000.0f : 0.0f;
+        lastMs = now;
+        if (dt < 0.0f || dt > 0.25f) dt = 0.0f;      /* a hitch must not launch it */
+
+        /* Camera distance: the =/- keys next to backspace, and PgUp/PgDn as an
+           alternate. (The scroll wheel would need raw input, which was removed
+           from this DLL when it collided with weapon switching.) */
+        {   /* = and - pull the camera in and out. */
+            int out = (GetAsyncKeyState(VK_OEM_MINUS) & 1) != 0;
+            int in  = (GetAsyncKeyState(VK_OEM_PLUS)  & 1) != 0;
+            if (out != in) {
+                g_driveCamD *= out ? 1.25f : (1.0f / 1.25f);
+                if (g_driveCamD < 1.0f)  g_driveCamD = 1.0f;
+                if (g_driveCamD > 60.0f) g_driveCamD = 60.0f;
+                _snprintf(g_note, sizeof(g_note) - 1, "camera distance %.1f", g_driveCamD);
+                g_note[sizeof(g_note) - 1] = 0;
+                InterlockedExchange(&g_haveNote, 1);
+            }
+        }
+        {   /* [ and ] lower and raise the camera - the two keys under = and -,
+               so the whole camera sits on one cluster. PgUp/PgDn stay out of
+               this: they are freecam's speed keys and always were. The default
+               framing is too high on a small animal like a viperwolf and too low
+               on a sturmbeest, which is why this wants keys and not a command. */
+            int up = (GetAsyncKeyState(VK_OEM_6) & 1) != 0;   /* ] */
+            int dn = (GetAsyncKeyState(VK_OEM_4) & 1) != 0;   /* [ */
+            if (up != dn) {
+                g_driveCamH += up ? 0.5f : -0.5f;
+                if (g_driveCamH < -5.0f) g_driveCamH = -5.0f;
+                if (g_driveCamH > 30.0f) g_driveCamH = 30.0f;
+                _snprintf(g_note, sizeof(g_note) - 1, "camera height %.1f", g_driveCamH);
+                g_note[sizeof(g_note) - 1] = 0;
+                InterlockedExchange(&g_haveNote, 1);
+                logf_("[drive] camera height %.1f", g_driveCamH);
+            }
+        }
+
+        /* Shift = sprint. Sturmbeest and Viperwolf have no sprint STATE, so the
+           honest equivalent is to drive the speed up for as long as it is held -
+           time-based and exponential, the same feel as the freecam ramp. Ctrl
+           brings it back down. Released, it settles to the base pace. */
+        if (dt > 0.0f) {
+            int fast = (GetAsyncKeyState(VK_SHIFT)    & 0x8000) != 0;
+            int slow = (GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0;
+
+            /* A MODE SWITCH, NOT A RAMP.
+               Shift used to drive the speed up exponentially for as long as it
+               was held, so the pace depended on how long you leaned on the key
+               and every creature felt the same. Both of the speeds that
+               actually mean something are known - the creature's own walk and
+               sprint gaits, straight off the same virtual - so hold nothing and
+               pick one: W walks, W+Shift sprints. Ctrl still trims, for the
+               cases where neither gait is what you want. */
+            if (g_driveWalk > 0.0f) {
+                if (slow && !fast) {
+                    float f = (float)pow(3.0, (double)dt);
+                    g_driveSpeed /= f;
+                    if (g_driveSpeed < 0.5f) g_driveSpeed = 0.5f;
+                } else {
+                    g_driveSpeed = fast ? g_driveMax : g_driveWalk;
+                }
+            } else {
+                /* No distinct walk gait came back for this creature - keep the
+                   old ramp rather than inventing a walk speed for it. */
+                float f = (float)pow(3.0, (double)dt);
+                if (fast && !slow) {
+                    g_driveSpeed *= f;
+                    if (g_driveSpeed > g_driveMax) g_driveSpeed = g_driveMax;
+                } else if (slow && !fast) {
+                    g_driveSpeed /= f;
+                    if (g_driveSpeed < 0.5f) g_driveSpeed = 0.5f;
+                }
+            }
+        }
+    }
+    if (!Readable(beast, OFF_ENT_POS + 12)) return;
+    camEnt = GetCameraEntityDirect();
+    if (!Readable(camEnt, OFF_ENT_XFORM + 0x40)) return;
+    if (!Readable((const void*)FN_ENT_SETPOS, 8)) return;
+
+    /* THE SHAKE, and why it got worse the faster you went.
+       The chase camera runs on the FREE camera, and CCameraFreeComponent::Update
+       reads its entity's transform, ADDS ITS OWN MOVEMENT, and writes it back.
+       Its movement comes from the same WASD we are steering the creature with -
+       the free_camera action map is what is bound while driving - integrated
+       through the speed accumulator at +0xC8. So every frame the camera flew
+       itself forwards and we yanked it back to the creature. That fight is the
+       shake, and its size is the camera's self-motion per frame, which is why it
+       grew with speed: holding Shift ramps the accumulator too.
+
+       Zeroing the accumulator each frame makes the camera hold still on its own
+       and leaves our position write authoritative. It is restored by the engine
+       the moment freecam is used normally, because Update rebuilds it from input. */
+    {
+        void* fc = FindFreeCamComponent();
+        if (Readable(fc, OFF_CAM_ACCEL + 4)) {
+            *(float*)((char*)fc + OFF_CAM_SPEED) = 0.0f;
+            *(float*)((char*)fc + OFF_CAM_ACCEL) = 0.0f;
+        }
+    }
+
+    cm = (const float*)((char*)camEnt + OFF_ENT_XFORM);   /* row1 = forward */
+    bp = (const float*)((char*)beast  + OFF_ENT_POS);
+    pos[0] = bp[0] - cm[4] * g_driveCamD;
+    pos[1] = bp[1] - cm[5] * g_driveCamD;
+    pos[2] = bp[2] - cm[6] * g_driveCamD + g_driveCamH;
+
+    /* SMOOTHING. We write the camera from a hook that runs AFTER the frame's own
+       camera Update, so our position is what the NEXT Update starts from - one
+       frame of lag. Standing still that is invisible; moving fast the camera is
+       forever chasing a stale target and the correction reads as a flicker.
+       Easing toward the target rather than snapping turns that jump into a follow.
+       A large delta still snaps, so a warp or teleport is not eased into. */
+    {
+        static float last[3];
+        static int   have = 0;
+        static void* lastBeast = 0;
+        static DWORD prevMs = 0;
+        DWORD  now = GetTickCount();
+        float  sdt = prevMs ? (float)(now - prevMs) / 1000.0f : 0.0f;
+        prevMs = now;
+        if (sdt < 0.0f || sdt > 0.25f) sdt = 0.0f;
+
+        if (!have || lastBeast != beast) {
+            last[0] = pos[0]; last[1] = pos[1]; last[2] = pos[2];
+            have = 1; lastBeast = beast;
+        } else {
+            /* TIME-BASED, not per-frame. A fixed per-frame factor is a different
+               filter at 60fps than at the several hundred this engine reaches -
+               tight and twitchy when frames are cheap, sluggish when they are
+               not. 1-exp(-rate*dt) is the same follow either way. */
+            float k = (sdt > 0.0f) ? (1.0f - (float)exp(-12.0 * (double)sdt)) : 0.35f;
+            int i;
+            if (k > 1.0f) k = 1.0f;
+            for (i = 0; i < 3; ++i) {
+                float d = pos[i] - last[i];
+                last[i] = (d > 50.0f || d < -50.0f) ? pos[i] : last[i] + d * k;
+                pos[i]  = last[i];
+            }
+        }
+    }
+
+    __try { ((fnEntSetPos)FN_ENT_SETPOS)(camEnt, pos[0], pos[1], pos[2]); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        InterlockedExchange(&g_driveCam, 0);
+        logf_("[drive] chase camera faulted - disabled");
+    }
+}
+
+static char g_driveSignal[96] = "";   /* attack signal, derived at `drive` time */
+
+/* Combat suspension state, shared by the bound key, `drivecalm` and `drive`.
+   Declared here because the number-key handler below acts on it. */
+static int  g_driveCalm = 0;
+static void AgentCombat(int enable);
+
+
+/* ---- the signal catalogue -------------------------------------------------
+   Every name below was read out of a shipped `.gosm.xml`; none is a guess, and
+   every published hash reproduces under zlib CRC-32. See SIGNALS.md and
+   CREATURE_AUDIT.md Â§3, which machine-diffed this table against the complete
+   accepted set: 74 names, nothing missing, nothing that the data rejects.
+
+   Three things here are counter-intuitive and cost real testing time if missed:
+
+     1. Nearly every viperwolf action is gated behind Attack_Warning. The one
+        that opens the menu from ANY state is `viperwolf_forced_attack_warning`,
+        which is why it is listed first.
+     2. Banshee and Leonopteryx are on a DIFFERENT track (Mount.gosm), where
+        `forceidle` does nothing at all - theirs is `force_idle_animal`. We used
+        to bind plain `forceidle` unconditionally, which was simply broken for
+        flyers.
+     3. The species column is a MENU convenience, not a correctness constraint.
+        animal_state_machines.xml is ONE blob with ONE track, and every species
+        file hangs its sinks off the SAME shared Idle - so a thanator standing
+        in Idle really is offered `tame_sign` and `hammerhead_attack` too. We
+        keep the split only so the number keys stay short. Where the audit
+        proved a row is on a state that is NOT its apparent owner's - the two
+        `mounted_direhorse_*` (sinks on ::Thanator/States/Mounted) and
+        `let_user_get_on` (a shared-track interrupt) - the row now lives in the
+        shared block, because hiding them behind the wrong species hid the only
+        route into the entire mounted set. CREATURE_AUDIT B4.
+
+   PRECONDITIONS ARE DATA, NOT PROSE. `from`/`state`/`stop` used to be sentences
+   in `note` that two functions guessed at by substring, and both guessed wrong:
+   SigNeedsWarning matched the literal "Warning only" - a spelling only the
+   viperwolf notes use - so it caught 7 of ~23 gated signals, and for the two
+   that need IDLE it sent the Attack_Warning unlock, which is precisely what
+   kills them. LoopStopFor meanwhile modelled howl/bark/prowl as loops (they
+   self-end) and missed every state that genuinely holds. CREATURE_AUDIT B5/B6.
+   `note` is now for humans only; nothing reads it.
+
+   An empty species string matches every animal on the shared quadruped track. */
+enum {
+    FROM_ANY = 0,   /* a track <Interrupt>: accepted anywhere, cannot fail for
+                       state reasons. The safest thing in the file.            */
+    FROM_IDLE,      /* accepted from the shared Idle - and from `state` too if
+                       that is set. `state` == 0 means IDLE AND NOTHING ELSE,
+                       which is the case the old auto-unlock actively broke.   */
+    FROM_STATE      /* `state` names what it needs; getting there is an unlock */
+};
+
+typedef struct {
+    const char* species;
+    const char* sig;
+    int         from;     /* FROM_* above                                      */
+    const char* state;    /* see FROM_* - documentation when it gates nothing   */
+    const char* stop;     /* set ONLY when the target state has no unconditional
+                             <Connection> and therefore HOLDS: this is the
+                             signal that ends it. A state that walks itself out
+                             when the clip finishes gets 0, however long it runs */
+    const char* note;
+} DriveSig;
+
+static const DriveSig kDriveSigs[] = {
+    /* ================= Viperwolf ================= */
+    { "viperwolf",  "viperwolf_forced_attack_warning", FROM_ANY,   0,                       "viperwolf_attack_warning_end",
+      "[ANY - track interrupt] -> Attack_Warning, which HOLDS. THE unlock" },
+    { "viperwolf",  "viperwolf_attack_closerange",     FROM_IDLE,  "Attack_Warning",        0,
+      "[Idle|Attack_Warning] Idle->CloseRangeAttack->Idle; Warning->Bite->Warning. damage @25%" },
+    { "viperwolf",  "viperwolf_howl",                  FROM_STATE, "Attack_Warning",        0,
+      "[Attack_Warning] Howl SELF-ENDS back to Attack_Warning; howl_stop is an early out, not a requirement" },
+    { "viperwolf",  "viperwolf_bark",                  FROM_STATE, "Attack_Warning",        0,
+      "[Attack_Warning] Bark SELF-ENDS back to Attack_Warning; bark_stop is an early out" },
+    { "viperwolf",  "viperwolf_hop",                   FROM_STATE, "Attack_Warning",        0,
+      "[Attack_Warning] Hop -> HopBark -> Attack_Warning, a self-ending chain" },
+    { "viperwolf",  "viperwolf_stare",                 FROM_STATE, "Attack_Warning",        "viperwolf_stare_end",
+      "[Attack_Warning] Stare HOLDS - stare_end or safe_fail required" },
+    { "viperwolf",  "viperwolf_safe_fail",             FROM_STATE, "Stare",                 0,
+      "[Stare] -> Sit (viperwolf_idle_sitting). The only sit. Two-step: warning, stare, this" },
+    { "viperwolf",  "viperwolf_prowl_left",            FROM_STATE, "Attack_Warning",        0,
+      "[Attack_Warning] a 4-state ring that SELF-ENDS at Attack_Warning; prowl_stop is an early out" },
+    { "viperwolf",  "viperwolf_prowl_right",           FROM_STATE, "Attack_Warning",        0,
+      "[Attack_Warning] a 4-state ring that SELF-ENDS at Attack_Warning; prowl_stop is an early out" },
+    { "viperwolf",  "viperwolf_prowl_stop",            FROM_STATE, "ProwlLeft|ProwlRight",  0,
+      "[ProwlLeft group|ProwlRight group] -> Attack_Warning" },
+    { "viperwolf",  "viperwolf_flee_start",            FROM_STATE, "Attack_Warning",        0,
+      "[Attack_Warning] FleeStart, sets Speed=8 at 99%, -> Idle" },
+    { "viperwolf",  "viperwolf_flee_end",              FROM_IDLE,  0,                       0,
+      "[Idle ONLY] -> FleeEnd -> Attack_Warning. The old auto-unlock BROKE this one" },
+    { "viperwolf",  "viperwolf_attack_warning",        FROM_IDLE,  0,                       "viperwolf_attack_warning_end",
+      "[Idle ONLY] -> Attack_Warning, which HOLDS. The forced variant is better" },
+    { "viperwolf",  "viperwolf_attack_warning_end",    FROM_STATE, "Attack_Warning",        0,
+      "[Attack_Warning] -> Idle. Attack_Warning HOLDS, so this is its stop partner" },
+    { "viperwolf",  "viperwolf_howl_stop",             FROM_STATE, "Howl",                  0,
+      "[Howl] the early out; the howl would have ended by itself" },
+    { "viperwolf",  "viperwolf_bark_stop",             FROM_STATE, "Bark",                  0,
+      "[Bark] the early out; the bark would have ended by itself" },
+    { "viperwolf",  "viperwolf_stare_end",             FROM_STATE, "Stare",                 0,
+      "[Stare] -> Attack_Warning" },
+
+    /* ================= Thanator ================= */
+    { "thanator",   "Thanator_AttackWarning",           FROM_IDLE,  "SoloAttack|Mounted",    "Thanator_AttackWarningEnd",
+      "[Idle|SoloAttack] -> Thanator Attack Warning, which HOLDS; [Mounted] -> AttackWarningTrans, which also HOLDS" },
+    { "thanator",   "Thanator_ClawAttackFront",         FROM_IDLE,  "Thanator Attack Warning|Mounted", "Thanator_AttackEnd",
+      "[Idle|Thanator Attack Warning] -> SoloAttack, which HOLDS; [Mounted] -> AI Thanator Attack, self-ends" },
+    { "thanator",   "Thanator_AttackEnd",               FROM_STATE, "SoloAttack",            0,
+      "[SoloAttack] -> Idle. REQUIRED after ClawAttackFront from Idle or Warning" },
+    { "thanator",   "Thanator_AttackLeft",              FROM_IDLE,  "Thanator Attack Warning", 0,
+      "[Idle|Thanator Attack Warning] -> AttackLeft, self-ends -> Idle. hurt @10%" },
+    { "thanator",   "Thanator_AttackRight",             FROM_IDLE,  "Thanator Attack Warning", 0,
+      "[Idle|Thanator Attack Warning] -> AttackRight, self-ends -> Idle. hurt @10%" },
+    { "thanator",   "Thanator_AttackJump",              FROM_IDLE,  "Thanator Attack Warning", 0,
+      "[Idle|Thanator Attack Warning] -> AttackJump, self-ends. The ONLY jump reachable by signal" },
+    { "thanator",   "Thanator_AttackWarningEnd",        FROM_STATE, "Thanator Attack Warning", 0,
+      "[Thanator Attack Warning] -> Idle. Its stop partner" },
+    { "thanator",   "Thanator_AttackWarningTransition", FROM_STATE, "Thanator Attack Warning|SoloAttack|AttackWarningTrans", 0,
+      "[Warning|SoloAttack] -> Warning Transition, self-ends -> Idle; [AttackWarningTrans] -> AttackWarning1 -> Mounted" },
+    { "thanator",   "mounted_thanator_leapattack",      FROM_STATE, "::Thanator/States/Mounted", 0,
+      "[Mounted] Quadruped_LeapAttack, self-ends -> Mounted" },
+    { "thanator",   "mounted_thanator_claw",            FROM_STATE, "::Thanator/States/Mounted", 0,
+      "[Mounted] self-ends -> Mounted" },
+    { "thanator",   "mounted_onspotmove",               FROM_STATE, "::Thanator/States/Mounted", 0,
+      "[Mounted] self-ends -> Mounted" },
+    { "thanator",   "let_user_get_off",                 FROM_STATE, "::Thanator/States/Mounted", 0,
+      "[Mounted] -> GetOff -> Idle" },
+    { "thanator",   "bailout_of_vehicle",               FROM_STATE, "::Thanator/States/Mounted", 0,
+      "[Mounted] -> Idle, no animation" },
+
+    /* ================= Direhorse ================= */
+    { "direhorse",  "direhorse_kick",        FROM_IDLE, "::Thanator/States/Mounted", 0,
+      "[Idle] rear kick, damage @25%; the same signal is also a [Mounted] sink -> AI Direhorse Kick" },
+    { "direhorse",  "direhorse_forwardkick", FROM_IDLE, "::Thanator/States/Mounted", 0,
+      "[Idle] forward kick - it hits TWICE, @25% and @72%; also a [Mounted] sink" },
+    { "direhorse",  "tame_sign",             FROM_IDLE, 0,                           0,
+      "[Idle ONLY] -> TameSign (Quadruped_HeadTwitch). Its only non-combat action" },
+
+    /* ================= Hammerhead / Titanothere ================= */
+    { "hammerhead", "hammerhead_attack",                   FROM_IDLE,  0,               0,
+      "[Idle ONLY] -> CloseRangeAttack -> AttackCooldown -> Idle. hurt @3%" },
+    { "hammerhead", "hammerhead_attackwarning",            FROM_IDLE,  0,               "hammerhead_attackwarning_end",
+      "[Idle ONLY] -> AttackWarning, which HOLDS - the head-lowering display" },
+    { "hammerhead", "hammerhead_skillattack",              FROM_IDLE,  "AttackWarning", 0,
+      "[Idle|AttackWarning] -> LongRangeAttack (hammerhead_alert_stomp), skill event @61%" },
+    { "hammerhead", "hammerhead_attackwarning_transition", FROM_IDLE,  "AttackWarning", 0,
+      "[Idle|AttackWarning] -> Transition, self-ends -> Idle" },
+    { "hammerhead", "hammerhead_attackwarning_end",        FROM_STATE, "AttackWarning|AttackCooldown", 0,
+      "[AttackWarning|AttackCooldown] -> Idle. AttackWarning's stop partner" },
+
+    /* ================= Sturmbeest ================= */
+    { "sturmbeest", "sturmbeest_attack_closerange", FROM_IDLE, 0, 0,
+      "[Idle ONLY] -> HeadAttack, self-ends -> Idle. The ONLY sturmbeest signal there is" },
+
+    /* ===== Banshee AND Leonopteryx - Mount.gosm, a different track entirely ===
+       Carried ONCE, under "banshee": both species load the same file, there is
+       nothing species-specific in it (no AnimalSpecies test, one Track), and
+       DriveSigBuild maps a leonopteryx leaf onto this key. The table used to
+       carry a hand-copied SUBSET for the leonopteryx, silently costing it
+       `mounted_preattack_animal` and `mounted_idle_animal`. CREATURE_AUDIT B3.
+
+       Almost every state on this track HOLDS, and most have no single "undo"
+       partner - the way out is whichever signal you want next, or the track
+       interrupt. So `stop` is set only where a genuine cancel exists. */
+    { "banshee",    "force_idle_animal",          FROM_ANY,   0,                     0,
+      "[ANY - the ONLY track interrupt here] -> Idle_temp. `forceidle` does NOTHING on this track" },
+    { "banshee",    "take_off",                   FROM_STATE, "Idle_temp|Mounted_SoloIdle", 0,
+      "[Idle_temp|SoloIdle] -> SoloLiftOff -> SoloMove. THE unlock for everything below" },
+    { "banshee",    "mounted_preattack_animal",   FROM_STATE, "SoloMove",            0,
+      "[SoloMove] -> SoloPreAttack, HOLDS" },
+    { "banshee",    "mounted_attack_animal",      FROM_STATE, "SoloMove|SoloPreAttack", 0,
+      "[SoloMove|SoloPreAttack] -> SoloAttack, self-ends -> SoloMove. There is NO ground attack on this track" },
+    { "banshee",    "mounted_landing_animal",     FROM_STATE, "SoloMove",            0,
+      "[SoloMove] -> SoloLanding, HOLDS. This is how you land" },
+    { "banshee",    "mounted_idle_animal",        FROM_STATE, "SoloMove|SoloPreAttack|Landing_End1|Mount|Mounted_Landing_End", 0,
+      "[5 sources, not 3] -> SoloIdle, HOLDS" },
+    { "banshee",    "mounted_move_animal",        FROM_STATE, "SoloLanding|SoloPreAttack|Idle_temp|Mounted_Idle|Mounted_Landing|Mounted_Landing_End", 0,
+      "[6 sources] -> Move" },
+    { "banshee",    "mounted_landing_end_animal", FROM_STATE, "SoloLanding|Mounted_Move|Mounted_Landing", 0,
+      "[SoloLanding|Mounted_Move|Mounted_Landing] -> Landing_End, HOLDS" },
+    { "banshee",    "get_on_animal",              FROM_STATE, "Idle_temp",           0,
+      "[Idle_temp] -> Mount (Animal_Mount_GetOn), HOLDS. Rider slot may be null - UNKNOWN what it does with none" },
+    { "banshee",    "force_on_animal",            FROM_STATE, "Idle_temp",           0,
+      "[Idle_temp] -> Mounted_Idle (CGOStateAnimWithSlave), HOLDS" },
+    { "banshee",    "mounted_liftoff_animal",     FROM_STATE, "Mounted_Idle",        0,
+      "[Mounted_Idle] -> Mounted_TakeOff -> Mounted_Move. NOTE: a DIFFERENT signal from take_off" },
+    { "banshee",    "get_off_animal",             FROM_STATE, "Mounted_Idle",        0,
+      "[Mounted_Idle] -> Dismount -> Idle_temp" },
+    { "banshee",    "mounted_pre_grab",           FROM_STATE, "Mounted_Move",        "mounted_stop_grab",
+      "[Mounted_Move] -> Mounted_PreGrab, HOLDS" },
+    { "banshee",    "mounted_grab_animal",        FROM_STATE, "Mounted_PreGrab",     0,
+      "[Mounted_PreGrab] -> Mounted_Grab -> Mounted_UnGrab -> Mounted_Move" },
+    { "banshee",    "mounted_stop_grab",          FROM_STATE, "Mounted_PreGrab",     0,
+      "[Mounted_PreGrab] -> Mounted_Move" },
+    { "banshee",    "mounted_wall_approach",      FROM_STATE, "Mounted_Move",        "mounted_wall_cancel",
+      "[Mounted_Move] -> WallApproach, HOLDS" },
+    { "banshee",    "mounted_wall_touch",         FROM_STATE, "Mounted_Move|WallApproach", "mounted_wall_cancel",
+      "[Mounted_Move|WallApproach] -> WallTouch, HOLDS" },
+    { "banshee",    "mounted_wall_cancel",        FROM_STATE, "WallApproach|WallTouch", 0,
+      "[WallApproach|WallTouch] -> Mounted_Move" },
+    { "banshee",    "mounted_wall_flip",          FROM_STATE, "WallApproach|WallTouch|Mounted_Move", 0,
+      "[group CanWallFlip] -> WallFlip -> Mounted_Move" },
+
+    /* ===== every animal on the shared AnimalQuadruped track =====
+       Reminder: the blob merges all six machines, so an empty species string is
+       CORRECT here and would arguably be correct for most of the rows above. */
+    { "",           "start_lookat",           FROM_IDLE,  0,        "stop_lookat",
+      "[Idle ONLY] -> LookAt (head tracking), HOLDS" },
+    { "",           "stop_lookat",            FROM_STATE, "LookAt", 0,
+      "[LookAt] -> Idle" },
+    { "",           "TriggerAnimalHurtAnim",  FROM_IDLE,  "LookAt|Eat|HeadTwitch|BriefingAnim|smart terrain|19 Viperwolf states", 0,
+      "[group CanPlayHurt] the flinch - and NOT from any Thanator/Direhorse/Hammerhead/Sturmbeest state, nor Ragdoll or Die" },
+    { "",           "resurrect",              FROM_STATE, "Ragdoll", 0,
+      "[Ragdoll] -> Idle. It un-kills a ragdoll" },
+    { "",           "die",                    FROM_ANY,   0,         0,
+      "[ANY - track interrupt] -> Die -> Ragdoll, and `resurrect` brings it back. On a FLYER it lands in Mounted_Die, which is TERMINAL - only force_idle_animal escapes" },
+
+    /* The mounted set's front door, and the two rows that are NOT the
+       direhorse's. All three are sinks/interrupts that belong to whatever
+       creature is standing in ::Thanator/States/Mounted, whichever species that
+       is - hiding them under "thanator"/"direhorse" hid the only route in.
+       CREATURE_AUDIT B4. Every state under Mounted is CGOStateAnimWithSlave
+       with the RIDER as slave; with no rider bound the result is UNKNOWN. */
+    { "",           "let_user_get_on",              FROM_ANY,   0,                           0,
+      "[ANY - track interrupt] -> LetUserGetOnMe -> ::Thanator/States/Mounted. THE unlock for every "
+      "mounted_* row - 7 signals. *** DIREHORSE AND THANATOR ONLY have a Quadruped_getOn branch, and "
+      "that root has NO Invalid/DoNothing fallback: on any other species this is a silent ONE-WAY TRIP "
+      "into Mounted, which kills every Idle-gated signal. Escape with forceidle or bailout_of_vehicle. ***" },
+    { "",           "mounted_direhorse_kick",       FROM_STATE, "::Thanator/States/Mounted", 0,
+      "[::Thanator/States/Mounted] a sink on a THANATOR state, not a direhorse one" },
+    { "",           "mounted_direhorse_forwardkick",FROM_STATE, "::Thanator/States/Mounted", 0,
+      "[::Thanator/States/Mounted] likewise not direhorse-specific" },
+
+    { "",           "start_smart_terrain",    FROM_IDLE,  0,               0,
+      "[Idle ONLY] -> TransitionStart -> PlaySmartTerrain -> TransitionEnd -> Idle. Needs a blackboard smartterrain_*_moveStateID or it falls straight through" },
+    { "",           "loop_smart_terrain",     FROM_IDLE,  0,               "abort_smart_terrain",
+      "[Idle ONLY] -> LoopTransitionStart -> LoopSmartTerrain, which HOLDS FOREVER" },
+    { "",           "stop_smart_terrain",     FROM_STATE, "SmartTerrain",  0,
+      "[group SmartTerrain] -> TransitionEnd. WINDOW 95-100% ONLY - the one sink in the corpus that is not 0-100" },
+    { "",           "abort_smart_terrain",    FROM_STATE, "SmartTerrain",  0,
+      "[group SmartTerrain - all 5 states] -> Idle. The reliable escape" },
+    { "",           "start_briefing",         FROM_IDLE,  0,               "activation_failure",
+      "[Idle ONLY] -> BriefingAnim (CGOStateBriefing), self-loops. Needs a domino/briefing context - UNKNOWN what it plays without one" },
+    { "",           "interrupt_briefing",     FROM_STATE, "BriefingAnim",  0,
+      "[BriefingAnim] -> BriefingAnim (restart)" },
+    { "",           "activation_failure",     FROM_STATE, "TransitionStart|TransitionEnd|LoopTransitionStart|BriefingAnim", 0,
+      "[the 3 transitions|BriefingAnim] -> the failure fall-through. A second escape hatch" },
+};
+#define DRIVE_SIG_N ((int)(sizeof(kDriveSigs)/sizeof(kDriveSigs[0])))
+
+/* Look a name up in the catalogue. Everything that used to read the `note`
+   prose reads this instead, so `drivebind`-bound names get the same treatment
+   as menu ones and nothing has to be kept in sync by hand. */
+static const DriveSig* SigRow(const char* sig)
+{
+    int i;
+    if (!sig || !*sig) return 0;
+    for (i = 0; i < DRIVE_SIG_N; ++i)
+        if (strcmp(kDriveSigs[i].sig, sig) == 0) return &kDriveSigs[i];
+    return 0;
+}
+
+
+/* ==================== does this species HAVE a clip? ====================
+   CREATURE_RIDING.md sections 7.1-7.2. A signal that changes state but has no
+   move-tree leaf for this species is not a bug in the table and not a wrong
+   hash - it is the shipped data. The move tree branches on the AnimalSpecies
+   condition, and for several roots only one or two species are enumerated.
+
+   Two distinct outcomes, and the console should name them differently:
+
+     NOCLIP  - the root has no branch for this species at all. Quadruped_getOn
+               and Quadruped_GetOff do not even have the Invalid/DoNothing leaf
+               that HeadTwitch and LookAt have, so nothing plays and the state
+               change is invisible.
+     IDLE    - the root DOES have a branch for this species and its leaf is that
+               species' own idle_relax. Accepted, animated, and identical to
+               doing nothing. This is why every attack signal on a hexapede
+               looks broken and is not.
+
+   That second category is the one that had never been named, and it is the
+   answer to "I press the button and nothing happens": the command works. */
+typedef struct {
+    const char* sig;        /* kDriveSigs.sig                                  */
+    const char* haveClip;   /* '|'-separated species that get a REAL clip      */
+    const char* idleOnly;   /* '|'-separated species whose leaf is idle_relax  */
+    const char* root;       /* the move-tree root, for the log                 */
+} SigClip;
+
+#define ATK_REAL "direhorse|thanator|viperwolf|sturmbeest|hammerhead"
+#define ATK_IDLE "hexapede|tapirus|stingbat|wasp"
+
+static const SigClip kSigClips[] = {
+    /* --- the mount set: two species, and NO Invalid fallback --------------- */
+    { "let_user_get_on",              "direhorse|thanator", "", "Quadruped_getOn" },
+    { "let_user_get_off",             "direhorse|thanator", "", "Quadruped_GetOff" },
+    { "mounted_onspotmove",           "direhorse|thanator", "", "Quadruped_OnSpotMove" },
+    /* --- Quadruped_Attack: everyone has a branch, four of them are idle ---- */
+    { "direhorse_kick",               ATK_REAL, ATK_IDLE, "Quadruped_Attack" },
+    { "direhorse_forwardkick",        ATK_REAL, ATK_IDLE, "Quadruped_Attack" },
+    { "mounted_direhorse_kick",       ATK_REAL, ATK_IDLE, "Quadruped_Attack" },
+    { "mounted_direhorse_forwardkick",ATK_REAL, ATK_IDLE, "Quadruped_Attack" },
+    { "mounted_thanator_claw",        ATK_REAL, ATK_IDLE, "Quadruped_Attack" },
+    { "Thanator_ClawAttackFront",     ATK_REAL, ATK_IDLE, "Quadruped_Attack" },
+    { "hammerhead_attack",            ATK_REAL, ATK_IDLE, "Quadruped_Attack" },
+    { "sturmbeest_attack_closerange", ATK_REAL, ATK_IDLE, "Quadruped_Attack" },
+    { "viperwolf_attack_closerange",  ATK_REAL, ATK_IDLE, "Quadruped_Attack" },
+    /* --- single-species roots --------------------------------------------- */
+    { "Thanator_AttackJump",          "thanator",  "", "Quadruped_AttackJump" },
+    { "Thanator_AttackLeft",          "thanator",  "", "Quadruped_AttackLeft" },
+    { "Thanator_AttackRight",         "thanator",  "", "Quadruped_AttackRight" },
+    { "mounted_thanator_leapattack",  "thanator",  "", "Quadruped_LeapAttack" },
+    { "hammerhead_skillattack",       "hammerhead","", "quadruped_AttackSkill" },
+    { "TriggerAnimalHurtAnim",        "viperwolf", "", "Quadruped_Hurt" },
+    { "viperwolf_safe_fail",          "viperwolf", "", "Quadruped_AttackSafeFail" },
+    { "viperwolf_howl",               "viperwolf", "", "Quadruped_Howl" },
+    { "viperwolf_bark",               "viperwolf", "", "Quadruped_Bark" },
+    { "viperwolf_hop",                "viperwolf", "", "Quadruped_Hop" },
+    { "viperwolf_stare",              "viperwolf", "", "Quadruped_Stare" },
+    { "viperwolf_flee_start",         "viperwolf", "", "Quadruped_FleeStart" },
+    { "viperwolf_flee_end",           "viperwolf", "", "Quadruped_FleeEnd" },
+    /* Quadruped_AttackWarning has ONLY Viperwolf and Thanator branches, and the
+       Thanator one links straight into Generic_Movement/NotMoving - so the
+       hammerhead's own warning signal has nothing to play at all. */
+    { "viperwolf_attack_warning",     "viperwolf", "", "Quadruped_AttackWarning" },
+    { "viperwolf_forced_attack_warning","viperwolf","","Quadruped_AttackWarning" },
+    { "Thanator_AttackWarning",       "",          "", "Quadruped_AttackWarning" },
+    { "hammerhead_attackwarning",     "",          "", "Quadruped_AttackWarning" },
+    { "hammerhead_attackwarning_transition", "hammerhead|thanator", "",
+                                                  "Quadruped_Attack_Warning_Transition" },
+    { "Thanator_AttackWarningTransition",    "hammerhead|thanator", "",
+                                                  "Quadruped_Attack_Warning_Transition" },
+    /* --- tame_sign: the ONE real fidget, and it is direhorse-only ---------- */
+    { "tame_sign",                    "viperwolf|direhorse|banshee",
+                                      "sturmbeest|hexapede|tapirus|hammerhead|thanator",
+                                      "Quadruped_HeadTwitch" },
+    { "start_lookat",                 "viperwolf|banshee|thanator",
+                                      "direhorse|sturmbeest|hexapede|tapirus|hammerhead",
+                                      "Quadruped_LookAt" },
+    /* --- the flyer set: banshee and leonopteryx only ----------------------- */
+    { "take_off",                     "banshee|leonopteryx", "", "Animal_Mounted_LiftOff" },
+    { "mounted_idle_animal",          "banshee|leonopteryx", "", "Animal_Mounted_Idle" },
+    { "mounted_landing_animal",       "banshee|leonopteryx", "", "Animal_Mounted_Landing" },
+    { "mounted_attack_animal",        "banshee|leonopteryx", "", "Animal_Mount_Attack" },
+    { "mounted_grab_animal",          "leonopteryx",         "", "Animal_Mounted_Grab" },
+    { "mounted_pre_grab",             "leonopteryx",         "", "Animal_Mounted_PreGrab" },
+};
+#define SIG_CLIP_N ((int)(sizeof(kSigClips)/sizeof(kSigClips[0])))
+
+/* 0 = a real clip, 1 = idle_relax only, 2 = no branch at all, -1 = not catalogued.
+   `species` is g_driveSpecies (the kDriveSigs key), NOT the raw archetype leaf. */
+static int SigClipVerdict(const char* sig, const char* species, const SigClip** rowOut)
+{
+    int i;
+    if (rowOut) *rowOut = 0;
+    if (!sig || !*sig || !species || !*species) return -1;
+    for (i = 0; i < SIG_CLIP_N; ++i) {
+        if (strcmp(kSigClips[i].sig, sig) != 0) continue;
+        if (rowOut) *rowOut = &kSigClips[i];
+        if (kSigClips[i].idleOnly[0] && Stristr(kSigClips[i].idleOnly, species)) return 1;
+        if (kSigClips[i].haveClip[0] && Stristr(kSigClips[i].haveClip, species)) return 0;
+        return 2;
+    }
+    return -1;
+}
+
+/* ---- humanoids ------------------------------------------------------------
+   A driven NPC stood there doing nothing when you pressed the attack keys, and
+   the reason was not that pawns cannot fight: every name in kDriveSigs above is
+   an AnimalQuadruped.gosm / Mount.gosm name, and a humanoid pawn loads NEITHER.
+   It loads 24 other machines, and its attacks are SHARED rather than per-species
+   - there is no navi_*, rda_* or soldier_* signal anywhere in the game.
+
+   The set below is weapons.gosm.xml group `AllowAttackInstant`, whose member
+   states are xIdle + xIdleCycleBreaker: accepted from a plain standing idle,
+   exactly like the animal tables. Nothing new is needed to send them -
+   RequestSignal broadcasts to every loaded track and does not care about
+   species, so AgentSignal() reaches these unchanged.
+
+   SINK names, not request names. Input sends `startshooting`, the weapon code
+   answers with `fire_bullet`, and the state machine listens for the second one.
+   From a cold idle with the AI muted there is no weapon code running to do that
+   translation, so we send the sink directly. Same for `throw_ai` (not
+   `throw_grenade`) and `melee_attack_swing`.
+
+   Worth knowing: defaultinputremappingconfig.xml binds no grenade and no melee
+   key at all, so `throw_ai` and the machete rows reach content the retail PC
+   player has no way to trigger. See NPC_POSSESSION.md. */
+typedef struct { const char* sig; const char* note; } HumanSig;
+
+static const HumanSig kHumanSigs[] = {
+    /* REQUEST names first. The distinction cost a test pass, so it is written
+       down here: the documented chain for a human firing is
+
+           input -> `startshooting` -> equipment request 3 -> the weapon code
+           emits `fire_bullet` -> States/FireBullets plays the animation
+
+       `fire_bullet` is the SINK. Sending it from a cold idle animates a shot
+       that the weapon was never asked to take, which is why attacking appeared
+       to do nothing. `startshooting` is the request that actually drives the
+       weapon code, and the pawn `<Event>` elements accept signals rather than
+       only emitting them, so it can be sent from here.
+
+       A holstered weapon is the other half: an NPC standing idle has nothing in
+       its hands, and every shooting name is a no-op until `drawweapon`. */
+    { "drawweapon",              "TAKE THE WEAPON OUT FIRST - shooting is a no-op while holstered" },
+    { "startshooting",           "the REQUEST that makes the weapon fire; ends with stopshooting" },
+    { "reload",                  "request; the weapon answers with reload_now" },
+    { "throw_grenade",           "request; the weapon answers with throw_ai" },
+    { "holsterweapon",           "put it away again" },
+
+    { "fire_bullet",             "SINK: plays the firing animation only, fires nothing" },
+    { "melee_attack_swing",      "machete swing; chains until melee_end_chain" },
+    { "melee_charge_begin",      "the wind-up charge - one of two attacks a merc emits" },
+    { "melee_attack_killground",  "finisher on a downed target" },
+    { "melee_attack_success",    "the connect reaction" },
+    { "melee_attack_miss",       "the whiff reaction" },
+    { "melee_attack_scare",      "the threat swing, no damage" },
+    { "throw_ai",                "grenade - the AI-side throw; NO key is bound to this" },
+    { "throw_player",            "grenade - the player-side lowering-arms throw" },
+    { "perform_dodge",           "the roll" },
+    { "prepare_charged_shot",    "charged-weapon wind-up" },
+    { "explode_projectiles",     "rocket launcher: detonate in flight" },
+    { "jam",                     "force a weapon jam" },
+    { "stopshooting",            "FireBullets only - the loop-stop partner" },
+    { "melee_end_chain",         "MeleeAttackSwing -> idle" },
+    { "machete_hit_left",        "melee chain step" },
+    { "machete_hit_right",       "melee chain step" },
+    { "TriggerHurtAnim",         "the flinch (pawn name; animals use TriggerAnimalHurtAnim)" },
+    { "stun",                    "TRACK interrupt -> stun" },
+    { "resurrect",               "ragdoll only -> idle" },
+    { "die",                     "TRACK interrupt, from any state" },
+};
+#define HUMAN_SIG_N ((int)(sizeof(kHumanSigs)/sizeof(kHumanSigs[0])))
+
+/* Is this leaf one of the creatures kDriveSigs knows about? Everything else -
+   RDA troopers, Na'vi warriors, the civilian technicians - gets the humanoid
+   set. Deliberately a whitelist of animals rather than a whitelist of humans:
+   there are far more humanoid archetypes than animal ones, and a signal sent to
+   the wrong track is a documented no-op rather than a fault. */
+static int IsAnimalLeaf(const char* leaf)
+{
+    static const char* kAnimals[] = {
+        "viperwolf", "thanator", "direhorse", "hammerhead", "titano",
+        "sturmbeest", "banshee", "leonopteryx", "hexapede", "tapirus",
+        "prolemuris", "hellfirewasp", "wasp", "stingbat", "slinger",
+        "austrapede", "fanlizard", "sturmbeast",
+    };
+    int i;
+    if (!leaf || !*leaf) return 0;
+    for (i = 0; i < (int)(sizeof(kAnimals)/sizeof(kAnimals[0])); ++i)
+        if (Stristr(leaf, kAnimals[i])) return 1;
+    return 0;
+}
+
+/* The built list for the creature currently being driven. A viperwolf alone has
+   17 of its own, so nine number keys are not enough - 1..9 address the current
+   PAGE and 0 steps to the next one.
+
+   DRIVE_MAX was 40 and the worst case is now a viperwolf: 1 interrupt + its 17
+   + the 15 shared rows + the combat toggle = 34, and a flyer reaches 21. 40
+   would still hold both, but only just, and running out is SILENT - DriveSigAdd
+   simply drops the overflow and the missing keys look like a data bug. 64 is
+   free (4 KB of BSS) and ends the arithmetic. 64/9 = 8 pages, and every array
+   and loop below is sized off DRIVE_MAX or DRIVE_SLOTS, never a literal.
+   The 64-byte name width is unchanged and still ample: the longest real signal
+   name in the game is `hammerhead_attackwarning_transition`, 35 characters. */
+#define DRIVE_SLOTS 9
+#define DRIVE_MAX   64
+static char        g_driveSig[DRIVE_MAX][64];
+static const char* g_driveNote[DRIVE_MAX];
+static int         g_driveSigN = 0;
+static int         g_drivePage = 0;
+
+/* Not every slot sends a signal. A slot can instead be an ACTION we perform
+   ourselves - so things like the combat toggle live on the number keys with
+   everything else, rather than being a console command you have to stop and
+   type. 0 = send the signal, 1 = toggle the creature's combat behaviour. */
+#define DRIVE_ACT_SIGNAL 0
+#define DRIVE_ACT_COMBAT 1
+static int g_driveAct[DRIVE_MAX];
+
+static void DriveSigAdd(const char* sig, const char* note)
+{
+    int i;
+    if (!sig || !*sig || g_driveSigN >= DRIVE_MAX) return;
+    for (i = 0; i < g_driveSigN; ++i)
+        if (strcmp(g_driveSig[i], sig) == 0) return;      /* no duplicates */
+    strncpy(g_driveSig[g_driveSigN], sig, sizeof(g_driveSig[0]) - 1);
+    g_driveSig[g_driveSigN][sizeof(g_driveSig[0]) - 1] = 0;
+    g_driveNote[g_driveSigN] = note;
+    g_driveAct[g_driveSigN]  = DRIVE_ACT_SIGNAL;
+    ++g_driveSigN;
+}
+
+/* Which signals leave the creature in a state it will NEVER walk out of, and
+   what ends them. This is the `stop` column of the catalogue, and the rule
+   behind that column is read straight off the GOSM: a CGOStateAnim with an
+   unconditional <Connection> advances by itself when the clip ends; one with
+   only <Sink>s holds.
+
+   The hand-written list this replaced had it backwards. It modelled howl, bark
+   and the two prowls as loops - all four have unconditional <Connection>s and
+   end themselves, so the key just refused to fire twice in a row - while the
+   states that genuinely hold were absent. The worst of them: the key for
+   `Thanator_ClawAttackFront` lands in SoloAttack, which has no <Connection> at
+   all, and parked the thanator mid-swing forever. The left-mouse path had
+   already been fixed for exactly this (AttackEndFor); the key path had not.
+   CREATURE_AUDIT B6. */
+static int g_driveLoop = -1;      /* index of the entry currently holding */
+
+static const char* LoopStopFor(const char* sig)
+{
+    const DriveSig* row = SigRow(sig);
+    if (row) return row->stop;
+    /* Humanoid: FireBullets runs until stopshooting, and the machete swing keeps
+       chaining until melee_end_chain. Both would otherwise latch exactly the way
+       the thanator's claw does. Only two of the 21 pawn signals hold, so they
+       stay here rather than growing a column onto kHumanSigs for two rows. */
+    if (!sig) return 0;
+    if (strcmp(sig, "startshooting")      == 0) return "stopshooting";
+    if (strcmp(sig, "fire_bullet")        == 0) return "stopshooting";
+    if (strcmp(sig, "melee_attack_swing") == 0) return "melee_end_chain";
+    return 0;
+}
+
+static void DriveActAdd(int act, const char* label, const char* note)
+{
+    if (g_driveSigN >= DRIVE_MAX) return;
+    strncpy(g_driveSig[g_driveSigN], label, sizeof(g_driveSig[0]) - 1);
+    g_driveSig[g_driveSigN][sizeof(g_driveSig[0]) - 1] = 0;
+    g_driveNote[g_driveSigN] = note;
+    g_driveAct[g_driveSigN]  = act;
+    ++g_driveSigN;
+}
+
+/* WHICH ROWS THIS CREATURE GETS, and which "back to Idle" it answers to.
+   Both are set by DriveSigBuild and read by the gate further down, which would
+   otherwise have to re-derive the species from the signal name - it used to,
+   passing g_driveSig[idx] as the species hint, and that works only for names
+   that happen to carry a species prefix. `take_off`, `die`, `let_user_get_on`
+   and every `mounted_*` carry none. */
+static char g_driveSpecies[64] = "";  /* the kDriveSigs key, not the raw leaf */
+static char g_driveIdleSig[32] = "";  /* forceidle, or force_idle_animal      */
+
+/* Map an archetype leaf onto the key the catalogue is written in. Both flyers
+   load the same Mount.gosm, so both use the banshee's rows (B3), and the two
+   spelling variants that PrimaryAttackFor already accepted get folded in too -
+   a Titanothere archetype used to get the hammerhead attack on left-click and
+   NONE of the five hammerhead rows in its menu, which is the same bug wearing a
+   different hat (B4). */
+static const char* SpeciesKeyFor(const char* leaf)
+{
+    if (Stristr(leaf, "banshee") || Stristr(leaf, "leonopteryx")) return "banshee";
+    if (Stristr(leaf, "hammerhead") || Stristr(leaf, "titano"))   return "hammerhead";
+    if (Stristr(leaf, "sturmbeest") || Stristr(leaf, "sturmbeast"))return "sturmbeest";
+    return leaf;
+}
+
+/* Build the list for `leaf` - the archetype's last segment, e.g. "Viperwolf". */
+static void DriveSigBuild(const char* leaf)
+{
+    int k;
+    int flyer = (Stristr(leaf, "banshee") || Stristr(leaf, "leonopteryx")) ? 1 : 0;
+    int human = !IsAnimalLeaf(leaf);
+    const char* key = SpeciesKeyFor(leaf);
+
+    g_driveSigN = 0;
+    g_drivePage = 0;
+    g_driveLoop = -1;
+
+    strncpy(g_driveSpecies, key, sizeof(g_driveSpecies) - 1);
+    g_driveSpecies[sizeof(g_driveSpecies) - 1] = 0;
+    strcpy(g_driveIdleSig, flyer ? "force_idle_animal" : "forceidle");
+
+    /* The right interrupt first - it is the escape hatch when an animation
+       latches, and it is NOT the same name on the two tracks. (For a flyer this
+       is also a catalogue row; DriveSigAdd de-duplicates.) */
+    DriveSigAdd(g_driveIdleSig, "interrupt: back to Idle from any state");
+
+    if (human) {
+        /* A pawn never loads AnimalQuadruped.gosm, so every animal name below
+           would hash to nothing on it. Give it the shared weapons set instead -
+           this is what made a driven NPC look like it had no attacks. */
+        for (k = 0; k < HUMAN_SIG_N; ++k)
+            DriveSigAdd(kHumanSigs[k].sig, kHumanSigs[k].note);
+        DriveActAdd(DRIVE_ACT_COMBAT, "combat",
+                    "stops it attacking you");
+        logf_("[drive] %d entries for \"%s\" (humanoid - weapons.gosm)",
+              g_driveSigN, leaf);
+        return;
+    }
+
+    for (k = 0; k < DRIVE_SIG_N; ++k)                     /* this species */
+        if (kDriveSigs[k].species[0] && Stristr(key, kDriveSigs[k].species))
+            DriveSigAdd(kDriveSigs[k].sig, kDriveSigs[k].note);
+
+    if (!flyer) {                                          /* shared track only */
+        for (k = 0; k < DRIVE_SIG_N; ++k)
+            if (!kDriveSigs[k].species[0])
+                DriveSigAdd(kDriveSigs[k].sig, kDriveSigs[k].note);
+    } else {
+        /* A flyer is on Mount.gosm and none of the shared quadruped rows exist
+           there - except ONE. `die` is a group `::Mount/Animation Track/CanDie`
+           covering 21 states, so excluding the whole shared block cost the
+           flyers the only signal that does work. CREATURE_AUDIT B2.
+           (It is a one-way trip: Mounted_Die has no Connection and no Sink at
+           all, so force_idle_animal is the only way back. The note says so.) */
+        const DriveSig* d = SigRow("die");
+        if (d) DriveSigAdd(d->sig, d->note);
+    }
+
+    /* Last slot: the combat toggle, so it is reachable without leaving the game.
+       It sits at the end because it is a mode change, not an animation. */
+    DriveActAdd(DRIVE_ACT_COMBAT, "combat",
+                "stops it lunging at you; the animation keys are unaffected");
+
+    logf_("[drive] %d entries for \"%s\"%s",
+          g_driveSigN, leaf, flyer ? " (Mount.gosm track)" : "");
+}
+
+/* WHAT LEFT-CLICK SHOULD SEND.
+   This used to be built by string surgery: lowercase the archetype's last
+   segment and append "_attack_closerange". That works for a viperwolf and a
+   sturmbeest and is WRONG for everything else. A Thanator has no
+   `_attack_closerange` signal at all - its attacks are `Thanator_ClawAttackFront`
+   and friends, capitalised - and `Animals.Avatar.Thanator_Pet` made it worse by
+   producing "thanator_pet_attack_closerange". Signal names are case-sensitive
+   hashes, so a wrong name is not an error: it matches nothing and the creature
+   just stands there, which is exactly what was reported.
+
+   Take the primary attack from the confirmed catalogue instead. */
+/* Some attacks do NOT return to idle by themselves - they park in an attack
+   state until an explicit end signal arrives. The Thanator is the clear case:
+   `Thanator_ClawAttackFront` goes to SoloAttack, and `Thanator_AttackEnd` is
+   documented as "SoloAttack only -> Idle".
+
+   In normal play the AI's own task sends that end. We MUTE the AI, so nothing
+   does - which is why attacking a Thanator left it stuck mid-swing with only
+   forceidle to break it out. Muting created this; we send the end ourselves.
+
+   The thanator really is the only one: viperwolf CloseRangeAttack, sturmbeest
+   HeadAttack, hammerhead CloseRangeAttack, direhorse SoloAttack_Direhorse and
+   the mount's SoloAttack all have unconditional <Connection>s and walk
+   themselves out. This is the same fact as the `stop` column on
+   Thanator_ClawAttackFront, for the OTHER caller - the number keys go through
+   LoopStopFor, left mouse comes here. */
+static const char* AttackEndFor(const char* leaf)
+{
+    if (Stristr(leaf, "thanator")) return "Thanator_AttackEnd";
+    return 0;
+}
+
+static const char* PrimaryAttackFor(const char* leaf)
+{
+    if (Stristr(leaf, "thanator"))   return "Thanator_ClawAttackFront";
+    if (Stristr(leaf, "viperwolf"))  return "viperwolf_attack_closerange";
+    if (Stristr(leaf, "sturmbeest")) return "sturmbeest_attack_closerange";
+    if (Stristr(leaf, "hammerhead") ||
+        Stristr(leaf, "titano"))     return "hammerhead_attack";
+    if (Stristr(leaf, "direhorse"))  return "direhorse_kick";
+    /* A GROUNDED flyer has no attack at all - there is no ground attack in
+       Mount.gosm. `mounted_attack_animal` is accepted only from Mounted_SoloMove
+       and Mounted_SoloPreAttack, and a freshly spawned banshee sits in the
+       track's DefaultState, Idle_temp, so left-click was a guaranteed no-op.
+       `take_off` is what Idle_temp accepts, and it is the step that MAKES the
+       attack reachable: Idle_temp -> SoloLiftOff -> SoloMove. So left-click
+       launches it, and the attack is on a number key one flight later.
+       CREATURE_AUDIT B7. */
+    if (Stristr(leaf, "banshee") ||
+        Stristr(leaf, "leonopteryx"))return "take_off";
+    /* Not an animal at all: a pawn. `startshooting`, NOT `fire_bullet` - the
+       first is the request that drives the weapon code, the second is the sink
+       the weapon code emits afterwards. Sending the sink played an animation
+       and fired nothing, which is what "attacking does not work" looked like.
+       Note the weapon still has to be OUT: see `drawweapon` in kHumanSigs. */
+    if (!IsAnimalLeaf(leaf))         return "startshooting";
+    return 0;                        /* unknown species - fall back to the guess */
+}
+
+static int DrivePages(void)
+{
+    int p = (g_driveSigN + DRIVE_SLOTS - 1) / DRIVE_SLOTS;
+    return p < 1 ? 1 : p;
+}
+/* (DRIVE_SIG_N is defined with the catalogue; it used to be repeated here.) */
+static volatile long g_hudOn = 1;     /* the driving controls panel; F6 toggles */
+static int  AgentSignal(const char* name);   /* defined with the attack block */
+static int  AgentSignalGated(const char* name, const char* species);
+
+/* ---- signals we owe the creature, and when --------------------------------
+   Most unlocks land instantly: a signal names a target state and the track is
+   in it the moment RequestSignal returns, which is why sending
+   `viperwolf_forced_attack_warning` and then the howl in the same frame works.
+   Two do not. `take_off` goes to SoloLiftOff and only reaches SoloMove when the
+   lift-off clip finishes, and `let_user_get_on` goes to LetUserGetOnMe and only
+   reaches Mounted when THAT clip finishes. Sending the follow-up immediately
+   would land in the intermediate state, be dropped silently, and - because the
+   next press would re-send the unlock - never converge.
+
+   So the gate hands those to this queue instead, and the drive tick delivers
+   them. Ordered, tiny, main-thread only, and dropped wholesale when the drive
+   stops so nothing arrives at an agent we no longer own. */
+/* 8, not 4: a preempted command is now up to three hops (break, unlock, target)
+   and a two-stage unlock makes four, so 4 slots could silently drop the last
+   one - SigQueue returns 0 rather than growing. */
+#define SIGQ_MAX 8
+static struct { char sig[64]; DWORD at; } g_sigQ[SIGQ_MAX];
+static int g_sigQN = 0;
+
+/* Whose thread the drive tick runs on. DrivePush and DriveHoldPlayer are
+   documented main-thread-only, but `attack`/`aisignal`/`drivesignal` call
+   AgentSignal from wherever the console executes commands, and whether that is
+   the same thread was never established. Recorded here and checked once in
+   AgentSignal, which is the whole of the two-line answer CREATURE_AUDIT B11
+   asked for - it reports rather than serialises, because if the answer turns
+   out to be "different thread" the fix is a queue, not a lock. */
+static DWORD g_driveTickTid = 0;
+
+static int SigQueue(const char* sig, DWORD delayMs)
+{
+    if (!sig || !*sig || g_sigQN >= SIGQ_MAX) return 0;
+    strncpy(g_sigQ[g_sigQN].sig, sig, sizeof(g_sigQ[0].sig) - 1);
+    g_sigQ[g_sigQN].sig[sizeof(g_sigQ[0].sig) - 1] = 0;
+    g_sigQ[g_sigQN].at = GetTickCount() + delayMs;
+    ++g_sigQN;
+    logf_("[drive] \"%s\" queued for +%lums - the state it needs is still "
+          "playing its way in", sig, (unsigned long)delayMs);
+    return 1;
+}
+
+static void SigQueueClear(void) { g_sigQN = 0; }
+
+static void SigQueueTick(void)
+{
+    DWORD now = GetTickCount();
+    while (g_sigQN > 0 && (long)(now - g_sigQ[0].at) >= 0) {
+        char sig[64];
+        int  i;
+        strcpy(sig, g_sigQ[0].sig);
+        for (i = 1; i < g_sigQN; ++i) g_sigQ[i - 1] = g_sigQ[i];
+        --g_sigQN;
+        AgentSignal(sig);
+    }
+}
+
+static void DriveHoldPlayer(void)
+{
+    void* ent;
+    g_driveTickTid = GetCurrentThreadId();
+    DriveRebind();
+    DriveCamTick();
+    if (!g_drive) { g_driveHoldValid = 0; return; }
+
+    {   /* Left mouse = attack. Edge-triggered on the HIGH bit; the low bit is
+           consumed by the read and has misfired for us before. */
+        static int lastLmb = 0;
+        int lmb = AppHasFocus() && (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+        if (lmb && !lastLmb && !g_consoleOpen && g_driveSignal[0]) {
+            /* Ignore a new attack while one is still running, or holding the
+               button would restart it and we would be back to a flicker - this
+               time a real one, from the animation resetting. */
+            if (!g_attackUntil || GetTickCount() >= g_attackUntil) {
+                AgentSignal(g_driveSignal);
+                g_attackUntil = GetTickCount() + g_attackHold;
+                /* schedule the end signal for species that need one */
+                if (g_attackEnd[0]) g_attackEndAt = g_attackUntil;
+            }
+        }
+        lastLmb = lmb;
+    }
+
+    /* THE RUNAWAY WATCHDOG. If the agent has stopped asking us for a velocity,
+       we are not driving any more no matter what our flags say - most likely the
+       creature has left a resident sector and its AI is no longer being ticked.
+       Zero what we last set, then stop for real. */
+    /* Never asked yet? Say so once, and keep driving. This is the state a calm
+       creature sits in, and killing the drive over it was the bug. */
+    if (!g_velSeen) {
+        if (g_driveBegan && GetTickCount() - g_driveBegan > 4000 &&
+            !InterlockedExchange(&g_idleHinted, 1)) {
+            _snprintf(g_note, sizeof(g_note) - 1,
+                      "this creature has not asked for a velocity yet - it is idle. "
+                      "'driveai' unmutes its AI so it enters a behaviour that will.");
+            g_note[sizeof(g_note) - 1] = 0;
+            InterlockedExchange(&g_haveNote, 1);
+            logf_("[drive] no SetDesiredVelocity call in %lums - agent idle, "
+                  "still driving", (unsigned long)(GetTickCount() - g_driveBegan));
+        }
+    }
+    /* THE WATCHDOG NOW MEASURES THE RIGHT THING.
+       It used to fire when the AI stopped asking us for a velocity. That was a
+       sound proxy while steering was reactive - but DrivePush() drives every frame
+       whether or not the AI asks, so "the AI went quiet" no longer means the drive
+       is over. The log caught it doing exactly that: "agent stopped updating for
+       1016ms - ground LOADED" while the push was working perfectly.
+
+       The real runaway condition is the one the original comment described: the
+       creature left the world we can reach. Test THAT directly - is its entity
+       still there, and is the ground under it resident - and ignore call
+       frequency entirely. */
+    else if (g_driveEnt) {
+        int  resident = -1;
+        int  gone     = !Readable(g_driveEnt, OFF_ENT_POS + 12);
+        if (!gone)
+            resident = SectorResidentAt((const float*)((char*)g_driveEnt + OFF_ENT_POS));
+        /* THE ENTITY BEING GONE is now the only thing that ends a drive. There is
+           nothing left to steer, and nothing to hand back. */
+        if (gone) {
+            logf_("[drive] the driven entity is gone. Stopping.");
+            _snprintf(g_note, sizeof(g_note) - 1,
+                      "the creature we were driving is gone - drive stopped");
+            g_note[sizeof(g_note) - 1] = 0;
+            InterlockedExchange(&g_haveNote, 1);
+            DriveStop(0);
+            return;
+        }
+
+        /* UNLOADED GROUND NO LONGER ENDS THE DRIVE. Tearing it down was the wrong
+           response twice over: it cost a drive mid-run with the ground plainly
+           underneath ("left the resident world - ground NOT LOADED" while steering
+           normally), and even when the reading is correct an unloaded sector is
+           TEMPORARY - drive back and it returns.
+
+           What the original runaway actually was: the creature kept the last
+           velocity we set and ran off with nothing ticking it. DrivePush lets us
+           answer that directly - hold it at zero every frame instead of
+           surrendering. So freeze, say so once, and resume automatically when the
+           ground comes back. The hooks stay installed throughout, so control
+           returns by itself with nothing to retype.
+
+           Debounced, because SectorResidentAt reads a streaming structure that is
+           legitimately in flux while a sector swaps, and one sample should never
+           be acted on. */
+        if (resident != 0) {
+            g_driveBadSince = 0;
+        } else if (!g_driveBadSince) {
+            g_driveBadSince = GetTickCount();
+        } else if (GetTickCount() - g_driveBadSince >= DRIVE_LOST_MS &&
+                   !g_driveFrozen) {
+            /* FREEZE. Stop it ONCE here while the agent is still known good, then
+               let go of every pointer we hold. From this moment nothing
+               dereferences the agent or the entity: the streamer may free either
+               at any time and Readable() cannot tell us, because a freed block
+               stays mapped. */
+            if (g_driveOrig && g_driveAgent) {
+                float zero[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                __try { ((fnSetDesiredVel)g_driveOrig)(g_driveAgent, 0, zero); }
+                __except (EXCEPTION_EXECUTE_HANDLER) { }
+            }
+            InterlockedExchange(&g_driveFrozen, 1);
+            g_driveAgent   = 0;      /* dropped on purpose - id64 is the handle now */
+            g_driveEnt     = 0;
+            g_driveRetryAt = 0;
+            logf_("[drive] ground NOT LOADED for %lums - FROZEN, pointers dropped, "
+                  "will re-resolve id %08lX:%08lX",
+                  (unsigned long)(GetTickCount() - g_driveBadSince),
+                  g_driveIdHi, g_driveIdLo);
+            _snprintf(g_note, sizeof(g_note) - 1,
+                      "the creature's sector unloaded - drive is HELD, not stopped. "
+                      "It reconnects by itself when the sector loads.");
+            g_note[sizeof(g_note) - 1] = 0;
+            InterlockedExchange(&g_haveNote, 1);
+        }
+    }
+    /* ---- frozen: get the creature back ---------------------------------------
+       The whole point of freezing rather than stopping. We hold no pointers, so
+       there is nothing to crash through; look the creature up by its stable id64
+       twice a second and, when it exists AND its ground is resident, re-attach
+       and hand control straight back. */
+    else if (g_driveFrozen && g_driveHaveId) {
+        if (GetTickCount() >= g_driveRetryAt) {
+            unsigned long lo = g_driveIdLo, hi = g_driveIdHi;
+            void* ent;
+            g_driveRetryAt = GetTickCount() + 500;
+            ent = EntWalkFind(0, &lo, &hi);
+            if (ent && Readable(ent, OFF_ENT_POS + 12) &&
+                SectorResidentAt((const float*)((char*)ent + OFF_ENT_POS)) != 0 &&
+                DriveAttachTo(ent, 0)) {
+                InterlockedExchange(&g_driveFrozen, 0);
+                g_driveBadSince = 0;
+                logf_("[drive] re-resolved id %08lX:%08lX -> entity %p - resumed",
+                      g_driveIdHi, g_driveIdLo, ent);
+                _snprintf(g_note, sizeof(g_note) - 1,
+                          "the sector loaded - you have the creature back");
+                g_note[sizeof(g_note) - 1] = 0;
+                InterlockedExchange(&g_haveNote, 1);
+            }
+        }
+    }
+
+    /* Close the attack out. Without this the creature parks in its attack state
+       for good, because the AI that would normally end it is muted. */
+    if (g_attackEndAt && GetTickCount() >= g_attackEndAt) {
+        g_attackEndAt = 0;
+        if (g_attackEnd[0]) AgentSignal(g_attackEnd);
+    }
+
+    /* Deliver any unlock step that had to wait for a clip to finish. */
+    SigQueueTick();
+
+    {   /* 1-9 fire the current PAGE of signals, 0 turns the page - a viperwolf
+           builds 34 and nine keys will not hold them. Safe to take the number row:
+           input is already blocked while driving, so these are not switching
+           weapons behind us. */
+        static int lastNum[DRIVE_SLOTS] = { 0,0,0,0,0,0,0,0,0 };
+        static int lastPg = 0;
+        int i, pg;
+        int focus = AppHasFocus();
+        for (i = 0; i < DRIVE_SLOTS; ++i) {
+            int idx = g_drivePage * DRIVE_SLOTS + i;
+            int d   = focus && (GetAsyncKeyState('1' + i) & 0x8000) != 0;
+            if (d && !lastNum[i] && !g_consoleOpen &&
+                idx < g_driveSigN && g_driveSig[idx][0]) {
+                const char* stop = LoopStopFor(g_driveSig[idx]);
+                if (g_driveAct[idx] == DRIVE_ACT_SIGNAL && idx == g_driveLoop) {
+                    /* THE STUCK ANIMATION. Some of these land in a state with no
+                       unconditional <Connection>, which the track will sit in
+                       until its partner signal arrives - the thanator's SoloAttack
+                       is the clearest case. Pressing the key again used to just
+                       re-send the start, so the only way out was forceidle.
+                       Now the same key ends it. */
+                    if (stop) AgentSignal(stop);
+                    g_driveLoop = -1;
+                } else if (g_driveAct[idx] == DRIVE_ACT_COMBAT) {
+                    g_driveCalm = !g_driveCalm;
+                    AgentCombat(g_driveCalm ? 0 : 1);
+                    _snprintf(g_note, sizeof(g_note) - 1,
+                              g_driveCalm
+                                ? "combat OFF - it leaves you alone; the "
+                                  "animation keys are unaffected"
+                                : "combat ON - it will fight you again");
+                    g_note[sizeof(g_note) - 1] = 0;
+                    InterlockedExchange(&g_haveNote, 1);
+                } else {
+                    /* The species comes from the build, not from the signal
+                       name: half of these names carry no species prefix. */
+                    AgentSignalGated(g_driveSig[idx], g_driveSpecies);
+                    /* remember it if it is one of the holding ones, and treat
+                       any interrupt as having ended whatever was running */
+                    g_driveLoop = stop ? idx : -1;
+                }
+            }
+            lastNum[i] = d;
+        }
+        pg = focus && (GetAsyncKeyState('0') & 0x8000) != 0;
+        if (pg && !lastPg && !g_consoleOpen && DrivePages() > 1)
+            g_drivePage = (g_drivePage + 1) % DrivePages();
+        lastPg = pg;
+    }
+
+    ent = GetPlayerEntity();
+    if (!Readable(ent, OFF_ENT_POS + 12)) return;
+    if (!g_driveHoldValid) {
+        const float* p = (const float*)((char*)ent + OFF_ENT_POS);
+        g_driveHold[0] = p[0]; g_driveHold[1] = p[1]; g_driveHold[2] = p[2];
+        g_driveHoldValid = 1;
+        logf_("[drive] holding the player at (%.1f %.1f %.1f)",
+              g_driveHold[0], g_driveHold[1], g_driveHold[2]);
+        return;
+    }
+    if (Readable((const void*)FN_ENT_SETPOS, 8)) {
+        __try {
+            ((fnEntSetPos)FN_ENT_SETPOS)(ent, g_driveHold[0], g_driveHold[1], g_driveHold[2]);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) { g_driveHoldValid = 0; }
+    }
+}
+
+/* ---- attack, and calming the AI ----------------------------------------
+   `Agent::RequestSignal` is `agent->vt[+0x148]` = `0x10A8D790`, `ret 4`, and its
+   argument is a POINTER to a CRC-32, not the value. It is byte-identical across
+   all six animal agents and appears in 25 vtables, so it generalises even more
+   widely than the velocity setter.
+
+   It really is how attacks happen: `CTaskBtzAttack::Update` fires through exactly
+   this slot with the attack's signal hash and does nothing else - no Attack()
+   method, no damage call. The damage is a "Send Stim" event baked into the
+   animation state at ~25% through, so playing the state IS the hit.
+
+   Signal names are zlib CRC-32, CASE-SENSITIVE, e.g. `sturmbeest_attack_closerange`.
+   `forceidle` is a track-level interrupt accepted from any state, which makes it
+   the safest first test - it cannot fail for state reasons.
+
+   Guarded because `agent+0x260` is dereferenced unchecked inside. */
+/* AGENT_SLOT_SIGNAL is declared with AGENT_SLOT_SETVEL, above DriveRebind. */
+#define AGENT_SLOT_COMBAT  0x1E0      /* 0x10AB64F0 - suspend/resume combat */
+#define FN_REQUESTSIGNAL   (0x10A8D790u + g_rebase)
+
+typedef void (__thiscall *fnRequestSignal)(void* agent, const unsigned long* hash);
+typedef void (__thiscall *fnAgentCombat  )(void* agent, int enable);
+
+/* ---- TAKING THE AI'S VOICE AWAY -------------------------------------------
+   Overriding the desired VELOCITY was never enough. The brain and its tasks keep
+   running, and they drive the creature by requesting SIGNALS through this same
+   vtable - `CTaskBtzAttack::Update` fires the attack signal through slot +0x148
+   and does nothing else. So the AI kept putting a viperwolf into its
+   attack-warning crouch, and that state blocks locomotion and swallows the keys:
+   we were steering something the AI was simultaneously commanding.
+
+   Suspending combat outright was the wrong lever - it also gates the states our
+   own signals need. This is the precise one: hook the signal slot and let
+   through ONLY the requests that came from us. The AI can still think, still
+   pick targets, still update its tasks; it simply cannot make the creature do
+   anything. Every request it makes is dropped on the floor, which is exactly
+   "null output until we say otherwise".
+
+   Ours are marked by g_ourSignal, set around the call in AgentSignal. Single
+   threaded - the whole drive path is main-thread only - so a plain flag is
+   sufficient and a lock would be theatre.
+
+   KNOWN LIMIT, deliberately left: g_ourSignal is a flag, not a token. If the
+   original RequestSignal synchronously causes the track to request ANOTHER
+   signal, that nested request is inside our window and passes the mute too.
+   Harmless today - the AI's requests come from task updates, not from inside a
+   signal - but it means the mute is not airtight, so do not build anything on
+   it being one. CREATURE_AUDIT B11.
+
+   The state lives up with AGENT_SLOT_SETVEL, because DriveRebind needs it. */
+static void __fastcall hkRequestSignal(void* agent, void* edx,
+                                       const unsigned long* hash)
+{
+    if (g_drive && g_muteAI && agent == g_driveAgent && !g_ourSignal) {
+        ++g_muted;
+        return;                            /* the AI asked; we decline */
+    }
+    /* Same reason as hkSetDesiredVelocity: DriveStop nulls g_sigOrig from another
+       thread, and a restore that declined leaves this slot live with nothing
+       behind it. Dropping the signal is survivable; calling NULL is not. */
+    if (!g_sigOrig) return;
+    ((fnRequestSignal)g_sigOrig)(agent, hash);
+    (void)edx;
+}
+
+/* g_driveSignal and AgentSignal are declared above DriveHoldPlayer, which fires
+   the attack on left-mouse. */
+
+static unsigned long Crc32Str(const char* s)
+{
+    unsigned long c = 0xFFFFFFFFu;
+    int i, k;
+    for (i = 0; s[i]; ++i) {
+        c ^= (unsigned char)s[i];
+        for (k = 0; k < 8; ++k)
+            c = (c >> 1) ^ (0xEDB88320u & (unsigned long)(-(long)(c & 1)));
+    }
+    return ~c;
+}
+
+/* ---- the state gate, which is why howl/bark/hop/stare "did nothing" ---------
+   Those signals are not broken and they are not being swallowed - the log shows
+   every one of them sent with its correct hash. They are STATE-GATED: press one
+   while the creature sits in Idle and the animation tree has no transition to
+   take, so nothing happens and nothing complains. Sending the signal that gets
+   it into the required state FIRST is the part a player cannot be expected to
+   know, and it costs nothing when the creature is already there.
+
+   This used to work off the prose in `note`, matching the literal substring
+   "Warning only". That spelling appears in exactly seven notes, all viperwolf,
+   so it covered 7 of the ~23 gated signals - and the thanator's own notes said
+   "Idle or Attack Warning" with a space, which the same matcher would have
+   missed forever. Worse, two viperwolf signals need IDLE, and the unlock takes
+   the creature OUT of Idle: a normal session left the wolf parked in
+   Attack_Warning with `viperwolf_flee_end` and `viperwolf_attack_warning`
+   permanently dead. CREATURE_AUDIT B5. It reads the catalogue's `from`/`state`
+   columns now.
+
+   AND THERE ARE SEVEN MORE UNLOCK ROUTES THAN WE THOUGHT. The old comment here
+   said there was no confirmed ANY-state unlock for any species but the
+   viperwolf. That was wrong - CREATURE_AUDIT Â§4 lists them, and one of them
+   (`let_user_get_on`) is the only route into a seven-signal block. */
+typedef struct {
+    const char* species;   /* kDriveSigs key; "" = any creature      */
+    const char* state;     /* substring of the row's `state` column  */
+    const char* sig;       /* what puts the creature into it         */
+    int         wait;      /* ms before the state is actually entered */
+} SigUnlock;
+
+static const SigUnlock kUnlocks[] = {
+    /* Viperwolf. Two stages: the track interrupt opens nine signals, and the
+       stare then opens the sit - the only sit in the game - and nothing else. */
+    { "viperwolf",  "Attack_Warning",           "viperwolf_forced_attack_warning", 0 },
+    { "viperwolf",  "Stare",                    "viperwolf_stare",                 0 },
+    /* Thanator. Accepted from Idle, so no interrupt is needed for either.
+       Order matters: AttackWarningTransition's state column names the warning
+       AND SoloAttack, and the warning is the cheaper way in. */
+    { "thanator",   "Thanator Attack Warning",  "Thanator_AttackWarning",          0 },
+    { "thanator",   "SoloAttack",               "Thanator_ClawAttackFront",        0 },
+    /* Hammerhead. Also from Idle. */
+    { "hammerhead", "AttackWarning",            "hammerhead_attackwarning",        0 },
+    /* Banshee / Leonopteryx, the two-step Â§4 describes and the code did neither
+       half of. force_idle_animal is the ONLY interrupt on the Mount track, so it
+       is the one thing that always works; take_off is then the door to the rest.
+       take_off waits, because it lands in SoloLiftOff and reaches SoloMove only
+       when that clip ends - 900ms is the same order as g_attackHold and is a
+       GUESS, not a measurement. */
+    { "banshee",    "Idle_temp",                "force_idle_animal",               0 },
+    { "banshee",    "SoloMove",                 "take_off",                      900 },
+    /* Everyone: the mounted set. A shared-track interrupt, so species is "" -
+       and LetUserGetOnMe has to play before ::Thanator/States/Mounted is
+       actually entered, hence the wait. The full path is the match key on
+       purpose: the flyer rows are full of "Mounted_*" state names that a bare
+       "Mounted" would collide with. */
+    { "",           "::Thanator/States/Mounted", "let_user_get_on",              900 },
+};
+#define SIG_UNLOCK_N ((int)(sizeof(kUnlocks)/sizeof(kUnlocks[0])))
+
+/* Floor for the gap between an unlock and the signal it unlocks. 350ms is a
+   starting guess, not a measurement - `drivewait <ms>` changes it live. Set it
+   to 0 to get the old same-frame behaviour back for comparison. */
+static volatile long g_sigWaitMin = 350;
+
+static const SigUnlock* UnlockSigFor(const char* species, const char* state)
+{
+    int i;
+    if (!state) return 0;
+    for (i = 0; i < SIG_UNLOCK_N; ++i)
+        if ((!kUnlocks[i].species[0] ||
+             (species && Stristr(species, kUnlocks[i].species))) &&
+            Stristr(state, kUnlocks[i].state))
+            return &kUnlocks[i];
+    return 0;
+}
+
+static int AgentSignal(const char* name);
+static int SignalWithUnlockAt(const char* name, const char* species,
+                              int depth, DWORD base);
+
+/* Send `name`, preceded by whatever the catalogue says has to happen first.
+
+   A NEW COMMAND CANCELS THE OLD ONE. That is the behaviour asked for: press
+   howl, then press attack, and the wolf should stop howling and attack - not
+   finish the howl, and not ignore the attack because it is still in the Howl
+   state and the attack has no transition out of it.
+
+   Three things have to happen for that, in order:
+
+     1. Drop anything still pending in the queue. Without this the PREVIOUS
+        command's delayed step lands a moment after the new one and overrides
+        it - the new command would appear to work and then undo itself.
+     2. Break out of whatever is playing. If a loop is running we know its exact
+        partner (howl -> howl_stop) and that is the clean exit. Otherwise use the
+        track interrupt, which is the one signal documented as working from ANY
+        state, and is why kDriveSigs puts it in slot 1 for both tracks.
+     3. Only then run the unlock chain, with every hop separated by the gap -
+        breaking out re-locks Attack_Warning, so the unlock has to happen again
+        after the interrupt, not before it.
+
+   Skipped entirely when the target is itself an interrupt (FROM_ANY) or is the
+   idle interrupt: those already work from anywhere, and forcing an extra step
+   in front of them would only add latency. */
+static int SignalWithUnlockAt(const char* name, const char* species,
+                              int depth, DWORD base);
+
+static int AgentSignalGated(const char* name, const char* species)
+{
+    const DriveSig* row  = SigRow(name);
+    DWORD           step = (DWORD)g_sigWaitMin;
+    DWORD           base = 0;
+    const char*     brk  = 0;
+
+    SigQueueClear();                       /* (1) the old command stops here */
+
+    if (!(row && row->from == FROM_ANY) &&
+        !(g_driveIdleSig[0] && _stricmp(g_driveIdleSig, name) == 0)) {
+        if (g_driveLoop >= 0 && g_driveLoop < g_driveSigN)   /* (2) */
+            brk = LoopStopFor(g_driveSig[g_driveLoop]);
+        if (!brk && g_driveIdleSig[0]) brk = g_driveIdleSig;
+        if (brk && _stricmp(brk, name) == 0) brk = 0;        /* already going there */
+    }
+
+    if (brk) {
+        logf_("[drive] new command \"%s\" - breaking out with \"%s\" first",
+              name, brk);
+        AgentSignal(brk);
+        base = step;
+    }
+    g_driveLoop = -1;                      /* whatever was looping is over */
+
+    return SignalWithUnlockAt(name, species, 0, base);      /* (3) */
+}
+
+/* Three cases, one per `from`:
+
+     FROM_ANY   - a track interrupt. Nothing to prepare, ever.
+     FROM_STATE - send the signal that gets there, and RECURSE, because some of
+                  those are gated themselves: the sit is warning -> stare ->
+                  safe_fail, and a grounded flyer is force_idle_animal ->
+                  take_off -> attack. Three hops is the deepest real chain.
+     FROM_IDLE with no other source - drop back to Idle first. This is the
+                  inverse of the bug: the old code sent the Attack_Warning
+                  unlock before Idle-only signals and killed them. The interrupt
+                  cannot fail for state reasons, so the correction is free.
+     FROM_IDLE with other sources - nothing. It works from where it is.
+
+   The unlock is skipped when `name` is the unlock's own stop partner: pressing
+   `Thanator_AttackEnd` must not claw at the air first, and pressing
+   `viperwolf_stare_end` must not stare first. That falls out of the table
+   rather than needing its own list. */
+/* `base` is how long from now this hop should be delivered. It exists because a
+   preempted command needs THREE steps - interrupt, unlock, target - and the
+   original code could only carry a delay on the last one ("if a chain ever needs
+   two, this is where they would have to accumulate"). It needs two now. */
+static int SignalWithUnlockAt(const char* name, const char* species,
+                              int depth, DWORD base)
+{
+    const DriveSig*  row  = SigRow(name);
+    const SigUnlock* un   = 0;
+    int              wait = 0;
+
+    if (row && depth < 4) {
+        if (row->from == FROM_STATE) {
+            un = UnlockSigFor(species, row->state);
+            if (un) {
+                const DriveSig* u = SigRow(un->sig);
+                if (_stricmp(un->sig, name) == 0 ||
+                    (u && u->stop && _stricmp(u->stop, name) == 0))
+                    un = 0;                     /* it IS the way back out */
+            }
+            if (un) {
+                logf_("[drive] \"%s\" needs [%s] - sending \"%s\" first",
+                      name, row->state, un->sig);
+                SignalWithUnlockAt(un->sig, species, depth + 1, base);
+                wait = un->wait;
+            }
+        } else if (row->from == FROM_IDLE && !row->state &&
+                   g_driveIdleSig[0] && _stricmp(g_driveIdleSig, name) != 0) {
+            logf_("[drive] \"%s\" is Idle-ONLY - sending \"%s\" first",
+                  name, g_driveIdleSig);
+            if (base) SigQueue(g_driveIdleSig, base);
+            else      AgentSignal(g_driveIdleSig);
+            wait = 1;                 /* see below - the same race applies here */
+        }
+    }
+
+    /* EVERY unlock needs a gap, not just the two that were given one.
+       The log settled this: the unlock and the signal went out in the SAME
+       millisecond -
+
+           [drive] signal "viperwolf_forced_attack_warning" sent
+           [drive] signal "viperwolf_howl"                  sent
+
+       - and the creature ended up sitting in Attack_Warning having done nothing
+       else. The unlock worked; the second signal arrived while the state machine
+       was still in Idle and matched no transition, which is a silent no-op.
+
+       The table assumed a TRACK INTERRUPT enters its state immediately and only
+       gave a wait to the two unlocks that visibly play a clip first (take_off,
+       let_user_get_on). That assumption was wrong: an interrupt still has to be
+       processed by the move tree on a later frame.
+
+       g_sigWaitMin is the floor applied to every chained signal; a row that
+       already asks for longer keeps its own value. It is a GUESS - which is
+       exactly why `drivewait <ms>` exists to tune it live rather than needing a
+       rebuild to try a different number. */
+    if (wait && wait < (int)g_sigWaitMin) wait = (int)g_sigWaitMin;
+    if (base + (DWORD)wait) return SigQueue(name, base + (DWORD)wait);
+    return AgentSignal(name);
+}
+
+static int AgentSignal(const char* name)
+{
+    unsigned long hash;
+    void** vt;
+    int    ok = 1;
+
+    if (!g_driveAgent || !Readable(g_driveAgent, 0x264)) return 0;   /* +0x260 */
+    vt = *(void***)g_driveAgent;
+    if (!Readable(vt, AGENT_SLOT_SIGNAL + 4)) return 0;
+    hash = Crc32Str(name);
+    /* Name the reason BEFORE the signal goes out, so the log line and the
+       (absent) visible result sit next to each other. CREATURE_RIDING.md 7.4. */
+    {
+        const SigClip* cr = 0;
+        int v = SigClipVerdict(name, g_driveSpecies, &cr);
+        if (v == 2)
+            logf_("[drive] \"%s\": %s has NO branch for \"%s\" - the state will "
+                  "change and nothing will animate",
+                  name, cr ? cr->root : "?", g_driveSpecies);
+        else if (v == 1)
+            logf_("[drive] \"%s\": %s resolves to %s_idle_relax for \"%s\" - accepted, "
+                  "animated, and indistinguishable from doing nothing",
+                  name, cr ? cr->root : "?", g_driveSpecies, g_driveSpecies);
+    }
+    {   /* Answer the open question in the log rather than in a comment. Once. */
+        static int warned = 0;
+        DWORD me = GetCurrentThreadId();
+        if (!warned && g_driveTickTid && me != g_driveTickTid) {
+            warned = 1;
+            logf_("[drive] NOTE: signal sent from thread %lu, drive ticks on %lu "
+                  "- console signals are NOT on the game thread",
+                  (unsigned long)me, (unsigned long)g_driveTickTid);
+        }
+    }
+    /* Mark this as OURS so the signal hook lets it through - everything the AI
+       asks for while driving is swallowed, ours is not. */
+    g_ourSignal = 1;
+    __try { ((fnRequestSignal)vt[AGENT_SLOT_SIGNAL / 4])(g_driveAgent, &hash); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { ok = 0; }
+    g_ourSignal = 0;
+    if (!ok) { logf_("[drive] signal \"%s\" faulted", name); return 0; }
+    logf_("[drive] signal \"%s\" (%08lX) sent", name, hash);
+    return 1;
+}
+
+/* ---- facinginfo: WHY does a driven creature swivel to face the player? ----
+   PURE READ. Nothing here writes anything.
+
+   FACING.md found that facing is not on the agent at all - it is on the pawn
+   state block that SetDesiredVelocity already writes into:
+
+       agent+0x260 -> CPawn component
+       CPawn+0x28  -> pawn state block S
+       S+0x0C       WorldSpeed - the vector our drive hook substitutes
+       S+0x1C       facing authority: bit0 UsingAim, bit1 UsingLook, bit2 Bark
+
+   The rule: moving -> face the velocity (ours). Stopped with UsingLook clear ->
+   keep the current facing. Stopped with UsingLook SET -> face the look
+   direction. That last case is the swivel.
+
+   The author could NOT prove the animal path runs through that selector - it is
+   the one thing left UNKNOWN - and said to run this probe before writing
+   anything. Clearing bits at an unverified offset on a live creature is exactly
+   how we would quietly corrupt an unrelated field, so the write half is
+   deliberately not built yet. Run this with the creature stopped and
+   swivelling; the flags say which recipe is right, and "all clear and it still
+   swivels" is just as useful an answer as a hit. */
+#define OFF_AGENT_PAWN  0x260
+#define OFF_PAWN_STATE  0x28
+
+static void* PawnStateFromAnimalAgent(void* agent)
+{
+    void** vt;
+    void*  pawn;
+    if (!Readable(agent, OFF_AGENT_PAWN + 4)) return 0;
+    vt = *(void***)agent;
+    if (!Readable(vt, AGENT_SLOT_SETVEL + 4)) return 0;
+    if (vt[AGENT_SLOT_SETVEL / 4] != (void*)FN_SETDESIREDVEL &&
+        vt[AGENT_SLOT_SETVEL / 4] != (void*)hkSetDesiredVelocity) return 0;
+    pawn = *(void**)((char*)agent + OFF_AGENT_PAWN);
+    if (!Readable(pawn, OFF_PAWN_STATE + 4)) return 0;
+    return *(void**)((char*)pawn + OFF_PAWN_STATE);
+}
+
+static void FacingInfo(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    unsigned char* s;
+    const float* f;
+
+    if (!g_driveAgent) {
+        P_(console, 0, AC "facinginfo: not driving anything\n"); return;
+    }
+    s = (unsigned char*)PawnStateFromAnimalAgent(g_driveAgent);
+    if (!Readable(s, 0x94)) {
+        P_(console, 0, AC
+           "facinginfo: no pawn state behind this agent - which is itself an\n"
+           "  answer: facing does not run through the pawn for this creature.\n");
+        logf_("[face] no pawn state from agent %p", g_driveAgent);
+        return;
+    }
+    f = (const float*)s;
+
+    P_(console, 0, AC
+       "facinginfo: S=%p flags[1C]=%02X  Aim=%d Look=%d Bark=%d  1D=%02X 1E=%02X\n",
+       s, s[0x1C], s[0x1C] & 1, (s[0x1C] >> 1) & 1, (s[0x1C] >> 2) & 1,
+       s[0x1D], s[0x1E]);
+    P_(console, 0, AC "  WorldSpeed %.3f %.3f %.3f\n",
+       f[0x0C/4], f[0x10/4], f[0x14/4]);
+    P_(console, 0, AC "  LookAngles %.3f %.3f %.3f   dist %.3f\n",
+       f[0x54/4], f[0x58/4], f[0x5C/4], f[0x78/4]);
+    P_(console, 0, AC "  AimAngles  %.3f %.3f %.3f   dist %.3f\n",
+       f[0x6C/4], f[0x70/4], f[0x74/4], f[0x90/4]);
+    P_(console, 0, AC "  orientTgt  %.3f %.3f %.3f\n",
+       f[0x30/4], f[0x34/4], f[0x38/4]);
+    P_(console, 0, AC
+       "  Look=1 while it swivels  -> clearing these bits is the fix.\n"
+       "  all clear and it STILL swivels -> facing is elsewhere entirely.\n");
+
+    logf_("[face] S=%p 1C=%02X 1D=%02X 1E=%02X ws=%.3f %.3f %.3f "
+          "look=%.3f %.3f %.3f aim=%.3f %.3f %.3f",
+          s, s[0x1C], s[0x1D], s[0x1E],
+          f[0x0C/4], f[0x10/4], f[0x14/4],
+          f[0x54/4], f[0x58/4], f[0x5C/4],
+          f[0x6C/4], f[0x70/4], f[0x74/4]);
+}
+
+/* ---- facing: stop the creature turning to look at the player ---------------
+   The previous plan, written up in FACING_AGENTS_MD.md, was to hook `+0x208` and
+   then write the focus MIRRORS on the CBtzAnimal record (`B+0x31`, `B+0x34`).
+   That plan is not implemented here, deliberately, because the same document
+   also records that an exhaustive scan found NOTHING that reads those fields for
+   gameplay - two of the eight hits are network dirty-checks. Writing them would
+   most likely have been another silent no-op, which is the failure mode this
+   project keeps repeating.
+
+   Going upstream instead. Verified disassembly of `CBtzAnimalAgent::Update`:
+
+     10AB5F0B  mov  eax,[esi+0x264]        ; the sensory system
+     10AB5F11  mov  ecx,[esi+0x300]        ; the CBtzAnimal component
+     10AB5F17  mov  al,[eax+0x1D]          ; bHasFocus
+     10AB5F1A  test al, al
+     10AB5F1C  mov  edx,[ecx+0x28]         ; -> B
+     10AB5F20  mov  [edx+0x31], al         ; the mirror, unconditional
+     10AB5F23  je   0x10AB6196             ; <-- NO FOCUS => SKIP THE WHOLE BODY
+     10AB5F29..10AB5F56   B[0x34..0x3C] = sens[0x20..0x28]
+
+   `sens+0x1D` is not a mirror, it is the SOURCE, and one zero byte written before
+   the original runs makes the entire rest of Update dead for that tick - mirror
+   included, focus position included, charge timer included. It is also what any
+   other consumer would read (`sens+0x18` is the target entity, `+0x20` its world
+   position), which is the case the mirror plan could not cover.
+
+   Whether the yaw itself is driven from this focus is STILL UNKNOWN - the last
+   hop was never found. So this ships in two halves: a probe that logs the fields
+   every tick so we can see whether focus correlates with turning, and the
+   suppression. If the creature keeps swivelling with focus provably zeroed, then
+   facing is genuinely elsewhere and the probe output tells us that rather than
+   leaving us guessing.
+
+   Per-vtable original saving, because `+0x208` is overridden per species and one
+   global would restore species A's function onto species B. */
+#define AGENT_SLOT_UPDATE 0x208
+#define OFF_AGENT_SENS    0x264
+#define OFF_SENS_TARGET   0x18
+#define OFF_SENS_HASFOCUS 0x1D
+#define OFF_SENS_FOCUSPOS 0x20
+
+typedef void (__fastcall *fnAgentUpdate)(void* agent, void* edx, float dt);
+
+static void*         g_faceVt    = 0;      /* the vtable we patched          */
+static void*         g_faceOrig  = 0;      /* ITS original +0x208           */
+static volatile long g_faceSuppress = 0;   /* zero the focus each tick       */
+static volatile long g_faceAuto     = 0;   /* WE armed it for drive, not the user */
+/* Defined further down with the rest of the facing hook; drive arms and
+   releases it, and drive comes first in the file. */
+static int FaceHookSet(void* console, int on);
+static volatile long g_faceProbe    = 0;   /* log the fields each tick       */
+static unsigned long g_faceLogged   = 0;
+
+/* ---- drivelock: HOW MUCH of the creature's brain we stop -------------------
+   FACING.md ends without a conclusion, and the `facing` command says so on
+   screen: "whether yaw is actually driven from this focus is UNKNOWN, the last
+   hop was never found. If it still swivels, facing lives elsewhere."
+
+   `facing` zeroes ONE BYTE (sens+0x1D) and then calls the agent's Update
+   anyway - so sensing, target selection, behaviour selection, path requests and
+   whatever writes orientation all still run. It suppresses one input to the
+   brain, not the brain.
+
+   LEVEL 2 SKIPS THE UPDATE ENTIRELY. That is the experiment the old note asked
+   for and never ran, and it is decisive in a way no amount of reading is:
+
+     - if the creature stops swivelling at level 2 but not at level 1, the yaw
+       write is downstream of this Update and the focus byte was simply the
+       wrong lever;
+     - if it STILL swivels with the whole Update skipped, then nothing the agent
+       does is responsible, and the write is in the pawn, the movement component
+       or animation root motion - which eliminates the entire AI agent as a
+       suspect in one test.
+
+   Either answer closes the question. It is also the "single clean gate" rather
+   than per-channel suppression: no Update means no signals to mute, no focus to
+   zero, no behaviour to calm.
+
+   WHAT IT MIGHT COST, said up front because it is untested: if the move tree or
+   the animation state machine is ticked from this Update, level 2 may freeze the
+   creature's animation while it still slides where we steer it. That is a
+   perfectly readable outcome and it is information, not a crash - and it is why
+   this is a LEVEL, not the new default. Level 0 remains what ships. */
+#define DRIVELOCK_OFF   0
+#define DRIVELOCK_SOFT  1     /* zero the focus byte BEFORE Update - FACING Lever 3 */
+#define DRIVELOCK_HARD  2     /* do not run Update at all                          */
+#define DRIVELOCK_LAST  3     /* run Update, then clear the mirror - FACING Lever 1 */
+#define DRIVELOCK_AIM   4     /* run Update, then point the focus where WE look - 2 */
+#define DRIVELOCK_AGENT 5     /* the ENGINE'S OWN gate - agent+0x1C4               */
+
+/* ---- THE ENGINE'S OWN "AI OFF" FLAG, which §12.6 concluded did not exist ----
+   It does, and it is one byte. On BTZ animal agents the per-tick entry is
+   vtable +0xCC (FUN_10ab5070):
+
+       if ( !this->vfunc_0xE4() )    ; 109c0ad0: mov al,[ecx+0x1C4]; ret
+             this->vfunc_0x208(dt);  ; Update - the slot we hook
+
+   so a non-zero byte at agent+0x1C4 makes the engine skip the whole agent update
+   through its OWN code path, not ours. Setters are FUN_10a8ded0 (=1, with
+   teardown) and FUN_10a8dc40 (=0); initialised in CGameAgent's ctor
+   FUN_10a8e630. We write the BYTE rather than calling the setters - the setter
+   also runs teardown nobody has read, and a plain byte we can put back is the
+   reversible half of the same thing.
+
+   TWO CONSEQUENCES THAT SHAPE THE CODE.
+
+   1. OUR OWN +0x208 HOOK GOES SILENT. The engine stops calling Update, so
+      hkAgentUpdate stops running - which means anything that must happen per
+      tick in this mode CANNOT live there. It lives in the main-thread detour
+      instead (DriveLockTick, below).
+
+   2. THE FLAG ONLY STOPS NEW COMMANDS. Whatever is already in the controller
+      block persists and the pawn, animation and physics keep consuming it, so
+      the stale look-at has to be cleared by us every frame.
+
+   AND ONE CORRECTION TO THE ADVICE THAT CAME WITH IT: the controller's VELOCITY
+   field, ctrl+0x0C, must NOT be cleared. `ctrl` is *(pawnBase+0x28) with
+   pawnBase = *(agent+0x260), which is the SAME block SetDesiredVelocity writes -
+   the disassembly beside DrivePush shows it storing x/y/z at S+0x0C/+0x10/+0x14
+   where S = *(pawn+0x28). Zeroing it every frame would cancel our own steering,
+   because DrivePush is the thing writing it. Only the look-at is stale. */
+#define OFF_AGENT_AIOFF   0x1C4
+#define OFF_AGENT_PAWN    0x260
+#define OFF_CTRL_FROMPAWN 0x28
+static volatile long g_driveLock    = DRIVELOCK_OFF;
+static volatile long g_lockSkipped  = 0;   /* Updates suppressed - the evidence */
+
+/* FACING.md's three levers, and which of them this file already had.
+   The document is explicit about which are shippable, and the one we were
+   already using is not among them:
+
+     Lever 1 "most surgical; try first" - call the original Update FIRST, then
+             write B[0x31] = 0, so WE are the last writer for the frame. The
+             charge timer and the stim broadcast behave normally.   -> `last`
+     Lever 2 "the outcome the brief asks for" - leave the flag set and overwrite
+             the focus POSITION with our own aim point, at BOTH ends (B+0x34 and
+             sens+0x20), because FACING 15.6 leaves open which end the consumer
+             reads and writing both costs 24 bytes and settles it. -> `aim`
+     Lever 3 "diagnosis only, do not ship" - zero sens[0x1D] BEFORE calling
+             through, which makes the je at 0x10AB5F23 skip the entire Update
+             body.                                                  -> `soft`
+
+   `facing` has always been Lever 3. That is why it reads as heavy-handed: it is
+   not suppressing a turn, it is skipping the whole tick from the inside, and
+   FACING says plainly not to ship it. `last` and `aim` are the levers the
+   document actually recommends and they had never been implemented.
+
+   The B record: agent+0x300 is the CBtzAnimal component (class id struct
+   0x11220B7C), and B = *(that + 0x28). Update copies sens[0x1D] -> B[0x31] and
+   sens[0x20..0x28] -> B[0x34..0x3C] every tick. All CONFIRMED in FACING 15. */
+#define OFF_AGENT_ANIMAL  0x300
+#define OFF_ANIMAL_REC    0x28
+#define OFF_BST_HASFOCUS  0x31
+#define OFF_BST_FOCUSPOS  0x34
+
+static void* AnimalRecOf(void* agent)
+{
+    void* comp;
+    void* rec;
+    if (!Readable(agent, OFF_AGENT_ANIMAL + 4)) return 0;
+    comp = *(void**)((char*)agent + OFF_AGENT_ANIMAL);
+    if (!Readable(comp, OFF_ANIMAL_REC + 4)) return 0;
+    rec = *(void**)((char*)comp + OFF_ANIMAL_REC);
+    return Readable(rec, OFF_BST_FOCUSPOS + 12) ? rec : 0;
+}
+
+/* The pawn-side controller block - the OTHER path to the look-at fields.
+   AnimalRecOf goes agent+0x300 (the CBtzAnimal component) -> +0x28; this goes
+   agent+0x260 (the CAnimal pawn) -> +0x28. Whether those land on the same object
+   is NOT established: the trace that found this one reports the look-at written
+   at +0x31/+0x34 and read at +0x30/+0x34, a four-byte disagreement it flags
+   itself as "either different structs, or my alignment is off by a slot".
+   So both are cleared, for the same reason Lever 2 writes both ends - it costs
+   a handful of bytes and removes the ambiguity as a variable. */
+static void* DriveCtrlOf(void* agent)
+{
+    void* pawn;
+    void* ctrl;
+    if (!Readable(agent, OFF_AGENT_PAWN + 4)) return 0;
+    pawn = *(void**)((char*)agent + OFF_AGENT_PAWN);
+    if (!Readable(pawn, OFF_CTRL_FROMPAWN + 4)) return 0;
+    ctrl = *(void**)((char*)pawn + OFF_CTRL_FROMPAWN);
+    return Readable(ctrl, 0x40) ? ctrl : 0;
+}
+
+/* Where WE want the creature looking: 20 m along the camera's forward row from
+   the creature itself - the same camera row DriveKeysToVel steers by, so the
+   creature's focus and its movement agree instead of fighting. */
+static int DriveAimPoint(float* out)
+{
+    void* cam = GetCameraEntityDirect();
+    const float *m, *p;
+    if (!Readable(cam, OFF_ENT_XFORM + 0x30)) return 0;
+    if (!Readable(g_driveEnt, OFF_ENT_POS + 12)) return 0;
+    m = (const float*)((char*)cam + OFF_ENT_XFORM);
+    p = (const float*)((char*)g_driveEnt + OFF_ENT_POS);
+    out[0] = p[0] + m[4] * 20.0f;
+    out[1] = p[1] + m[5] * 20.0f;
+    out[2] = p[2] + m[6] * 20.0f;
+    return 1;
+}
+
+static void* SensOf(void* agent)
+{
+    void* s;
+    if (!Readable(agent, OFF_AGENT_SENS + 4)) return 0;
+    s = *(void**)((char*)agent + OFF_AGENT_SENS);
+    return Readable(s, 0x2C) ? s : 0;
+}
+
+static void __fastcall hkAgentUpdate(void* agent, void* edx, float dt)
+{
+    if (agent == g_driveAgent) {
+        unsigned char* sens = (unsigned char*)SensOf(agent);
+        if (sens) {
+            if (g_faceProbe) {
+                /* Throttled - this runs every AI tick. */
+                unsigned long now = GetTickCount();
+                if (now - g_faceLogged > 400) {
+                    const float* fp = (const float*)(sens + OFF_SENS_FOCUSPOS);
+                    void* tgt = *(void**)(sens + OFF_SENS_TARGET);
+                    void* svt = Readable(sens, 4) ? *(void**)sens : 0;
+                    const float* fwd = 0;
+                    /* g_driveEnt, NOT g_lastSpawn: a mouse pick moves g_lastSpawn,
+                       so the first version of this probe could silently start
+                       reporting a DIFFERENT entity's orientation mid-session. */
+                    if (Readable(g_driveEnt, OFF_ENT_XFORM + 0x20))
+                        fwd = (const float*)((char*)g_driveEnt + OFF_ENT_XFORM + 0x10);
+                    g_faceLogged = now;
+                    /* `cls` is the check that matters. FACING_AGENTS_MD.md says
+                       agent+0x264 is the sensory system and +0x18 is the current
+                       target ENTITY - but the first run logged tgt == the agent's
+                       own address, which no entity pointer should ever be. So print
+                       the vtable and name it: BtzAnimalSensorySystem is 0x110F0640
+                       and CViperwolfSensorySystem is 0x110F03D0. Anything else and
+                       +0x264 is not the sensory system at all, which would make
+                       every offset below it - including the sens+0x1D we are
+                       zeroing - meaningless. */
+                    logf_("[face] sens=%p vt=%p (%s) tgt=%p%s hasFocus=%u "
+                          "focus=(%.1f %.1f %.1f) fwd=(%.3f %.3f %.3f)",
+                          sens, svt,
+                          (svt == (void*)(0x110F0640u + g_rebase)) ? "BtzAnimalSensory" :
+                          (svt == (void*)(0x110F03D0u + g_rebase)) ? "ViperwolfSensory" :
+                                                                    "*** UNKNOWN ***",
+                          tgt, (tgt == agent) ? " (== the agent: a BACK-POINTER, not a target)" : "",
+                          (unsigned)sens[OFF_SENS_HASFOCUS],
+                          fp[0], fp[1], fp[2],
+                          fwd ? fwd[0] : 0.0f, fwd ? fwd[1] : 0.0f,
+                          fwd ? fwd[2] : 0.0f);
+                }
+            }
+            if (g_faceSuppress || g_driveLock == DRIVELOCK_SOFT) {
+                /* BEFORE the original, so its `je` at 0x10AB5F23 is taken and
+                   nothing downstream in this tick sees a focus at all. */
+                sens[OFF_SENS_HASFOCUS] = 0;
+            }
+        }
+        /* THE HARD GATE. Return without calling the original at all, so the
+           whole agent tick - sensing, targeting, behaviour, path requests, the
+           lot - does not happen for this one creature. Only the driven agent is
+           affected; every other creature in the world ticks normally, which is
+           what makes this safe to leave on while you look around.
+           DrivePush still writes WorldSpeed to the pawn state every frame from
+           the main-thread detour, and that path is downstream of the agent, so
+           steering is expected to keep working with the brain switched off. */
+        if (g_driveLock == DRIVELOCK_HARD) {
+            InterlockedIncrement(&g_lockSkipped);
+            return;
+        }
+    }
+    /* g_faceOrig is ONE global while VtPatch happily hooks +0x208 on several
+       species vtables (DriveRebind does exactly that across a species change).
+       `facing off` restores only g_faceVt's slot and then nulls both globals, so
+       a second hooked vtable is left calling here with no original - address 0
+       on the next AI tick. The registry knows about every slot; this call does
+       not, so it has to be able to decline. */
+    if (!g_faceOrig) return;
+    ((fnAgentUpdate)g_faceOrig)(agent, edx, dt);
+
+    /* ---- LEVERS 1 AND 2 RUN AFTER THE ORIGINAL ----------------------------
+       That is the entire point of them. Update copies sens -> B every tick, so
+       the only way to win the frame is to write LAST. Writing before it, which
+       is all `facing`/`soft` has ever done, is either overwritten immediately or
+       - because the je at 0x10AB5F23 sees the cleared byte - skips the whole
+       tick, which is why FACING labels that one "diagnosis only, do not ship". */
+    if (agent == g_driveAgent &&
+        (g_driveLock == DRIVELOCK_LAST || g_driveLock == DRIVELOCK_AIM)) {
+        void* rec = AnimalRecOf(agent);
+        unsigned char* s2 = (unsigned char*)SensOf(agent);
+        __try {
+            if (g_driveLock == DRIVELOCK_LAST) {
+                /* FACING Lever 1 - "most surgical; try first". Clear the mirror
+                   after the copy that set it, leaving the charge timer and the
+                   stim broadcast to behave normally. */
+                if (rec) *((unsigned char*)rec + OFF_BST_HASFOCUS) = 0;
+            } else {
+                /* FACING Lever 2 - "the outcome the brief asks for". Keep the
+                   focus ALIVE but aim it where the camera looks, so the creature
+                   turns WITH you instead of toward whatever it noticed. Written
+                   at BOTH ends because FACING 15.6 leaves open which one the
+                   consumer reads, and writing both costs 24 bytes. */
+                float aim[3];
+                if (DriveAimPoint(aim)) {
+                    if (rec) {
+                        *((unsigned char*)rec + OFF_BST_HASFOCUS) = 1;
+                        memcpy((char*)rec + OFF_BST_FOCUSPOS, aim, 12);
+                    }
+                    if (s2) {
+                        s2[OFF_SENS_HASFOCUS] = 1;
+                        memcpy(s2 + OFF_SENS_FOCUSPOS, aim, 12);
+                    }
+                }
+            }
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            /* The streamer can free either object between the Readable and the
+               write. Fall back to `off` rather than repeat a faulting write
+               every tick, and SAY SO - a lever that silently stopped working is
+               the failure mode this file keeps paying for. */
+            InterlockedExchange(&g_driveLock, DRIVELOCK_OFF);
+    /* ...and give the creature its head back, but only if the arming was ours. */
+    if (g_faceAuto) {
+        InterlockedExchange(&g_faceSuppress, 0);
+        InterlockedExchange(&g_faceAuto, 0);
+        FaceHookSet(0, 0);
+        logf_("[drive] facing suppression released");
+    }
+            logf_("[face] lever write faulted - drivelock forced to off");
+        }
+    }
+}
+
+/* ---- the AGENT-GATE half, MAIN THREAD, once per frame ----------------------
+   Everything here would normally sit in hkAgentUpdate, and cannot: setting
+   agent+0x1C4 stops the engine calling Update at all, so that hook never fires
+   in this mode. Called from the detour beside DrivePush.
+
+   `on` = 0 restores the byte, which is why g_lockAgentSet is remembered: the
+   agent may have been re-resolved (or the mode left) since we set it. */
+static void*         g_lockAgentSet = 0;   /* whose byte we raised */
+static unsigned char g_lockAgentWas = 0;   /* and what it held before */
+
+static void DriveLockTick(void)
+{
+    void* agent = g_driveAgent;
+    int   want  = (g_drive && g_driveLock == DRIVELOCK_AGENT);
+
+    /* Put the byte back if we raised it on someone and no longer want it - or
+       if the drive target changed under us, which DriveRebind does on a species
+       change. Leaving a permanently deaf agent behind would be a bug the player
+       could never diagnose. */
+    if (g_lockAgentSet && (!want || g_lockAgentSet != agent)) {
+        if (Readable(g_lockAgentSet, OFF_AGENT_AIOFF + 1)) {
+            __try {
+                *((unsigned char*)g_lockAgentSet + OFF_AGENT_AIOFF) = g_lockAgentWas;
+                logf_("[lock] agent %p +0x1C4 restored to %u",
+                      g_lockAgentSet, (unsigned)g_lockAgentWas);
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) { }
+        }
+        g_lockAgentSet = 0;
+    }
+    if (!want || !agent) return;
+    if (!Readable(agent, OFF_AGENT_AIOFF + 1)) return;
+
+    __try {
+        unsigned char* f = (unsigned char*)agent + OFF_AGENT_AIOFF;
+        if (!g_lockAgentSet) {
+            g_lockAgentWas = *f;
+            g_lockAgentSet = agent;
+            logf_("[lock] agent %p +0x1C4 %u -> 1 (engine skips its Update)",
+                  agent, (unsigned)g_lockAgentWas);
+        }
+        *f = 1;
+
+        /* THE STALE COMMANDS THE FLAG DOES NOT CLEAR. Look-at only - see the
+           note on the defines above for why the velocity field is left alone. */
+        {
+            void* rec  = AnimalRecOf(agent);
+            void* ctrl = DriveCtrlOf(agent);
+            if (rec)  *((unsigned char*)rec  + OFF_BST_HASFOCUS) = 0;
+            if (ctrl) {
+                *((unsigned char*)ctrl + 0x30) = 0;   /* the read offset ... */
+                *((unsigned char*)ctrl + 0x31) = 0;   /* ... and the written one */
+            }
+        }
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        InterlockedExchange(&g_driveLock, DRIVELOCK_OFF);
+        g_lockAgentSet = 0;
+        logf_("[lock] agent-gate write faulted - drivelock forced to off");
+    }
+}
+
+/* ---- probe: the CAnimal turn controller -----------------------------------
+   CAnimal carries a full spring-damper rotation controller - stiffness, damping,
+   max angular velocity, and separate "scared" variants - that the humanoid path
+   does not have. +0x144 is fNormalMaxAngularVelocity and +0x148 is
+   fScaredMaxAngularVelocity. Its CONSUMER was never found, so this is a probe
+   and not a fix: if clamping the maximum angular velocity to zero stops the
+   swivel, that is the whole answer in one write, and if it does not, the turn is
+   not rate-limited here and the controller is eliminated. Either way it costs
+   two floats and is fully reversible. */
+#define OFF_ANIMAL_MAXANGV  0x144
+#define OFF_ANIMAL_MAXANGVS 0x148
+static void* g_turnOn   = 0;        /* the CAnimal we clamped */
+static float g_turnSaved[2];
+
+/* CONSOLE MAY BE NULL HERE. DriveStop calls this as DriveTurnSet(0, 0, 0.0f) on
+   the teardown path, and CConsole::Printf is NOT null-tolerant: its first act is
+   to take the console's own lock at [this+0x88], so a NULL `this` faults reading
+   address 0x88 inside RtlEnterCriticalSection. That is exactly the crash in
+   "Crash 1.txt"/"Crash 2.txt" - see the block comment above DriveStop. Every
+   print below is therefore gated. */
+#define TURN_SAY if (console) P_
+static int DriveTurnSet(void* console, int clamp, float v)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void* pawn;
+
+    if (g_turnOn && Readable(g_turnOn, OFF_ANIMAL_MAXANGVS + 4)) {
+        __try {
+            *(float*)((char*)g_turnOn + OFF_ANIMAL_MAXANGV)  = g_turnSaved[0];
+            *(float*)((char*)g_turnOn + OFF_ANIMAL_MAXANGVS) = g_turnSaved[1];
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) { }
+        g_turnOn = 0;
+    }
+    if (!clamp) { TURN_SAY(console, 0, AC "driveturn: restored\n"); return 1; }
+
+    if (!g_drive || !g_driveAgent) {
+        TURN_SAY(console, 0, AC "driveturn: drive a creature first\n"); return 0;
+    }
+    if (!Readable(g_driveAgent, OFF_AGENT_PAWN + 4)) return 0;
+    pawn = *(void**)((char*)g_driveAgent + OFF_AGENT_PAWN);
+    if (!Readable(pawn, OFF_ANIMAL_MAXANGVS + 4)) {
+        TURN_SAY(console, 0, AC
+           "driveturn: the pawn at agent+0x260 is not readable to +0x148 - this\n"
+           "  creature may not be a CAnimal, which is where those two floats live.\n");
+        return 0;
+    }
+    __try {
+        g_turnSaved[0] = *(float*)((char*)pawn + OFF_ANIMAL_MAXANGV);
+        g_turnSaved[1] = *(float*)((char*)pawn + OFF_ANIMAL_MAXANGVS);
+        *(float*)((char*)pawn + OFF_ANIMAL_MAXANGV)  = v;
+        *(float*)((char*)pawn + OFF_ANIMAL_MAXANGVS) = v;
+        g_turnOn = pawn;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        TURN_SAY(console, 0, AC "driveturn: faulted - not clamped\n");
+        g_turnOn = 0;
+        return 0;
+    }
+    TURN_SAY(console, 0, AC
+       "driveturn: max angular velocity %.2f / %.2f -> %.2f on CAnimal %p\n"
+       "  These are the normal and SCARED limits of CAnimal's spring-damper\n"
+       "  rotation controller, which the humanoid path does not have. Its\n"
+       "  consumer was never traced, so this is a PROBE:\n"
+       "    the swivel stops  -> the turn is rate-limited here, and this is the\n"
+       "      lever. Say so and we make it permanent.\n"
+       "    it keeps turning  -> the controller is eliminated, and what is left\n"
+       "      is animation root motion composing onto the entity matrix.\n"
+       "  'driveturn off' puts both floats back.\n",
+       g_turnSaved[0], g_turnSaved[1], v, pawn);
+    return 1;
+}
+
+/* Install/remove on the CURRENT drive target's vtable. Returns 0 and says why on
+   failure - refusing quietly is the bug this codebase has hit most often. */
+/* Also reachable with console == NULL (DriveStop calls FaceHookSet(0, 0)). That
+   is safe only because on == 0 returns before any print; make it not depend on
+   the argument, for the reason spelled out at DriveTurnSet. */
+#define FACE_SAY if (console) P_
+static int FaceHookSet(void* console, int on)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void** vt;
+    void*  cur;
+    DWORD  old;
+
+    if (!on) {
+        if (g_faceVt && g_faceOrig) {
+            void** slot = (void**)((char*)g_faceVt + AGENT_SLOT_UPDATE);
+            if (VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) {
+                if (*slot == (void*)hkAgentUpdate) *slot = g_faceOrig;
+                VirtualProtect(slot, sizeof(void*), old, &old);
+                logf_("[face] +0x208 restored on vtable %p", g_faceVt);
+            }
+        }
+        g_faceVt = g_faceOrig = 0;
+        return 1;
+    }
+
+    if (!g_driveAgent || !Readable(g_driveAgent, 0x304)) {
+        FACE_SAY(console, 0, AC "facing: drive a creature first\n");
+        return 0;
+    }
+    vt = *(void***)g_driveAgent;
+    if (!Readable(vt, AGENT_SLOT_UPDATE + 4)) {
+        FACE_SAY(console, 0, AC
+           "facing: this agent's vtable is shorter than +0x208 - several of the\n"
+           "  21 agent classes are, so this one has no Update slot to hook.\n");
+        return 0;
+    }
+    cur = vt[AGENT_SLOT_UPDATE / 4];
+    if (cur == (void*)hkAgentUpdate) return 1;             /* already ours */
+
+    if (!SensOf(g_driveAgent)) {
+        FACE_SAY(console, 0, AC
+           "facing: agent+0x264 (the sensory system) is NULL - it is not bound to\n"
+           "  an entity yet. Normal right after a spawn; try again in a moment.\n");
+        return 0;
+    }
+    /* Through the registry, for the same reason as the velocity and signal slots
+       (B1a/B1b): drive across two species calls this twice with two different
+       vt, and g_faceVt only remembers the second. The registry remembers both;
+       g_faceVt stays as the "most recent", which is all the !on path needs. */
+    if (!VtPatch(&vt[AGENT_SLOT_UPDATE / 4], (void*)hkAgentUpdate)) {
+        FACE_SAY(console, 0, AC "facing: could not unprotect the vtable\n");
+        return 0;
+    }
+    g_faceVt   = vt;
+    g_faceOrig = cur;                    /* per-vtable, never a shared global */
+
+    logf_("[face] hooked +0x208 on vtable %p (was %p, class %s)",
+          vt, cur, AgentClassName(g_driveAgent) ? AgentClassName(g_driveAgent) : "?");
+    FACE_SAY(console, 0, AC
+       "facing: hooked %s Update (+0x208 was %p)\n",
+       AgentClassName(g_driveAgent) ? AgentClassName(g_driveAgent) : "this agent",
+       cur);
+    return 1;
+}
+
+
+/* Suspend just the combat behaviour. `ai_IgnorePlayer` turned out to be a
+   CGameConfig property with no consumer in the AI module - the wrong switch.
+   This one touches nothing but the combat sub-object, leaving the brain, tasks,
+   animation state machine and controller alive, which is what keeps driving
+   working. NOT on by default: it may also block OUR attacks, which is untested. */
+static void AgentCombat(int enable)
+{
+    void** vt;
+    if (!g_driveAgent || !Readable(g_driveAgent, 0x304)) return;
+    vt = *(void***)g_driveAgent;
+    if (!Readable(vt, AGENT_SLOT_COMBAT + 4)) return;
+    __try { ((fnAgentCombat)vt[AGENT_SLOT_COMBAT / 4])(g_driveAgent, enable); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { logf_("[drive] combat toggle faulted"); return; }
+    logf_("[drive] combat %s", enable ? "resumed" : "suspended");
+}
+
+/* ---- streaming anchor: make the world load around the CREATURE ------------
+   Sector residency is driven by ONE component class, CDynLoadComponent, and any
+   entity can carry it. It has no tick: it overrides the vtable slot that
+   CEntity::SetTransform broadcasts to every component when its owner moves, and
+   from there it both drives the async sector ring and writes the box the
+   blocking corner-wait uses. So residency follows whichever entities carry one,
+   and only while they move. Park the pawn and nothing streams - which is why
+   driving a creature far enough dropped it through unloaded terrain.
+
+   0x107981A0 is the engine's own attach helper (new component + AddComponent on
+   the owner entity). It has exactly two callers in the image. One of them, the
+   cinematic-camera `DoLoading` path, is DEAD CODE - CCameraBoneComponent is
+   never constructed in this build, so do not believe the "cameras do this too"
+   story. The other, CEntitySystemService::AttachDynLoad (0x1084018F), is the
+   LIVE one and is the ONLY place a CDynLoadComponent is ever attached: it runs
+   at pawn spawn. That is also the proof of our diagnosis - the anchor rides the
+   player pawn, so parking the pawn stops the world streaming, full stop.
+
+   We mirror that live caller, including its `component+0x10 = 0` write. The
+   component cannot be declared in an archetype (it is not in the component
+   factory table), so calling this helper is the only way in.
+
+   Nothing per-frame is needed - the creature's physics already routes its motion
+   through CEntity::SetTransform, which is what updates the anchor. See
+   STREAMING.md. Main thread only. */
+#define FN_ADD_DYNLOAD    (0x107981A0u + g_rebase)  /* __thiscall(ent) -> component  */
+#define FN_DYNLOAD_CLSID  (0x104CC2B0u + g_rebase)  /* __cdecl(void), lazy id init   */
+#define FN_REMOVE_COMP    (0x101B51C0u + g_rebase)  /* __thiscall(ent, component)    */
+#define G_DYNLOAD_HOLDER  (0x11220BC4u + g_rebase)  /* lazily built descriptor       */
+#define G_DYNLOAD_KEY     (0x11220BD4u + g_rebase)  /* holder+0x10 - the lookup key  */
+#define VT_DYNLOADCOMP    (0x11141F90u + g_rebase)
+
+typedef void* (__thiscall *fnAddDynLoad )(void* ent);
+typedef void  (__cdecl    *fnClassIdInit)(void);
+typedef void  (__thiscall *fnRemoveComp )(void* ent, void* comp);
+typedef void  (__thiscall *fnCompMoved  )(void* comp);
+
+static void* g_anchorEnt = 0;    /* whose anchor is ours to remove */
+
+/* NULL is a normal answer - it means "this entity is not an anchor". */
+static void* StreamAnchorOf(void* ent)
+{
+    void* c = 0;
+    if (!Readable(ent, 0x100)) return 0;
+    __try {
+        if (!*(void**)G_DYNLOAD_HOLDER) ((fnClassIdInit)FN_DYNLOAD_CLSID)();
+        c = ((fnGetComponent_)FN_GET_COMPONENT_)(ent, (const void*)G_DYNLOAD_KEY);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) { c = 0; }
+    return c;
+}
+
+static void* StreamAnchorAttach(void* ent)
+{
+    void* c = StreamAnchorOf(ent);
+    if (c) {                       /* already has one - do NOT add a second */
+        logf_("[strm] entity %p already anchors streaming (comp %p)", ent, c);
+        return c;
+    }
+    __try { c = ((fnAddDynLoad)FN_ADD_DYNLOAD)(ent); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[strm] *** attach FAULTED on %p - caught", ent);
+        return 0;
+    }
+    if (!Readable(c, 0x38) || *(unsigned long*)c != VT_DYNLOADCOMP) {
+        logf_("[strm] attach returned %p with vtable %p, expected %p - not trusting it",
+              c, Readable(c, 4) ? *(void**)c : 0, (void*)VT_DYNLOADCOMP);
+        return 0;
+    }
+    /* Mirror the live attach site (0x1084018F) exactly - it clears +0x10 right
+       after the component comes back. Logged, because this is the one field we
+       are writing on faith rather than from a decoded meaning. */
+    logf_("[strm] comp+0x10 was %p, clearing it as the engine's own caller does",
+          *(void**)((char*)c + 0x10));
+    *(void**)((char*)c + 0x10) = 0;
+
+    /* The CALLER records what it attached to - two features can each hold one. */
+    logf_("[strm] anchor attached to %p (comp %p, sector %ld)",
+          ent, c, (long)*(int*)((char*)c + 0x30));
+
+    /* Pump it once so residency moves NOW rather than on the creature's next
+       step - the engine does exactly this right after attaching. */
+    __try {
+        void** vt = *(void***)c;
+        if (Readable(vt, 21 * 4)) ((fnCompMoved)vt[20])(c);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[strm] initial pump faulted - harmless, it updates on the next move");
+    }
+    return c;
+}
+
+/* Remove OUR anchor from a specific entity. Two features can hold one each -
+   the driven creature and the free camera - so this takes the entity rather
+   than reading a single global. */
+static void StreamAnchorRemove(void* ent)
+{
+    void* c;
+    if (!Readable(ent, 0x100)) return;
+    c = StreamAnchorOf(ent);
+    if (!c) return;
+    __try { ((fnRemoveComp)FN_REMOVE_COMP)(ent, c); logf_("[strm] anchor removed from %p", ent); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { logf_("[strm] anchor removal faulted - caught"); }
+}
+
+static void StreamAnchorDetach(void)
+{
+    void* ent = g_anchorEnt;
+    g_anchorEnt = 0;
+    StreamAnchorRemove(ent);
+}
+
+/* Push the owner's CURRENT position into the anchor by hand.
+   Needed because the anchor normally updates as a side effect of
+   CEntity::SetTransform broadcasting to its components, and it is NOT
+   established that the free camera's own Update writes its transform through
+   that path rather than poking the matrix directly. Calling slot 20 ourselves
+   is what the engine does immediately after attaching, so it is a supported way
+   to say "the owner moved" - and it makes the anchor correct either way. */
+static void StreamAnchorPump(void* comp)
+{
+    if (!Readable(comp, 0x38)) return;
+    __try {
+        void** vt = *(void***)comp;
+        if (Readable(vt, 21 * 4)) ((fnCompMoved)vt[20])(comp);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) { }
+}
+
+/* ---- freecam's own anchor, kept separate from the creature's -------------- */
+static int   g_fcAnchor    = 0;     /* the user asked for `freecam 1`      */
+static void* g_fcAnchorEnt = 0;     /* which camera entity we attached to  */
+static void* g_fcAnchorComp = 0;    /* cached, so we do not look it up per frame */
+
+static void FreecamAnchorStop(void)
+{
+    if (g_fcAnchorEnt) StreamAnchorRemove(g_fcAnchorEnt);
+    g_fcAnchorEnt  = 0;
+    g_fcAnchorComp = 0;
+    g_fcAnchor     = 0;
+}
+
+static void FreecamAnchorStop_fwd(void) { FreecamAnchorStop(); }
+
+/* Main thread, once per frame while freecam is on. */
+static void FreecamAnchorTick(void)
+{
+    void* cam;
+    if (!g_fcAnchor || !g_freecam) return;
+    cam = GetCameraEntityDirect();
+    if (!Readable(cam, 0x100)) return;
+
+    if (cam != g_fcAnchorEnt) {          /* first time, or the camera changed */
+        if (g_fcAnchorEnt) StreamAnchorRemove(g_fcAnchorEnt);
+        g_fcAnchorComp = StreamAnchorAttach(cam);
+        if (!g_fcAnchorComp) {
+            logf_("[strm] could not anchor streaming to camera %p - giving up", cam);
+            g_fcAnchor = 0;
+            return;
+        }
+        g_fcAnchorEnt = cam;
+        logf_("[strm] streaming now follows the FREE CAMERA (%p)", cam);
+    }
+    StreamAnchorPump(g_fcAnchorComp);
+}
+
+/* ---- time scale ------------------------------------------------------------
+   The time manager keeps a scale as a DOUBLE at +0x50, default 1.0, applied by
+   one multiply before the frame delta is stored. Zeroing it stops the world
+   while every per-frame call still runs - see FREEZE.md for why that matters
+   (nothing is skipped, so nothing can wedge on a missed step).
+
+   Coming back is safe by construction: the frame timestamp is written every
+   frame BEFORE any scaling, so no time debt builds up while frozen, and the
+   raw delta is clamped to 0.1s before scaling - so the worst first live frame
+   is 100ms, not however long you spent stopped. */
+#define G_TIMEMGR_PP (0x111CA758u + g_rebase)
+#define OFF_TM_SCALE 0x50
+
+static double g_savedScale = 1.0;
+static int    g_frozen     = 0;
+
+static double TimeScaleGet(void)
+{
+    char* tm = *(char**)G_TIMEMGR_PP;
+    if (!Readable(tm, OFF_TM_SCALE + 8)) return -1.0;
+    return *(double*)(tm + OFF_TM_SCALE);
+}
+
+static int TimeScaleSet(double v)
+{
+    char* tm = *(char**)G_TIMEMGR_PP;
+    if (!Readable(tm, OFF_TM_SCALE + 8)) return 0;
+    *(double*)(tm + OFF_TM_SCALE) = v;
+    return 1;
+}
+
+/* Never unload, warp or restore with the world stopped - that would leave the
+   game frozen with nothing left to unfreeze it. */
+static void TimeScaleRestore(void)
+{
+    if (!g_frozen) return;
+    TimeScaleSet(g_savedScale > 0.0 ? g_savedScale : 1.0);
+    g_frozen = 0;
+    logf_("[frz ] time scale restored to %.2f on teardown", g_savedScale);
+}
+
+/* ---- allsectors: load a big radius of the map and keep it loaded -----------
+   The sector-interest object on the streaming component (comp+0x2C) holds the
+   load radii: two arrays, five entries and three, one per resource category,
+   measured in SECTORS. Normal play runs them at 2..20 and the grid is 16x16.
+
+   These are the engine's own public setters, which RE-PUBLISH the request as
+   they write. Poking the arrays directly would change the numbers without
+   telling the streamer anything:
+
+     0x1022DDD0  SetA(idx, value) + re-emit
+     0x1022DE00  SetB(idx, value) + re-emit
+     0x1022DE30  SetAll(value)    + re-emit
+
+   THE RISK IS REAL, AND IT IS NOT A CRASH: the engine BLOCKS on a sector it has
+   asked for - 0x1020BF40 is a pump loop with no timeout. Ask for the whole map
+   at once and the game sits there until every sector is resident, which on a
+   256-sector level is a long time and looks exactly like a hang. So the radius
+   is an argument with a modest default, and the original values are saved so it
+   can be put back. */
+#define FN_INT_SETA   (0x1022DDD0u + g_rebase)
+#define FN_INT_SETB   (0x1022DE00u + g_rebase)
+#define OFF_DYN_INTEREST 0x2C
+#define OFF_INT_ARR_A    0x00      /* {ptr, count, cap} */
+#define OFF_INT_ARR_B    0x0C
+
+typedef void (__thiscall *fnIntSetIdx)(void* interest, int idx, int value);
+
+static int g_secSaved = 0;
+static int g_secA[5], g_secB[3];
+
+/* The interest belongs to whichever entity carries the streaming component -
+   normally the player's pawn (STREAMING.md: the only live attach is at pawn
+   spawn). If we are driving, the creature has one too; the player's is the one
+   that governs where the world stays loaded. */
+static void* SectorInterest(void)
+{
+    void* pl = GetPlayerEntity();
+    void* c  = pl ? StreamAnchorOf(pl) : 0;
+    if (!Readable(c, OFF_DYN_INTEREST + 4)) return 0;
+    {
+        void* it = *(void**)((char*)c + OFF_DYN_INTEREST);
+        return Readable(it, 0x38) ? it : 0;
+    }
+}
+
+static int SectorRadiiSave(void* it)
+{
+    const int* a;
+    const int* b;
+    unsigned long na, nb;
+    int i;
+    if (g_secSaved) return 1;
+    a  = *(const int**)((char*)it + OFF_INT_ARR_A);
+    na = *(unsigned long*)((char*)it + OFF_INT_ARR_A + 4);
+    b  = *(const int**)((char*)it + OFF_INT_ARR_B);
+    nb = *(unsigned long*)((char*)it + OFF_INT_ARR_B + 4);
+    if (na != 5 || nb != 3) {
+        logf_("[sect] radii counts are %lu/%lu, expected 5/3 - refusing", na, nb);
+        return 0;
+    }
+    if (!Readable(a, 5 * 4) || !Readable(b, 3 * 4)) return 0;
+    for (i = 0; i < 5; ++i) g_secA[i] = a[i];
+    for (i = 0; i < 3; ++i) g_secB[i] = b[i];
+    g_secSaved = 1;
+    logf_("[sect] saved radii A=%d,%d,%d,%d,%d B=%d,%d,%d",
+          g_secA[0], g_secA[1], g_secA[2], g_secA[3], g_secA[4],
+          g_secB[0], g_secB[1], g_secB[2]);
+    return 1;
+}
+
+/* Two corrections learned from the first attempt, which measurably made things
+   WORSE rather than better:
+
+   1. NEVER REDUCE A RADIUS. The shipped values are A=4,5,10,20,1 B=1,4,4 - and
+      A[3] is the MASTER BOUND: a sector outside it is skipped entirely. It ships
+      at 20, which on a 16x16 grid already spans the whole map. Setting every
+      entry to 8 therefore cut the master bound from 20 to 8 while raising the
+      small ones - so less was resident, not more. Take the maximum instead.
+
+   2. THE "MODE FLAG" WRITE IS GONE, AND IT IS WHY THE CHARACTER VANISHED.
+      I wrote 1 into `interest+0x35` believing it meant "request the whole
+      world". Both halves of that were wrong, per STREAMING.md 1.4:
+
+        a) WRONG OBJECT. `+0x34` and `+0x35` are fields on the COMPONENT, not
+           on the interest - in 0x10EEECB0 `esi` is the component (`[esi+0x2C]`
+           is the interest, `[esi+0x0C]` the owner node). So the write landed
+           on a blind byte inside the 0x38-byte SectorInterest, three bytes
+           from its end. Unknown field, corrupted.
+
+        b) WRONG MEANING even at the right address. `al = (!flag34 && flag35)`
+           is pushed as ARG3 to Interest::SetPosition (0x1022E000) - a
+           parameter, not an early-out. The only early-out is on `+0x34`
+           alone at 0x10EEECF8, and it skips just the CWorld blocking box.
+
+      Corrupting the interest stopped it tracking position, so nothing new was
+      ever requested: terrain (always resident) stayed, everything streamed -
+      including the player's own model - was evicted and never came back.
+
+      So: radii only, through the engine's own re-publishing setters, saved and
+      restorable. Whether radii alone are sufficient is NOT established - A[3]
+      already ships at 20, which spans the map. See the console text. */
+
+static void SectorRadiiSet(void* it, int v)
+{
+    int i;
+    __try {
+        for (i = 0; i < 5; ++i) {
+            int want = (g_secA[i] > v) ? g_secA[i] : v;    /* never shrink */
+            ((fnIntSetIdx)FN_INT_SETA)(it, i, want);
+        }
+        for (i = 0; i < 3; ++i) {
+            int want = (g_secB[i] > v) ? g_secB[i] : v;
+            ((fnIntSetIdx)FN_INT_SETB)(it, i, want);
+        }
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[sect] setter faulted at radius %d", v);
+        return;
+    }
+    logf_("[sect] radii raised to >=%d (radii only - no flag pokes)", v);
+}
+
+static void SectorRadiiRestore(void* it)
+{
+    int i;
+    if (!g_secSaved) return;
+    __try {
+        for (i = 0; i < 5; ++i) ((fnIntSetIdx)FN_INT_SETA)(it, i, g_secA[i]);
+        for (i = 0; i < 3; ++i) ((fnIntSetIdx)FN_INT_SETB)(it, i, g_secB[i]);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[sect] restore faulted");
+    }
+    logf_("[sect] radii restored");
+}
+
+/* Is the sector under this point actually resident? This is the shipped AI
+   task's own test (CTaskCheckPosInLoadedSector), lifted verbatim: get the
+   sector, ask whether it is NOT resident, invert. Non-blocking - it reads two
+   arrays and calls one virtual. Returns 1 loaded, 0 not, -1 could not tell.
+   NOTE the inverted sense of 0x102AB370: non-zero means NOT ready. */
+#define G_WORLD_PP        (0x111CA75Cu + g_rebase)
+#define FN_SECTOR_FROMPOS (0x10207780u + g_rebase)
+#define FN_SECTOR_NOTRES  (0x102AB370u + g_rebase)
+typedef void* (__thiscall *fnSectorFromPos)(void* world, const float* pos);
+typedef char  (__thiscall *fnSectorNotRes )(void* sector);
+
+static int SectorResidentAt(const float* pos)
+{
+    void* world = *(void**)G_WORLD_PP;
+    void* sec   = 0;
+    char  notRes;
+    if (!Readable(world, 0x260) || !Readable(pos, 12)) return -1;
+    __try { sec = ((fnSectorFromPos)FN_SECTOR_FROMPOS)(world, pos); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+    if (!Readable(sec, 0x100)) return 0;      /* no sector there at all */
+    __try { notRes = ((fnSectorNotRes)FN_SECTOR_NOTRES)(sec); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+    return notRes ? 0 : 1;
+}
+
+static const char* YesNoUnk(int v)
+{
+    return v > 0 ? "LOADED" : v == 0 ? "NOT LOADED" : "unknown";
+}
+
+/* Read-only diagnostic: who is anchoring streaming, and is the ground under
+   each of them actually resident? This is the check that tells you whether a
+   fall-through is a streaming failure or something else. */
+static void AnchorInfo(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void* pl = GetPlayerEntity();
+    void* cr = g_lastSpawn;
+
+    P_(console, 0, AC "anchor: what is pulling sectors in\n");
+    if (Readable(pl, 0x100)) {
+        const float* p = (const float*)((char*)pl + OFF_ENT_POS);
+        P_(console, 0, AC "  player   %p  anchor %s  ground %s  (%.0f %.0f %.0f)\n",
+           pl, StreamAnchorOf(pl) ? "YES" : "no ",
+           YesNoUnk(SectorResidentAt(p)), p[0], p[1], p[2]);
+    } else {
+        P_(console, 0, AC "  player   - no entity\n");
+    }
+    if (Readable(cr, 0x100)) {
+        const float* p = (const float*)((char*)cr + OFF_ENT_POS);
+        P_(console, 0, AC "  creature %p  anchor %s  ground %s  (%.0f %.0f %.0f)\n",
+           cr, StreamAnchorOf(cr) ? "YES" : "no ",
+           YesNoUnk(SectorResidentAt(p)), p[0], p[1], p[2]);
+    } else {
+        P_(console, 0, AC "  creature - nothing spawned\n");
+    }
+    P_(console, 0, AC
+       "  'anchor on' anchors streaming to the last spawned thing, 'anchor off'\n"
+       "  removes ours again. 'drive' does it for you.\n");
+}
+
+/* Resolve the agent behind `ent` and install our two vtable hooks on it.
+   Everything DriveStart does to the AGENT, and nothing it does to the camera,
+   input or player - so a reconnect after a streaming gap restores steering
+   without re-entering the whole drive mode. Returns 0 and logs why on failure.
+
+   Note it re-reads the vtable each time. A creature that streamed out and back is
+   a NEW agent object, and can even be a different species vtable, so reusing the
+   old g_driveVt/g_driveOrig would restore the wrong function later. */
+static int DriveAttachTo(void* ent, void* console)
+{
+    void*  aiComp = 0;
+    void*  agent;
+    void** vt;
+
+    if (!Readable(ent, 0x100)) return 0;
+    __try { aiComp = ((fnGetComponent_)FN_GET_COMPONENT_)(ent, (const void*)CID_AICOMPONENT); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    if (!Readable(aiComp, OFF_AICOMP_AGENT + 4)) return 0;
+    agent = *(void**)((char*)aiComp + OFF_AICOMP_AGENT);
+    if (!Readable(agent, 0x304)) return 0;
+
+    /* The chain SetDesiredVelocity itself walks. A freshly streamed-in agent can
+       be readable but not yet built - this is the Samson crash guard. */
+    {
+        void* pawn;
+        if (!Readable((char*)agent + 0x260, 4)) return 0;
+        pawn = *(void**)((char*)agent + 0x260);
+        if (!Readable(pawn, 0x2C)) return 0;
+        if (!Readable(*(void**)((char*)pawn + 0x28), 0x18)) return 0;
+    }
+
+    vt = *(void***)agent;
+    if (!Readable(vt, AGENT_SLOT_SIGNAL + 4)) return 0;
+    if (vt[AGENT_SLOT_SETVEL / 4] != (void*)FN_SETDESIREDVEL &&
+        vt[AGENT_SLOT_SETVEL / 4] != (void*)hkSetDesiredVelocity) {
+        logf_("[drive] attach refused: +0x128 is %p, not the base setter",
+              vt[AGENT_SLOT_SETVEL / 4]);
+        return 0;
+    }
+
+    if (vt[AGENT_SLOT_SETVEL / 4] != (void*)hkSetDesiredVelocity) {
+        g_driveOrig = vt[AGENT_SLOT_SETVEL / 4];
+        if (!VtPatch(&vt[AGENT_SLOT_SETVEL / 4], (void*)hkSetDesiredVelocity))
+            return 0;
+    }
+    g_driveVt    = vt;
+    g_driveAgent = agent;
+    g_driveEnt   = ent;
+
+    if (vt[AGENT_SLOT_SIGNAL / 4] != (void*)hkRequestSignal) {
+        if (!g_sigOrig) g_sigOrig = vt[AGENT_SLOT_SIGNAL / 4];
+        VtPatch(&vt[AGENT_SLOT_SIGNAL / 4], (void*)hkRequestSignal);
+    }
+    if (console)
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "drive: attached to agent %08X\n",
+                              (unsigned)(size_t)agent);
+    return 1;
+}
+
+/* CONSOLE IS NULL ON THE TEARDOWN PATHS - Escape-while-driving, the creature
+   dying, and unload all call DriveStop(0). That is deliberate and documented
+   below, but it makes every helper this calls a place where a stray
+   CConsole::Printf becomes an access violation: Printf's first act is to take
+   the console's own lock at [this+0x88], so a NULL `this` faults reading address
+   0x88 inside RtlEnterCriticalSection at 0x1000EE10.
+   That is precisely the crash in "Crash 1.txt" and "Crash 2.txt": both logs show
+   ESI=0, ECX=0x88, fault reading 0x88, with 0x100AC0C0 - which is FN_PRINTF -
+   three times in the stack, and "[drive] combat resumed" (AgentCombat(1), a few
+   statements below) as the last line before it. The register file is identical
+   in both crashes because it is a fixed code path with a literal NULL, not a
+   race. The offender was DriveTurnSet's unconditional "driveturn: restored".
+   RULE FOR ANYTHING ADDED HERE: no unguarded Printf below this line. */
+static void DriveStop(void* console)
+{
+    g_driveHoldValid = 0;
+    g_lastVelCall    = 0;      /* disarm the runaway watchdog */
+    InterlockedExchange(&g_velSeen, 0);
+    InterlockedExchange(&g_idleHinted, 0);
+    g_driveBegan     = 0;
+    /* Anything still owed to the creature dies with the drive - the agent is
+       about to stop being ours, and a deferred signal has no business arriving
+       after that. */
+    SigQueueClear();
+    g_attackEndAt    = 0;
+    StreamAnchorDetach();
+
+    /* BEFORE clearing g_driveAgent - AgentCombat needs it. Every restore below
+       runs unconditionally; none of it may be gated on `console`, because the
+       unload path calls this with console == NULL and leaving the AI suspended
+       or the vtable hooked after we unmap is exactly the bug this fixes. */
+    AgentCombat(1);
+    g_driveCalm = 0;
+
+    /* SUPPRESS THE CREATURE'S FACING FOR THE WHOLE DRIVE.
+     *
+     * Muting the AI's SIGNALS is not the same as stopping it steering. The
+     * signal mute stops the creature putting itself into an attack crouch, but
+     * the agent's facing update keeps running underneath, so the body still
+     * swivels toward whatever the engine thinks it should look at - which is
+     * the reported "the AI still turns the hammerhead while I am driving it".
+     *
+     * The machinery to stop that already existed and was simply never wired
+     * up: `g_faceSuppress` was armed ONLY by typing `facing` by hand, and the
+     * five DRIVELOCK levers below it are written to DRIVELOCK_OFF in all three
+     * places that touch them and to nothing else - dead code. Driving now arms
+     * the suppression itself, because a creature you are driving should never
+     * be fighting you for its own heading.
+     *
+     * `g_faceProbe` stays OFF: the manual command turns it on to log the focus
+     * every 400ms, which is a diagnostic, not something to run for the length
+     * of a drive. `g_faceAuto` records that WE armed it, so stopping the drive
+     * only undoes our own arming and leaves a manual `facing` alone. */
+    if (!g_faceSuppress) {
+        if (FaceHookSet(console, 1)) {
+            InterlockedExchange(&g_faceSuppress, 1);
+            InterlockedExchange(&g_faceProbe, 0);
+            InterlockedExchange(&g_faceAuto, 1);
+            logf_("[drive] facing suppression armed for the drive");
+        }
+    }
+
+    /* Take the +0x208 detour down with the rest - leaving it installed past a
+       DriveStop would keep calling a hook whose g_driveAgent is gone. */
+    FaceHookSet(0, 0);
+
+    /* THE ENGINE'S OWN AI GATE AND THE TURN CLAMP, both put back HERE rather
+       than left to the per-frame tick. DriveLockTick does restore them once
+       g_drive goes false - but only if the detour runs again, and on the unload
+       path it may not. An agent left holding +0x1C4 = 1 is a creature that is
+       permanently deaf to its own AI with nothing on screen to say why, which is
+       exactly the kind of invisible state this file keeps being bitten by. Both
+       calls are idempotent and both are safe with console == NULL. */
+    InterlockedExchange(&g_driveLock, DRIVELOCK_OFF);
+    DriveLockTick();           /* the mode is now OFF, so this restores the byte */
+    DriveTurnSet(0, 0, 0.0f);  /* puts the two angular-velocity floats back      */
+
+    /* RESTORE EVERY SLOT WE EVER PATCHED - bug B1a/B1b (CREATURE_AUDIT.md).
+       This replaces two blocks that each restored ONE remembered vtable. Across a
+       species change DriveRebind patches a second vtable, and the old code left
+       that second slot pointing into this DLL after unload; the exit sweep was
+       catching it after the fact ("agent velocity slot STILL ours"). The registry
+       does not care how many vtables a session touched. */
+    logf_("[drive] restoring hooks (%ld AI requests were muted)", g_muted);
+    VtRestoreAll();
+    g_sigVt = g_sigOrig = 0;
+    g_ourSignal = 0;
+    g_driveVt = g_driveOrig = g_driveAgent = g_driveEnt = 0;
+    g_driveBadSince = 0;
+    g_driveHaveId = 0;
+    g_driveIdLo = g_driveIdHi = 0;
+    InterlockedExchange(&g_driveFrozen, 0);
+    InterlockedExchange(&g_drive, 0);
+    InterlockedExchange(&g_driveCam, 0);
+    /* Clear the flag first so SetGameInput's invariant lets the re-enable through. */
+    SetGameInput(1);
+    FreecamLeave(console);              /* back to the pawn camera - always */
+    if (console)
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "drive: off - camera, controls and the creature's AI are all restored\n");
+}
+
+static void DriveStart(void* console)
+{
+    void* ent = g_lastSpawn;
+    void* aiComp = 0;
+    void* agent;
+    void** vt;
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+
+    if (g_drive) { DriveStop(console); return; }
+    if (!Readable(ent, 0x100)) {
+        P_(console, 0, AC "drive: spawn a creature first, then 'drive'\n"); return;
+    }
+    __try { aiComp = ((fnGetComponent_)FN_GET_COMPONENT_)(ent, (const void*)CID_AICOMPONENT); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { aiComp = 0; }
+    if (!Readable(aiComp, OFF_AICOMP_AGENT + 4)) {
+        P_(console, 0, AC "drive: that entity has no AI component - not steerable\n"); return;
+    }
+    agent = *(void**)((char*)aiComp + OFF_AICOMP_AGENT);
+    if (!Readable(agent, 4)) { P_(console, 0, AC "drive: no agent\n"); return; }
+    vt = *(void***)agent;
+    if (!Readable(vt, AGENT_SLOT_SETVEL + 4)) {
+        P_(console, 0, AC "drive: agent vtable too short\n"); return; }
+    if (vt[AGENT_SLOT_SETVEL / 4] == (void*)hkSetDesiredVelocity) {
+        P_(console, 0, AC "drive: already hooked on this species\n"); return;
+    }
+    if (vt[AGENT_SLOT_SETVEL / 4] != (void*)FN_SETDESIREDVEL) {
+        P_(console, 0, AC
+           "drive: slot +0x128 is %p, expected %p - this is not the shared animal\n"
+           "  setter, so steering it this way would call the wrong function.\n",
+           vt[AGENT_SLOT_SETVEL / 4], (void*)FN_SETDESIREDVEL);
+        return;
+    }
+
+    g_driveEnt   = ent;      /* what we steer, independent of any later pick */
+    {   /* Stable identity, so a streaming gap can be survived rather than ending
+           the drive. Costs one map walk, once, at 'drive'. */
+        unsigned long lo = 0, hi = 0;
+        g_driveHaveId = (EntWalkFind(ent, &lo, &hi) != 0);
+        g_driveIdLo = lo; g_driveIdHi = hi;
+        logf_("[drive] id64 %08lX:%08lX %s", hi, lo,
+              g_driveHaveId ? "recorded - can survive a streaming gap"
+                            : "NOT FOUND - a streaming gap will end this drive");
+    }
+    g_driveOrig  = vt[AGENT_SLOT_SETVEL / 4];
+    if (!VtPatch(&vt[AGENT_SLOT_SETVEL / 4], (void*)hkSetDesiredVelocity)) {
+        g_driveEnt = g_driveOrig = 0;
+        P_(console, 0, AC "drive: could not unprotect the vtable\n");
+        return;
+    }
+    g_driveVt    = vt;
+    g_driveAgent = agent;
+
+    /* Take its voice as well as its legs - see hkRequestSignal. Same vtable,
+       one slot along, same restore discipline. */
+    if (Readable(&vt[AGENT_SLOT_SIGNAL / 4], 4) &&
+        vt[AGENT_SLOT_SIGNAL / 4] != (void*)hkRequestSignal) {
+        g_sigOrig = vt[AGENT_SLOT_SIGNAL / 4];
+        if (VtPatch(&vt[AGENT_SLOT_SIGNAL / 4], (void*)hkRequestSignal)) {
+            g_sigVt = vt;
+            logf_("[drive] signal slot hooked (was %p) - the AI is muted", g_sigOrig);
+        } else {
+            g_sigOrig = 0;
+        }
+    }
+    /* Ask the creature how fast it can actually go, and make that the ceiling.
+       Running the velocity past its gait speed is what makes it skate: the move
+       tree has no animation faster than its top gait, so the extra speed is pure
+       sliding. Query every gait and take the largest sane answer. */
+    {
+        float best = 0.0f;
+        float slow = 0.0f;            /* the slowest real gait = the walk */
+        int   g;
+        if (Readable(vt, AGENT_SLOT_GAITSPD + 4)) {
+            for (g = 0; g < 6; ++g) {
+                float s = 0.0f;
+                __try { s = ((fnGaitSpeed)vt[AGENT_SLOT_GAITSPD / 4])(agent, g); }
+                __except (EXCEPTION_EXECUTE_HANDLER) { s = 0.0f; }
+                if (s > best && s < 200.0f) best = s;
+                /* THE WALK WAS ALREADY HERE AND WAS BEING THROWN AWAY. This
+                   loop asks the creature for EVERY gait and kept only the
+                   largest, so the slow gaits - the walk - were logged and
+                   discarded. No memory offsets and no parameter-table hunting
+                   are needed for a walk pace: it is the smallest sane answer
+                   the same virtual already gives. */
+                if (s > 0.5f && s < 200.0f && (slow == 0.0f || s < slow))
+                    slow = s;
+                logf_("[drive] gait %d -> %.2f", g, s);
+            }
+        }
+        g_driveWalk = (slow > 0.5f && slow < best) ? slow : 0.0f;
+        if (g_driveWalk > 0.0f)
+            logf_("[drive] walk gait %.2f, sprint %.2f", g_driveWalk, best);
+        if (best > 0.5f) {
+            g_driveMax = best;
+            logf_("[drive] top gait speed %.2f - sprint clamped to it", best);
+        } else {
+            g_driveMax = 40.0f;
+            logf_("[drive] no usable gait speed - falling back to %.1f", g_driveMax);
+        }
+        if (g_driveWalk > 0.0f) g_driveSpeed = g_driveWalk;   /* start walking */
+        if (g_driveSpeed > g_driveMax) g_driveSpeed = g_driveMax;
+    }
+
+    g_muted = 0;
+    /* Arm the watchdog, but as "not yet started" - g_velSeen stays 0 until the
+       agent actually asks, so an idle creature is not mistaken for a runaway. */
+    g_lastVelCall = GetTickCount();
+    g_driveBegan  = GetTickCount();
+    InterlockedExchange(&g_velSeen, 0);
+    InterlockedExchange(&g_idleHinted, 0);
+    InterlockedExchange(&g_drive, 1);
+
+    /* Make the world stream around the CREATURE. Without this the anchor stays
+       on the parked pawn, no sector is ever requested where you actually are,
+       and the creature eventually runs off the loaded terrain and falls. */
+    if (StreamAnchorAttach(ent)) {
+        g_anchorEnt = ent;
+        P_(console, 0, AC "drive: the world now streams around the creature\n");
+    }
+    else
+        P_(console, 0, AC
+           "drive: WARNING - could not anchor streaming to the creature. Do not\n"
+           "  travel far: the terrain ahead of you may never load in.\n");
+
+    /* Switch to the free camera INSTEAD of cutting input.
+       Activating it pushes the shipped `free_camera` action map, which replaces
+       the player's controls wholesale - so the player stops receiving movement
+       and plays no walk or jump animations, WITHOUT us blacking out input. That
+       matters because cutting input would also kill mouse-look, and mouse-look is
+       what makes a chase camera worth having. The free camera's own WASD moves it,
+       but we overwrite its position every frame anyway, so that is harmless.
+
+       The creature's AI still decides to attack you, which the velocity override
+       does not touch. That is handled below, by suspending the combat behaviour
+       itself - NOT by `ai_IgnorePlayer`, which this file used to claim: that is
+       a CGameConfig property with no consumer in the AI module, so setting it
+       does nothing at all. */
+    FreecamEnter(console);
+    InterlockedExchange(&g_driveCam, g_freecam ? 1 : 0);
+    {   /* derive "<species>_attack_closerange" from the archetype's last segment,
+           e.g. Animals.Avatar.Sturmbeest -> sturmbeest_attack_closerange.
+           Signal names are CASE-SENSITIVE CRC-32. Override with 'drivesignal'. */
+        const char* leaf = strrchr(g_lastSpawnName, '.');
+        const char* prim;
+        leaf = leaf ? leaf + 1 : g_lastSpawnName;
+
+        prim = PrimaryAttackFor(leaf);
+        if (prim) {
+            strncpy(g_driveSignal, prim, sizeof(g_driveSignal) - 1);
+            g_driveSignal[sizeof(g_driveSignal) - 1] = 0;
+        } else {
+            /* Unknown species: the old guess is still the best we have, but say
+               so rather than pretending it is a known name. */
+            int i = 0;
+            while (leaf[i] && i < (int)sizeof(g_driveSignal) - 24) {
+                g_driveSignal[i] = (char)tolower((unsigned char)leaf[i]); ++i;
+            }
+            g_driveSignal[i] = 0;
+            if (i) strncat(g_driveSignal, "_attack_closerange",
+                           sizeof(g_driveSignal) - strlen(g_driveSignal) - 1);
+            logf_("[drive] \"%s\" is not in the attack table - guessing \"%s\"",
+                  leaf, g_driveSignal);
+        }
+        {   /* and how to get back out of it, where that is a separate signal */
+            const char* end = AttackEndFor(leaf);
+            g_attackEnd[0] = 0;
+            g_attackEndAt  = 0;
+            if (end) {
+                strncpy(g_attackEnd, end, sizeof(g_attackEnd) - 1);
+                g_attackEnd[sizeof(g_attackEnd) - 1] = 0;
+            }
+        }
+        logf_("[drive] left-click sends \"%s\"%s%s", g_driveSignal,
+              g_attackEnd[0] ? ", closed with " : "",
+              g_attackEnd[0] ? g_attackEnd : "");
+
+        DriveSigBuild(leaf);
+    }
+
+    /* Combat is deliberately LEFT RUNNING - but NOT for the reason this comment
+       used to give. It said suspending combat gates our signals, because the
+       viperwolf's actions are reachable only from Viperwolf_Attack_Warning,
+       "which is a combat state". The gating is real; that causation is not.
+       Viperwolf_Attack_Warning is a CGOState in the ANIMATION track, and the
+       only thing that ever puts a creature into it is a signal -
+       `viperwolf_attack_warning` from Idle, or the `viperwolf_forced_attack_warning`
+       interrupt from anywhere. AgentCombat suspends a BEHAVIOUR; it cannot veto
+       a track transition. And we mute the AI anyway, so the AI was never the
+       thing entering that state. CREATURE_AUDIT B8.
+
+       Which means `drivecalm` should be safe to leave on. It is still defaulted
+       OFF here because that is INFERRED from the data and has not been tested in
+       game - SIGNALS.md Â§10 test 3 isolates exactly this, and until someone runs
+       it, changing the default would be swapping one guess for another. */
+    g_driveCalm = 0;
+
+    logf_("[drive] agent=%p vt=%p orig=%p (input on free_camera map, combat suspended)",
+          agent, vt, g_driveOrig);
+    P_(console, 0, AC
+       "drive: ON - you are the creature.\n"
+       "  WASD steers it, the mouse aims the camera, and the camera chases it.\n"
+       "  The free-camera action map replaces your controls, so the player plays\n"
+       "  no walk or jump animations. It stays ours while the console is open.\n"
+       "  Its AI is MUTED: the brain still runs, but every signal it asks for is\n"
+       "  dropped, so it cannot put itself into an attack crouch or fight your\n"
+       "  steering. Only your keys reach it. 'driveai' unmutes to see what it\n"
+       "  wants to do; 'drivecalm' is the older, blunter switch.\n"
+       "  It keeps its own animations - we only replace the velocity its AI asks\n"
+       "  for. 'drive' again undoes all of it.\n"
+       "  'drivespeed <n>' pace (%.1f), 'drivecam <height> <dist>' framing (%.1f %.1f).\n",
+       g_driveSpeed, g_driveCamH, g_driveCamD);
+}
+
+static void BeastInfo(void* console)
+{
+    void* ent = g_lastSpawn ? g_lastSpawn : GetPlayerEntity();
+    const char* which = g_lastSpawn ? "last spawned entity" : "player";
+    void *aiComp = 0, *agent, **vt, *fn;
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+
+    if (!Readable(ent, 0x100)) { P_(console, 0, AC "beastinfo: nothing to inspect\n"); return; }
+    __try { aiComp = ((fnGetComponent_)FN_GET_COMPONENT_)(ent, (const void*)CID_AICOMPONENT); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        P_(console, 0, AC "beastinfo: GetComponent faulted\n"); return;
+    }
+    if (!Readable(aiComp, OFF_AICOMP_AGENT + 4)) {
+        P_(console, 0, AC "beastinfo: %s has no CAIComponent - not AI-driven\n", which);
+        return;
+    }
+    agent = *(void**)((char*)aiComp + OFF_AICOMP_AGENT);
+    if (!Readable(agent, 4)) { P_(console, 0, AC "beastinfo: no agent on the AI component\n"); return; }
+    vt = *(void***)agent;
+    if (!Readable(vt, AGENT_SLOT_SETVEL + 4)) {
+        P_(console, 0, AC "beastinfo: agent vtable too short - not an animal agent\n"); return;
+    }
+    fn = vt[AGENT_SLOT_SETVEL / 4];
+    P_(console, 0, AC
+       "beastinfo: %s\n  aiComp=%p agent=%p vtable=%p\n  vt[+0x128]=%p  %s\n",
+       which, aiComp, agent, vt, fn,
+       (fn == (void*)hkSetDesiredVelocity)
+         ? "== OUR hook - this species is already being driven"
+         : (fn == (void*)FN_SETDESIREDVEL)
+             ? "== SetDesiredVelocity - DRIVEABLE by detouring this"
+             : "does NOT match SetDesiredVelocity - different agent family");
+    logf_("[beast] %s aiComp=%p agent=%p vt=%p slot128=%p (want %p)",
+          which, aiComp, agent, vt, fn, (void*)FN_SETDESIREDVEL);
+}
+
+/* ---- mountinfo: is this thing rideable? --------------------------------
+   PURE READ. Asks an entity for its CBtzHybridAnimal component and prints the
+   driving action map name the engine would push on mounting.
+
+   This settles the one open contradiction in PLAY_AS.md: the data scan says the
+   shipped Thanator archetype instantiates the mount component, the disassembly
+   pass guessed it does not, and only the live game can say. It also shows
+   whether sDrivingActionMap is EMPTY - which is exactly what would leave you
+   mounted on a Thanator with no controls. */
+#define FN_GET_COMPONENT   (0x101B79E0u + g_rebase)  /* __thiscall(ent, classId) */
+#define CID_HYBRID_ANIMAL  (0x11220BC0u + g_rebase)  /* CBtzHybridAnimal class id */
+#define OFF_DRIVING_MAP    0x1ACu        /* sDrivingActionMap, a CryStringBase   */
+
+typedef void* (__thiscall *fnGetComponent)(void* ent, const void* classId);
+
+/* ---- fixcontrol: re-point the player at its pawn's real node -----------
+   playerinfo on a warped-in session reported the pawn ALIVE but the chain
+   inconsistent: CPlayer+0x08 holds a node that resolves to the right entity,
+   while the entity's own back-pointer at +0x34 names a DIFFERENT node. The world
+   change rebuilt the link and left the player holding the previous one.
+
+   Everything that validates the chain therefore refuses - including our own
+   GetPlayerEntity, which is why noclip and tp have been quietly doing nothing.
+
+   The repair is one pointer: adopt the node the ENTITY claims as its own. A raw
+   store is right here - SetControlledEntity does exactly that, with no AddRef
+   and no Release of the old node (POSSESSION.md), so we are not dropping a
+   reference the engine expected to own. The old value is kept for undo. */
+static void* g_ctlSaved   = 0;
+static void* g_ctlSavedAt = 0;
+
+static void FixControl(void* console, int undo)
+{
+    void*  lst = *(void**)PLAYERLIST_PTR;
+    void** arr;
+    void  *elem, *inner, *node, *ent, *realNode;
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+
+    if (undo) {
+        if (g_ctlSavedAt && Readable(g_ctlSavedAt, 4)) {
+            *(void**)g_ctlSavedAt = g_ctlSaved;
+            P_(console, 0, AC "fixcontrol: reverted to %p\n", g_ctlSaved);
+            logf_("[ctl ] reverted %p -> %p", g_ctlSavedAt, g_ctlSaved);
+            g_ctlSavedAt = 0;
+        } else {
+            P_(console, 0, AC "fixcontrol: nothing to undo\n");
+        }
+        return;
+    }
+
+    if (!Readable(lst, 0x10) || *(unsigned long*)((char*)lst + 8) == 0) {
+        P_(console, 0, AC "fixcontrol: no player\n"); return;
+    }
+    arr = *(void***)((char*)lst + 4);
+    if (!Readable(arr, 4)) { P_(console, 0, AC "fixcontrol: no player array\n"); return; }
+    elem = arr[0];
+    if (!Readable(elem, 8)) { P_(console, 0, AC "fixcontrol: no element\n"); return; }
+    inner = *(void**)((char*)elem + 4);
+    if (!Readable(inner, 0x20)) { P_(console, 0, AC "fixcontrol: no CPlayer\n"); return; }
+
+    node = *(void**)((char*)inner + 8);
+    if (!Readable(node, 0x10)) { P_(console, 0, AC "fixcontrol: ref unreadable\n"); return; }
+    ent = *(void**)((char*)node + 0x0C);
+    if (!Readable(ent, 0x100)) { P_(console, 0, AC "fixcontrol: ref points at nothing\n"); return; }
+
+    realNode = *(void**)((char*)ent + OFF_ENT_CHECK);
+    if (realNode == node) {
+        P_(console, 0, AC "fixcontrol: chain already consistent - nothing to do\n");
+        return;
+    }
+    /* Only adopt a node that agrees the entity is its own, so a garbage
+       back-pointer can never be promoted into the player. */
+    if (!Readable(realNode, 0x10) || *(void**)((char*)realNode + 0x0C) != ent) {
+        P_(console, 0, AC
+           "fixcontrol: the entity's back-pointer (%p) does not resolve back to\n"
+           "  it - refusing to use it\n", realNode);
+        logf_("[ctl ] refused: realNode=%p does not round-trip", realNode);
+        return;
+    }
+
+    g_ctlSaved   = node;
+    g_ctlSavedAt = (char*)inner + 8;
+    *(void**)((char*)inner + 8) = realNode;
+
+    P_(console, 0, AC
+       "fixcontrol: controlled ref %p -> %p (the node the entity claims).\n"
+       "  'fixcontrol undo' puts it back.\n", node, realNode);
+    logf_("[ctl ] controlled ref %p -> %p (entity %p)", node, realNode, ent);
+}
+
+/* ==================== entlist: walk every live entity ====================
+   PURE READ, no engine calls. `CEntitySystem+0x1C` is an MSVC
+   std::map<u32 classId, hash_map<u64 entityId, EntityRefNode*>>:
+
+     outer sentinel   *(esys+0x2C)
+     tree node        {left@0, parent@4, right@8, classIdHash@0xC,
+                       innerListHead@0x20, innerCount@0x24, isnil@0x41}
+     inner list node  {next@0, prev@4, id64@8, EntityRefNode*@0x10}
+
+   Each entity appears under exactly one key, so outer x inner visits everything
+   once. The archetype name is stored ON the entity as a DuniaString at +0x18 -
+   no hash, no archetype-manager round trip. (A minority of entities have that
+   name overwritten with a category label like "SpawnedPickupEntity", so treat it
+   as a hint, not an identity.)
+
+   This exists before any picking work for the same reason `spawn_list` came
+   before `spawn`: it validates the tree layout, the list layout, the ref-node
+   hop and the string layout in one go, at zero risk. */
+#define OFF_ESYS_MAPSENT   0x2C
+/* REFUTED, 2026-07-30, KEPT SO IT IS NOT RETRIED.
+   The idea was a free spawn detector: if the entity map stored its element
+   count somewhere fixed, the editor could read that ONE u32 out-of-process
+   (~0.1 us) and only re-ask `addr world` when it moved, instead of re-walking
+   on a timer.
+   MSVC's std::map is {_Myhead, _Mysize}, and the sentinel is at 0x2C, so 0x30
+   should have been the size. MEASURED against the live game with 3,246
+   entities: esys+0x30 reads 58. A sweep of esys+0x00..0x200 AND of
+   sentinel-0x40..+0x80 found NO field within +/-60 of the true count. Whatever
+   this container is, it does not keep a size we can find.
+   So `gen_at` is published as 0, meaning "no detector available", and the
+   client falls back to a clock (see WorldFeed.should_refresh). That costs one
+   ~24 ms walk every few seconds, which is affordable; a wrong address that
+   someone later decided to trust would not be. `esys` is still published so
+   the search can be resumed - tools\probe_gen.py does it. */
+#define OFF_ESYS_MAPCOUNT  0
+#define OFF_TN_LEFT        0x00
+#define OFF_TN_PARENT      0x04
+#define OFF_TN_RIGHT       0x08
+#define OFF_TN_CLASSID     0x0C
+#define OFF_TN_INNERHEAD   0x20
+#define OFF_TN_INNERCOUNT  0x24
+#define OFF_TN_ISNIL       0x41
+#define OFF_IN_NEXT        0x00
+#define OFF_IN_ID64        0x08
+#define OFF_IN_REFNODE     0x10
+
+/* THE HOP THAT KEEPS CRASHING US, in one place.
+
+   `in -> +0x10 = ref node -> +0x0C = entity` appeared FIVE times, each written
+   the same way and each wrong the same way:
+
+       void* ref = *(void**)((char*)in + OFF_IN_REFNODE);
+       void* ent = QuickPtr(ref) ? *(void**)((char*)ref + 0x0C) : 0;
+
+   QuickPtr only says the VALUE looks like a pointer - aligned and in range. It
+   says nothing about the memory being there. Two crashes came from exactly this:
+   FindPlayerByName+0x1D4 during a warp, and PickWithDir+0x313 with ECX =
+   0x656E0068, whose bytes are 'h',0,'n','e' - the walk had reached a node whose
+   ref field held TEXT and dereferenced it.
+
+   Hardening four of the five and missing one just moves the crash, which is what
+   happened last time. So: one helper, and no site keeps its own copy.
+
+   Readable() alone is not enough either - the page can be unmapped between the
+   check and the read while the world is streaming - hence the SEH backstop. */
+static int   QuickPtr(const void* p);
+static int   Readable(const void* p, SIZE_T n);
+
+/* The same hop with NO VirtualQuery, for the snapshot's inner loop only.
+
+   MEASURED, and it overturned my own first guess. Shrinking the poslist payload
+   5.2x (241 KB -> 46 KB) and dropping 1,251 GetWorldAABB calls moved the pull
+   only 56.5 ms -> 50.2 ms. So neither bytes nor formatting nor the AABB calls
+   were the cost: what both paths still shared was this walk.
+
+   Per entity the walk called Readable() about three times, and Readable() is
+   VirtualQuery - a syscall. ~1,250 entities x 3 = ~3,700 syscalls per pull. At
+   roughly 10us each that is most of the 50 ms, which is exactly the shape of
+   the measurement.
+
+   QuickPtr still rejects the obvious garbage (null, unaligned, kernel range) for
+   free, and SEH catches anything that slips through - one __try frame for the
+   whole access instead of three kernel transitions per entity. The safety
+   property is unchanged: a bad pointer yields nothing rather than a crash. */
+static void* RefNodeEntityFast(void* in, void** pRef)
+{
+    void* ref;
+    void* ent = 0;
+    if (pRef) *pRef = 0;
+    if (!QuickPtr(in)) return 0;
+    __try {
+        ref = *(void**)((char*)in + OFF_IN_REFNODE);
+        if (!QuickPtr(ref)) return 0;
+        ent = *(void**)((char*)ref + 0x0C);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    if (!QuickPtr(ent)) return 0;
+    if (pRef) *pRef = ref;
+    return ent;
+}
+
+static void* RefNodeEntity(void* in, void** pRef)
+{
+    void* ref;
+    void* ent = 0;
+    if (pRef) *pRef = 0;
+    if (!QuickPtr(in) || !Readable(in, OFF_IN_REFNODE + 4)) return 0;
+    ref = *(void**)((char*)in + OFF_IN_REFNODE);
+    if (!QuickPtr(ref) || !Readable(ref, 0x10)) return 0;
+    __try { ent = *(void**)((char*)ref + 0x0C); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    if (!QuickPtr(ent)) return 0;
+    if (pRef) *pRef = ref;
+    return ent;
+}
+#define OFF_ENT_NAMESTR    0x18
+
+/* ---- identity that survives streaming ------------------------------------
+   WHY POINTERS ARE NOT ENOUGH. Readable() proves a page is COMMITTED, not that
+   the object on it is alive - a freed heap block stays mapped, so Readable()
+   happily returns true for a destroyed agent. That is exactly how the Samson
+   crash got through (readable agent, garbage at +0x260) and it is why "hold the
+   creature and reconnect later" cannot be done by keeping the pointer.
+
+   The id64 on the entity system's inner node is stable identity: it survives the
+   entity being streamed out and back. So a drive records the id at start, drops
+   every pointer the moment the ground goes away, and re-resolves by id when it
+   comes back.
+
+   One walk serves both directions:
+     wantEnt != NULL -> find that entity, write its id64 to *pLo/*pHi
+     wantEnt == NULL -> find the entity whose id64 is *pLo/*pHi
+   Returns the entity, or NULL. */
+static int QuickPtr(const void* p);          /* defined just below */
+
+static void* EntWalkFind(void* wantEnt, unsigned long* pLo, unsigned long* pHi)
+{
+    void*  esys = *(void**)G_ENTSYS_PTR;
+    void*  stack[64];
+    int    sp = 0, guard = 0;
+    void  *sent, *node;
+
+    if (!Readable(esys, OFF_ESYS_MAPSENT + 4)) return 0;
+    sent = *(void**)((char*)esys + OFF_ESYS_MAPSENT);
+    if (!Readable(sent, 0x48)) return 0;
+
+    node = *(void**)((char*)sent + OFF_TN_PARENT);
+    while ((node || sp) && guard++ < 4096) {
+        while (QuickPtr(node) && Readable(node, 0x48) &&
+               !*(unsigned char*)((char*)node + OFF_TN_ISNIL) && sp < 63) {
+            stack[sp++] = node;
+            node = *(void**)((char*)node + OFF_TN_LEFT);
+        }
+        if (!sp) break;
+        node = stack[--sp];
+        {
+            unsigned long count = *(unsigned long*)((char*)node + OFF_TN_INNERCOUNT);
+            void* in = *(void**)((char*)node + OFF_TN_INNERHEAD);
+            unsigned long i;
+            if (count > 65536) count = 0;
+            for (i = 0; i < count && QuickPtr(in); ++i) {
+                void* ref;
+                void* ent = RefNodeEntity(in, &ref);
+                if (QuickPtr(ent)) {
+                    unsigned long lo = *(unsigned long*)((char*)in + OFF_IN_ID64);
+                    unsigned long hi = *(unsigned long*)((char*)in + OFF_IN_ID64 + 4);
+                    if (wantEnt) {
+                        if (ent == wantEnt) { *pLo = lo; *pHi = hi; return ent; }
+                    } else if (lo == *pLo && hi == *pHi) {
+                        return Readable(ent, 0x100) ? ent : 0;
+                    }
+                }
+                in = *(void**)((char*)in + OFF_IN_NEXT);
+            }
+        }
+        node = *(void**)((char*)node + OFF_TN_RIGHT);
+    }
+    return 0;
+}
+
+/* A cheap plausibility test for the hot walk. Readable() calls VirtualQuery -
+   a syscall - which is fine a few times per frame and ruinous a million times.
+   This rejects the obvious garbage; Readable() is still used before any deep
+   dereference. */
+static int QuickPtr(const void* p)
+{
+    unsigned long v = (unsigned long)p;
+    return v >= 0x00010000u && v < 0x7FFF0000u && (v & 3) == 0;
+}
+
+/* Walk the entity map for the player's body, by archetype name.
+
+   The name comes from the picker's own output standing on top of it:
+   `player.MainCharacter.PawnPlayerCorp`. Both halves are matched rather than the
+   full string, because the Na'vi campaign and the vehicles use different leaf
+   names on the same MainCharacter stem, and matching the stem alone would also
+   catch `player.MainCharacter` template entities that are not the live body.
+
+   Deliberately NOT a substitute for the list walk: the list is the engine's own
+   answer and carries the CPlayer that the camera hangs off. This is the recovery
+   path for when the list is stale, which is the only state it has been seen in. */
+static const char* EntityName(void* ent);      /* defined just below */
+
+/* Walk the entity map applying `fn` to every live entity. Written once because
+   FindPlayerByName, EntityCount and LogPlayerishNames were about to be three
+   copies of the same red-black walk, and the walk is the fiddly part. */
+typedef int (*EntVisit)(void* ent, void* ctx);   /* return 1 to stop */
+
+static void EntForEach(EntVisit fn, void* ctx)
+{
+    void*  esys = *(void**)G_ENTSYS_PTR;
+    void*  stack[64];
+    int    sp = 0, guard = 0;
+    void  *sent, *node;
+
+    if (!Readable(esys, OFF_ESYS_MAPSENT + 4)) return;
+    sent = *(void**)((char*)esys + OFF_ESYS_MAPSENT);
+    if (!Readable(sent, 0x48)) return;
+
+    node = *(void**)((char*)sent + OFF_TN_PARENT);
+    while ((node || sp) && guard++ < 4096) {
+        while (QuickPtr(node) && Readable(node, 0x48) &&
+               !*(unsigned char*)((char*)node + OFF_TN_ISNIL) && sp < 63) {
+            stack[sp++] = node;
+            node = *(void**)((char*)node + OFF_TN_LEFT);
+        }
+        if (!sp) break;
+        node = stack[--sp];
+        {
+            unsigned long count;
+            void* in;
+            unsigned long i;
+            /* Popped nodes were validated at PUSH time, and `fn` can run engine
+               code in between - see the note in EntList. SEH, not Readable. */
+            __try {
+                count = *(unsigned long*)((char*)node + OFF_TN_INNERCOUNT);
+                in    = *(void**)((char*)node + OFF_TN_INNERHEAD);
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) { break; }
+            if (count > 65536) count = 0;
+            for (i = 0; i < count && QuickPtr(in); ++i) {
+                void* ref;
+                void* ent = RefNodeEntity(in, &ref);   /* the one guarded hop */
+                if (!Readable(in, OFF_IN_NEXT + 4)) break;
+                if (ent && Readable(ent, 0x100) && fn(ent, ctx)) return;
+                in = *(void**)((char*)in + OFF_IN_NEXT);
+            }
+        }
+        __try { node = *(void**)((char*)node + OFF_TN_RIGHT); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { break; }
+    }
+}
+
+static int visitCount(void* ent, void* ctx) { (void)ent; ++*(long*)ctx; return 0; }
+
+static long EntityCount(void)
+{
+    long n = 0;
+    EntForEach(visitCount, &n);
+    return n;
+}
+
+/* Anything that could plausibly BE the player. If the retry loop times out this
+   is what says whether the archetype is named something we did not expect - the
+   Na'vi campaign and the vehicles do not all use `PawnPlayerCorp`. */
+static int visitPlayerish(void* ent, void* ctx)
+{
+    const char* nm = EntityName(ent);
+    long* shown = (long*)ctx;
+    if (!nm) return 0;
+    if (Stristr(nm, "player") || Stristr(nm, "MainCharacter") ||
+        Stristr(nm, "Pawn")) {
+        if (*shown < 24) { logf_("[warp]     %s  (%p)", nm, ent); ++*shown; }
+    }
+    return 0;
+}
+
+static void LogPlayerishNames(void)
+{
+    long shown = 0;
+    EntForEach(visitPlayerish, &shown);
+    if (!shown) logf_("[warp]     (nothing matching player/MainCharacter/Pawn)");
+}
+
+/* ---- picking a spawn point out of the loaded world -------------------------
+   An mp_* world's spawn points are ordinary entities once it is up - the warp
+   log already lists them by name - so their positions can simply be READ rather
+   than resolved through the MP spawn-point service that does not exist outside
+   a match. Prefer a *Start* point: that is where a match actually begins, so it
+   is the one most likely to have ground under it. Never pick a Spectator point;
+   those sit off the map deliberately.
+
+   MEASURED in mp_bluelagoon_rb_01: SpawnPointBlueStart.Multi_5 is at
+   (63.9, 575.3, 90.0) and SpawnPointRed.Multi_0 at (526.9, 212.1, 200.0) -
+   both inside the 640 m map, so these are real destinations. */
+typedef struct { float pos[3]; char name[96]; int rank; } SpawnPick;
+
+static int visitSpawnPoint(void* ent, void* ctx)
+{
+    SpawnPick* best = (SpawnPick*)ctx;
+    const char* nm = EntityName(ent);
+    int rank;
+    if (!nm || !Stristr(nm, "SpawnPoint")) return 0;
+    if (Stristr(nm, "Spectator")) return 0;
+    rank = Stristr(nm, "Start") ? 2 : 1;
+    if (rank <= best->rank) return 0;
+    if (!Readable((char*)ent + OFF_ENT_POS, 12)) return 0;
+    {
+        const float* q = (const float*)((char*)ent + OFF_ENT_POS);
+        /* (0,0,0) is not a real place in any Avatar world - a spawn point that
+           reads as the origin is an unplaced one, not a destination. */
+        if (q[0] == 0.0f && q[1] == 0.0f && q[2] == 0.0f) return 0;
+        best->pos[0] = q[0]; best->pos[1] = q[1]; best->pos[2] = q[2];
+    }
+    best->rank = rank;
+    _snprintf(best->name, sizeof(best->name) - 1, "%s", nm);
+    best->name[sizeof(best->name) - 1] = 0;
+    return rank == 2;                     /* a Start point is good enough */
+}
+
+static int PickSpawnPoint(SpawnPick* out)
+{
+    memset(out, 0, sizeof(*out));
+    EntForEach(visitSpawnPoint, out);
+    return out->rank > 0;
+}
+
+/* Runs ON THE MAIN THREAD, from the frame detour. Everything it touches is
+   engine state and the engine is main-thread-only.
+
+   This is deliberately NOT folded into `respawn`. `respawn` has its own
+   measured behaviour on the object the player list holds, and changing what it
+   points at would silently change a command people already rely on. This one
+   names its target explicitly and reports every hop, because the whole question
+   it exists to answer is "can a pawn be created at all in here". */
+static void DoMkPawn(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void* pl = FindRealPlayer(1, console);
+    void *svc, *before, *after;
+    unsigned long arch;
+    unsigned char b5 = 1;
+    float pos[3], ang[3];
+    SpawnPick sp;
+
+    if (!pl) {
+        P_(console, 0, AC
+            "mkpawn: there is no CPlayer or CFCXPlayer object in the process at\n"
+            "  all. Nothing here can create one - that is the game mode's job.\n");
+        return;
+    }
+    svc  = *(void**)((char*)pl + OFF_PL_SERVICE);
+    arch = *(unsigned long*)((char*)pl + OFF_PL_ARCHREF);
+    if (Readable((void*)G_MODEOBJ_PP, 4)) {
+        void* mode = *(void**)G_MODEOBJ_PP;
+        if (Readable(mode, 8)) b5 = *(unsigned char*)((char*)mode + 5);
+    }
+    P_(console, 0, AC
+        "mkpawn: CPlayer %08X  vtable %08X\n"
+        "  +0x194 pawn node %08X   +0x198 archetype %08X %s\n"
+        "  +0x1B8 service   %08X %s   mode byte+5 = %u\n",
+        (unsigned)(size_t)pl, (unsigned)*(unsigned long*)pl,
+        (unsigned)*(unsigned long*)((char*)pl + OFF_CP_PAWNNODE),
+        arch, (arch == 0xFFFFFFFFu) ? "** POISONED **" : "(valid)",
+        (unsigned)(size_t)svc, svc ? "(present)" : "** NULL **", (unsigned)b5);
+
+    if (!svc) {
+        P_(console, 0, AC "mkpawn: the spawn worker bails on a null service. Stop.\n");
+        return;
+    }
+    if (arch == 0xFFFFFFFFu) {
+        P_(console, 0, AC "mkpawn: the archetype is poisoned; the worker bails. Stop.\n");
+        return;
+    }
+
+    if (g_mkPawnHavePos) {
+        pos[0] = g_mkPawnAt[0]; pos[1] = g_mkPawnAt[1]; pos[2] = g_mkPawnAt[2];
+        P_(console, 0, AC "mkpawn: target (%.1f %.1f %.1f) - given\n",
+           pos[0], pos[1], pos[2]);
+    } else if (PickSpawnPoint(&sp)) {
+        pos[0] = sp.pos[0]; pos[1] = sp.pos[1]; pos[2] = sp.pos[2];
+        P_(console, 0, AC "mkpawn: target (%.1f %.1f %.1f) - %s\n",
+           pos[0], pos[1], pos[2], sp.name);
+        logf_("[pawn] spawn point %s at (%.1f %.1f %.1f)", sp.name,
+              pos[0], pos[1], pos[2]);
+    } else {
+        P_(console, 0, AC
+            "mkpawn: no usable spawn point entity in this world. Give\n"
+            "  coordinates: 'mkpawn <x> <y> <z>'.\n");
+        return;
+    }
+    ang[0] = ang[1] = ang[2] = 0.0f;
+
+    before = RealPlayerPawn(pl);
+    logf_("[pawn] mkpawn at (%.1f %.1f %.1f) arch=%08X b5=%u before=%08X",
+          pos[0], pos[1], pos[2], arch, (unsigned)b5, (unsigned)(size_t)before);
+
+    __try {
+        void** vt = *(void***)pl;
+        if (b5) {
+            fnPlayerSpawn f = (fnPlayerSpawn)*(void**)((char*)vt + PL_VT_SPAWN);
+            unsigned long ref = arch;
+            f(pl, pos, ang, &ref);
+        } else {
+            fnPlayerSpawnSlot f = (fnPlayerSpawnSlot)
+                *(void**)((char*)vt + PL_VT_SPAWNSLOT);
+            f(pl, pos, ang, 0xFFFFFFFFu, 0xFFFFFFFFu);
+        }
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        P_(console, 0, AC "mkpawn: the spawn call FAULTED - caught.\n");
+        logf_("[pawn] mkpawn FAULTED");
+        return;
+    }
+
+    after = RealPlayerPawn(pl);
+    logf_("[pawn] mkpawn returned  after=%08X  node=%08X  entities=%ld",
+          (unsigned)(size_t)after,
+          (unsigned)*(unsigned long*)((char*)pl + OFF_CP_PAWNNODE),
+          EntityCount());
+    if (after && after != before)
+        P_(console, 0, AC
+            "mkpawn: NEW PAWN %08X. Run 'fixinput' to get the controls back.\n",
+            (unsigned)(size_t)after);
+    else if (after)
+        P_(console, 0, AC "mkpawn: the call ran; the pawn is unchanged (%08X).\n",
+           (unsigned)(size_t)after);
+    else
+        P_(console, 0, AC
+            "mkpawn: the call ran and returned, and there is still no pawn.\n"
+            "  Both preconditions were met, so the refusal is further in -\n"
+            "  see MULTIPLAYER.md S10.\n");
+}
+
+/* One walk, not two. This was a second copy of EntForEach's traversal and it is
+   where the warp crash happened - so the hardening had to be applied twice, in
+   two places that could drift. Now there is one traversal to get right. */
+static int visitPlayer(void* ent, void* ctx)
+{
+    const char* nm = EntityName(ent);
+    if (nm && Stristr(nm, "MainCharacter") && Stristr(nm, "PawnPlayer")) {
+        *(void**)ctx = ent;
+        return 1;                      /* stop */
+    }
+    return 0;
+}
+
+static void* FindPlayerByName(void)
+{
+    void* hit = 0;
+    EntForEach(visitPlayer, &hit);
+    return hit;
+}
+
+static const char* EntityName(void* ent)
+{
+    char* s;
+    int cap;
+    if (!Readable(ent, OFF_ENT_NAMESTR + 0x20)) return "?";
+    s   = (char*)ent + OFF_ENT_NAMESTR;
+    cap = *(int*)(s + 0x18);
+    {   /* DuniaString small-string optimisation: inline below capacity 0x10 */
+        const char* p = (cap >= 0x10) ? *(const char* const*)(s + 4) : (const char*)(s + 4);
+        return (Readable(p, 1) && *p) ? p : "(unnamed)";
+    }
+}
+
+/* THE SAME READ WITH NO VirtualQuery, for the snapshot's inner loop.
+
+   MEASURED, in the same terms as RefNodeEntityFast above it. Readable() is a
+   VirtualQuery - a syscall - and EntityName calls it TWICE per entity. On a
+   1,251-entity level that is ~2,500 kernel transitions per `listx` or `ents`
+   pull, on the game's MAIN THREAD, at roughly 10us each: about 25 ms, for two
+   bounds checks on a string. That is the largest remaining slice of the 95 ms
+   this file's own profile records, after the AABB calls.
+
+   The transformation is exactly the one RefNodeEntityFast already makes and
+   documents: QuickPtr rejects the obvious garbage (null, unaligned, kernel
+   range) for free, and SEH catches whatever slips through. The safety property
+   is unchanged - a bad pointer yields "?" rather than a crash - and it is
+   stronger here than there, because this keeps its OWN __try rather than relying
+   on the caller's, so a faulting name costs the name and not the whole row.
+   That matters: the old code emitted the entity with the name "?", and dropping
+   the row instead would have silently shrunk the editor's world.
+
+   EntityName() itself is untouched. Every other caller is a once-per-command
+   read where a syscall is free, and the rule this file keeps stating - never
+   dereference a derived pointer without Readable - still holds there. */
+static const char* EntityNameFast(void* ent)
+{
+    const char* p;
+    __try {
+        const char* s   = (const char*)ent + OFF_ENT_NAMESTR;
+        int         cap = *(const int*)(s + 0x18);
+        if (cap >= 0x10) {                  /* heap buffer - validate the pointer */
+            p = *(const char* const*)(s + 4);
+            if (!QuickPtr(p)) return "(unnamed)";
+        } else {
+            p = s + 4;                      /* inline: interior of the entity */
+        }
+        return *p ? p : "(unnamed)";
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return "?"; }
+}
+
+static void EntList(void* console, const char* needle)
+{
+    void*  esys = *(void**)G_ENTSYS_PTR;
+    void*  stack[64];
+    int    sp = 0;
+    int    shown = 0, total = 0, guard = 0;
+    void*  sent;
+    void*  node;
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+
+    if (!Readable(esys, OFF_ESYS_MAPSENT + 4)) {
+        P_(console, 0, AC "entlist: no entity system - load a level first\n"); return;
+    }
+    sent = *(void**)((char*)esys + OFF_ESYS_MAPSENT);
+    if (!Readable(sent, 0x48)) { P_(console, 0, AC "entlist: map sentinel unreadable\n"); return; }
+
+    /* TWO BUGS produced "108,000 entities" and a multi-second freeze.
+
+       1. The inner walk terminated on `in != ihead`, treating `node+0x20` as an
+          EMBEDDED list sentinel. Comparing a node pointer against the ADDRESS of
+          a field is never equal, so it ran to its 4096 guard on every tree node
+          and counted garbage. The authoritative bound is `innerCount` at +0x24 -
+          use it and never rely on the sentinel comparison.
+       2. Readable() calls VirtualQuery, a syscall. Doing that per hop over
+          hundreds of thousands of iterations IS the freeze. It is only used now
+          where we are about to dereference deeply; the hot path uses a cheap
+          range check instead. */
+    node = *(void**)((char*)sent + OFF_TN_PARENT);      /* sentinel's parent = root */
+    while ((node || sp) && guard++ < 4096) {
+        while (QuickPtr(node) && Readable(node, 0x48) &&
+               !*(unsigned char*)((char*)node + OFF_TN_ISNIL) && sp < 63) {
+            stack[sp++] = node;
+            node = *(void**)((char*)node + OFF_TN_LEFT);
+        }
+        if (!sp) break;
+        node = stack[--sp];
+        {
+            unsigned long classId, count;
+            void* in;
+            unsigned long i;
+
+            /* BUG 3 (crash at avatar_console.dll+0x1C4DC, log line 11287).
+               Fault reading 18BC0A4C with ESI=18BC0A40 - node+0x0C, which is
+               exactly the classId load below. The node came off `stack`, so it
+               DID pass Readable() when it was pushed; it stopped being readable
+               between the push and the pop.
+
+               That is not a thread race - commands run on the main thread inside
+               the frame hook. It is this walk's own doing: P_() below is
+               CConsole::Printf, which allocates a ring entry and frees the line
+               it evicts (Mem_Free is in the crash's stack). Running the engine's
+               allocator in the middle of a red-black walk lets the heap move
+               under nodes we are still holding pointers to, and `ents` walks
+               with up to 63 stale pointers on the stack.
+
+               Readable() cannot fix this - as RefNodeEntity's own comment says,
+               it proves a page is committed, not that the object is alive, and
+               re-checking after the pop would only narrow the window. The two
+               sibling walkers already draw the right conclusion and wrap the
+               node body in SEH; EntList was the one that never did. */
+            __try {
+                classId = *(unsigned long*)((char*)node + OFF_TN_CLASSID);
+                count   = *(unsigned long*)((char*)node + OFF_TN_INNERCOUNT);
+                in      = *(void**)((char*)node + OFF_TN_INNERHEAD);
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) { break; }
+
+            if (count > 65536) count = 0;        /* implausible - skip the bucket */
+            for (i = 0; i < count && QuickPtr(in); ++i) {
+                void* ref;
+                void* ent = RefNodeEntity(in, &ref);
+                ++total;
+                if (QuickPtr(ent) && shown < 40 && Readable(ent, OFF_ENT_POS + 12)) {
+                    const char* nm = EntityName(ent);
+                    if (!needle || !*needle || Stristr(nm, needle)) {
+                        const float* p = (const float*)((char*)ent + OFF_ENT_POS);
+                        P_(console, 0, AC "  %08lX:%08lX cls=%08lX (%.0f %.0f %.0f) %s\n",
+                           *(unsigned long*)((char*)in + OFF_IN_ID64 + 4),
+                           *(unsigned long*)((char*)in + OFF_IN_ID64),
+                           classId, p[0], p[1], p[2], nm);
+                        ++shown;
+                    }
+                }
+                __try { in = *(void**)((char*)in + OFF_IN_NEXT); }
+                __except (EXCEPTION_EXECUTE_HANDLER) { break; }
+            }
+        }
+        /* The right child is loaded RAW and only null-checked by the outer
+           `while`, so a torn node feeds garbage straight back into the descent.
+           The descent's QuickPtr/Readable pair does reject it, but the load
+           itself has to survive first. */
+        __try { node = *(void**)((char*)node + OFF_TN_RIGHT); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { break; }
+    }
+    P_(console, 0, AC
+       "entlist: %d entit%s across %d class%s%s\n", total, (total == 1) ? "y" : "ies",
+       guard, (guard == 1) ? "" : "es",
+       (shown >= 40) ? " - showing 40, narrow with 'entlist <text>'" : "");
+    logf_("[ents] total=%d classes=%d shown=%d", total, guard, shown);
+}
+
+/* wantMeta = 0 skips the per-entity NAME and CLASS work.
+
+   PROFILED: a `listx` pull costs the game ~95 ms of MAIN-THREAD time for 1,251
+   entities, and a large slice of that is here rather than in the formatting.
+   Per entity this loop otherwise does:
+
+     EntityName()  -> Readable() x2   ... and Readable() is VirtualQuery, a SYSCALL
+     Readable(ent) -> 1 more syscall
+     RefNodeEntity -> 2 more
+     strncpy of the name, _snprintf("%08lX") of the class id
+
+   That is roughly five VirtualQuery calls plus two string operations, 1,251
+   times, every pull. This file's own comment on QuickPtr says it plainly:
+   Readable() is "fine a few times per frame and ruinous a million times".
+
+   Names and class ids are IMMUTABLE while a level is loaded. `poslist` fetches
+   them never; the client gets them once from `listx` and joins on the id. So the
+   hot path can skip all of it - not an approximation, just not redoing constant
+   work several times a second. */
+static void EntSnapshotEx(int wantMeta)
+{
+    void*  esys = *(void**)G_ENTSYS_PTR;
+    void*  stack[64];
+    int    sp = 0, guard = 0;
+    long   n = 0;
+    void  *sent, *node;
+
+    InterlockedExchange(&g_entCount, 0);
+    if (!Readable(esys, OFF_ESYS_MAPSENT + 4)) return;
+    sent = *(void**)((char*)esys + OFF_ESYS_MAPSENT);
+    if (!Readable(sent, 0x48)) return;
+
+    /* From here to ProbeLeave every dereference is of a pointer read out of live
+       engine memory that another thread may be rewriting, which is why each one
+       sits in its own __try. Announce that to the crash reporter so a fault it
+       is about to handle is not reported as a crash - see ProbeEnter. */
+    ProbeEnter();
+    node = *(void**)((char*)sent + OFF_TN_PARENT);
+    while ((node || sp) && guard++ < 4096 && n < ENT_MAX) {
+        while (QuickPtr(node) && Readable(node, 0x48) &&
+               !*(unsigned char*)((char*)node + OFF_TN_ISNIL) && sp < 63) {
+            stack[sp++] = node;
+            node = *(void**)((char*)node + OFF_TN_LEFT);
+        }
+        if (!sp) break;
+        node = stack[--sp];
+        {
+            unsigned long classId, count;
+            void* in;
+            unsigned long i;
+            /* Popped nodes were validated at PUSH time - see the note in
+               EntList for why that is not the same as valid NOW. */
+            char clsHex[9];
+            __try {
+                classId = *(unsigned long*)((char*)node + OFF_TN_CLASSID);
+                count   = *(unsigned long*)((char*)node + OFF_TN_INNERCOUNT);
+                in      = *(void**)((char*)node + OFF_TN_INNERHEAD);
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) { break; }
+            /* One class id per BUCKET, so format it once here instead of calling
+               _snprintf once per entity - ~1,251 calls became ~200. */
+            {
+                static const char kHex[] = "0123456789ABCDEF";
+                unsigned long v = classId;
+                int h;
+                for (h = 7; h >= 0; --h) { clsHex[h] = kHex[v & 0xF]; v >>= 4; }
+                clsHex[8] = 0;
+            }
+            if (count > 65536) count = 0;
+            for (i = 0; i < count && QuickPtr(in) && n < ENT_MAX; ++i) {
+                void* ref;
+                void* ent = RefNodeEntityFast(in, &ref);
+                /* One SEH frame for the whole row instead of a VirtualQuery per
+                   pointer - see RefNodeEntityFast. */
+                if (ent) __try {
+                    const float* p = (const float*)((char*)ent + OFF_ENT_POS);
+                    if (wantMeta) {
+                        /* EntityNameFast, not EntityName: two VirtualQuery
+                           syscalls per entity was ~25 ms of main-thread time per
+                           pull on a 1,251-entity level. And a copy that stops at
+                           the NUL rather than strncpy, which zero-fills all 96
+                           bytes of a field whose contents average about 30. */
+                        const char* nm = EntityNameFast(ent);
+                        char* d = g_entRows[n].name;
+                        int   k = 0;
+                        while (k < ENT_NLEN - 1 && nm[k]) { d[k] = nm[k]; ++k; }
+                        d[k] = 0;
+                        /* classId is loop-invariant for this whole bucket, so
+                           the hex is formatted ONCE per bucket above rather than
+                           through _snprintf once per entity. */
+                        memcpy(g_entRows[n].cls, clsHex, 9);
+                    } else {
+                        /* Blanked ON PURPOSE, and g_entMetaValid records it. A
+                           stale name paired with a fresh position would be a
+                           quietly WRONG label in the entity browser, which is
+                           worse than no label; the browser now checks the flag
+                           and asks for a proper snapshot instead. */
+                        g_entRows[n].name[0] = 0;
+                        g_entRows[n].cls[0]  = 0;
+                    }
+                    g_entRows[n].ent = ent;
+                    g_entRows[n].ref = ref;
+                    g_entRows[n].lo  = *(unsigned long*)((char*)in + OFF_IN_ID64);
+                    g_entRows[n].hi  = *(unsigned long*)((char*)in + OFF_IN_ID64 + 4);
+                    g_entRows[n].pos[0] = p[0];
+                    g_entRows[n].pos[1] = p[1];
+                    g_entRows[n].pos[2] = p[2];
+                    ++n;
+                }
+                __except (EXCEPTION_EXECUTE_HANDLER) { /* skip this row */ }
+                __try { in = *(void**)((char*)in + OFF_IN_NEXT); }
+                __except (EXCEPTION_EXECUTE_HANDLER) { break; }
+            }
+        }
+        /* Same raw right-child load as EntList - see the note there. */
+        __try { node = *(void**)((char*)node + OFF_TN_RIGHT); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { break; }
+    }
+    ProbeLeave();
+    InterlockedExchange(&g_entCount, n);
+    InterlockedExchange(&g_entMetaValid, wantMeta ? 1 : 0);
+    logf_("[ents] snapshot: %ld live entities%s", n, wantMeta ? "" : " (positions only)");
+}
+
+/* Everything except the hot path wants names and classes. */
+static void EntSnapshot(void) { EntSnapshotEx(1); }
+
+/* ---- pick: select whatever the crosshair is pointing at -----------------
+   There is no usable raycast in this build - Havok's is a batched job system
+   with zero reachable callers, and its hit is collidable data rather than an
+   entity (PICKING.md). So we cast the camera ray ourselves and take the entity
+   with the smallest ANGULAR offset from it: perpendicular distance divided by
+   distance along the ray, which picks what looks nearest the crosshair rather
+   than what is physically closest.
+
+   Selection then feeds the other commands, so `kill` and `drive` stop meaning
+   "the last thing you spawned" and start meaning "the thing you are looking at". */
+static void*         g_selEnt = 0;
+static void*         g_selRef = 0;    /* the EntityRefNode - 'delete' needs it */
+static unsigned long g_selIdLo = 0, g_selIdHi = 0;
+static char          g_selName[128] = "";
+
+/* Read-only: what is steering this thing, and can we take it over? Answers the
+   human-NPC question from data instead of from my assumption about it. */
+static void AgentInfo(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void*  ent = (g_selEnt && Readable(g_selEnt, 0x100)) ? g_selEnt : g_lastSpawn;
+    void*  ai  = 0;
+    void*  ag;
+    void** vt;
+    const char* nm;
+    void*  setvel;
+    int    driveable, haveUpdate;
+
+    if (!Readable(ent, 0x100)) {
+        P_(console, 0, AC "agentinfo: nothing selected - click something first\n");
+        return;
+    }
+    __try { ai = ((fnGetComponent_)FN_GET_COMPONENT_)(ent, (const void*)CID_AICOMPONENT); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { ai = 0; }
+    if (!Readable(ai, OFF_AICOMP_AGENT + 4)) {
+        P_(console, 0, AC
+           "agentinfo: %s has no AI component - nothing can steer it.\n", g_selName);
+        return;
+    }
+    ag = *(void**)((char*)ai + OFF_AICOMP_AGENT);
+    if (!Readable(ag, 4)) { P_(console, 0, AC "agentinfo: no agent\n"); return; }
+    vt = *(void***)ag;
+    if (!Readable(vt, AGENT_SLOT_SETVEL + 4)) {
+        P_(console, 0, AC "agentinfo: agent vtable unreadable\n"); return;
+    }
+    nm         = AgentClassName(ag);
+    setvel     = vt[AGENT_SLOT_SETVEL / 4];
+    driveable  = (setvel == (void*)FN_SETDESIREDVEL ||
+                  setvel == (void*)hkSetDesiredVelocity);
+    haveUpdate = Readable(vt, AGENT_SLOT_UPDATE + 4);
+
+    P_(console, 0, AC
+       "agentinfo: %s\n"
+       "  agent  %08X   vtable %08X   class %s\n"
+       "  +0x128 %08X   %s\n"
+       "  +0x148 %08X   (signals)\n"
+       "  +0x208 %s\n"
+       "  sensory (agent+0x264) %s\n",
+       g_selName,
+       (unsigned)(size_t)ag, (unsigned)(size_t)vt, nm ? nm : "unidentified",
+       (unsigned)(size_t)setvel,
+       driveable ? "the shared BASE setter - 'drive' will take this"
+                 : "NOT the base setter - 'drive' will refuse",
+       Readable(vt, AGENT_SLOT_SIGNAL + 4)
+           ? (unsigned)(size_t)vt[AGENT_SLOT_SIGNAL / 4] : 0u,
+       haveUpdate ? "present - 'facing' can hook it"
+                  : "vtable is shorter than 0x208 - no Update to hook",
+       SensOf(ag) ? "bound" : "NULL (not attached to an entity yet)");
+    P_(console, 0, AC
+       "  21 agent classes share that +0x128, CPawnAgent among them - so the\n"
+       "  humanoids are not excluded by the check. What differs for them is the\n"
+       "  signal vocabulary (none in our table) and +0x208.\n");
+    logf_("[agent] %s cls=%s vt=%p setvel=%p driveable=%d",
+          g_selName, nm ? nm : "?", vt, setvel, driveable);
+}
+
+/* ---- vehinfo: did the merged seats actually reach the LIVE entity? ----------
+   `vehenter` no-opping says the engine declined, not why. Everything on the
+   authoring side checks out: the merge reported map 775 -> 775 (an in-place
+   overwrite, not an add), the built descriptor holds four seats, INTERIOR and
+   Safedoor are real bones in the Valkyrie's own skeleton, and `passenger` is a
+   seat type the shipped library itself uses. So measure the live object rather
+   than edit the file again on a hunch.
+
+   CVehicle::GetSeats 0x10770950 is two instructions, so inline it:
+
+     10770950  mov eax,[ecx+0x4DC]    ; CVehicle -> CVehicleImpl
+     10770956  add eax, 0xC           ; -> {Seat* @+0, int count @+4}
+     10770959  ret
+
+   CVehicleImpl+0x04 is iAnimVehicleType - the field that must move together with
+   a driver seat or the animation tree has nothing to select.
+
+   Class id 0x8B611803 = crc32("CVehicle"), confirmed against ids[4] of the
+   depth-5 descriptor at 0x112214A8. Read only. */
+#define P_CVEHICLE_CLASSID  (0x112214C0u + g_rebase)
+#define OFF_VEH_IMPL        0x4DC
+#define OFF_IMPL_ANIMTYPE   0x04
+#define OFF_IMPL_SEATVEC    0x0C
+
+static void VehInfo(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void* ent = (g_selEnt && Readable(g_selEnt, 0x100)) ? g_selEnt : g_lastSpawn;
+    void *comp = 0, *impl, *seats;
+    int   count, animType;
+
+    if (!Readable(ent, 0x100)) {
+        P_(console, 0, AC "vehinfo: nothing selected - click the vehicle first\n");
+        return;
+    }
+    __try { comp = ((fnGetComponent_)FN_GET_COMPONENT_)(ent, (const void*)P_CVEHICLE_CLASSID); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { comp = 0; }
+    if (!Readable(comp, OFF_VEH_IMPL + 4)) {
+        P_(console, 0, AC
+           "vehinfo: %s has NO CVehicle component - not a vehicle at all, so seats\n"
+           "  are irrelevant and vehenter can never work on it.\n", g_selName);
+        logf_("[veh] %s has no CVehicle component", g_selName);
+        return;
+    }
+    impl = *(void**)((char*)comp + OFF_VEH_IMPL);
+    if (!Readable(impl, OFF_IMPL_SEATVEC + 8)) {
+        P_(console, 0, AC "vehinfo: CVehicle %08X has no readable impl\n",
+           (unsigned)(size_t)comp);
+        return;
+    }
+    animType = *(int*)((char*)impl + OFF_IMPL_ANIMTYPE);
+    seats    = *(void**)((char*)impl + OFF_IMPL_SEATVEC);
+    count    = *(int*)((char*)impl + OFF_IMPL_SEATVEC + 4);
+
+    P_(console, 0, AC
+       "vehinfo: %s\n"
+       "  CVehicle %08X  impl %08X  iAnimVehicleType %d\n"
+       "  seat vector %08X  count %d  %s\n",
+       g_selName, (unsigned)(size_t)comp, (unsigned)(size_t)impl, animType,
+       (unsigned)(size_t)seats, count,
+       count > 0 ? "<- the merge REACHED this entity"
+                 : "<- ZERO seats on the live object");
+    if (count <= 0)
+        P_(console, 0, AC
+           "  So authoring is not what to chase next: the archetype this entity was\n"
+           "  built from still has no seats. Either the merge did not replace it, or\n"
+           "  the descriptor was parsed and cached from an earlier spawn. Test by\n"
+           "  merging and then spawning a FRESH one before any other Valkyrie exists\n"
+           "  this session.\n");
+    logf_("[veh] vehinfo %s comp=%p impl=%p seats=%p count=%d anim=%d",
+          g_selName, comp, impl, seats, count, animType);
+}
+
+
+static float g_pickFov = 65.0f;   /* vertical FOV, degrees - tune with `pickfov` */
+
+/* A ray through the MOUSE CURSOR rather than the crosshair. The camera basis
+   gives right/up/forward directly, so this is the standard pinhole construction.
+   Whether the engine's FOV is horizontal or vertical is UNKNOWN (PICKING.md), so
+   it is tunable - and the built-in self-check is that a click at the exact centre
+   of the screen must behave identically to the crosshair. */
+static int CursorRay(float* dir)
+{
+    void* cam = GetCameraEntityDirect();
+    POINT pt;
+    RECT  rc;
+    const float* m;
+    float ndcx, ndcy, ty, tx, aspect, len;
+    int i;
+
+    if (!Readable(cam, OFF_ENT_XFORM + 0x40)) return 0;
+    if (!g_gameWnd || !IsWindow(g_gameWnd)) return 0;
+    if (!GetCursorPos(&pt)) return 0;
+    ScreenToClient(g_gameWnd, &pt);
+    if (!GetClientRect(g_gameWnd, &rc) || rc.right < 16 || rc.bottom < 16) return 0;
+    if (pt.x < 0 || pt.y < 0 || pt.x > rc.right || pt.y > rc.bottom) return 0;
+
+    ndcx   = (2.0f * (float)pt.x / (float)rc.right) - 1.0f;
+    ndcy   = 1.0f - (2.0f * (float)pt.y / (float)rc.bottom);
+    aspect = (float)rc.right / (float)rc.bottom;
+    ty     = (float)tan((double)g_pickFov * 3.14159265358979 / 360.0);
+    tx     = ty * aspect;
+
+    m = (const float*)((char*)cam + OFF_ENT_XFORM);  /* row0 right, row1 fwd, row2 up */
+    for (i = 0; i < 3; ++i)
+        dir[i] = m[4 + i] + m[0 + i] * (ndcx * tx) + m[8 + i] * (ndcy * ty);
+    len = (float)sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
+    if (len < 0.0001f) return 0;
+    dir[0] /= len; dir[1] /= len; dir[2] /= len;
+    return 1;
+}
+
+/* ---- rcprobe: the engine's own world raycast, read-only --------------------
+   RAYCAST.md overturned PICKING.md and BOUNDS.md, both of which had recorded
+   "no callable raycast" as CONFIRMED. The negative came from a reachability scan
+   that indexed only `E8 rel32` calls; the real entry is reached by an `E9`
+   tail-jump that also supplies the `this`:
+
+     10375C50  mov ecx,[ecx+0x90]
+     10375C56  jmp 0x10388260
+
+   That thunk has 64 shipped callers. (Worth remembering generally: MSVC emits
+   every "method forwarding to a member sub-object" this way, so an E8-only scan
+   declares all of them dead.)
+
+   THIS IS A PROBE AND CHANGES NOTHING. It runs before the picker is touched
+   because two features in this project have silently done nothing when I skipped
+   exactly this step. The single most valuable line it prints is |normal|: if that
+   is not 1.0, then +0x0C is not the surface normal and the whole struct map is
+   wrong.
+
+   The one gate that will bite: BOTH ray endpoints are tested against the world
+   AABB, and failure returns no hit and NO error (0x10388449, 0x103884F9). A
+   camera-to-500m ray routinely leaves the world box. Bit 0x04 clips the segment
+   first, so flags = 5. `rcprobe <range> 1` deliberately passes flags = 1 instead,
+   which should miss even with geometry in range - that one argument proves the
+   gate rather than arguing about it. */
+#define P_PHYSSYS        (0x111EC994u + g_rebase)
+#define FN_RAYCAST       (0x10375C50u + g_rebase)   /* __thiscall ret 0x18 */
+#define FN_FILTER_INIT   (0x10376EE0u + g_rebase)   /* __thiscall ret 8, returns this */
+#define FN_GET_COLLOBJ   (0x103761B0u + g_rebase)   /* __thiscall(physSys, handle) */
+#define OFF_PS_COLLWORLD 0x90
+#define OFF_CW_HKHOLDER  0x84
+#define OFF_HK_WORLD1    0x54
+#define OFF_HK_WORLD2    0x70
+#define OFF_HK_AABBMIN   0x2D0
+#define OFF_HK_AABBMAX   0x2E0
+#define RC_MASKA         0x5BFu     /* bullets / LOS / ground probes */
+
+typedef struct { float p[3]; }        RcVec3;
+typedef struct { void* vptr; unsigned maskA, maskB; } RcFilter;
+typedef struct { void* ptr; unsigned size; unsigned capEnc; } RcHitVec;
+typedef struct {                    /* 0x30 bytes - see RAYCAST_AGENTS_MD.md */
+    float        pos[3];            /* +0x00 world hit position              */
+    float        normal[3];         /* +0x0C unit world surface normal       */
+    unsigned     handle;            /* +0x18 collision-object handle         */
+    float        dist;              /* +0x1C metres from start, NOT 0..1     */
+    unsigned char flag20;           /* +0x20 UNKNOWN                         */
+    unsigned char material;         /* +0x21 surface-property index          */
+    unsigned char pad22[2];         /* +0x22 never written                   */
+    unsigned char key[8];           /* +0x24 UNKNOWN - do NOT read as an id  */
+    unsigned     tail2C;            /* +0x2C UNKNOWN                         */
+} RcHit;
+
+typedef void* (__thiscall *fnFilterInit)(void* f, unsigned maskA, unsigned maskB);
+typedef void  (__thiscall *fnRayCast)(void* physSys, const RcVec3* start,
+                                      const RcVec3* delta, RcHitVec* out,
+                                      void* filter, void* ignore, unsigned flags);
+typedef void* (__thiscall *fnGetCollObj)(void* physSys, unsigned handle);
+
+/* The read-only fast path. The engine's own accessor 0x10376E20 increments a
+   refcount; we must not. NULL is a LEGITIMATE answer - terrain and static world
+   collision have no owning entity. */
+static void* RcHitEntity(void* physSys, unsigned handle)
+{
+    void*  collObj;
+    void** holder;
+    void*  node;
+    if (!handle) return 0;
+    __try { collObj = ((fnGetCollObj)FN_GET_COLLOBJ)(physSys, handle); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    if (!Readable(collObj, 0x14)) return 0;
+    holder = (void**)((char*)collObj + 8);
+    if (*(unsigned*)((char*)holder + 8) != 0) return 0;   /* the engine's gate */
+    node = holder[0];
+    if (!Readable(node, 0x10)) return 0;
+    return *(void**)((char*)node + 0x0C);
+}
+
+/* Cast along `dir` and report the closest collision hit. Returns 1 on a hit and
+   fills *outDist (metres) and *outEnt (which is legitimately NULL for terrain and
+   static world). Validated live: |normal| == 1.0000 exactly, flat ground gives
+   (0,0,1), a fence gives a horizontal normal and its own named entity, and
+   dist == |pos-start| to three decimals. Guarded at every hop because physSys is
+   NULL with no level loaded and the thunk would fault dereferencing +0x90. */
+static int RcCastRay(const float* org, const float* dir, float range,
+                     float* outDist, void** outEnt)
+{
+    void *physSys, *collWorld, *hkHolder;
+    RcVec3   start, delta;
+    RcFilter filt;
+    RcHit    slots[8];
+    RcHitVec out;
+
+    *outDist = 0.0f;
+    *outEnt  = 0;
+    if (!Readable((void*)P_PHYSSYS, 4)) return 0;
+    physSys = *(void**)P_PHYSSYS;
+    if (!Readable(physSys, OFF_PS_COLLWORLD + 4)) return 0;
+    collWorld = *(void**)((char*)physSys + OFF_PS_COLLWORLD);
+    if (!Readable(collWorld, OFF_CW_HKHOLDER + 4)) return 0;
+    hkHolder = *(void**)((char*)collWorld + OFF_CW_HKHOLDER);
+    if (!Readable(hkHolder, OFF_HK_WORLD1 + 4)) return 0;
+
+    start.p[0] = org[0]; start.p[1] = org[1]; start.p[2] = org[2];
+    delta.p[0] = dir[0] * range;
+    delta.p[1] = dir[1] * range;
+    delta.p[2] = dir[2] * range;
+
+    memset(slots, 0, sizeof(slots));
+    out.ptr = slots; out.size = 0; out.capEnc = (8u << 6) | 1u;
+    __try {
+        ((fnFilterInit)FN_FILTER_INIT)(&filt, RC_MASKA, 0u);
+        /* flags 5 = closest-hit | clip-to-world. Bit 4 matters: without it both
+           endpoints are range-checked against the world AABB and a ray leaving
+           the box returns no hit AND no error. */
+        ((fnRayCast)FN_RAYCAST)(physSys, &start, &delta, &out, &filt, 0, 5u);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+
+    if (!out.size) return 0;
+    *outDist = slots[0].dist;
+    *outEnt  = RcHitEntity(physSys, slots[0].handle);
+    return 1;
+}
+
+static void RcProbe(void* console, double range, unsigned flags)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void *physSys, *collWorld, *hkHolder, *w1, *w2, *cam;
+    RcVec3   start, delta;
+    RcFilter filt;
+    RcHit    slots[8];
+    RcHitVec out;
+    float    d[3], nlen, pd;
+    unsigned capBefore;
+
+    if (!Readable((void*)P_PHYSSYS, 4)) { P_(console, 0, AC "rcprobe: no physics global\n"); return; }
+    physSys = *(void**)P_PHYSSYS;
+    if (!Readable(physSys, OFF_PS_COLLWORLD + 4)) {
+        P_(console, 0, AC "rcprobe: physSys NULL/unreadable - no level loaded?\n"); return;
+    }
+    collWorld = *(void**)((char*)physSys + OFF_PS_COLLWORLD);
+    if (!Readable(collWorld, OFF_CW_HKHOLDER + 4)) {
+        P_(console, 0, AC "rcprobe: collWorld unreadable\n"); return;
+    }
+    hkHolder = *(void**)((char*)collWorld + OFF_CW_HKHOLDER);
+    if (!Readable(hkHolder, OFF_HK_AABBMAX + 16)) {
+        P_(console, 0, AC "rcprobe: hkHolder unreadable\n"); return;
+    }
+    w1 = *(void**)((char*)hkHolder + OFF_HK_WORLD1);
+    w2 = *(void**)((char*)hkHolder + OFF_HK_WORLD2);
+
+    cam = GetCameraEntityDirect();
+    if (!Readable(cam, OFF_ENT_POS + 12)) { P_(console, 0, AC "rcprobe: no camera\n"); return; }
+    if (!CursorRay(d)) { P_(console, 0, AC "rcprobe: cursor is off the client area\n"); return; }
+    {
+        const float* cp = (const float*)((char*)cam + OFF_ENT_POS);
+        start.p[0] = cp[0]; start.p[1] = cp[1]; start.p[2] = cp[2];
+    }
+    delta.p[0] = d[0] * (float)range;
+    delta.p[1] = d[1] * (float)range;
+    delta.p[2] = d[2] * (float)range;
+
+    {   const float* mn = (const float*)((char*)hkHolder + OFF_HK_AABBMIN);
+        const float* mx = (const float*)((char*)hkHolder + OFF_HK_AABBMAX);
+        P_(console, 0, AC
+           "rcprobe: physSys %08X collWorld %08X hkHolder %08X hkWorld %08X/%08X\n"
+           "  worldAABB (%.0f %.0f %.0f) .. (%.0f %.0f %.0f)\n",
+           (unsigned)(size_t)physSys, (unsigned)(size_t)collWorld,
+           (unsigned)(size_t)hkHolder, (unsigned)(size_t)w1, (unsigned)(size_t)w2,
+           mn[0], mn[1], mn[2], mx[0], mx[1], mx[2]);
+    }
+
+    memset(slots, 0, sizeof(slots));
+    __try { ((fnFilterInit)FN_FILTER_INIT)(&filt, RC_MASKA, 0u); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        P_(console, 0, AC "rcprobe: filter ctor faulted\n"); return;
+    }
+    out.ptr    = slots;
+    out.size   = 0;                       /* MUST be 0 - 0x103854F7 branches on it */
+    out.capEnc = (8u << 6) | 1u;          /* capacity exactly 8; overflow would heap-alloc */
+    capBefore  = out.capEnc;
+
+    P_(console, 0, AC
+       "  start (%.1f %.1f %.1f) delta (%.1f %.1f %.1f) len %.0f\n"
+       "  maskA %03X maskB 0 -> filterInfo %05X   flags %u   cap %u  size-in %u\n",
+       start.p[0], start.p[1], start.p[2], delta.p[0], delta.p[1], delta.p[2],
+       (float)range, RC_MASKA, (0u << 17) | RC_MASKA | 0x8000u, flags,
+       (out.capEnc >> 6) << ((out.capEnc >> 1) & 0x1F), out.size);
+
+    __try {
+        ((fnRayCast)FN_RAYCAST)(physSys, &start, &delta, &out, &filt, 0, flags);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        P_(console, 0, AC "rcprobe: THE RAYCAST FAULTED - caught. Nothing changed.\n");
+        logf_("[rc  ] raycast faulted");
+        return;
+    }
+
+    P_(console, 0, AC "  out.size = %u%s\n", out.size,
+       out.size ? "" : "   <- MISS (or it never ran; the world-AABB gate is silent)");
+    if (out.capEnc != capBefore)
+        P_(console, 0, AC
+           "  *** capEnc changed %X -> %X: it REALLOCATED, so our encoding is\n"
+           "      wrong and the slots are stale. Do not build on this.\n",
+           capBefore, out.capEnc);
+
+    if (out.size) {
+        RcHit* h = &slots[0];
+        void*  ent;
+        nlen = (float)sqrt(h->normal[0]*h->normal[0] + h->normal[1]*h->normal[1] +
+                           h->normal[2]*h->normal[2]);
+        pd   = (float)sqrt((h->pos[0]-start.p[0])*(h->pos[0]-start.p[0]) +
+                           (h->pos[1]-start.p[1])*(h->pos[1]-start.p[1]) +
+                           (h->pos[2]-start.p[2])*(h->pos[2]-start.p[2]));
+        ent = RcHitEntity(physSys, h->handle);
+        P_(console, 0, AC
+           "  pos    (%.2f %.2f %.2f)\n"
+           "  normal (%.3f %.3f %.3f)  |normal| = %.4f  %s\n"
+           "  dist   %.3f   |pos-start| %.3f   %s\n"
+           "  handle %08X  flag20 %02X  material %02X  tail2C %08X\n"
+           "  entity %08X  %s\n",
+           h->pos[0], h->pos[1], h->pos[2],
+           h->normal[0], h->normal[1], h->normal[2], nlen,
+           (nlen > 0.999f && nlen < 1.001f)
+               ? "UNIT - the struct map holds"
+               : "*** NOT UNIT - +0x0C is not the normal ***",
+           h->dist, pd,
+           (pd > 0.001f && h->dist > pd * 0.98f && h->dist < pd * 1.02f)
+               ? "metres, as documented"
+               : "*** mismatch - check whether it is a 0..1 fraction ***",
+           h->handle, (unsigned)h->flag20, (unsigned)h->material, h->tail2C,
+           (unsigned)(size_t)ent,
+           ent ? (EntityName(ent) ? EntityName(ent) : "?")
+               : "NULL - correct for terrain and static world");
+        logf_("[rc  ] size=%u pos=(%.2f %.2f %.2f) n=(%.3f %.3f %.3f) |n|=%.4f "
+              "dist=%.3f pd=%.3f handle=%08X ent=%p mat=%02X",
+              out.size, h->pos[0], h->pos[1], h->pos[2],
+              h->normal[0], h->normal[1], h->normal[2], nlen, h->dist, pd,
+              h->handle, ent, (unsigned)h->material);
+    } else {
+        logf_("[rc  ] miss flags=%u range=%.0f", flags, (float)range);
+    }
+}
+
+/* Every entity is treated as a POINT at its origin, because we have no bounding
+   volumes. For a mine pod sitting on the ground that is nearly exact; for a tall
+   plant whose origin is at the base of the trunk it is badly wrong - click the
+   canopy and the ray passes nowhere near the origin, so small props on the ground
+   out-score the thing that visually fills the cursor.
+
+   Without bounds this cannot be made right by scoring alone, so instead of
+   pretending one answer is correct we keep the whole shortlist: the best is
+   selected, the runners-up are named, and clicking again along the same ray
+   cycles to the next one. That turns a wrong guess into one extra click. */
+#define PICK_MAX 12
+
+typedef struct {
+    void* ent; void* ref; unsigned long lo, hi;
+    float score, dist; int hit;      /* hit = the ray really entered its box */
+} PickCand;
+
+static PickCand g_cand[PICK_MAX];
+static int      g_candN   = 0;
+static int      g_candIdx = 0;
+
+/* Is this candidate still the entity we picked, or has its memory been reused?
+
+   Readable() cannot answer that - it calls VirtualQuery and only proves the page
+   is committed, and a freed heap block stays mapped. The shortlist survives a
+   world change, so after a warp every entry points into the previous world's
+   freed entities; PickSelect crashed walking one whose memory had been reused by
+   float data.
+
+   The back-pointer is the real test, and it is the same one GetPlayerEntity has
+   always used: a live entity's +0x34 points back at the ref node it came from.
+   Reused memory does not satisfy that, and it costs one compare. */
+static int CandLive(const PickCand* c)
+{
+    if (!c || !c->ent || !c->ref) return 0;
+    if (!Readable(c->ent, OFF_ENT_POS + 12)) return 0;
+    if (!Readable((char*)c->ent + OFF_ENT_CHECK, 4)) return 0;
+    if (*(void**)((char*)c->ent + OFF_ENT_CHECK) != c->ref) return 0;
+    return 1;
+}
+
+static void PickSelect(void* console, int i);   /* PickWithDir ends by calling it */
+static void RepairPlayerList(void* console);    /* `fixplayer`, defined with the warp code */
+static int  g_fixForce = 0;   /* `fixplayer force` - actually write, see the note there */
+
+/* THE REAL FIX for picking. Every entity carries its own local-space AABB at
+   +0xA4/+0xB0, and GetWorldAABB transforms it by the entity's own matrix and
+   hands it back. Non-virtual, pure math, no allocation, no physics, and it
+   provably cannot mutate the entity (its only writes are to its own frame and
+   to our two output buffers).
+
+   This is what makes the tall plant selectable: its box is the MODEL's extent,
+   canopy included, expressed relative to its trunk-base origin - exactly the
+   quantity the point test was missing. The engine's own soft-lock scores the
+   box centre rather than the origin, so this is also what the game does. */
+#define FN_WORLD_AABB (0x101B2370u + g_rebase)
+typedef void (__thiscall *fnWorldAABB)(void* ent, float* outMin, float* outMax);
+
+/* Slab test. Returns 1 and the entry distance when the ray meets the box. */
+static int RayAabb(const float* o, const float* d,
+                   const float* mn, const float* mx, float* tnear)
+{
+    float t0 = 0.0f, t1 = 1e9f;
+    int i;
+    for (i = 0; i < 3; ++i) {
+        if (d[i] > -1e-6f && d[i] < 1e-6f) {          /* parallel to this slab */
+            if (o[i] < mn[i] || o[i] > mx[i]) return 0;
+        } else {
+            float inv = 1.0f / d[i];
+            float ta  = (mn[i] - o[i]) * inv;
+            float tb  = (mx[i] - o[i]) * inv;
+            if (ta > tb) { float s = ta; ta = tb; tb = s; }
+            if (ta > t0) t0 = ta;
+            if (tb < t1) t1 = tb;
+            if (t0 > t1) return 0;
+        }
+    }
+    *tnear = t0;
+    return 1;
+}
+
+/* 1 if the ray enters this entity's box; *t is the distance to the entry.
+   A degenerate (zero-size) box means the entity never got real bounds - those
+   fall back to the old angular test rather than being silently unpickable. */
+static int EntityBoxHit(void* ent, const float* org, const float* dir, float* t)
+{
+    float mn[3], mx[3];
+    if (!Readable(ent, 0xBC)) return 0;
+    __try { ((fnWorldAABB)FN_WORLD_AABB)(ent, mn, mx); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    if (mx[0] - mn[0] < 0.01f && mx[1] - mn[1] < 0.01f && mx[2] - mn[2] < 0.01f)
+        return 0;
+    return RayAabb(org, dir, mn, mx, t);
+}
+
+static void PickWithDir(void* console, const float* dir, int quiet)
+{
+    void*  esys = *(void**)G_ENTSYS_PTR;
+    void*  cam  = GetCameraEntityDirect();
+    void*  stack[64];
+    int    sp = 0, guard = 0;
+    void  *sent, *node;
+    const float *cp;
+    void*  best = 0;
+    float  bestScore = 1e9f;
+    unsigned long bestLo = 0, bestHi = 0;
+    int    n = 0;
+    PickCand cand[PICK_MAX];
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    float  rcDist = 0.0f;
+    void*  rcEnt  = 0;
+    int    rcHave = 0;
+
+    if (!Readable(cam, OFF_ENT_XFORM + 0x40)) {
+        if (!quiet) P_(console, 0, AC "pick: no camera\n"); return; }
+    if (!Readable(esys, OFF_ESYS_MAPSENT + 4)) {
+        if (!quiet) P_(console, 0, AC "pick: no entity system\n"); return; }
+    sent = *(void**)((char*)esys + OFF_ESYS_MAPSENT);
+    if (!Readable(sent, 0x48)) {
+        if (!quiet) P_(console, 0, AC "pick: map unreadable\n"); return; }
+
+    cp = (const float*)((char*)cam + OFF_ENT_POS);
+
+    /* ---- the collision raycast, as an OCCLUSION CAP --------------------------
+       Validated by rcprobe before this was written. Two uses:
+
+         (a) if it hits a real named entity, that is the exact, occlusion-correct,
+             surface-accurate answer and it wins outright;
+         (b) either way its distance caps the AABB search - a candidate whose box
+             entry is BEHIND the first solid surface cannot be what you clicked.
+
+       (b) is the valuable half: it kills "a distant huge object's box beats a
+           small nearby one", because the wall in front supplies a short cap.
+
+       A miss (or no physics world) leaves rcDist at 0 and nothing is capped, so
+       behaviour is exactly as before. Nothing regresses.
+
+       NOTE it does NOT solve thin foliage: grass, vines and small props often
+       carry no collision shape at all, so the ray passes straight through them
+       and they still rely on the AABB path below. */
+    rcHave = RcCastRay(cp, dir, 300.0f, &rcDist, &rcEnt);
+    if (rcHave && rcEnt && !Readable(rcEnt, OFF_ENT_POS + 12)) rcEnt = 0;
+
+    node = *(void**)((char*)sent + OFF_TN_PARENT);
+    while ((node || sp) && guard++ < 4096) {
+        while (QuickPtr(node) && Readable(node, 0x48) &&
+               !*(unsigned char*)((char*)node + OFF_TN_ISNIL) && sp < 63) {
+            stack[sp++] = node;
+            node = *(void**)((char*)node + OFF_TN_LEFT);
+        }
+        if (!sp) break;
+        node = stack[--sp];
+        {
+            unsigned long count = *(unsigned long*)((char*)node + OFF_TN_INNERCOUNT);
+            void* in = *(void**)((char*)node + OFF_TN_INNERHEAD);
+            unsigned long i;
+            if (count > 65536) count = 0;
+            for (i = 0; i < count && QuickPtr(in); ++i) {
+                void* ref;
+                void* ent = RefNodeEntity(in, &ref);
+                if (QuickPtr(ent) && Readable(ent, OFF_ENT_POS + 12)) {
+                    const float* ep = (const float*)((char*)ent + OFF_ENT_POS);
+                    float v[3], t, perp2, len2, score;
+                    v[0] = ep[0] - cp[0]; v[1] = ep[1] - cp[1]; v[2] = ep[2] - cp[2];
+                    t = v[0]*dir[0] + v[1]*dir[1] + v[2]*dir[2];   /* along the ray */
+                    if (t > 0.5f && t < 300.0f) {
+                        float hitT = 0.0f;
+                        int   boxHit = EntityBoxHit(ent, cp, dir, &hitT);
+
+                        len2  = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
+                        perp2 = len2 - t*t;
+                        if (perp2 < 0.0f) perp2 = 0.0f;
+                        score = (float)sqrt((double)perp2) / t;     /* angular */
+
+                        /* A real box hit ALWAYS outranks a near-miss, and among
+                           box hits the nearest wins - which is what "what am I
+                           clicking on" actually means. Misses keep the old
+                           angular ordering, pushed below every hit. */
+                        /* OCCLUSION: reject anything whose box entry is behind
+                           the first solid surface. 1.5m of slack, because a
+                           creature's capsule is narrower than its render mesh and
+                           the ray can hit the ground just in front of its feet. */
+                        if (rcHave && boxHit && hitT > rcDist + 1.5f &&
+                            ent != rcEnt) {
+                            in = *(void**)((char*)in + OFF_IN_NEXT);
+                            continue;
+                        }
+
+                        if (boxHit && hitT < 300.0f) score = hitT * 0.001f;
+                        else                         score = 1.0f + score;
+
+                        /* The raycast named this entity: it is the surface the
+                           cursor is actually over. Beat every box hit. */
+                        if (rcHave && ent == rcEnt) score = -1.0f;
+
+                        if (boxHit || score < 1.12f) {              /* ~7 degrees */
+                            /* keep a sorted shortlist, not just the winner */
+                            int k;
+                            if (n < PICK_MAX)                            k = n++;
+                            else if (score < cand[PICK_MAX - 1].score)   k = PICK_MAX - 1;
+                            else                                         k = -1;
+                            while (k > 0 && cand[k - 1].score > score) {
+                                cand[k] = cand[k - 1]; --k;
+                            }
+                            if (k >= 0) {
+                                cand[k].ent   = ent;
+                                cand[k].ref   = ref;   /* needed by 'delete' */
+                                cand[k].score = score;
+                                cand[k].dist  = boxHit ? hitT : t;
+                                cand[k].hit   = boxHit;
+                                cand[k].lo = *(unsigned long*)((char*)in + OFF_IN_ID64);
+                                cand[k].hi = *(unsigned long*)((char*)in + OFF_IN_ID64 + 4);
+                            }
+                        }
+                    }
+                }
+                in = *(void**)((char*)in + OFF_IN_NEXT);
+            }
+        }
+        node = *(void**)((char*)node + OFF_TN_RIGHT);
+    }
+
+    if (!n) {
+        g_candN = 0;
+        if (!quiet) P_(console, 0, AC "pick: nothing there\n");
+        return;
+    }
+
+    /* A LEFT click is always a fresh pick of the best candidate. It used to
+       cycle whenever two clicks landed on nearly the same ray, which meant an
+       accidental second click silently changed the selection under you - and a
+       `kill` then hit something you never chose. Cycling is an explicit RIGHT
+       click now, over the shortlist this scan produced. */
+    memcpy(g_cand, cand, sizeof(PickCand) * n);
+    g_candN   = n;
+    g_candIdx = 0;
+    PickSelect(console, 0);
+}
+
+/* Select entry `i` of the shortlist and report it. Shared by the left-click
+   pick and the right-click cycle so the two can never disagree. */
+static void PickSelect(void* console, int i)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void* best;
+
+    if (i < 0 || i >= g_candN) return;
+    g_candIdx = i;
+    best      = g_cand[i].ent;
+    /* Readable() is NOT a liveness test - it proves the page is committed, and a
+       freed heap block stays mapped. That is how this function crashed at +0x2D3
+       after `warp sp_hometree`: the candidate list still held entities from the
+       previous world, and the registers showed float bit patterns (0x3F8A8B8C)
+       being walked as pointers - freed memory already reused.
+
+       CandLive() adds the back-pointer test the player walk uses: a live entity's
+       +0x34 points back at the ref node it came from. Reused memory will not
+       satisfy that. */
+    if (!CandLive(&g_cand[i])) {
+        P_(console, 0, AC "pick: that entity is gone - click again\n");
+        g_candN = 0;
+        return;
+    }
+
+    g_selEnt  = best;
+    g_selRef  = g_cand[i].ref;
+    g_selIdLo = g_cand[i].lo;
+    g_selIdHi = g_cand[i].hi;
+    strncpy(g_selName, EntityName(best), sizeof(g_selName) - 1);
+    g_selName[sizeof(g_selName) - 1] = 0;
+    /* The line below this used to promise "'drive' steers it" and then not make it
+       true: DriveStart reads g_lastSpawn, and only the entity BROWSER was setting
+       that. Clicking a creature and typing 'drive' answered "spawn a creature
+       first, then 'drive'" while staring at a selected creature. Point both at the
+       same entity here, exactly as the browser does, so there is one notion of
+       "the thing we act on" no matter how it was chosen. */
+    g_lastSpawn = best;
+    strncpy(g_lastSpawnName, g_selName, sizeof(g_lastSpawnName) - 1);
+    g_lastSpawnName[sizeof(g_lastSpawnName) - 1] = 0;
+    {
+        const float* p = (const float*)((char*)best + OFF_ENT_POS);
+        P_(console, 0, AC
+           "picked: %s   [%d of %d]\n"
+           "  id %08lX:%08lX  entity %p  (%.0f %.0f %.0f)  %s  %.0fm away\n",
+           g_selName, i + 1, g_candN, g_selIdHi, g_selIdLo, best,
+           p[0], p[1], p[2],
+           g_cand[i].hit ? "BOX HIT" : "near miss", g_cand[i].dist);
+    }
+    if (g_candN > 1) {
+        char line[256];
+        int  k, used = 0;
+        line[0] = 0;
+        for (k = 0; k < g_candN && used < 200; ++k) {
+            const char* nm;
+            if (k == i) continue;
+            /* THE CRASH SITE. This called EntityName on every other candidate
+               with no check whatsoever - only `best` above was ever validated. */
+            if (!CandLive(&g_cand[k])) continue;
+            nm = EntityName(g_cand[k].ent);
+            {   /* MSVC's _snprintf returns -1 on truncation, not the length it
+                   wanted - so `used += ...; if (used < 0) break;` only ever
+                   decremented `used` by one and carried on writing at the same
+                   offset, silently dropping names. Test the return value itself
+                   and stop on truncation. */
+                int w = _snprintf(line + used, sizeof(line) - 1 - used,
+                                  "%s%s", used ? ", " : "", nm ? nm : "?");
+                if (w < 0) { line[sizeof(line) - 1] = 0; break; }
+                used += w;
+            }
+        }
+        line[sizeof(line) - 1] = 0;
+        P_(console, 0, AC "  also here: %s\n"
+                          "  RIGHT-CLICK to cycle to the next one\n", line);
+    }
+    P_(console, 0, AC "  'kill' kills it, 'delete' removes it, 'drive' steers it.\n");
+    logf_("[pick] %s id=%08lX:%08lX ent=%p (%d of %d)%s",
+          g_selName, g_selIdHi, g_selIdLo, best, i + 1, g_candN,
+          g_cand[i].hit ? " BOXHIT" : "");
+}
+
+/* Right click: step through what the last left click found. No re-scan, so the
+   list cannot shift under you if the mouse drifted a pixel. */
+static void PickCycle(void* console)
+{
+    if (g_candN <= 0) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "pick: nothing selected yet - left-click something first\n");
+        return;
+    }
+    if (g_candN == 1) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "pick: %s is the only thing there\n", g_selName);
+        return;
+    }
+    PickSelect(console, (g_candIdx + 1) % g_candN);
+}
+
+/* Crosshair - what `pick` typed at the console uses. */
+static void PickEntity(void* console)
+{
+    void* cam = GetCameraEntityDirect();
+    if (!Readable(cam, OFF_ENT_XFORM + 0x40)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "pick: no camera\n"); return; }
+    {
+        const float* m = (const float*)((char*)cam + OFF_ENT_XFORM);
+        float d[3];
+        d[0] = m[4]; d[1] = m[5]; d[2] = m[6];
+        PickWithDir(console, d, 0);
+    }
+}
+
+/* Cursor - what a click with the console open uses. */
+static void PickAtCursor(void* console, int quiet)
+{
+    float d[3];
+    if (CursorRay(d)) PickWithDir(console, d, quiet);
+    else if (!quiet)
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "pick: could not build a ray through the cursor\n");
+}
+
+/* KillPawnAgent is __cdecl(idLo, idHi) and resolves the id itself, then delivers
+   100000 damage through CEntity vtable slot 8 - a base-class virtual, so it
+   should reach animals and vehicles too. Gate to watch: if [entity+0x90] & 8 is
+   clear it diverts to the buddies manager and silently no-ops. */
+/* REMOVED: FN_KILLPAWNAGENT and its typedef. The comment below explains why the
+   ApplyDamage path replaced it; the declarations were left behind, unused. */
+
+/* The OLD kill called the engine's own `KillPawnAgent` native. Our signature for
+   it was right; the function is simply broken for this purpose. It builds a bare
+   CEntityEventStims and broadcasts that, but every character-sheet handler opens
+   with an is-a test for CBTZDamageStim and rejects anything else on the first
+   compare. The 100000 we passed lands in an int COUNT field; the real damage
+   float lives at CBTZDamageStim+0xA8, which does not exist on the object it
+   builds. So it was a silent no-op on EVERYTHING - the plant just made that
+   visible. See DAMAGE.md.
+
+   This is the engine's own scripted-kill instead, copied from the handler that
+   runs when the retail game sends a "kill" to a plant. Damage goes through the
+   character sheet's ApplyDamage, which is the same thing a bullet reaches.
+   Crucially it RETURNS the damage actually applied, so kill can stop lying:
+   0.0f means the target refused it. */
+#define FN_ACS_GETDESC  (0x104CC680u + g_rebase)  /* lazy-init the sheet descriptor */
+#define P_ACS_CLASSID   (0x11220EB8u + g_rebase)
+#define P_ACS_INITFLAG  (0x11220EA4u + g_rebase)
+#define ACS_SRC_NAMEID  0xFBF122A1u               /* the Domino-kill source id.
+                                                     Its name lives in a data file,
+                                                     not the DLL - copy verbatim. */
+typedef void* (__thiscall *fnGetComp2 )(void* ent, const unsigned long* pClassId);
+typedef int   (__thiscall *fnSheetState)(void* sheet);
+typedef float (__thiscall *fnSheetFloat)(void* sheet);
+typedef float (__thiscall *fnApplyDamage)(void* sheet, float amount, unsigned long srcNameId,
+                                          void* instigator, unsigned long a4,
+                                          unsigned long a5, unsigned long a6,
+                                          unsigned long flags);
+
+/* The sheet is a COMPONENT, not the entity. CPawn is not a CEntity either -
+   both are components hanging off entity+0xC0. */
+static void* CharacterSheetOf(void* ent)
+{
+    void* sheet = 0;
+    if (!Readable(ent, 0x100)) return 0;
+    __try {
+        if (*(unsigned long*)P_ACS_INITFLAG == 0)
+            ((void* (__cdecl*)(void))FN_ACS_GETDESC)();
+        sheet = ((fnGetComp2)FN_GET_COMPONENT_)(ent, (const unsigned long*)P_ACS_CLASSID);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) { sheet = 0; }
+    return Readable(sheet, 0x18) ? sheet : 0;
+}
+
+static void KillSelected(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void*  sheet;
+    void** vt;
+    int    state;
+    float  maxhp, applied;
+
+    if (!g_selEnt || !Readable(g_selEnt, 0x94)) {
+        P_(console, 0, AC "kill: nothing selected - click something first\n");
+        return;
+    }
+    sheet = CharacterSheetOf(g_selEnt);
+    if (!sheet) {
+        P_(console, 0, AC
+           "kill: %s has no character sheet, so it cannot be damaged at all.\n"
+           "  'delete' destroys it outright instead.\n", g_selName);
+        return;
+    }
+    vt = *(void***)sheet;
+    if (!Readable(vt, 81 * 4)) {
+        P_(console, 0, AC "kill: sheet vtable too short - not calling into it\n");
+        return;
+    }
+    __try {
+        state = ((fnSheetState)vt[80])(sheet);
+        if (state != 1) {
+            P_(console, 0, AC "kill: %s is already dead (state %d)\n", g_selName, state);
+            return;
+        }
+        maxhp = ((fnSheetFloat)vt[35])(sheet);
+        /* ApplyDamage returns 0 immediately for amount <= 0, so never pass 0. */
+        if (maxhp <= 0.0f) maxhp = 100000.0f;
+        applied = ((fnApplyDamage)vt[69])(sheet, maxhp, ACS_SRC_NAMEID, sheet,
+                                          0u, 0xFFFFFFFFu, 0xFFFFFFFFu, 0x16u);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        P_(console, 0, AC "kill: faulted - caught\n");
+        logf_("[kill] *** FAULTED on %s", g_selName);
+        return;
+    }
+    if (applied > 0.0f) {
+        P_(console, 0, AC "kill: %s - %.0f damage applied\n", g_selName, applied);
+        logf_("[kill] %s applied=%.1f max=%.1f", g_selName, applied, maxhp);
+    } else {
+        P_(console, 0, AC
+           "kill: %s REFUSED the damage (0 applied) - it is damageable but\n"
+           "  something rejected this hit.\n", g_selName);
+        logf_("[kill] %s refused (max=%.1f)", g_selName, maxhp);
+    }
+}
+
+/* ---- resurrect: undo a kill on a mission-critical NPC ----------------------
+   The point of this is softlock insurance. Kill someone the campaign still needs
+   to talk to and the mission cannot advance; reloading a checkpoint is the only
+   other way back, and it costs everything since the checkpoint.
+
+   Why it is even possible - the "is it alive" predicate is NOT a stored state
+   machine. Sheet vtable slot 80 is 0x1050DDD0, in full:
+
+     1050DDD0  xorps  xmm0, xmm0
+     1050DDD3  comiss xmm0, [ecx+0x14]
+     1050DDD7  mov    eax, 3
+     1050DDDC  jae    +5                  ; 0 >= health  -> stays 3 (dead)
+     1050DDDE  mov    eax, 1              ; else         -> 1 (alive)
+
+   It is `health > 0 ? 1 : 3`, computed fresh every call from the float at
+   CCharacterSheet+0x14. Nothing else is consulted. So putting health back above
+   zero makes every gate that asks "is this thing alive" - including the damage
+   handler's own second gate - answer yes again.
+
+   And there is a plain setter for it, verified rather than taken from the notes
+   (which described it as taking its argument in xmm0; it does not):
+
+     1050F440  movss xmm0, [esp+4]        ; slot 33 - the arg is on the STACK
+     1050F446  movss [ecx+0x14], xmm0
+     1050F44B  ret 4
+     1050F430  fld   [ecx+0x14] / ret     ; slot 32 - getter, no args
+
+   WHAT THIS DOES NOT DO, and it would be dishonest to imply otherwise: dying
+   also ran an animation, probably dropped the body into ragdoll, and fired
+   whatever death event the mission scripts were listening for. None of that is
+   rewound by a float. The realistic outcome is a corpse that reports full health,
+   and the honest test is whether the NPC gets up. Report what happens and the
+   next lever is the agent's own state, not the sheet.
+
+   `delete` is a different matter entirely and cannot be undone - it destroys the
+   entity, so there is no sheet left to write to. This refuses that case up front
+   rather than appearing to work. */
+#define SHEET_SLOT_GETHP  32
+#define SHEET_SLOT_SETHP  33
+#define SHEET_SLOT_MAXHP  35
+#define SHEET_SLOT_STATE  80
+#define OFF_ENT_FLAGS     0x90
+#define ENT_FLAG_DESTROYED 0x10
+
+typedef void (__thiscall *fnSetHealth)(void* sheet, float hp);
+
+static volatile long g_wantResurrect = 0;
+static char          g_resName[ENT_NLEN] = "";
+
+/* Runs ON THE MAIN THREAD. */
+static void DoResurrect(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void*  ent = 0;
+    char   who[ENT_NLEN];
+    void*  sheet;
+    void** vt;
+    int    state, state2;
+    float  maxhp, hp0, hp1;
+    unsigned long flags;
+
+    if (g_resName[0]) {
+        /* By name, because a corpse is genuinely hard to click. Freshest data
+           wins - re-walk the world rather than trusting an old snapshot. */
+        long i, n;
+        EntSnapshot();
+        n = g_entCount;
+        for (i = 0; i < n; ++i) {
+            if (Stristr(g_entRows[i].name, g_resName)) {
+                ent = g_entRows[i].ent;
+                strncpy(who, g_entRows[i].name, sizeof(who) - 1);
+                who[sizeof(who) - 1] = 0;
+                break;
+            }
+        }
+        if (!ent) {
+            P_(console, 0, AC
+               "resurrect: nothing in the world matches \"%s\".\n"
+               "  If you used 'delete' rather than 'kill', the entity is gone for\n"
+               "  good - reload a checkpoint.\n", g_resName);
+            return;
+        }
+    } else {
+        ent = g_selEnt;
+        strncpy(who, g_selName, sizeof(who) - 1);
+        who[sizeof(who) - 1] = 0;
+        if (!ent || !Readable(ent, 0x100)) {
+            P_(console, 0, AC
+               "resurrect: nothing selected. Click the body, or name it -\n"
+               "  'resurrect kendra'.\n");
+            return;
+        }
+    }
+    if (!Readable(ent, 0x100)) {
+        P_(console, 0, AC "resurrect: %s is not a readable entity any more\n", who);
+        return;
+    }
+
+    flags = *(unsigned long*)((char*)ent + OFF_ENT_FLAGS);
+    if (flags & ENT_FLAG_DESTROYED) {
+        P_(console, 0, AC
+           "resurrect: %s is DESTROYED (flags %08lX, bit 4 set) - that is what\n"
+           "  'delete' does, and it cannot be undone: there is no character sheet\n"
+           "  left to write health into. Reload a checkpoint.\n", who, flags);
+        return;
+    }
+
+    sheet = CharacterSheetOf(ent);
+    if (!sheet) {
+        P_(console, 0, AC
+           "resurrect: %s has no character sheet, so it has no health to restore.\n"
+           "  Only things that could be killed can be brought back.\n", who);
+        return;
+    }
+    vt = *(void***)sheet;
+    if (!Readable(vt, (SHEET_SLOT_STATE + 1) * 4)) {
+        P_(console, 0, AC "resurrect: sheet vtable too short - not calling into it\n");
+        return;
+    }
+
+    __try {
+        state = ((fnSheetState)vt[SHEET_SLOT_STATE])(sheet);
+        hp0   = ((fnSheetFloat)vt[SHEET_SLOT_GETHP])(sheet);
+        maxhp = ((fnSheetFloat)vt[SHEET_SLOT_MAXHP])(sheet);
+        if (state == 1) {
+            P_(console, 0, AC
+               "resurrect: %s is already alive (health %.0f/%.0f) - nothing to do.\n",
+               who, hp0, maxhp);
+            return;
+        }
+        if (maxhp <= 0.0f) maxhp = 100.0f;      /* computed slot; don't trust it blindly */
+        ((fnSetHealth)vt[SHEET_SLOT_SETHP])(sheet, maxhp);
+        hp1    = ((fnSheetFloat)vt[SHEET_SLOT_GETHP])(sheet);
+        state2 = ((fnSheetState)vt[SHEET_SLOT_STATE])(sheet);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        P_(console, 0, AC "resurrect: faulted - caught, nothing further attempted\n");
+        logf_("[res ] *** FAULTED on %s", who);
+        return;
+    }
+
+    logf_("[res ] %s state %d->%d hp %.1f->%.1f (max %.1f) flags %08lX",
+          who, state, state2, hp0, hp1, maxhp, flags);
+
+    if (state2 == 1) {
+        P_(console, 0, AC
+           "resurrect: %s health %.0f -> %.0f, the sheet now reports ALIVE.\n"
+           "  That is the engine's own liveness test satisfied. What it does NOT\n"
+           "  undo is the death animation, the ragdoll, or any death event the\n"
+           "  mission already received - so watch whether it actually gets up.\n"
+           "  If it stays down, the sheet is fine and the AI agent's state is the\n"
+           "  next thing to go after; say so and I will dig there.\n",
+           who, hp0, hp1);
+    } else {
+        P_(console, 0, AC
+           "resurrect: wrote %.0f health to %s but slot 80 still reports %d.\n"
+           "  Read back %.0f, so either the write did not stick or something\n"
+           "  re-zeroed it immediately.\n", maxhp, who, state2, hp1);
+    }
+}
+
+/* ---- entbox: does this entity actually HAVE a bounding box? ---------------
+   PURE READ. Every pick is reporting "near miss", which means the ray-vs-box
+   test never once succeeded. Either the boxes are empty, or the accessor is not
+   returning what we think. This dumps both the raw fields and what the engine
+   hands back, so the answer comes from the game rather than from me. */
+static void EntBox(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void* ent = g_selEnt;
+    const float *lmn, *lmx;
+    const float *pos;
+    float wmn[3], wmx[3];
+    float d[3];
+    int   haveRay = 0;
+
+    if (!ent || !Readable(ent, 0xBC)) {
+        P_(console, 0, AC "entbox: nothing selected - click something first\n");
+        return;
+    }
+    lmn = (const float*)((char*)ent + 0xA4);
+    lmx = (const float*)((char*)ent + 0xB0);
+    pos = (const float*)((char*)ent + OFF_ENT_POS);
+
+    P_(console, 0, AC "entbox: %s  entity %p\n", g_selName, ent);
+    P_(console, 0, AC "  position     (%.2f %.2f %.2f)\n", pos[0], pos[1], pos[2]);
+    P_(console, 0, AC "  local  +0xA4 (%.2f %.2f %.2f) .. +0xB0 (%.2f %.2f %.2f)\n",
+       lmn[0], lmn[1], lmn[2], lmx[0], lmx[1], lmx[2]);
+    P_(console, 0, AC "  local  size  (%.2f %.2f %.2f)\n",
+       lmx[0] - lmn[0], lmx[1] - lmn[1], lmx[2] - lmn[2]);
+
+    memset(wmn, 0, sizeof(wmn));
+    memset(wmx, 0, sizeof(wmx));
+    __try { ((fnWorldAABB)FN_WORLD_AABB)(ent, wmn, wmx); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        P_(console, 0, AC "  GetWorldAABB FAULTED - caught\n");
+        return;
+    }
+    P_(console, 0, AC "  world  min   (%.2f %.2f %.2f)  max (%.2f %.2f %.2f)\n",
+       wmn[0], wmn[1], wmn[2], wmx[0], wmx[1], wmx[2]);
+    P_(console, 0, AC "  world  size  (%.2f %.2f %.2f)\n",
+       wmx[0] - wmn[0], wmx[1] - wmn[1], wmx[2] - wmn[2]);
+
+    haveRay = CursorRay(d);
+    if (!haveRay) {
+        void* cam = GetCameraEntityDirect();
+        if (Readable(cam, OFF_ENT_XFORM + 0x40)) {
+            const float* m = (const float*)((char*)cam + OFF_ENT_XFORM);
+            d[0] = m[4]; d[1] = m[5]; d[2] = m[6];
+            haveRay = 1;
+        }
+    }
+    if (haveRay) {
+        void* cam = GetCameraEntityDirect();
+        const float* cp = (const float*)((char*)cam + OFF_ENT_POS);
+        float t = 0.0f;
+        int   hit = Readable(cam, OFF_ENT_POS + 12)
+                    ? RayAabb(cp, d, wmn, wmx, &t) : 0;
+        P_(console, 0, AC "  ray from (%.2f %.2f %.2f) dir (%.2f %.2f %.2f) -> %s\n",
+           Readable(cam, OFF_ENT_POS + 12) ? cp[0] : 0.0f,
+           Readable(cam, OFF_ENT_POS + 12) ? cp[1] : 0.0f,
+           Readable(cam, OFF_ENT_POS + 12) ? cp[2] : 0.0f,
+           d[0], d[1], d[2], hit ? "HIT" : "miss");
+        if (hit) P_(console, 0, AC "  entry distance %.2f\n", t);
+    }
+    logf_("[box ] %s local(%.2f %.2f %.2f)-(%.2f %.2f %.2f) "
+          "world(%.2f %.2f %.2f)-(%.2f %.2f %.2f)",
+          g_selName, lmn[0], lmn[1], lmn[2], lmx[0], lmx[1], lmx[2],
+          wmn[0], wmn[1], wmn[2], wmx[0], wmx[1], wmx[2]);
+}
+
+/* ---- delete: destroy the selected entity outright -------------------------
+   Not damage - destruction. The entity and every component it owns (graphics,
+   physics/collision, AI, audio) go with it, which is what "as if it never
+   existed" means for this session.
+
+   Signature re-derived from the BYTES, not from a decompile, because the first
+   candidate was wrong: 0x101AB370 was described to me as "destroy by id" and is
+   actually a red-black-tree walk returning a bool. The real one:
+
+     0x101B0260   __thiscall(CEntityManager* mgr, EntityRefNode* node)   ret 4
+
+   THE REFCOUNT MATTERS. Disassembling both exit paths shows the callee does
+   exactly one Release on the node it is given (`add [ebx+8], -1`, then dtor and
+   free if it reaches zero). It CONSUMES a reference. The engine's own caller
+   (0x10840050) therefore does `add [esi+8], 1` immediately before the call. We
+   hold no reference of our own - our node pointer came from walking the entity
+   map - so we do the same +1 and let the callee consume it. Skip that and we
+   would be handing over a reference we never owned, and the node would be freed
+   out from under whoever does own it.
+
+   Node layout, consistent with everything else we use: +0x08 refcount,
+   +0x0C entity. We verify +0x0C still matches the entity we selected before
+   destroying anything - a stale node is the one way this gets ugly. */
+#define G_ENTMGR_PP    (0x111E634Cu + g_rebase)
+#define FN_DESTROY_ENT (0x101B0260u + g_rebase)
+typedef void (__thiscall *fnDestroyEnt)(void* mgr, void* refNode);
+
+static void DeleteSelected(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void* mgr = *(void**)G_ENTMGR_PP;
+    void* ref = g_selRef;
+    void* doomed = 0;
+    char  name[128];
+
+    if (!g_selEnt || !Readable(g_selEnt, 0x100)) {
+        P_(console, 0, AC "delete: nothing selected - click something first\n");
+        return;
+    }
+    if (!Readable(ref, 0x10)) {
+        P_(console, 0, AC
+           "delete: no ref node for this selection - re-pick it and try again\n");
+        return;
+    }
+    if (*(void**)((char*)ref + 0x0C) != g_selEnt) {
+        P_(console, 0, AC
+           "delete: the selection is stale (the node no longer points at it).\n"
+           "  Re-pick and try again - deleting on a stale node is how you corrupt\n"
+           "  the entity table.\n");
+        g_selEnt = g_selRef = 0;
+        return;
+    }
+    if (!Readable(mgr, 0x60)) {
+        P_(console, 0, AC "delete: no entity manager\n");
+        return;
+    }
+    if (g_selEnt == GetPlayerEntity()) {
+        P_(console, 0, AC
+           "delete: that is YOUR OWN pawn. Refusing - it would take the camera,\n"
+           "  the input map and the streaming anchor with it.\n");
+        return;
+    }
+
+    strncpy(name, g_selName, sizeof(name) - 1);
+    name[sizeof(name) - 1] = 0;
+    doomed = g_selEnt;              /* remembered so the caches can be cleared by
+                                       IDENTITY afterwards - see below */
+    logf_("[del ] destroying %s ent=%p ref=%p refcount=%ld",
+          name, g_selEnt, ref, (long)*(long*)((char*)ref + 8));
+
+    __try {
+        *(long*)((char*)ref + 8) += 1;              /* the reference the callee eats */
+        ((fnDestroyEnt)FN_DESTROY_ENT)(mgr, ref);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        P_(console, 0, AC "delete: FAULTED - caught. Restart the game.\n");
+        logf_("[del ] *** FAULTED destroying %s", name);
+        /* Same clearing as the success path. The shortlist used to survive a
+           faulted destroy still holding an entry for a half-destroyed entity,
+           with CandLive the only thing between that and a crash. */
+        g_selEnt = g_selRef = 0;
+        g_candN = 0;
+        if (g_lastSpawn == doomed) { g_lastSpawn = 0; g_lastSpawnName[0] = 0; }
+        return;
+    }
+    g_selEnt = g_selRef = 0;
+    g_candN = 0;
+    /* IDENTITY, not readability. This used to be
+         `if (g_lastSpawn && !Readable(g_lastSpawn, 0x100)) g_lastSpawn = 0;`
+       and this file says four separate times that Readable is not a liveness
+       test - a freed heap block stays mapped, which is how the Samson crash got
+       through. PickSelect sets g_lastSpawn = the picked entity unconditionally,
+       so after any pick-then-delete g_lastSpawn IS the destroyed entity and
+       Readable almost always still says yes. agentinfo, vehinfo, mountinfo,
+       `anchor on`, `drive` and `vehenter` all then take it. Comparing the
+       pointer we just destroyed against the one we cached needs no guess. */
+    if (g_lastSpawn == doomed) {
+        g_lastSpawn = 0;
+        g_lastSpawnName[0] = 0;     /* it named the dead thing in every printout */
+    }
+
+    P_(console, 0, AC
+       "delete: %s destroyed - it and all its components are gone.\n"
+       "  NOTE: this is for THIS SESSION. The entity is authored in the level's\n"
+       "  sector file, so a reload brings it back. Permanent removal means\n"
+       "  editing that file - see the offline editor.\n", name);
+}
+
+/* ---- actmap: what action maps are pushed on the player? ----------------
+   PURE READ. `fixinput` reloads the GLOBAL action-map container and that now
+   succeeds - but a map being loaded is not the same as it being PUSHED onto this
+   player. PLAY_AS.md notes that PushActionMap returns -1 silently when a name
+   fails to resolve, and that a world change rebuilds the global container, which
+   would leave the player's own stack empty. An empty stack looks exactly like
+   what we have: camera fine, audio fine, no input, no menu.
+
+   The holder is CPlayer+0xEC. This dumps its head rather than assuming a layout
+   we have not confirmed, and separately reports the documented candidate fields. */
+/* ---- animinfo: is the animation dependency graph still populated? ------
+   PURE READ. Locomotion here is animation-driven - the state machine supplies
+   root motion - which is why noclip (a direct position write) moves the pawn
+   while walking does not. A pawn with no locomotion clips stands still, twitches
+   on an idle, and teleports fine.
+
+   ANIM_MERGE.md found the mechanism: CResourceManager::CreateResource attaches a
+   container's children by binary-searching the depload graph, and the world load
+   FREES THE GRAPH'S NODE INDEX after walking it. Anything created after that
+   point - including a pawn rebuilt by a warp - comes up with an empty package,
+   and the empty result is then cached, so re-spawning cannot fix it.
+
+   graph = *(void**)(resourceMgr + 0x6C); nodes at +0x04, edges +0x10, classes +0x28. */
+#define G_RESOURCEMGR   (0x111CA4E4u + g_rebase)
+#define OFF_MGR_GRAPH   0x6C
+
+/* ==================== the GAME's own log ====================
+   Not our diagnostics - the engine's. Dunia already writes its own messages into
+   the console ring (`flashbind`, `playsound`, `GetInitInfos`, `blendframes` and
+   the rest are all the game talking to itself), so this mirrors that stream into
+   its own file as it appears, and leaves ours out.
+
+   Filtering is exact rather than heuristic: every line WE print is prefixed with
+   the accent markup AC = 0x01 "FFC864", and our command echoes start with "> ".
+   Engine lines carry their own colour codes, so dropping precisely those two
+   shapes leaves a clean game log.
+
+   Ring layout (already used by the overlay): array at console+0x0C, capacity
+   +0x10, head +0x14 (oldest), count +0x18. */
+#define GAMELOG_PATH "avatar_game.log"
+/* Defined with the overlay code further down - the ring reader is shared, and it
+   handles DuniaStringW's small-string optimisation, which a naive read gets
+   wrong for every line of 7 characters or fewer. */
+static int ReadDuniaW(const void* str, wchar_t* out, int cap);
+
+/* Is this ring line one WE printed? Checked against the palette table rather
+   than one hard-coded prefix, because the command echo now opens with the dim
+   chevron colour instead of a bare "> " - and the old test looked for exactly
+   that "> ", so recolouring the echo would have quietly started leaking every
+   command into the game log. */
+static int IsOurConsoleLine(const wchar_t* t)
+{
+    static const char* const mine[] = { AC_HEX, PC_HEX, UC_HEX };
+    int m, i;
+    if (t[0] == L'>' && t[1] == L' ') return 1;      /* pre-palette shape */
+    if (t[0] != 1) return 0;
+    for (m = 0; m < 3; ++m) {
+        for (i = 0; i < 6; ++i)
+            if (t[1 + i] != (wchar_t)(unsigned char)mine[m][i]) break;
+        if (i == 6) return 1;
+    }
+    return 0;
+}
+
+static volatile long g_gamelog = 0;
+static int  g_glLast  = -1;      /* last ring index we have written out */
+
+static void GameLogTick(void* console)
+{
+    void** arr;
+    int capn, head, count, newest, i;
+    wchar_t line[4096];
+    char    utf[4096];
+    FILE*   f = 0;
+    char    path[MAX_PATH];
+
+    if (!g_gamelog || !Readable(console, 0x80)) return;
+    arr   = (void**)(*(void**)((char*)console + 0x0C));
+    capn  = *(int*)((char*)console + 0x10);
+    head  = *(int*)((char*)console + 0x14);
+    count = *(int*)((char*)console + 0x18);
+    if (capn <= 0 || count <= 0 || !Readable(arr, (SIZE_T)capn * 4)) return;
+
+    newest = ((head + count - 1) % capn + capn) % capn;
+    if (newest == g_glLast) return;
+    if (g_glLast < 0) { g_glLast = newest; return; }   /* start from "now" */
+
+    _snprintf(path, sizeof(path) - 1, "%s\\" GAMELOG_PATH, g_dir);
+    path[sizeof(path) - 1] = 0;   /* _snprintf does NOT terminate on truncation */
+    for (i = 0; i < capn; ++i) {
+        int idx = (g_glLast + 1 + i) % capn;
+        const wchar_t* t;
+        int n, k;
+
+        if (ReadDuniaW(arr[idx], line, 4096) <= 0) { if (idx == newest) break; continue; }
+
+        /* ours? drop it. */
+        t = line;
+        if (IsOurConsoleLine(t)) { if (idx == newest) break; continue; }
+
+        /* strip the engine's own colour markup so the file is plain text */
+        n = 0;
+        while (*t && n < (int)sizeof(utf) - 1) {
+            if ((unsigned)*t < 0x20) {
+                ++t;
+                for (k = 0; k < 6 && iswxdigit(t[k]); ++k) { }
+                if (k == 6) t += 6;
+                continue;
+            }
+            utf[n++] = (*t < 0x80) ? (char)*t : '?';
+            ++t;
+        }
+        utf[n] = 0;
+        if (n) {
+            if (!f) { f = fopen(path, "a"); if (!f) return; }
+            fprintf(f, "%8lu %s\n", (unsigned long)(GetTickCount() - g_t0), utf);
+        }
+        if (idx == newest) break;
+    }
+    if (f) fclose(f);
+    g_glLast = newest;
+}
+
+/* ---- entflag: read/modify the player entity's flag word -----------------
+   Measured, not guessed: a healthy pawn reads flags=00213BAB and a pawn rebuilt
+   by a warp reads 00613BAB. One bit apart - 0x00400000, bit 22 - set only on the
+   one that cannot move. Everything else about it checks out, so this is the
+   cheapest available experiment.
+
+       entflag                 show it
+       entflag clear 400000    clear that bit
+       entflag set 400000      put it back
+
+   The previous value is kept, so any change is reversible. */
+static unsigned long g_flagSaved   = 0;
+static void*         g_flagSavedAt = 0;
+
+static void EntFlag(void* console, const char* arg)
+{
+    void* ent = GetPlayerEntity();
+    unsigned long* pf;
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+
+    if (!Readable(ent, 0x94)) {
+        /* GetPlayerEntity refuses on a back-pointer mismatch, which is exactly
+           the state we want to poke at - fall back to the raw chain. */
+        void*  lst = *(void**)PLAYERLIST_PTR;
+        void** arr;
+        void  *elem, *inner, *node;
+        if (!Readable(lst, 0x10) || *(unsigned long*)((char*)lst + 8) == 0) {
+            P_(console, 0, AC "entflag: no player\n"); return; }
+        arr = *(void***)((char*)lst + 4);
+        if (!Readable(arr, 4)) { P_(console, 0, AC "entflag: no array\n"); return; }
+        elem = arr[0];
+        if (!Readable(elem, 8)) { P_(console, 0, AC "entflag: no element\n"); return; }
+        inner = *(void**)((char*)elem + 4);
+        if (!Readable(inner, 0x20)) { P_(console, 0, AC "entflag: no CPlayer\n"); return; }
+        node = *(void**)((char*)inner + 8);
+        if (!Readable(node, 0x10)) { P_(console, 0, AC "entflag: no ref\n"); return; }
+        ent = *(void**)((char*)node + 0x0C);
+        if (!Readable(ent, 0x94)) { P_(console, 0, AC "entflag: no entity\n"); return; }
+    }
+    pf = (unsigned long*)((char*)ent + 0x90);
+
+    if (!arg || !*arg) {
+        P_(console, 0, AC
+           "entflag: entity=%p flags=%08lX\n"
+           "  healthy pawn reads 00213BAB, a warped one 00613BAB\n"
+           "  'entflag clear 400000' drops the bit that differs\n"
+           "  'entflag undo' puts the whole word back%s\n", ent, *pf,
+           g_flagSavedAt ? "" : " (nothing saved yet)");
+        return;
+    }
+    /* `entflag undo`. The header above has always promised "the previous value
+       is kept, so any change is reversible", and g_flagSavedAt was written on
+       every poke and read by nothing: there was no way to reverse anything. It
+       only restores when the saved address is still THIS pawn's flag word - a
+       warp or a respawn rebuilds the entity, and writing an old flag word into
+       whatever now occupies that address is precisely the class of mistake this
+       file keeps apologising for. */
+    if (_stricmp(arg, "undo") == 0) {
+        if (!g_flagSavedAt) {
+            P_(console, 0, AC "entflag: nothing to undo - no flag has been poked\n");
+        } else if (g_flagSavedAt != (void*)pf) {
+            P_(console, 0, AC
+               "entflag: the saved word belonged to a different entity (%p, the\n"
+               "  pawn is now %p) - refusing to write. A warp or a respawn rebuilds\n"
+               "  the pawn, and that address may be anything now.\n",
+               g_flagSavedAt, (void*)pf);
+        } else {
+            P_(console, 0, AC "entflag: %08lX -> %08lX (restored)\n", *pf, g_flagSaved);
+            logf_("[flag] undo: entity=%p %08lX -> %08lX", ent, *pf, g_flagSaved);
+            *pf = g_flagSaved;
+            g_flagSavedAt = 0;
+        }
+        return;
+    }
+    {
+        unsigned long mask = 0, v;
+        int doSet = 0;
+        const char* q = arg;
+        if (_strnicmp(q, "set", 3) == 0)        { doSet = 1; q += 3; }
+        else if (_strnicmp(q, "clear", 5) == 0) { doSet = 0; q += 5; }
+        else { P_(console, 0, AC "entflag: say 'set <hex>', 'clear <hex>' or 'undo'\n"); return; }
+        while (*q == ' ' || *q == '\t') ++q;
+        if (sscanf(q, "%lx", &mask) != 1 || !mask) {
+            P_(console, 0, AC "entflag: need a hex mask, e.g. 400000\n"); return; }
+
+        g_flagSaved   = *pf;
+        g_flagSavedAt = pf;
+        v = doSet ? (*pf | mask) : (*pf & ~mask);
+        *pf = v;
+        P_(console, 0, AC "entflag: %08lX -> %08lX  (try moving now)\n", g_flagSaved, v);
+        logf_("[flag] entity=%p %08lX -> %08lX", ent, g_flagSaved, v);
+    }
+}
+
+/* ---- capture OutputDebugStringA -----------------------------------------
+   The engine's own LogSys is dead - three call sites, all in a unit-test
+   harness, sink count zero in a live session, and the format strings themselves
+   were stripped. But `OutputDebugStringA` IS live and its gates are open, and it
+   carries Scaleform GFx's log (ActionScript, font, image and SWF errors) plus
+   Dunia's fatal path.
+
+   One-dword IAT swap at 0x11000098, the same technique as the Present hook.
+
+   THREADING: unlike everything else here, this is NOT main-thread-only - the GFx
+   sink can fire on the dedicated render thread. So the handler takes its own
+   lock, touches no engine state, and calls nothing but the CRT. */
+#define IAT_OUTPUTDEBUGSTRINGA (0x11000098u + g_rebase)
+#define DBGLOG_PATH "avatar_debug.log"
+
+typedef void (WINAPI *fnOutputDebugStringA)(LPCSTR);
+static fnOutputDebugStringA g_odsOrig = 0;
+/* The same pointer, NEVER cleared - the unload sweep runs after RemoveHook has
+   already zeroed g_odsOrig, so a repair conditioned on it could not fire. Same
+   defect, same fix, as g_rdPresentEver for the Present hook. */
+static fnOutputDebugStringA g_odsOrigEver = 0;
+static CRITICAL_SECTION     g_odsCs;
+static volatile long        g_odsCsInit = 0;
+
+static void WINAPI hkOutputDebugStringA(LPCSTR s)
+{
+    if (s && g_odsCsInit) {
+        EnterCriticalSection(&g_odsCs);
+        {
+            char  path[MAX_PATH];
+            FILE* f;
+            _snprintf(path, sizeof(path) - 1, "%s\\" DBGLOG_PATH, g_dir);
+            path[sizeof(path) - 1] = 0;   /* _snprintf does NOT terminate on truncation */
+            f = fopen(path, "a");
+            if (f) {
+                fprintf(f, "%8lu [%lu] %s%s",
+                        (unsigned long)(GetTickCount() - g_t0),
+                        GetCurrentThreadId(), s,
+                        (s[0] && s[strlen(s) - 1] == '\n') ? "" : "\n");
+                fclose(f);
+            }
+        }
+        LeaveCriticalSection(&g_odsCs);
+    }
+    if (g_odsOrig) g_odsOrig(s);
+}
+
+static int InstallDebugStringHook(void)
+{
+    DWORD  old;
+    void** slot = (void**)IAT_OUTPUTDEBUGSTRINGA;
+    if (g_odsOrig) return 1;
+    if (!Readable(slot, 4) || !Readable(*slot, 1)) return 0;
+    /* The CS must exist BEFORE the slot is swapped, or the first call through
+       the hook races the initialisation. It is initialised once per injection
+       and deliberately never deleted - see RemoveDebugStringHook. */
+    if (!g_odsCsInit) {
+        InitializeCriticalSection(&g_odsCs);
+        InterlockedExchange(&g_odsCsInit, 1);
+    }
+    if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) return 0;
+    g_odsOrig = (fnOutputDebugStringA)*slot;
+    g_odsOrigEver = g_odsOrig;              /* survives removal - see the decl */
+    *slot = (void*)hkOutputDebugStringA;
+    VirtualProtect(slot, sizeof(void*), old, &old);
+    logf_("[dbg ] OutputDebugStringA hooked (was %p)", g_odsOrig);
+    return 1;
+}
+
+static void RemoveDebugStringHook(void)
+{
+    DWORD  old;
+    void** slot = (void**)IAT_OUTPUTDEBUGSTRINGA;
+    if (!g_odsOrig) return;
+    if (Readable(slot, 4) && VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) {
+        *slot = (void*)g_odsOrig;
+        VirtualProtect(slot, sizeof(void*), old, &old);
+    } else {
+        /* We cannot take the hook out. Say so LOUDLY: this handler lives inside
+           a DLL that is about to be unmapped, and the next GFx or Dunia message
+           on any thread would call into nothing. The sweep will try again. */
+        logf_("[dbg ] *** COULD NOT restore the OutputDebugStringA IAT slot at %p"
+              " - the unload sweep will retry", (void*)slot);
+        return;                     /* keep g_odsOrig so the sweep can repair */
+    }
+    /* THE SLEEP HAS TO COVER THE STORE IT IS GUARDING - the same ordering bug
+       RemovePresentHook had. hkOutputDebugStringA ends with
+       `if (g_odsOrig) g_odsOrig(s);`, so a thread already inside the hook that
+       reads the pointer after we zero it silently swallows the message instead
+       of forwarding it. Restoring the slot stops new entries; the sleep drains
+       the ones in flight; only then is it safe to drop the pointer they read.
+       (Milder than the Present case - that one called address 0 - but it is the
+       same mistake and the fix is free.) */
+    Sleep(120);
+    g_odsOrig = 0;
+    /* g_odsCs is deliberately NOT deleted. The slot is restored and the in-flight
+       calls have drained, so nothing can enter the handler again - but the
+       handler's own guard is `if (s && g_odsCsInit)` followed by
+       EnterCriticalSection, which is check-then-act, and deleting a critical
+       section out from under that is exactly the g_snapCs shape this file has
+       already been bitten by. It is 24 bytes of our own static storage that goes
+       away with the mapping; there is nothing to reclaim and nothing to race. */
+    logf_("[dbg ] OutputDebugStringA restored");
+}
+
+/* ---- MULTI-INSTANCE: let a second copy of the game start -------------------
+   THE GATE, traced rather than guessed (Dunia.dll, preferred base 0x10000000):
+
+     1000554C  push 0x11010C14        ; "AvatarInstance" - a hardcoded literal
+     10005564  call 0x10003590        ; std::string::assign into a local
+     10005577  push eax               ; lpName
+     10005578  push ebx               ; bInheritHandle = FALSE
+     10005579  push 0x001F0001        ; MUTEX_ALL_ACCESS
+     1000557E  call [OpenMutexA]      ; <-- THE PROBE
+     10005584  cmp  eax, ebx
+     10005586  jnz  0x10006A01        ; <-- exists => bail
+     1000559D  call [CreateMutexA]    ; first instance claims it
+
+   and the branch target proves itself:
+
+     10006A0F  push 0x11010AE0        ; "ERROR_INSTANCE_MUTEX"
+
+   which is the Oasis string id behind "You already have a ... instance active
+   or left out after an unclean shutdown!" in
+   Data_Win32\patch0\languages\english\oasisstrings.rml.
+
+   So the WHOLE gate is one OpenMutexA result test. Return NULL for that one
+   name and the second instance proceeds: CreateMutexA then hands back a handle
+   to the existing mutex with ERROR_ALREADY_EXISTS, and nothing reads that.
+
+   WHY AN IAT SWAP AND NOT A BYTE PATCH. Patching the `jnz` at 0x10005586 works
+   and is six bytes, but it means editing Dunia.dll on disk - which this project
+   has a standing rule against, and which would apply to every launch including
+   the ones where the check is wanted. This is the same one-dword IAT swap the
+   OutputDebugStringA capture above uses, on the slot at 0x11000074.
+
+   WHY IT INSTALLS FROM DllMain. The check runs during Dunia's init, long before
+   a level exists - so Worker, which waits for g_console, is far too late. In
+   PROXY mode our DllMain runs while the loader is resolving Dunia's imports,
+   and KERNEL32 sits BEFORE DINPUT8 in Dunia's import descriptor list, so its
+   thunks - including this one - are already snapped when we get control. That
+   ordering is what makes this safe rather than a race.
+   Injected after the fact the check has already run, so this does nothing and
+   the log says so.
+
+   OPT-IN, never on by default. Either a marker file `avatar_multi.txt` next to
+   the DLL, or the environment variable AVATAR_MULTI_INSTANCE set to anything
+   but "0". Silently changing whether a game enforces single-instance is exactly
+   the kind of surprise that gets blamed on something else later.
+
+   The mutex name carries NO "Global\" prefix, so it lives in the caller's
+   session namespace - a genuinely separate Windows session already gets its own
+   copy and needs none of this.                                              */
+#define IAT_OPENMUTEXA_VA  0x11000074u          /* rebased at install */
+#define MULTI_MARKER       "avatar_multi.txt"
+#define MULTI_MUTEX_NAME   "AvatarInstance"
+
+typedef HANDLE (WINAPI *fnOpenMutexA)(DWORD, BOOL, LPCSTR);
+static fnOpenMutexA  g_omOrig     = 0;
+/* Never cleared - the unload sweep runs after RemoveHook has zeroed g_omOrig,
+   so a repair conditioned on it could not fire. Same defect and same fix as
+   g_rdPresentEver and g_odsOrigEver. */
+static fnOpenMutexA  g_omOrigEver = 0;
+static void**        g_omSlot     = 0;
+static volatile long g_multiOn    = 0;
+static volatile long g_omSwallow  = 0;
+static volatile long g_omSaid     = 0;
+
+static HANDLE WINAPI hkOpenMutexA(DWORD access, BOOL inherit, LPCSTR name)
+{
+    if (g_multiOn && name && _stricmp(name, MULTI_MUTEX_NAME) == 0) {
+        InterlockedIncrement(&g_omSwallow);
+        /* Logged ONCE. This can fire while the loader lock is held, and the log
+           is fopen/fprintf/fclose against the static CRT - safe, but not
+           something to do repeatedly or on a hot path. */
+        if (!InterlockedExchange(&g_omSaid, 1))
+            logf_("[mult] OpenMutexA(\"%s\") answered NOT FOUND - the "
+                  "single-instance gate is open for this process", name);
+        SetLastError(ERROR_FILE_NOT_FOUND);
+        return 0;
+    }
+    return g_omOrig ? g_omOrig(access, inherit, name) : 0;
+}
+
+/* -> 1 if the user asked for this. Checked before anything is touched. */
+static int MultiInstanceWanted(void)
+{
+    char path[MAX_PATH];
+    char env[16];
+    _snprintf(path, sizeof(path) - 1, "%s\\%s", g_dir, MULTI_MARKER);
+    path[sizeof(path) - 1] = 0;
+    if (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES) return 1;
+    env[0] = 0;
+    GetEnvironmentVariableA("AVATAR_MULTI_INSTANCE", env, sizeof(env));
+    return env[0] && env[0] != '0';
+}
+
+/* Called from DllMain - see the header above for why it cannot wait for Worker.
+   Deliberately silent: this runs under the loader lock, so the reporting is
+   left to Worker, which is a normal thread. */
+static int InstallMultiInstanceHook(void)
+{
+    HMODULE dunia;
+    unsigned long delta;
+    DWORD  old;
+    void** slot;
+
+    if (g_omOrig) return 1;
+    if (!MultiInstanceWanted()) return 0;
+
+    dunia = GetModuleHandleA("Dunia.dll");
+    if (!dunia) return 0;
+    delta = (unsigned long)(ULONG_PTR)dunia - DUNIA_PREFERRED;
+    slot  = (void**)(IAT_OPENMUTEXA_VA + delta);
+    /* Both halves matter: the slot must be mapped, and it must already hold a
+       real function - if the loader has not snapped this thunk yet we would be
+       writing a value it is about to overwrite. */
+    if (!Readable(slot, 4) || !Readable(*slot, 1)) return 0;
+    if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) return 0;
+    g_omOrig     = (fnOpenMutexA)*slot;
+    g_omOrigEver = g_omOrig;
+    g_omSlot     = slot;
+    *slot = (void*)hkOpenMutexA;
+    VirtualProtect(slot, sizeof(void*), old, &old);
+    InterlockedExchange(&g_multiOn, 1);
+    return 1;
+}
+
+static void RemoveMultiInstanceHook(void)
+{
+    DWORD old;
+    if (!g_omOrig || !g_omSlot) return;
+    if (Readable(g_omSlot, 4) &&
+        VirtualProtect(g_omSlot, sizeof(void*), PAGE_READWRITE, &old)) {
+        *g_omSlot = (void*)g_omOrig;
+        VirtualProtect(g_omSlot, sizeof(void*), old, &old);
+    } else {
+        logf_("[mult] *** COULD NOT restore the OpenMutexA IAT slot at %p - the "
+              "unload sweep will retry", (void*)g_omSlot);
+        return;                       /* keep g_omOrig so the sweep can repair */
+    }
+    /* Restore the slot, drain what is in flight, THEN drop the pointer those
+       in-flight calls read - the ordering the Present and debug-string hooks
+       both had to be fixed for. */
+    InterlockedExchange(&g_multiOn, 0);
+    Sleep(120);
+    g_omOrig = 0;
+    logf_("[mult] OpenMutexA restored (%ld probe(s) answered NOT FOUND)",
+          (long)g_omSwallow);
+}
+
+/* ---- PER-INSTANCE GAMER PROFILE ------------------------------------------
+   THE SECOND GATE. Opening the single-instance mutex lets two games RUN; it
+   does not let them play together, because both read the same
+
+       Documents\My Games\Avatar\GamerProfile.xml
+
+   whose identity is one line:
+
+       <Accounts><Account Name="Jasper" Pass="4B91C8A741C4D946" Active="1" /></Accounts>
+
+   Both instances therefore sign in as the same player and the session layer
+   kicks the first one:
+
+       E_SESSION_ERROR_ACCOUNT_KICKED_BY_DUPLICATE_LOGON
+       "You have been returned to the main menu because another person signed
+        in using your account."
+
+   (Oasis id, next to a block of E_SESSION_ERROR_RENDEZVOUS_* strings - this is
+   Ubisoft's Rendez-Vous session layer, and it is identity-based.)
+
+   So instance 2 gets its own profile file, and therefore its own account.
+
+   WHERE THE SEAM IS. `"\GamerProfile.xml"` is a literal at 0x110ABEF0,
+   concatenated onto a folder path at 0x107334D4 - that code only BUILDS the
+   string, it does not open it. Dunia's imports show exactly ONE CreateFileW
+   call site (0x100F0306) and five CreateFileA sites, i.e. the engine funnels
+   file opens through a small number of wrappers. Both are hooked here.
+
+   AND IT REPORTS WHAT IT SEES. Whether the profile is opened through
+   CreateFileW, CreateFileA, or the CRT's fopen (which would resolve inside
+   MSVCR80's own import table and NOT through Dunia's, so these hooks would miss
+   it) was not settled by reading. Rather than guess, the hooks log the first
+   few paths containing "GamerProfile" whether or not they redirect. One launch
+   then answers it: a redirect line means it worked, a "seen but not redirected"
+   line means the tail match is wrong, and silence means it is fopen and the
+   hook has to move to MSVCR80.
+
+   INSTANCE NUMBER. Not a counter in a file - a file would go stale the moment
+   a game crashed. Each process claims the lowest free mutex of its own, holds
+   it for its lifetime, and the OS reclaims it on exit however the process died.
+   Instance 1 keeps the stock profile, so a normal single launch is untouched.  */
+#define PROFILE_LEAF_W   L"GamerProfile.xml"
+#define PROFILE_LEAF_A   "GamerProfile.xml"
+#define INST_MUTEX_FMT   "AvatarConsoleInst%d"
+#define INST_MAX         8
+
+static volatile long g_instIndex  = 1;   /* 1 = first game; 2+ = redirect */
+static HANDLE        g_instMutex  = 0;
+static volatile long g_profSaid   = 0;   /* how many diagnostic lines spent */
+
+typedef HANDLE (WINAPI *fnCreateFileW)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES,
+                                       DWORD, DWORD, HANDLE);
+typedef HANDLE (WINAPI *fnCreateFileA)(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES,
+                                       DWORD, DWORD, HANDLE);
+static fnCreateFileW g_cfwOrig = 0, g_cfwOrigEver = 0;
+static fnCreateFileA g_cfaOrig = 0, g_cfaOrigEver = 0;
+static void**        g_cfwSlot = 0;
+static void**        g_cfaSlot = 0;
+
+/* Claim the lowest free instance slot and HOLD it. -> 1..INST_MAX */
+static int ClaimInstanceIndex(void)
+{
+    int i;
+    for (i = 1; i <= INST_MAX; ++i) {
+        char nm[64];
+        HANDLE h;
+        _snprintf(nm, sizeof(nm) - 1, INST_MUTEX_FMT, i);
+        nm[sizeof(nm) - 1] = 0;
+        h = CreateMutexA(0, TRUE, nm);
+        if (h && GetLastError() != ERROR_ALREADY_EXISTS) {
+            g_instMutex = h;                  /* held until the process dies */
+            return i;
+        }
+        if (h) CloseHandle(h);
+    }
+    return 1;                                  /* too many: behave like the first */
+}
+
+/* Case-insensitive "does this wide path end with GamerProfile.xml". */
+static int TailIsProfileW(const wchar_t* p, size_t* pLeafAt)
+{
+    size_t n, k;
+    if (!p) return 0;
+    n = wcslen(p);
+    k = wcslen(PROFILE_LEAF_W);
+    if (n < k) return 0;
+    if (_wcsicmp(p + (n - k), PROFILE_LEAF_W) != 0) return 0;
+    if (pLeafAt) *pLeafAt = n - k;
+    return 1;
+}
+
+static int TailIsProfileA(const char* p, size_t* pLeafAt)
+{
+    size_t n, k;
+    if (!p) return 0;
+    n = strlen(p);
+    k = strlen(PROFILE_LEAF_A);
+    if (n < k) return 0;
+    if (_stricmp(p + (n - k), PROFILE_LEAF_A) != 0) return 0;
+    if (pLeafAt) *pLeafAt = n - k;
+    return 1;
+}
+
+/* Set attr="..." to a decimal value, in place. -> the new length.
+
+   `buf` must have `cap` bytes of room; the value can grow (9000 -> 10000) so the
+   caller allocates headroom rather than assuming lengths match. A missing
+   attribute is not an error - it just returns the length unchanged, because the
+   profile schema differs slightly between builds and a missing port is far less
+   bad than refusing to write the file at all. */
+static long SetXmlAttrLong(char* buf, long len, long cap,
+                           const char* attr, long value)
+{
+    char  needle[64], repl[32];
+    char *p, *valStart, *q;
+    long  alen, vlen, oldLen, tail;
+
+    _snprintf(needle, sizeof(needle) - 1, "%s=\"", attr);
+    needle[sizeof(needle) - 1] = 0;
+    p = strstr(buf, needle);
+    if (!p) return len;
+    alen = (long)strlen(needle);
+    valStart = p + alen;
+    q = strchr(valStart, '"');
+    if (!q) return len;
+    oldLen = (long)(q - valStart);
+    _snprintf(repl, sizeof(repl) - 1, "%ld", value);
+    repl[sizeof(repl) - 1] = 0;
+    vlen = (long)strlen(repl);
+    if (len - oldLen + vlen + 1 >= cap) return len;      /* refuse to overflow */
+    tail = len - (long)(q - buf) + 1;                    /* includes the NUL */
+    memmove(valStart + vlen, q, (size_t)tail);
+    memcpy(valStart, repl, (size_t)vlen);
+    return len - oldLen + vlen;
+}
+
+/* Strip every <Account .../> out of a freshly seeded profile.
+
+   THE COPY IS NOT ENOUGH, and this is the bug the first version shipped with.
+   Seeding by plain copy carries the original's identity across verbatim:
+
+       <Accounts><Account Name="Jasper" Pass="..." Active="1" /></Accounts>
+
+   which is precisely the duplicate that gets instance 1 kicked with
+   E_SESSION_ERROR_ACCOUNT_KICKED_BY_DUPLICATE_LOGON. A per-instance profile
+   holding the same account is no better than sharing one file.
+
+   So the copy keeps the parts that are worth keeping - video settings, the whole
+   key-binding table, network ports - and loses the accounts, leaving
+   <Accounts></Accounts> empty. The game then treats instance 2 as a machine
+   with no account yet and lets you create one.
+
+   Textual rather than a real XML parse, deliberately: the edit is "delete every
+   self-closing <Account ...  /> element", the file is a few KB of ASCII we
+   ourselves just copied, and pulling in a parser to delete one element would be
+   more code and more to get wrong. Compaction is in-place and safe because the
+   write index never overtakes the read pointer.
+
+   The password field is NOT reused or transplanted. It is a stored credential;
+   the point here is a different account, and the game writes its own when one
+   is created. */
+static void StripAccountsW(const wchar_t* path)
+{
+    FILE* f;
+    long  n, cap, out = 0, removed = 0, base;
+    char* buf;
+    char* p;
+
+    f = _wfopen(path, L"rb");
+    if (!f) return;
+    fseek(f, 0, SEEK_END);
+    n = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (n <= 0 || n > 4 * 1024 * 1024) { fclose(f); return; }
+    /* Headroom, not n+1: SetXmlAttrLong below can GROW the file (a port
+       value going from 4 digits to 5), and a buffer sized exactly to the input
+       would have nowhere to put it. */
+    cap = n + 256;
+    buf = (char*)malloc((size_t)cap);
+    if (!buf) { fclose(f); return; }
+    if (fread(buf, 1, (size_t)n, f) != (size_t)n) { fclose(f); free(buf); return; }
+    fclose(f);
+    buf[n] = 0;
+
+    p = buf;
+    while (*p) {
+        if (strncmp(p, "<Account ", 9) == 0) {
+            char* q = strstr(p, "/>");
+            if (q) {
+                p = q + 2;
+                while (*p == '\r' || *p == '\n') ++p;          /* and its line */
+                while (out > 0 && (buf[out - 1] == '\t' ||
+                                   buf[out - 1] == ' ')) --out; /* and its indent */
+                ++removed;
+                continue;
+            }
+        }
+        buf[out++] = *p++;
+    }
+
+    buf[out] = 0;
+
+    /* GIVE THIS INSTANCE ITS OWN PORTS.
+       Every profile ships with OnlineEnginePort=9000, OnlineServicePort=9001,
+       ScanFreePorts=1, ScanPortStart=9000, ScanPortRange=1000. Two instances
+       therefore both want 9000/9001; the second finds them taken and SCANS -
+       up to a thousand ports - and it does that while the lobby is polling for
+       sessions. That is a lobby-only cost that disappears once a match is
+       running, which matches the reported symptom exactly: laggy in the lobby,
+       smooth in game.
+
+       Rendering was ruled out first - if two instances were fighting over the
+       GPU, gameplay would be WORSE than a menu, not better.
+
+       100 apart so each instance keeps a clean block and the scan range never
+       has to walk into its neighbour's.
+
+       HYPOTHESIS, not a measurement: it fits the evidence and costs nothing, but
+       nobody has profiled the lobby. If the stall survives this, the next
+       suspect is the session layer retrying dead Rendez-Vous endpoints. */
+    base = 9000 + (g_instIndex - 1) * 100;
+    out = SetXmlAttrLong(buf, out, cap, "OnlineEnginePort",  base);
+    out = SetXmlAttrLong(buf, out, cap, "OnlineServicePort", base + 1);
+    out = SetXmlAttrLong(buf, out, cap, "ScanPortStart",     base);
+
+    f = _wfopen(path, L"wb");
+    if (f) {
+        fwrite(buf, 1, (size_t)out, f);
+        fclose(f);
+        logf_("[prof] seeded profile prepared: %ld account(s) stripped, ports "
+              "moved to %ld/%ld - instance %ld needs its own account, created "
+              "in the game's account screen",
+              removed, base, base + 1, (long)g_instIndex);
+    } else {
+        logf_("[prof] *** could not rewrite the seeded profile - instance %ld "
+              "will collide with instance 1 on both account and ports",
+              (long)g_instIndex);
+    }
+    free(buf);
+}
+
+/* Seed instance N's profile from instance 1's the first time it is asked for.
+   Copying rather than starting empty: the file also carries video settings and
+   the whole key-binding table, and a blank one would drop all of it. The
+   accounts are then stripped - see StripAccountsW for why that half matters. */
+static void SeedProfileW(const wchar_t* src, const wchar_t* dst)
+{
+    if (GetFileAttributesW(dst) != INVALID_FILE_ATTRIBUTES) return;
+    if (GetFileAttributesW(src) == INVALID_FILE_ATTRIBUTES) return;
+    if (CopyFileW(src, dst, TRUE)) {
+        logf_("[prof] seeded instance %ld's profile from the original",
+              (long)g_instIndex);
+        StripAccountsW(dst);
+    }
+}
+
+static HANDLE WINAPI hkCreateFileW(LPCWSTR name, DWORD acc, DWORD share,
+                                   LPSECURITY_ATTRIBUTES sa, DWORD disp,
+                                   DWORD flags, HANDLE tmpl)
+{
+    size_t at;
+    if (name && TailIsProfileW(name, &at)) {
+        if (g_instIndex > 1) {
+            wchar_t alt[MAX_PATH * 2];
+            if (at < (sizeof(alt) / sizeof(alt[0])) - 32) {
+                wcsncpy(alt, name, at);
+                alt[at] = 0;
+                _snwprintf(alt + at, (sizeof(alt) / sizeof(alt[0])) - at - 1,
+                           L"GamerProfile%ld.xml", (long)g_instIndex);
+                alt[(sizeof(alt) / sizeof(alt[0])) - 1] = 0;
+                SeedProfileW(name, alt);
+                if (g_profSaid < 4) {
+                    InterlockedIncrement(&g_profSaid);
+                    logf_("[prof] CreateFileW redirected -> %S", alt);
+                }
+                return g_cfwOrig(alt, acc, share, sa, disp, flags, tmpl);
+            }
+        }
+        if (g_profSaid < 4) {
+            InterlockedIncrement(&g_profSaid);
+            logf_("[prof] CreateFileW saw the profile (instance %ld, not "
+                  "redirected): %S", (long)g_instIndex, name);
+        }
+    }
+    return g_cfwOrig(name, acc, share, sa, disp, flags, tmpl);
+}
+
+static HANDLE WINAPI hkCreateFileA(LPCSTR name, DWORD acc, DWORD share,
+                                   LPSECURITY_ATTRIBUTES sa, DWORD disp,
+                                   DWORD flags, HANDLE tmpl)
+{
+    size_t at;
+    if (name && TailIsProfileA(name, &at)) {
+        if (g_instIndex > 1) {
+            char alt[MAX_PATH * 2];
+            if (at < sizeof(alt) - 32) {
+                memcpy(alt, name, at);
+                _snprintf(alt + at, sizeof(alt) - at - 1,
+                          "GamerProfile%ld.xml", (long)g_instIndex);
+                alt[sizeof(alt) - 1] = 0;
+                if (g_profSaid < 4) {
+                    InterlockedIncrement(&g_profSaid);
+                    logf_("[prof] CreateFileA redirected -> %s", alt);
+                }
+                return g_cfaOrig(alt, acc, share, sa, disp, flags, tmpl);
+            }
+        }
+        if (g_profSaid < 4) {
+            InterlockedIncrement(&g_profSaid);
+            logf_("[prof] CreateFileA saw the profile (instance %ld, not "
+                  "redirected): %s", (long)g_instIndex, name);
+        }
+    }
+    return g_cfaOrig(name, acc, share, sa, disp, flags, tmpl);
+}
+
+#define IAT_CREATEFILEW_VA 0x11000138u
+#define IAT_CREATEFILEA_VA 0x110000E4u
+
+static int HookIatSlot(unsigned long va, void* hook, void** saveOrig,
+                       void*** saveSlot)
+{
+    HMODULE dunia = GetModuleHandleA("Dunia.dll");
+    unsigned long delta;
+    void** slot;
+    DWORD old;
+    if (!dunia) return 0;
+    delta = (unsigned long)(ULONG_PTR)dunia - DUNIA_PREFERRED;
+    slot = (void**)(va + delta);
+    if (!Readable(slot, 4) || !Readable(*slot, 1)) return 0;
+    if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) return 0;
+    *saveOrig = *slot;
+    *saveSlot = slot;
+    *slot = hook;
+    VirtualProtect(slot, sizeof(void*), old, &old);
+    return 1;
+}
+
+/* Called from DllMain, right after the multi-instance hook and for the same
+   reason: the profile is read during startup. */
+static void InstallProfileRedirect(void)
+{
+    if (!MultiInstanceWanted()) return;
+    InterlockedExchange(&g_instIndex, ClaimInstanceIndex());
+    /* Hook both regardless of index - instance 1 redirects nothing, but its
+       hooks are what tell us WHICH api the profile arrives on. */
+    if (HookIatSlot(IAT_CREATEFILEW_VA, (void*)hkCreateFileW,
+                    (void**)&g_cfwOrig, &g_cfwSlot))
+        g_cfwOrigEver = g_cfwOrig;
+    if (HookIatSlot(IAT_CREATEFILEA_VA, (void*)hkCreateFileA,
+                    (void**)&g_cfaOrig, &g_cfaSlot))
+        g_cfaOrigEver = g_cfaOrig;
+}
+
+static void RemoveProfileRedirect(void)
+{
+    DWORD old;
+    if (g_cfwSlot && g_cfwOrig) {
+        if (Readable(g_cfwSlot, 4) &&
+            VirtualProtect(g_cfwSlot, sizeof(void*), PAGE_READWRITE, &old)) {
+            *g_cfwSlot = (void*)g_cfwOrig;
+            VirtualProtect(g_cfwSlot, sizeof(void*), old, &old);
+            Sleep(60);
+            g_cfwOrig = 0;
+        } else {
+            logf_("[prof] *** COULD NOT restore the CreateFileW IAT slot");
+        }
+    }
+    if (g_cfaSlot && g_cfaOrig) {
+        if (Readable(g_cfaSlot, 4) &&
+            VirtualProtect(g_cfaSlot, sizeof(void*), PAGE_READWRITE, &old)) {
+            *g_cfaSlot = (void*)g_cfaOrig;
+            VirtualProtect(g_cfaSlot, sizeof(void*), old, &old);
+            Sleep(60);
+            g_cfaOrig = 0;
+        } else {
+            logf_("[prof] *** COULD NOT restore the CreateFileA IAT slot");
+        }
+    }
+    if (g_instMutex) { CloseHandle(g_instMutex); g_instMutex = 0; }
+}
+
+
+
+/* ---- pawntype: Avatar <-> RDA soldier ----------------------------------
+   The link bed's body swap is a real shipped mechanism, not scripted set
+   dressing. `[0x112225D8]+0x40` is the pawn-type selector (1 = Avatar,
+   2 = Soldier, confirmed against shipped Lua), and `CPlayerService::
+   GetPawnArchetypeRef` maps it to one of the four MainCharacter.PawnPlayer*
+   archetypes. `SwitchPawntype` (0x1092AAE0) is live code - not the folded stub
+   at 0x10628B20 - and its body is a single byte write that the following frame
+   turns into a toggle between the two.
+
+   We call the engine's own function rather than writing the selector, so the
+   rebuild happens the way the game does it. UNTESTED: the calling convention is
+   recorded as nullary, hence the SEH. */
+#define FN_SWITCHPAWNTYPE (0x1092AAE0u + g_rebase)
+#define OFF_PAWNTYPE_SEL  0x40
+
+typedef void (__cdecl *fnSwitchPawnType)(void);
+
+static void PawnType(void* console)
+{
+    void* game = *(void**)G_GAMEOBJ_PP;
+    unsigned long before;
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+
+    if (!Readable(game, OFF_PAWNTYPE_SEL + 4)) {
+        P_(console, 0, AC "pawntype: no game object - load a save first\n"); return;
+    }
+    before = *(unsigned long*)((char*)game + OFF_PAWNTYPE_SEL);
+    P_(console, 0, AC "pawntype: currently %lu (%s)\n", before,
+       (before == 1) ? "Avatar" : (before == 2) ? "RDA soldier" : "unknown");
+
+    if (!Readable((const void*)FN_SWITCHPAWNTYPE, 8)) {
+        P_(console, 0, AC "pawntype: SwitchPawntype not readable\n"); return;
+    }
+    __try { ((fnSwitchPawnType)FN_SWITCHPAWNTYPE)(); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        P_(console, 0, AC "pawntype: SwitchPawntype faulted - caught\n");
+        logf_("[pawn] SwitchPawntype faulted"); return;
+    }
+    logf_("[pawn] SwitchPawntype called, selector was %lu", before);
+    P_(console, 0, AC
+       "pawntype: switch requested - the swap happens on the next frame.\n"
+       "  Run 'pawntype' again to read the new value.\n");
+}
+
+static void AnimInfo(void* console)
+{
+    void* mgr = *(void**)G_RESOURCEMGR;
+    void* graph;
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+
+    if (!Readable(mgr, OFF_MGR_GRAPH + 4)) {
+        P_(console, 0, AC "animinfo: no resource manager\n"); return;
+    }
+    graph = *(void**)((char*)mgr + OFF_MGR_GRAPH);
+    if (!Readable(graph, 0x30)) {
+        P_(console, 0, AC
+           "animinfo: mgr=%p graph=%p UNREADABLE\n"
+           "  If the graph is gone, every animation container created from now on\n"
+           "  comes up empty - which is what a pawn that cannot walk looks like.\n",
+           mgr, graph);
+        return;
+    }
+    {
+        unsigned long nodes   = *(unsigned long*)((char*)graph + 0x04);
+        unsigned long edges   = *(unsigned long*)((char*)graph + 0x10);
+        unsigned long classes = *(unsigned long*)((char*)graph + 0x28);
+        P_(console, 0, AC
+           "animinfo: mgr=%p graph=%p\n  nodes=%lu edges=%lu classes=%lu\n%s",
+           mgr, graph, nodes, edges, classes,
+           (nodes == 0)
+             ? "  *** NODES = 0 - the index was freed after the world load.\n"
+               "      Anything created after that gets an EMPTY animation package,\n"
+               "      and the empty result is cached. This would explain a pawn\n"
+               "      that animates but never translates.\n"
+             : "  The graph is populated, so this is NOT the cause.\n");
+        logf_("[anim] mgr=%p graph=%p nodes=%lu edges=%lu classes=%lu",
+              mgr, graph, nodes, edges, classes);
+    }
+}
+
+static void ActMapInfo(void* console)
+{
+    void*  lst = *(void**)PLAYERLIST_PTR;
+    void** arr;
+    void  *elem, *inner;
+    char*  holder;
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    int i;
+
+    if (!Readable(lst, 0x10) || *(unsigned long*)((char*)lst + 8) == 0) {
+        P_(console, 0, AC "actmap: no player\n"); return;
+    }
+    arr = *(void***)((char*)lst + 4);
+    if (!Readable(arr, 4)) { P_(console, 0, AC "actmap: no array\n"); return; }
+    elem = arr[0];
+    if (!Readable(elem, 8)) { P_(console, 0, AC "actmap: no element\n"); return; }
+    inner = *(void**)((char*)elem + 4);
+    if (!Readable(inner, OFF_PLAYER_INPUT + 0x40)) {
+        P_(console, 0, AC "actmap: no input holder on the CPlayer\n"); return;
+    }
+    holder = (char*)inner + OFF_PLAYER_INPUT;
+
+    P_(console, 0, AC "actmap: holder=%p (CPlayer+0x%X)\n", holder, OFF_PLAYER_INPUT);
+    for (i = 0; i < 0x30; i += 4) {
+        unsigned long v = *(unsigned long*)(holder + i);
+        P_(console, 0, AC "  +0x%02X = %08lX%s\n", i, v,
+           (v && Readable((const void*)v, 4)) ? "  (readable ptr)" : "");
+    }
+    {   /* documented candidate: array at +0x14, count at +0x18 */
+        void* a = *(void**)(holder + 0x14);
+        unsigned long n = *(unsigned long*)(holder + 0x18);
+        P_(console, 0, AC "  candidate stack: arr=%p count=%lu%s\n", a, n,
+           (n == 0) ? "   <<< EMPTY - nothing pushed, which would explain no input" : "");
+        /* The entries are POINTERS, not CRCs (189A7580 is plainly an address), so
+           dump each one's head. A pushed map that is the wrong map looks exactly
+           like a missing map from the outside, and the identity is in there. */
+        if (a && n && n <= 32 && Readable(a, n * 4)) {
+            for (i = 0; i < (int)n; ++i) {
+                unsigned long e = ((unsigned long*)a)[i];
+                P_(console, 0, AC "    [%d] %08lX\n", i, e);
+                if (e && Readable((const void*)e, 0x20)) {
+                    int k;
+                    for (k = 0; k < 0x20; k += 4) {
+                        unsigned long w = *(unsigned long*)((const char*)e + k);
+                        const char* asStr = "";
+                        /* a plausible name pointer is worth surfacing */
+                        if (w && Readable((const void*)w, 1) &&
+                            *(const char*)w >= 32 && *(const char*)w < 127)
+                            asStr = (const char*)w;
+                        P_(console, 0, AC "        +0x%02X = %08lX %s\n", k, w, asStr);
+                    }
+                }
+            }
+        }
+    }
+    logf_("[actmap] holder=%p +0x14=%p +0x18=%lu", holder,
+          *(void**)(holder + 0x14), *(unsigned long*)(holder + 0x18));
+}
+
+static void MountInfo(void* console)
+{
+    void* ent = g_lastSpawn ? g_lastSpawn : GetPlayerEntity();
+    void* comp = 0;
+    const char* which = g_lastSpawn ? "last spawned entity" : "player";
+
+    if (!Readable(ent, 0x100)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "mountinfo: nothing to inspect\n"); return;
+    }
+    __try { comp = ((fnGetComponent)FN_GET_COMPONENT)(ent, (const void*)CID_HYBRID_ANIMAL); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "mountinfo: GetComponent faulted\n"); return;
+    }
+
+    if (!Readable(comp, OFF_DRIVING_MAP + 0x20)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "mountinfo: %s has no CBtzHybridAnimal - not rideable by that route\n", which);
+        logf_("[mount] %s: no hybrid-animal component", which);
+        return;
+    }
+    {   /* CryStringBase, small-string optimisation on capacity */
+        char* base = (char*)comp + OFF_DRIVING_MAP;
+        int   cap  = *(int*)(base + 0x18);
+        int   len  = *(int*)(base + 0x14);
+        const char* nm = (cap >= 0x10) ? *(char**)(base + 4) : (base + 4);
+        if (!Readable(nm, 1)) nm = "";
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "mountinfo: %s HAS the mount component.\n"
+            "  driving action map: \"%s\" (len %d)\n%s",
+            which, nm, len,
+            (len > 0) ? "  It should be controllable once mounted.\n"
+                      : "  EMPTY - you would mount it and have no controls.\n");
+        logf_("[mount] %s: hybrid-animal comp=%p map=\"%s\" len=%d", which, comp, nm, len);
+    }
+}
+
+/* ---- planets: read-only probe ------------------------------------------
+   The sky planet is drawn with a matrix whose translation IS the camera
+   position (SKYBOX.md), so it can never be flown to. What CAN be touched is the
+   CPlanetComponent registry - if the campaign's Polyphemus is a planet entity
+   rather than a billboard, its radius is at component+0x114.
+
+   READ ONLY. Spawning a planet into a level with no planets-environment is an
+   immediate access violation (0x10409280 dereferences the accessor's result
+   with no null check), so this exists to answer the question WITHOUT taking
+   that risk. */
+#define G_PLANET_REG   (0x111789C8u + g_rebase)
+#define OFF_PLANET_RAD 0x114
+
+static void PlanetInfo(void* console)
+{
+    void*  reg = (void*)G_PLANET_REG;
+    void*  container;
+    void** slots;
+    unsigned long n, i, live = 0;
+
+    if (!Readable(reg, 0x10)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "planets: registry not readable\n"); return;
+    }
+    container = *(void**)((char*)reg + 0x0C);
+    if (!Readable(container, 8)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "planets: no container - none in this level\n");
+        return;
+    }
+    slots = *(void***)container;
+    n     = *(unsigned long*)((char*)container + 4);
+    if (n > 4096 || !Readable(slots, (SIZE_T)n * 4)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "planets: container looks wrong (n=%lu)\n", n);
+        return;
+    }
+    for (i = 0; i < n; ++i) {
+        void* c = slots[i];
+        if (!Readable(c, OFF_PLANET_RAD + 4)) continue;
+        ++live;
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "  [%lu] %p  radius %.1f\n",
+                              i, c, *(float*)((char*)c + OFF_PLANET_RAD));
+    }
+    logf_("[planets] %lu slot(s), %lu live", n, live);
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "planets: %lu slot(s), %lu live.\n"
+        "  The sky planet is drawn at the camera's own position, so it can never\n"
+        "  be reached - only resized. Do NOT spawn a Planets.* archetype unless\n"
+        "  this reports live components; it crashes without a planets environment.\n",
+        n, live);
+}
+
+/* ---- save ---------------------------------------------------------------
+   The whole of BtzGame:Autosave() (0x1092A740) is this one store. The autosave
+   tick polls the flag, queues request 1, and a later frame drains it into
+   CGameFilesService::SaveGameFile - asynchronous, self-gating, no arguments. */
+#define G_SAVEFLAG_OWNER (0x112225D8u + g_rebase)   /* one writer in the whole image */
+#define OFF_SAVE_REQUEST 0x58
+
+/* Set by warp. A save written after a world change records the DESTINATION's
+   state under the ORIGIN's level label - the save system takes the level from its
+   own field, which our warp does not update. The result loads the wrong world and
+   then applies state that does not belong to it, and crashes. One such save has
+   already been produced. Blocking this is worth more than the convenience. */
+static volatile long g_warpedThisSession = 0;
+
+static void RequestSave(void* console)
+{
+    void* owner = *(void**)G_SAVEFLAG_OWNER;
+
+    if (g_warpedThisSession) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "save: REFUSED - you have warped this session.\n"
+            "  The save system records the level from its own field, which warp\n"
+            "  does not update, so the file would say one world and contain\n"
+            "  another. That save loads the wrong level and then crashes.\n"
+            "  This has already happened once. Restart the game to save normally.\n"
+            "  'save force' overrides, and will probably cost you the slot.\n");
+        logf_("[save] refused - warped this session");
+        return;
+    }
+    if (!Readable(owner, OFF_SAVE_REQUEST + 1)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "save: not available - are you loaded into a game?\n");
+        return;
+    }
+    *(unsigned char*)((char*)owner + OFF_SAVE_REQUEST) = 1;
+    logf_("[save] autosave requested via %p+0x%X", owner, OFF_SAVE_REQUEST);
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "save: autosave requested - it completes over the next few frames.\n"
+        "  NOTE: this OVERWRITES your current slot, exactly like a checkpoint.\n"
+        "  There is no scratch slot; copy Documents\\My Games\\Avatar\\Saved Games\n"
+        "  if you want something to fall back to.\n");
+}
+
+/* Does a GAME-RELATIVE path exist as a loose file?
+   The engine's loader FAULTS on a file it cannot open rather than returning
+   false - that is how a simple "I forgot to copy it" turned into a caught crash
+   and a restart. So check first. The Data root is derived from the running
+   exe: <install>\bin\Avatar.exe -> <install>\Data_Win32\Data.
+
+   Returns 1 found, 0 definitely absent, -1 could not tell (in which case the
+   caller should NOT block - the file may be inside patch.pak, which we cannot
+   see from here). */
+static int LooseFileExists(const char* rel)
+{
+    /* TWO loose roots, in the engine's own precedence order. `Data_Win32\Patch`
+       is a directory - not just patch.pak - that mirrors Data and SHADOWS it.
+       That is where an override belongs, and it needs no repacking: drop the
+       file in and the engine prefers it over the shipped one. Checking Data
+       only is what made a correctly-placed file look missing. */
+    static const char* roots[2] = { "Patch", "Data" };
+    char exe[MAX_PATH], full[MAX_PATH];
+    char* cut;
+    int   i;
+    if (!GetModuleFileNameA(0, exe, sizeof(exe) - 1)) return -1;
+    exe[sizeof(exe) - 1] = 0;
+    cut = strrchr(exe, '\\');
+    if (!cut) return -1;
+    *cut = 0;                                   /* drop \Avatar.exe   */
+    cut = strrchr(exe, '\\');
+    if (!cut) return -1;
+    *cut = 0;                                   /* drop \bin          */
+
+    for (i = 0; i < 2; ++i) {
+        FILE* f;
+        _snprintf(full, sizeof(full) - 1, "%s\\Data_Win32\\%s\\%s",
+                  exe, roots[i], rel);
+        full[sizeof(full) - 1] = 0;
+        f = fopen(full, "rb");
+        if (f) { fclose(f); logf_("[merge] found loose: %s", full); return 1; }
+        logf_("[merge] not at: %s", full);
+    }
+    return 0;
+}
+
+/* Merge one entity library file into the live archetype table.
+   Shared by `spawn_all` (which merges the world's own full library) and
+   `mergelib <path>` (which merges any file we hand it - that is how an EDITED
+   archetype gets in front of the engine without touching a single game file).
+
+   Re-registering a name that already exists overwrites that ONE map slot in
+   place: no duplicate key, no leak, no table corruption (SPAWN_CROSSLEVEL.md
+   2.3, confirmed from the disassembly). That is what makes this a delivery
+   mechanism for a fixed archetype rather than only an additive one.
+
+   Returns 1 if the manager took the library. */
+static int MergeLibPath(void* console, const char* path, const char* who)
+{
+    void* mgr = ArchManager();
+    void* fcb;
+    void* handle;
+    unsigned long before, after, mapBefore, mapAfter;
+
+    if (!mgr) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "%s: no archetype manager - load a level first\n", who);
+        return 0;
+    }
+    before    = *(unsigned long*)((char*)mgr + OFF_MGR_VEC_COUNT);
+    mapBefore = *(unsigned long*)((char*)mgr + ARCH_LIST_COUNT);
+    if (before == 0 || before > 64) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "%s: no library loaded yet (%lu) - load a level first\n", who, before);
+        return 0;
+    }
+
+    ((fnPrintf)FN_PRINTF)(console, 0, AC "%s: merging %s ...\n", who, path);
+    logf_("[merge] %s (vec=%lu map=%lu)", path, before, mapBefore);
+
+    __try {
+        fcb = ((fnAlloc)FN_ALLOC)(0x10, 0);
+        if (!Readable(fcb, 0x10)) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC "%s: allocation failed\n", who);
+            return 0;
+        }
+        ((fnFcbCtor)FN_FCB_CTOR)(fcb);
+        if (*(unsigned long*)fcb != VT_FCBFILE) {
+            logf_("[merge] ctor gave vtable %08lX, expected %08lX",
+                  *(unsigned long*)fcb, (unsigned long)VT_FCBFILE);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "%s: library object did not construct as expected - aborted\n", who);
+            return 0;                     /* deliberately leaked: state unknown */
+        }
+        *(unsigned long*)((char*)fcb + OFF_FCB_REFCOUNT) = 1;
+
+        {   /* a missing or malformed file is a clean false, not a fault */
+            void** vt = *(void***)fcb;
+            if (!Readable(vt, FCB_VT_LOAD + 4) ||
+                !((fnFcbLoad)vt[FCB_VT_LOAD / 4])(fcb, path)) {
+                ReleaseFcb(fcb);
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "%s: could not load %s\n", who, path);
+                return 0;
+            }
+        }
+
+        /* ---- DID THE ENGINE ACTUALLY PARSE OUR BYTES? ----------------------
+           Three merges in a row reported "map 775 -> 775" while the library
+           VECTOR grew 2 -> 3 -> 4. So the file was accepted as a library and
+           contributed no archetypes - and two very different things look
+           identical from out here:
+
+             - the engine parsed it and found no prototypes  (our file is wrong)
+             - the engine never read our bytes at all        (path resolved to
+               nothing, or Load returned true without loading)
+
+           AddLibrary's registrar 0x101F2DE0 walks the tree with two vtable slots,
+           so walk the same way BEFORE handing anything over:
+
+             [vt+0x14]  int   GetChildCount()        (0x101F2E2B, 0x101F2F3C)
+             [vt+0x18]  Node* GetChild(int index)    (0x101F2E38, 0x101F2F4C)
+
+           The registrar then requires an "Entity" child on each grandchild and
+           reads `hidName` from it. Printing both counts says exactly where our
+           tree stops matching what it expects - or that there is no tree. */
+        {
+            typedef int   (__thiscall *fnChildCount)(void* node);
+            typedef void* (__thiscall *fnGetChild)(void* node, int idx);
+            void** vt = *(void***)fcb;
+            int    n0 = -1, n1 = -1;
+            void*  lib;
+            if (Readable(vt, 0x1C)) {
+                __try {
+                    n0 = ((fnChildCount)vt[0x14 / 4])(fcb);
+                    if (n0 > 0) {
+                        lib = ((fnGetChild)vt[0x18 / 4])(fcb, 0);
+                        if (Readable(lib, 4)) {
+                            void** lvt = *(void***)lib;
+                            if (Readable(lvt, 0x1C))
+                                n1 = ((fnChildCount)lvt[0x14 / 4])(lib);
+                        }
+                    }
+                }
+                __except (EXCEPTION_EXECUTE_HANDLER) { }
+            }
+            logf_("[merge] parsed tree: root children=%d child[0] children=%d", n0, n1);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "%s: engine parsed %d top-level object(s), %d prototype(s)\n",
+                who, n0, n1);
+            if (n0 <= 0 || n1 <= 0) {
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "  ZERO usable objects, so the engine is NOT getting a valid\n"
+                    "  library from this path - either it resolved to nothing or the\n"
+                    "  file is malformed. NOT calling AddLibrary; nothing changed.\n");
+                ReleaseFcb(fcb);
+                return 0;
+            }
+        }
+
+        handle = fcb;                     /* AddLibrary takes a pointer to it */
+        ((fnAddLibrary)FN_ADDLIBRARY)(mgr, &handle);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[merge] *** FAULTED - caught. Restart the game.");
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "%s: FAULTED - caught. Restart the game.\n", who);
+        return 0;
+    }
+
+    after    = *(unsigned long*)((char*)mgr + OFF_MGR_VEC_COUNT);
+    mapAfter = *(unsigned long*)((char*)mgr + ARCH_LIST_COUNT);
+    if (after != before + 1) {
+        /* It did not take ownership. Releasing now could free something the
+           manager is holding, so we leak 16 bytes instead. */
+        logf_("[merge] vector %lu -> %lu, expected %lu - NOT releasing",
+              before, after, before + 1);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "%s: the manager did not take the library - stopping here\n", who);
+        return 0;
+    }
+    if (*(unsigned long*)((char*)fcb + OFF_FCB_REFCOUNT) >= 2)
+        ReleaseFcb(fcb);                  /* drop ours; the manager keeps its own */
+    else
+        logf_("[merge] manager took no reference - leaking our handle, which is safe");
+
+    logf_("[merge] done: map %lu -> %lu archetypes", mapBefore, mapAfter);
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "%s: %lu -> %lu archetypes in %s\n", who, mapBefore, mapAfter, WorldName());
+    return 1;
+}
+
+static void SpawnMergeFull(void* console)
+{
+    char  path[MAX_PATH];
+    const char* dir;
+
+    if (_stricmp(g_mergedFor, WorldName()) == 0) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn_all: already merged for %s\n", WorldName()); return;
+    }
+    dir = GeneratedDir();
+    if (!dir) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn_all: could not read the world's generated directory\n"); return;
+    }
+    _snprintf(path, sizeof(path) - 1, "%s\\entitylibrary_full.fcb", dir);
+    path[sizeof(path) - 1] = 0;
+
+    if (!MergeLibPath(console, path, "spawn_all")) return;
+
+    strncpy(g_mergedFor, WorldName(), sizeof(g_mergedFor) - 1);
+    g_mergedFor[sizeof(g_mergedFor) - 1] = 0;
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "  These are now resolvable, NOT guaranteed to work: one whose data is not\n"
+        "  deployed here crashed the engine a frame after spawning. Names no level\n"
+        "  registers are blocked unless you use 'spawn!'. Wiped by any level change.\n");
+}
+
+/* ---- sit a spawn on the ground --------------------------------------------
+   We have no raycast - PICKING.md and BOUNDS.md both re-confirm the engine
+   exposes none we can call - so we cannot ask "where is the terrain at this XY".
+   What we DO have is the player, who is demonstrably standing on it, and a real
+   bounding box for every entity. Ground height comes from the bottom of the
+   PLAYER's world box (their feet); the offset comes from the bottom of the
+   SPAWNED thing's box. Put its base at their feet and the mesh sits on the floor
+   instead of a guessed distance above it.
+
+   THE TIMING PROBLEM, which is why this is deferred: at the instant the entity
+   is created its box is still EMPTY - the graphic component has not populated
+   bounds yet. Grounding at spawn time therefore always logged "degenerate" and
+   silently fell back. So we retry each frame until the box appears, and give up
+   after GROUND_MS.
+
+   The honest limit is unchanged: this is the ground under YOU, not under the
+   spawn point six metres ahead. Exact on flat terrain, off by the height
+   difference on a slope - and physics settles it from there either way. */
+#define GROUND_PEND 8
+#define GROUND_MS   4000
+
+typedef struct { void* ent; float x, y; DWORD until; } GroundPend;
+static GroundPend g_gpend[GROUND_PEND];
+
+/* 1 = placed (or the entity is gone and there is nothing left to do).
+
+   THE HEIGHT RULE IS THE ENTITY ORIGIN, NOT THE BOX. The first version aligned
+   the bottom of the spawned thing's bounding box to the player's, and it left
+   an ATV hanging a metre up: its box measured 4.25m tall with the origin only
+   1.03m above the base, which is nothing like the shape of an ATV. Those boxes
+   are loose - fine for deciding what you clicked on, useless as a ride height.
+
+   The evidence for the rule we use instead came from picking: every level-placed
+   entity reads back at z = 0 on this map - plants at (14 103 0), mine pods at
+   (25 105 0) - and so does the player. Entity origins sit ON the ground in this
+   game, so matching the player's origin height IS standing on the floor.
+
+   The box is still read when available, but only to log the discrepancy. If the
+   two ever agree we can revisit; right now the origin rule is the honest one. */
+static int GroundTry(void* ent, float x, float y)
+{
+    void* pl = GetPlayerEntity();
+    const float* pp;
+    float want;
+
+    if (!Readable(ent, OFF_ENT_POS + 12)) return 1;   /* destroyed - stop */
+    if (!Readable(pl, OFF_ENT_POS + 12))  return 0;   /* no reference yet  */
+
+    pp   = (const float*)((char*)pl + OFF_ENT_POS);
+    want = pp[2] + 0.05f;                             /* 5cm, not a drop */
+
+    __try { ((fnEntSetPos)FN_ENT_SETPOS)(ent, x, y, want); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 1; }
+
+    {   /* diagnostic only - never used to decide the height */
+        float emn[3], emx[3];
+        int   haveBox = 0;
+        if (Readable(ent, 0xBC)) {
+            __try { ((fnWorldAABB)FN_WORLD_AABB)(ent, emn, emx); haveBox = 1; }
+            __except (EXCEPTION_EXECUTE_HANDLER) { haveBox = 0; }
+        }
+        if (haveBox && (emx[2] - emn[2]) > 0.01f)
+            logf_("[grnd] %p -> z %.2f (player %.2f); box %.2f tall, base %.2f "
+                  "-> box says %.2f", ent, want, pp[2],
+                  emx[2] - emn[2], emn[2], want + (want - emn[2]));
+        else
+            logf_("[grnd] %p -> z %.2f (player %.2f); no box yet", ent, want, pp[2]);
+    }
+    return 1;
+}
+
+static void GroundQueue(void* ent, float x, float y)
+{
+    int i, oldest = 0;
+    for (i = 0; i < GROUND_PEND; ++i) {
+        if (!g_gpend[i].ent) {
+            g_gpend[i].ent = ent; g_gpend[i].x = x; g_gpend[i].y = y;
+            g_gpend[i].until = GetTickCount() + GROUND_MS;
+            return;
+        }
+        /* Signed difference, not a raw comparison: GetTickCount wraps every 49.7
+           days and a straight `<` picks the wrong victim across the wrap. Same
+           idiom as the rest of the file's deadline tests. */
+        if ((long)(g_gpend[i].until - g_gpend[oldest].until) < 0) oldest = i;
+    }
+    g_gpend[oldest].ent = ent; g_gpend[oldest].x = x; g_gpend[oldest].y = y;
+    g_gpend[oldest].until = GetTickCount() + GROUND_MS;
+}
+
+/* Main thread, once per frame. */
+static void GroundTick(void)
+{
+    DWORD now = GetTickCount();
+    int   i;
+    for (i = 0; i < GROUND_PEND; ++i) {
+        if (!g_gpend[i].ent) continue;
+        if (GroundTry(g_gpend[i].ent, g_gpend[i].x, g_gpend[i].y)) {
+            g_gpend[i].ent = 0;
+        } else if ((long)(now - g_gpend[i].until) > 0) {   /* wrap-safe */
+            logf_("[grnd] %p never grew a bounding box - left where it was",
+                  g_gpend[i].ent);
+            g_gpend[i].ent = 0;
+        }
+    }
+}
+
+/* Reads the live table. The old file-based version could only ever offer names
+   from the FULL library, most of which do not exist on any given map - it was
+   confidently wrong, which is worse than being empty. */
+static void SpawnArchetypeGo(void* console, const char* name);
+
+/* On a refusal, show what DOES exist under the same leaf name. Prefixes are not
+   consistent across the library - `Animals.`, `Avatar.` and `vehicle.` all carry
+   creatures - so a wrong prefix is the normal failure, and the live table already
+   holds the answer. */
+static void SpawnSuggest(void* console, const char* typed)
+{
+    const char* leaf = strrchr(typed, '.');
+    leaf = leaf ? leaf + 1 : typed;
+    if (!*leaf) return;
+    ((fnPrintf)FN_PRINTF)(console, 0, AC "  names containing '%s' on this map:\n", leaf);
+    if (ArchEnumerate(console, leaf) == 0)
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "  none - try 'spawn_all' first, it merges the full library\n");
+}
+
+static void SpawnList(void* console, const char* needle)
+{
+    if (ArchEnumerate(console, needle) >= 0 && (!needle || !*needle))
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "  (this is the CURRENT level's set - it changes with the map)\n");
+}
+
+/* Is this archetype registered by ANY of the 39 levels? Names no level ever
+   registers are the ones that crashed the engine a frame after spawning. */
+#define KNOWN_FILE "spawn_known.txt"
+
+static int KnownToSomeLevel(const char* name)
+{
+    char  path[MAX_PATH], line[256];
+    FILE* f;
+    int   found = 0;
+    _snprintf(path, sizeof(path) - 1, "%s\\" KNOWN_FILE, g_dir);
+    path[sizeof(path) - 1] = 0;   /* _snprintf does NOT terminate on truncation */
+    f = fopen(path, "r");
+    if (!f) return 1;             /* no list -> do not block anything */
+    while (!found && fgets(line, sizeof(line), f)) {
+        char* e = line + strlen(line);
+        while (e > line && (e[-1] == '\n' || e[-1] == '\r')) *--e = 0;
+        if (line[0] && line[0] != '#' && _stricmp(line, name) == 0) found = 1;
+    }
+    fclose(f);
+    return found;
+}
+
+static void SpawnArchetype(void* console, const char* name, int force)
+{
+    /* The archetype table is not all entities. Curves.*, WeaponProperties.*,
+       Metagame.* and tables.* are pure DATA, and creating one produces an object
+       the sector code walks into and dies on a frame later - confirmed, that is
+       the ACCESS_VIOLATION at 100AF2A1. KnownToSomeLevel does NOT catch these:
+       every level registers them, so "some level registers it" is true and
+       useless here. */
+    if (!force && NameLooksLikeData(name)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn: '%s' is a DATA archetype (curves, weapon properties, tables),\n"
+            "       not an entity. Creating one crashes the engine a frame later\n"
+            "       inside the streaming code. 'spawn! %s' tries it anyway.\n",
+            name, name);
+        return;
+    }
+    if (!force && !KnownToSomeLevel(name)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn: no level in the game registers '%s'.\n"
+            "       Either it is content the game never spawns anywhere - which has\n"
+            "       crashed the engine a frame after creation - or the PREFIX is\n"
+            "       wrong. Prefixes vary: Animals. / Avatar. / vehicle.\n"
+            "       'spawn! %s' tries it regardless.\n", name, name);
+        SpawnSuggest(console, name);
+        return;
+    }
+    SpawnArchetypeGo(console, name);
+}
+
+/* Opening the picker is a two-step handshake because the list has to be built
+   HERE, on the main thread - reading archetype names is an engine call - before
+   the overlay thread is allowed to put the panel on screen. */
+/* The entity browser: the same panel, listing what is ALREADY in the world.
+   Point of it is that the crosshair cannot reach everything - something buried
+   in scenery, or 80 metres long, is far easier to find by name. */
+static void OpenEntPicker(void* console)
+{
+    g_pickMode = PK_MODE_ENTS;   /* PkPaint picks the bottom button row from this
+                                    on every frame, so there is no per-window
+                                    layout left to get born in the wrong mode */
+    InterlockedExchange(&g_archReady, 0);
+    InterlockedExchange(&g_wantEntSnap, 1);
+    InterlockedExchange(&g_wantPicker, 1);
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "ents: opening the entity browser - type to search, click a row, then\n"
+        "  SELECT / ENTER / KILL / DELETE. The list is a snapshot; run 'ents'\n"
+        "  again to refresh it after things spawn or die.\n");
+}
+
+static void OpenSpawnPicker(void* console)
+{
+    if (!ArchManager()) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn: no archetype manager - load a level first\n");
+        return;
+    }
+    g_pickMode = PK_MODE_SPAWN;
+    InterlockedExchange(&g_archReady, 0);
+    InterlockedExchange(&g_wantArchSnap, 1);
+    InterlockedExchange(&g_wantPicker, 1);
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "spawn: opening the picker - type to search, Enter spawns, Esc closes.\n"
+        "  This is %s's set. 'spawn_all' merges the full library first.\n",
+        WorldName());
+}
+
+/* ---- why a spawned creature has no mesh -------------------------------------
+   Established by reading the shipped archetypes out of entitylibrary.fcb rather
+   than guessing: `Animals.Avatar.Viperwolf_Pet` and `Animals.Avatar.Thanator_Pet`
+   BOTH carry CGraphicComponent, CGraphicKitComponent and CFileDescriptorComponent.
+   The only differences are CAnimalNetworkComponent (wolf) versus
+   CBtzHybridAnimalNetworkComponent + CCameraParamVehicleComponent (thanator). So
+   "the viperwolf has no graphic component" is REFUTED, and with it two of the
+   three known silent bail-outs in the model build:
+
+     0x101DB5ED  no CFileDescriptorComponent      - ruled out, both have one
+     0x101D16FF  kit found no CGraphicComponent   - ruled out, both have one
+     0x101DB5F8  fdc+0x14 (descriptor DOM) NULL   - THE ONE LEFT
+
+   CGraphicComponent+0x38 is the part count. Zero is the constructor default and
+   means the build loop never ran - Activate then skips the scene insert and
+   RecomputeEntityAABB unions nothing, which is one cause for both "no mesh" and
+   "no bounding box". None of it logs or asserts, so this does.
+
+   Class ids are CRC-32 of the class name, and GetComponent takes a POINTER to
+   the id, which is why these are locals rather than the address constants the
+   vehicle helper uses. */
+static void GraphicReport(void* ent, const char* name)
+{
+    unsigned long cidGraphic = 0x035982C6;   /* crc32("CGraphicComponent")        */
+    unsigned long cidFdc     = 0x049C7D70;   /* crc32("CFileDescriptorComponent") */
+    void *g = 0, *f = 0;
+    long parts = -1, dom = -1;
+
+    if (!Readable(ent, 0x100)) return;
+    __try {
+        g = ((fnGetCompVeh)FN_GETCOMP_VEH)(ent, (const void*)&cidGraphic);
+        f = ((fnGetCompVeh)FN_GETCOMP_VEH)(ent, (const void*)&cidFdc);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[gfx ] %s: GetComponent faulted", name ? name : "?");
+        return;
+    }
+    if (Readable(g, 0x3C)) parts = *(long*)((char*)g + 0x38);
+    if (Readable(f, 0x18)) dom   = (long)*(void**)((char*)f + 0x14);
+
+    logf_("[gfx ] %s: gcomp=%p parts=%ld  fdc=%p fdc+0x14=%08lX  %s",
+          name ? name : "?", g, parts, f, (unsigned long)dom,
+          (parts == 0)
+              ? (dom == 0 ? "<-- NO MESH: descriptor DOM is NULL (0x101DB5F8)"
+                          : "<-- NO MESH: DOM present but no parts were built")
+              : (parts > 0 ? "ok" : "<-- no CGraphicComponent on this entity"));
+}
+
+/* ---- moving an arbitrary entity, and KNOWING whether it moved ---------------
+   `bring` used to call CEntity::SetPosition and print "moved to you" whatever
+   happened. It works on creatures and vehicles and silently does nothing on a
+   lot of other things, which is indistinguishable from success in the log.
+
+   SetPosition returns void and the engine reports no error, so the only honest
+   check is to read the transform back. Anything that refuses the write - a body
+   the physics owns, or a renderable that is baked into the sector's static
+   geometry rather than drawn from this entity's transform - shows up here as an
+   unchanged position instead of a lie.
+
+   Returns 1 if the entity is now within half a metre of where we asked, 0 if it
+   did not move, and -1 if the position could not be read at all. On 0 it fills
+   `got` with where the entity actually is, so the caller can say so. */
+static int EntMoveTo(void* ent, float x, float y, float z, float* got)
+{
+    float before[3], after[3];
+    const float* p;
+    float dx, dy, dz;
+
+    if (!Readable(ent, OFF_ENT_POS + 12)) return -1;
+    p = (const float*)((char*)ent + OFF_ENT_POS);
+    before[0] = p[0]; before[1] = p[1]; before[2] = p[2];
+
+    __try { ((fnEntSetPos)FN_ENT_SETPOS)(ent, x, y, z); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+
+    /* ---- THE TRANSFORM MOVED BUT THE MODEL DID NOT -------------------------
+       Confirmed by the first version of this function: it never once logged
+       REFUSED, so SetPosition always took and always read back correctly, while
+       fences, ladders and walls visibly stayed where they were.
+
+       So the entity transform is not what those objects are drawn from. A static
+       carries its own physics proxy at comp+0xC0 (BOUNDS.md 349 - GetWorldBounds
+       asks the proxy, not the entity), and the entity-level SetTransform
+       broadcast does not reach it. That also explains why they stayed pickable
+       at the OLD position: picking is bounds-driven, and the bounds come from
+       the proxy.
+
+       Push the position into the proxy the same way the noclip fallback does for
+       the character proxies. TRAP, straight from that code: proxies do not share
+       a vtable, so +0x68 must be dispatched per object and never hardcoded. */
+    {
+        void** comps;
+        int    n, i;
+        if (Readable(ent, OFF_ENT_COMPN + 4)) {
+            comps = *(void***)((char*)ent + OFF_ENT_COMPS);
+            n     = *(int*)((char*)ent + OFF_ENT_COMPN);
+            if (n > 0 && n <= 256 && Readable(comps, (SIZE_T)n * 4)) {
+                float want[3];
+                char  vts[256];
+                int   used = 0;
+                want[0] = x; want[1] = y; want[2] = z;
+                /* Log every component's class vtable. Some of these objects move
+                   visibly and some do not, and this is the line that will say
+                   what differs between them - guessing at it twice was already
+                   one time too many. */
+                for (i = 0; i < n && used < (int)sizeof(vts) - 12; ++i) {
+                    void* c = comps[i];
+                    if (!Readable(c, 4)) continue;
+                    used += _snprintf(vts + used, sizeof(vts) - used - 1,
+                                      "%08lX ", *(unsigned long*)c);
+                }
+                vts[used > 0 ? used : 0] = 0;
+                /* The NAME matters as much as the list. Without it these lines
+                   cannot be matched against which objects visibly moved, which
+                   is the entire question. */
+                logf_("[bring] %s: %d components: %s",
+                      g_selName[0] ? g_selName : "?", n, vts);
+
+                for (i = 0; i < n; ++i) {
+                    void* c = comps[i];
+                    void* px;
+                    void** pvt;
+                    if (!Readable(c, OFF_STATIC_PROXY + 4)) continue;
+                    /* The refusing entities carry 11046AE0 where the working
+                       ones carry 11046858 - a sibling phys class. LOOK before
+                       calling: dump what sits at the same +0xC0 slot and what
+                       vtable it has, rather than invoking a slot on an object
+                       whose layout is unverified. If it turns out to be a proxy
+                       of the same shape, syncing it is a two-line change. */
+                    if (*(unsigned long*)c == VT_PHYS_SIBLING) {
+                        void* q = *(void**)((char*)c + OFF_STATIC_PROXY);
+                        logf_("[bring]   sibling phys %p: +0xC0=%p vtable=%08lX",
+                              c, q,
+                              Readable(q, 4) ? *(unsigned long*)q : 0ul);
+                        continue;
+                    }
+                    if (*(unsigned long*)c != VT_STATICPHYS) continue;
+                    px = *(void**)((char*)c + OFF_STATIC_PROXY);
+                    if (!Readable(px, 4)) continue;
+                    pvt = *(void***)px;
+                    if (!Readable(pvt, 0x6C)) continue;
+                    {
+                        void* fn = pvt[0x68 / 4];
+                        if (!Readable(fn, 1)) continue;
+                        __try {
+                            ((void (__thiscall *)(void*, const float*))fn)(px, want);
+                            logf_("[bring] static proxy %p synced via vt+0x68 %p", px, fn);
+                        }
+                        __except (EXCEPTION_EXECUTE_HANDLER) {
+                            logf_("[bring] static proxy %p FAULTED on vt+0x68", px);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (!Readable(ent, OFF_ENT_POS + 12)) return -1;
+    after[0] = p[0]; after[1] = p[1]; after[2] = p[2];
+    if (got) { got[0] = after[0]; got[1] = after[1]; got[2] = after[2]; }
+
+    dx = after[0] - x; dy = after[1] - y; dz = after[2] - z;
+    if (dx * dx + dy * dy + dz * dz <= 0.25f) return 1;
+
+    logf_("[bring] REFUSED: asked (%.1f %.1f %.1f), was (%.1f %.1f %.1f), "
+          "is (%.1f %.1f %.1f)", x, y, z,
+          before[0], before[1], before[2], after[0], after[1], after[2]);
+    return 0;
+}
+
+/* ======================= LIVE EDITOR LINK ================================= *
+
+   A named pipe that lets an external editor GUI see and move what is in the
+   running world. Milestone one: hello / list / get / select / move.
+
+   WHY A NAMED PIPE, not a TCP socket
+   ----------------------------------
+   * No firewall prompt. A listening TCP socket in a game process is exactly
+     what Windows Defender pops a dialog about, and this DLL executes engine
+     calls on request - it must not be reachable from anything but this machine.
+     A named pipe is kernel-local by default and never prompts.
+   * No port to allocate, collide on, or configure.
+   * Trivial on both ends: CreateNamedPipe here, open(r'\\.\pipe\avatar_editor')
+     in Python. No extra library on either side.
+
+   PROTOCOL - deliberately readable, because it will be debugged by reading it.
+   Request : one plain-text line, `verb arg arg...\n`
+   Response: one or more JSON lines (JSON Lines), always terminated by a line
+             carrying "end". A request always produces exactly one response
+             block, so the client can read until "end" and never has to guess.
+
+   THREADING - the rule that this whole design exists to obey
+   ----------------------------------------------------------
+   The pipe thread NEVER touches engine state. It parses a line, publishes it,
+   and waits. The per-frame detour on the MAIN THREAD does every engine read and
+   write and publishes the answer. Calling the engine from a spawned thread
+   crashed the game instantly early in this project; this is the shape that
+   avoids it.
+
+       pipe thread   : g_lnkState IDLE -> writes g_lnkReq -> sets REQ, waits
+       main thread   : sees REQ -> does the work -> fills g_lnkOut -> sets DONE
+       pipe thread   : sees DONE -> writes the bytes out -> sets IDLE
+
+   Single writer per field per state, so no lock is needed. One client at a
+   time is enforced by the pipe instance count.
+
+   STALE POINTERS - the second rule
+   --------------------------------
+   Nothing here ever acts on a cached entity pointer. Every request names an
+   entity by its 64-bit id and is re-resolved through EntWalkFind, which walks
+   the live entity map; an id that is not in the map right now simply is not
+   found. The resolved pointer is then checked with the back-pointer test
+   (entity+0x34 == its ref node) that CandLive uses, because Readable() only
+   proves a page is committed and a freed block stays mapped.
+
+   VOLUME - the third rule
+   -----------------------
+   Nothing streams. `list` is a SNAPSHOT, taken only when asked, and the
+   serialised text is built once on the main thread into one buffer that the
+   pipe thread then writes. There is no per-frame traffic at all: an idle link
+   costs one PeekNamedPipe every 5 ms on a thread of our own.                  */
+
+#define LNK_PIPE_NAME  "\\\\.\\pipe\\avatar_editor"
+#define LNK_PROTO      1
+#define LNK_REQ_MAX    512
+#define LNK_OUT_MAX    (1024 * 1024)
+#define LNK_IDLE       0
+#define LNK_REQ        1
+#define LNK_DONE       2
+
+static volatile long g_lnkOn      = 1;   /* `editorlink off` turns it off      */
+static volatile long g_lnkState   = LNK_IDLE;
+static volatile long g_lnkOutLen  = 0;
+static volatile long g_lnkConn    = 0;   /* a client is attached right now     */
+static volatile long g_lnkReqs    = 0;   /* requests served this session       */
+static volatile long g_lnkMoves   = 0;   /* successful live moves              */
+static char          g_lnkReq[LNK_REQ_MAX];
+static char*         g_lnkOut     = 0;   /* heap; allocated on first use       */
+static HANDLE        g_lnkThread  = 0;
+/* THE NAME IS RESOLVED AT RUNTIME, because more than one game can be running.
+   CreateNamedPipe is called with nMaxInstances = 1, so a second instance's
+   create fails outright - and before this it then slept 2 s and tried the same
+   name again, for ever, so instance two simply had no link and the log filled
+   with one failure line every two seconds.
+
+   First instance keeps the canonical name, so every existing client - the GUI,
+   livelink.py, anything built against this - is unaffected. A later instance
+   falls back to `avatar_editor_<pid>` and says so. `hello` reports whichever it
+   got, so a client never has to guess which game it reached. */
+static char          g_lnkPipe[64] = "";
+static long          g_lnkPidNamed = 0;
+
+/* Append to the response buffer, never past the end. */
+static void LnkPut(const char* fmt, ...)
+{
+    va_list ap;
+    int n;
+    long len = g_lnkOutLen;
+    if (!g_lnkOut || len < 0 || len >= LNK_OUT_MAX - 600) return;
+    va_start(ap, fmt);
+    n = _vsnprintf(g_lnkOut + len, (size_t)(LNK_OUT_MAX - len - 1), fmt, ap);
+    va_end(ap);
+    if (n < 0) { g_lnkOut[LNK_OUT_MAX - 1] = 0; g_lnkOutLen = LNK_OUT_MAX - 1; return; }
+    g_lnkOutLen = len + n;
+}
+
+/* JSON string body (no quotes). Escapes what RFC 8259 requires and drops the
+   rest of the control range - entity names are engine identifiers, so this is a
+   safety net rather than a hot path. */
+static void LnkEsc(char* dst, int cap, const char* src)
+{
+    int o = 0;
+    if (cap <= 0) return;
+    if (!src) src = "";
+    while (*src && o < cap - 7) {
+        unsigned char c = (unsigned char)*src++;
+        if (c == '"' || c == '\\') { dst[o++] = '\\'; dst[o++] = (char)c; }
+        else if (c >= 0x20 && c < 0x7F) { dst[o++] = (char)c; }
+        else o += _snprintf(dst + o, (size_t)(cap - o - 1), "\\u%04X", c);
+    }
+    dst[o] = 0;
+}
+
+/* Resolve an id64 to a LIVE entity, or NULL. Never trusts a cached pointer:
+   EntWalkFind rebuilds the answer from the entity map every time, and the
+   back-pointer test then proves the memory really is that entity. */
+static void* LnkResolve(unsigned long lo, unsigned long hi, void** pRef)
+{
+    unsigned long l = lo, h = hi;
+    void* ent;
+    void* ref;
+    if (pRef) *pRef = 0;
+    ent = EntWalkFind(0, &l, &h);
+    if (!ent || !Readable(ent, OFF_ENT_POS + 12)) return 0;
+    if (!Readable((char*)ent + OFF_ENT_CHECK, 4)) return 0;
+    ref = *(void**)((char*)ent + OFF_ENT_CHECK);
+    if (!QuickPtr(ref)) return 0;          /* reused memory: not our entity */
+    if (pRef) *pRef = ref;
+    return ent;
+}
+
+/* ---- resolving MANY ids in ONE walk --------------------------------------
+   MEASURED against the running game this session (tools\bench_bones.py plus
+   the probes it grew out of). `bones` for 8 characters cost 438 ms round trip,
+   429 ms of which was MAIN-THREAD time - and essentially all of that was here,
+   not in the pose formatting:
+
+     resolve one entity at walk position 6        0.7 ms
+     ... the same verb, walk position 1881      125   ms
+     an id NOT in the map at all (a full walk)  262   ms
+     EIGHT ids not in the map                  2111   ms   <- no cap; additive
+
+   Two things follow. First, the cost is not per bone and not per entity: it is
+   linear in HOW FAR INTO THE MAP the entity happens to sit, because
+   EntWalkFind returns the moment it matches - and LnkResolve was called once
+   per requested id, so eight ids meant eight independent walks sharing no work.
+
+   Second, the "saturation at ~430 ms" that made this look like a fixed wait or
+   a per-frame budget was an artefact of the benchmark's own entity choice. It
+   sorted candidates by distance from the world ORIGIN, and the four it picked
+   first sat at walk positions 1247-1881 while the next four sat at 6-16. The
+   last four were therefore nearly free. Measured individually the eight sum to
+   425.2 ms; measured as one batch, 425.2 ms. Perfectly additive. There is no
+   cap, no frame wait and no per-frame budget anywhere in this path.
+
+   So: ONE walk, matching every requested id as it passes, stopping as soon as
+   all of them are found. Same walk shape as EntSnapshotEx - crucially including
+   RefNodeEntityFast, one SEH frame per entity instead of the two VirtualQuery
+   syscalls RefNodeEntity pays. That difference is why poslist walks the whole
+   3,252-entity map in ~24 ms where EntWalkFind's full walk costs 262 ms.
+
+   IDENTITY IS NOT WEAKENED, which is the only thing that matters here. Nothing
+   is cached between requests and the live map is still walked every time. The
+   back-pointer proof is in fact STRONGER than LnkResolve's: LnkResolve reads
+   ref out of the entity itself and only QuickPtr()s it, whereas the ref here
+   comes from the map's own ref node, so `entity+0x34 == that node` is the full
+   identity test that listx uses rather than a plausibility check.            */
+typedef struct {
+    unsigned long lo, hi;      /* in  - the id to find                        */
+    void*         ent;         /* out - the entity, or NULL                   */
+    void*         ref;         /* out - its ref node (the identity witness)   */
+} LnkSlot;
+
+static int LnkResolveMany(LnkSlot* v, int n)
+{
+    void*  esys = *(void**)G_ENTSYS_PTR;
+    void*  stack[64];
+    int    sp = 0, guard = 0, found = 0, k;
+    void  *sent, *node;
+
+    for (k = 0; k < n; ++k) { v[k].ent = 0; v[k].ref = 0; }
+    if (n <= 0) return 0;
+    if (!Readable(esys, OFF_ESYS_MAPSENT + 4)) return 0;
+    sent = *(void**)((char*)esys + OFF_ESYS_MAPSENT);
+    if (!Readable(sent, 0x48)) return 0;
+
+    node = *(void**)((char*)sent + OFF_TN_PARENT);
+    while ((node || sp) && guard++ < 4096 && found < n) {
+        while (QuickPtr(node) && Readable(node, 0x48) &&
+               !*(unsigned char*)((char*)node + OFF_TN_ISNIL) && sp < 63) {
+            stack[sp++] = node;
+            node = *(void**)((char*)node + OFF_TN_LEFT);
+        }
+        if (!sp) break;
+        node = stack[--sp];
+        {
+            unsigned long count = *(unsigned long*)((char*)node + OFF_TN_INNERCOUNT);
+            void* in = *(void**)((char*)node + OFF_TN_INNERHEAD);
+            unsigned long i;
+            if (count > 65536) count = 0;
+            for (i = 0; i < count && QuickPtr(in) && found < n; ++i) {
+                void* ref;
+                void* ent = RefNodeEntityFast(in, &ref);
+                if (ent) __try {
+                    unsigned long lo = *(unsigned long*)((char*)in + OFF_IN_ID64);
+                    unsigned long hi = *(unsigned long*)((char*)in + OFF_IN_ID64 + 4);
+                    for (k = 0; k < n; ++k) {
+                        if (!v[k].ent && v[k].lo == lo && v[k].hi == hi) {
+                            v[k].ent = ent;
+                            v[k].ref = ref;
+                            ++found;
+                            break;
+                        }
+                    }
+                }
+                __except (EXCEPTION_EXECUTE_HANDLER) { /* skip this row */ }
+                in = *(void**)((char*)in + OFF_IN_NEXT);
+            }
+        }
+        node = *(void**)((char*)node + OFF_TN_RIGHT);
+    }
+
+    /* Prove each hit really is that entity before anyone dereferences it. */
+    for (k = 0; k < n; ++k) {
+        if (!v[k].ent) continue;
+        if (!Readable(v[k].ent, OFF_ENT_POS + 12) ||
+            !Readable((char*)v[k].ent + OFF_ENT_CHECK, 4) ||
+            *(void**)((char*)v[k].ent + OFF_ENT_CHECK) != v[k].ref) {
+            v[k].ent = 0;
+            v[k].ref = 0;
+            --found;
+        }
+    }
+    return found;
+}
+
+/* "HI:LO" or "HI LO". Returns 1 on success. */
+static int LnkId(const char* a, const char* b, unsigned long* pLo, unsigned long* pHi)
+{
+    const char* colon;
+    if (!a) return 0;
+    colon = strchr(a, ':');
+    if (colon) {
+        char buf[24];
+        int  n = (int)(colon - a);
+        if (n <= 0 || n >= (int)sizeof(buf)) return 0;
+        memcpy(buf, a, (size_t)n); buf[n] = 0;
+        *pHi = strtoul(buf, 0, 16);
+        *pLo = strtoul(colon + 1, 0, 16);
+        return 1;
+    }
+    if (!b || !*b) return 0;
+    *pHi = strtoul(a, 0, 16);
+    *pLo = strtoul(b, 0, 16);
+    return 1;
+}
+
+static void LnkFail(const char* cmd, const char* why)
+{
+    char e[192];
+    LnkEsc(e, sizeof(e), why);
+    LnkPut("{\"ok\":false,\"cmd\":\"%s\",\"error\":\"%s\"}\n", cmd ? cmd : "?", e);
+    LnkPut("{\"end\":\"%s\"}\n", cmd ? cmd : "?");
+}
+
+/* One entity, as one JSON line. */
+static void LnkEntLine(const char* name, const char* cls,
+                       unsigned long hi, unsigned long lo, const float* p)
+{
+    char nb[ENT_NLEN * 6], cb[64];
+    LnkEsc(nb, sizeof(nb), name);
+    LnkEsc(cb, sizeof(cb), cls);
+    LnkPut("{\"id\":\"%08lX:%08lX\",\"n\":\"%s\",\"c\":\"%s\","
+           "\"p\":[%.3f,%.3f,%.3f]}\n", hi, lo, nb, cb, p[0], p[1], p[2]);
+}
+
+/* ==========================================================================
+   THE LIVE POSE - reading one entity's bone matrices
+   ==========================================================================
+
+   WHY. The editor cannot work out which animation an entity is playing: the
+   choice is made at runtime by the AI, the GOSM state machine and the move
+   tree (`graphics\move\movemgr(named).bin`, only partly decoded), and then
+   blended. None of that is in the shipped files, so simulating it offline is
+   out - see DevAccess\EDITOR_ANIMATION.md Part 2.6. Reading the engine's
+   FINISHED pose is not: by the time these matrices exist every clip, blend and
+   additive layer has already been resolved into them.
+
+   THE ROUTE, RE-DERIVED FROM THE BYTES (capstone over
+   Dunia_LIVE_DECRYPTED.dll). Two shipped call sites use the identical shape,
+   0x10772462 and 0x1077387F:
+
+     10772462  push 0x111C2334        ; the dword there is 4E48E1F0
+     10772467  mov  ecx, <entity>     ;   = crc32("CRenderableComponent")
+     10772469  call 0x101B79E0        ; CEntity::GetComponent -> renderable
+     1077248A  mov  edx, [renderable] ; vtable
+     1077248C  mov  eax, [edx + 0x80] ; <- one site uses +0x80 ...
+     107738AE  mov  eax, [edx + 0x84] ; <- ... the propeller uses +0x84
+     107738B6  call eax               ; -> the bone holder
+
+   and both then index it the way GetBoneIndexByNameHash (0x103BC0D0) and
+   GetBoneMatrixA/B (0x103BC200 / 0x103BC170) do internally:
+
+     holder+0x20  bone array        holder+0x2C  bone count
+     stride 0xA0                    entry+0x00   u32 crc32(bone name)
+     entry+0x10   float[16] chan A  entry+0x50   float[16] chan B
+
+   WE DO NOT CALL THE ACCESSORS. They are movaps-based and demand a 16-byte
+   aligned output buffer; reading the array ourselves is the same data with no
+   alignment contract, no engine call per bone, and no chance of faulting
+   inside engine code. Two engine calls happen per entity and none per bone.
+
+   TWO UNKNOWNS ARE LEFT TO THE CLIENT, NOT GUESSED HERE. Which vtable slot
+   yields the holder varies (both are live), so 0x84 is tried first, 0x80 is
+   the fallback, and `src` says which answered. Which matrix channel the
+   renderer consumes is recorded as UNKNOWN in VALKYRIE_ANIMPOSE.md §4, so the
+   channel is an argument and is echoed back in `chan`. A guess here would be
+   invisible in the reply, which is the failure mode this project keeps paying
+   for.                                                                       */
+#define CID_RENDERABLE    (0x111C2334u + g_rebase) /* &crc32("CRenderableComponent") */
+#define VT_BONEHOLDER_A   0x84      /* renderable vtable byte offset, tried first */
+#define VT_BONEHOLDER_B   0x80      /* ... and the fallback                       */
+#define OFF_BONE_ARRAY    0x20
+#define OFF_BONE_COUNT    0x2C
+#define BONE_STRIDE       0xA0
+#define OFF_BONE_HASH     0x00
+#define OFF_BONE_MAT_A    0x10
+#define OFF_BONE_MAT_B    0x50
+#define BONE_MAX          512       /* sanity cap; the biggest shipped rig is 103 */
+#define BONE_TOTAL_MAX    2048      /* across every id in one request             */
+/* Ids per request. Was 8, which was right when every id meant serialising a
+   whole skeleton. `addr bones` returns ADDRESSES - about 90 bytes an entity,
+   no matrices - and resolves them all in ONE map walk via LnkResolveMany, so
+   the cost of a larger batch is a handful of bytes rather than another walk.
+   Raised so the editor can pose everything rigged in view: with 8, widening
+   its candidate set to include plants and vehicles meant the nearest foliage
+   consumed every slot and the PLAYER stopped being asked about at all, which
+   showed up as the character standing in T-pose.
+   `bones` shares this constant and is still bounded by BONE_TOTAL_MAX, so its
+   reply cannot grow without limit. Stack arrays indexed by it are small
+   (ids[], slot[], why[] - about 1 KB at 64). */
+#define BONE_IDS_MAX      64
+
+typedef void* (__thiscall *fnBoneHolder)(void* renderable);
+
+/* -> the bone holder for `ent`, or NULL, with the array and count out-params.
+   A renderable that has not built its skeleton yet must read as "no pose",
+   never as a fault, so every dereference is guarded. */
+static void* BoneHolder(void* ent, int slot, long* pCount, void** pArr)
+{
+    void*  rc = 0;
+    void** vt;
+    void*  holder = 0;
+    void*  arr;
+    long   n;
+
+    if (pCount) *pCount = 0;
+    if (pArr)   *pArr   = 0;
+    if (!Readable(ent, 8)) return 0;
+
+    __try { rc = ((fnGetComponent)FN_GET_COMPONENT)(ent, (const void*)CID_RENDERABLE); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    if (!Readable(rc, 4)) return 0;
+
+    vt = *(void***)rc;
+    if (!Readable(vt, (SIZE_T)slot + 4)) return 0;
+    if (!Readable(vt[slot / 4], 4)) return 0;          /* the function itself */
+
+    __try { holder = ((fnBoneHolder)vt[slot / 4])(rc); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+
+    if (!Readable(holder, OFF_BONE_COUNT + 4)) return 0;
+    n = *(long*)((char*)holder + OFF_BONE_COUNT);
+    if (n <= 0 || n > BONE_MAX) return 0;
+    arr = *(void**)((char*)holder + OFF_BONE_ARRAY);
+    if (!Readable(arr, (SIZE_T)n * BONE_STRIDE)) return 0;
+
+    if (pCount) *pCount = n;
+    if (pArr)   *pArr   = arr;
+    return holder;
+}
+
+/* A NaN or an Inf would print as "-1.#IND00" and make the line unparseable
+   JSON. Bit test rather than <float.h>: exponent all-ones is Inf or NaN. */
+static int BoneMatFinite(const float* m)
+{
+    const unsigned long* u = (const unsigned long*)m;
+    int i;
+    for (i = 0; i < 16; ++i)
+        if ((u[i] & 0x7F800000u) == 0x7F800000u) return 0;
+    return 1;
+}
+
+/* ---- the MAIN-THREAD half. Every engine call in the link happens here. ---- */
+static void LinkTick(void* console)
+{
+    char  req[LNK_REQ_MAX];
+    char* argv[8];
+    int   argc = 0;
+    char* s;
+
+    if (InterlockedCompareExchange(&g_lnkState, LNK_REQ, LNK_REQ) != LNK_REQ)
+        return;                                   /* nothing pending */
+
+    memcpy(req, g_lnkReq, sizeof(req));
+    req[sizeof(req) - 1] = 0;
+    g_lnkOutLen = 0;
+    InterlockedIncrement(&g_lnkReqs);
+
+    /* split on whitespace, in place */
+    s = req;
+    while (*s && argc < 8) {
+        while (*s == ' ' || *s == '\t') ++s;
+        if (!*s) break;
+        argv[argc++] = s;
+        while (*s && *s != ' ' && *s != '\t') ++s;
+        if (*s) *s++ = 0;
+    }
+    if (!argc) { LnkFail("?", "empty request"); goto done; }
+
+    /* ---- hello: the handshake the GUI shows in its title bar ------------- */
+    if (_stricmp(argv[0], "hello") == 0 || _stricmp(argv[0], "ping") == 0) {
+        void* esys = *(void**)G_ENTSYS_PTR;
+        char  w[160];
+        LnkEsc(w, sizeof(w), WorldName());
+        LnkPut("{\"ok\":true,\"cmd\":\"hello\",\"proto\":%d,"
+               "\"dll\":\"avatar_console.dll " __DATE__ " " __TIME__ "\","
+               "\"pid\":%lu,\"world\":\"%s\",\"frames\":%ld,\"level\":%d,"
+               "\"pipe\":\"%s\",\"multi\":%d,"
+               "\"sel\":\"%08lX:%08lX\"}\n",
+               LNK_PROTO, (unsigned long)GetCurrentProcessId(), w,
+               (long)g_frames, Readable(esys, 4) ? 1 : 0,
+               g_lnkPipe, g_multiOn ? 1 : 0,
+               g_selIdHi, g_selIdLo);
+        LnkPut("{\"end\":\"hello\"}\n");
+        goto done;
+    }
+
+    /* ---- list: a snapshot, never a stream -------------------------------- */
+    if (_stricmp(argv[0], "list") == 0) {
+        long i, n, cap = ENT_MAX;
+        char w[160];
+        if (argc > 1) { cap = strtol(argv[1], 0, 10); if (cap <= 0) cap = ENT_MAX; }
+        if (!Readable(*(void**)G_ENTSYS_PTR, 4)) {
+            LnkFail("list", "no entity system - load a level first");
+            goto done;
+        }
+        EntSnapshot();                        /* main thread: legal here */
+        n = g_entCount;
+        if (n > cap) n = cap;
+        LnkEsc(w, sizeof(w), WorldName());
+        LnkPut("{\"ok\":true,\"cmd\":\"list\",\"count\":%ld,\"total\":%ld,"
+               "\"world\":\"%s\",\"frame\":%ld}\n",
+               n, (long)g_entCount, w, (long)g_frames);
+        for (i = 0; i < n; ++i)
+            LnkEntLine(g_entRows[i].name, g_entRows[i].cls,
+                       g_entRows[i].hi, g_entRows[i].lo, g_entRows[i].pos);
+        LnkPut("{\"end\":\"list\"}\n");
+        goto done;
+    }
+
+    /* ---- listx: everything a VIEWPORT needs ------------------------------ *
+       A NEW verb rather than extra fields on `list`, deliberately: an editor
+       built against an older DLL keeps working, and a client can try `listx`
+       and fall back. Per entity it adds:
+
+         "f"        the transform's forward row (xform+0x10 - the row `bring`
+                    uses to place things in front of you) -> orientation
+         "bn"/"bx"  the WORLD axis-aligned box, from CEntity::GetWorldAABB
+                    (0x101B2370). That function is non-virtual, pure math,
+                    allocates nothing, and its only writes are to its own frame
+                    and our two output buffers - so calling it a thousand times
+                    inside one frame is safe in a way a physics query is not.
+
+       Bounds are what turn a scatter of dots into a readable plan view, and
+       they are the same quantity a boxes-in-3D view would draw. */
+    /* ---- poslist: the hot path, stripped to nothing but what moves --------
+       PROFILED, not guessed (Editor/tools/perfprobe.py against 1,251 live
+       entities): a full `listx` round-trip costs 95.6 ms, of which 83.5 ms is
+       engine work plus 241 KB of JSON - and it runs INSIDE the per-frame detour,
+       i.e. on the game's own main thread. At 15 Hz that is 143% of a 60 FPS
+       frame budget, which is exactly why the game slowed when auto-refresh was
+       on.
+
+       Almost all of that payload is immutable. A name, a class id and a bounding
+       box do not change while the level is loaded, yet they were re-sent, re-
+       escaped and re-formatted several times a second. This verb sends only what
+       actually moves.
+
+       Dropped relative to listx, per entity:
+         - the GetWorldAABB engine call   (1,251 calls per pull, gone)
+         - two LnkEsc string escapes
+         - the forward-vector matrix read
+         - JSON punctuation: ~200 bytes/entity becomes ~40
+
+       Format is deliberately NOT JSON - it is the one path where readability
+       loses to cost. One header line, then `HI:LO x y z` per entity. The client
+       fetches names and bounds once with `listx` and joins on the id. */
+    if (_stricmp(argv[0], "poslist") == 0) {
+        long i, n, cap = ENT_MAX;
+        if (argc > 1) { cap = strtol(argv[1], 0, 10); if (cap <= 0) cap = ENT_MAX; }
+        if (!Readable(*(void**)G_ENTSYS_PTR, 4)) {
+            LnkFail("poslist", "no entity system - load a level first");
+            goto done;
+        }
+        EntSnapshotEx(0);              /* no names, no class ids - see EntSnapshotEx */
+        n = g_entCount;
+        if (n > cap) n = cap;
+        LnkPut("{\"ok\":true,\"cmd\":\"poslist\",\"count\":%ld,\"frame\":%ld}\n",
+               n, (long)g_frames);
+        for (i = 0; i < n; ++i) {
+            /* %.2f not %.3f: a centimetre is far below anything visible at
+               editor zoom, and it shortens every row. */
+            LnkPut("%08lX:%08lX %.2f %.2f %.2f\n",
+                   g_entRows[i].hi, g_entRows[i].lo,
+                   g_entRows[i].pos[0], g_entRows[i].pos[1],
+                   g_entRows[i].pos[2]);
+        }
+        LnkPut("{\"end\":\"poslist\"}\n");
+        goto done;
+    }
+
+    if (_stricmp(argv[0], "listx") == 0) {
+        long i, n, cap = ENT_MAX;
+        char w[160];
+        if (argc > 1) { cap = strtol(argv[1], 0, 10); if (cap <= 0) cap = ENT_MAX; }
+        if (!Readable(*(void**)G_ENTSYS_PTR, 4)) {
+            LnkFail("listx", "no entity system - load a level first");
+            goto done;
+        }
+        EntSnapshot();
+        n = g_entCount;
+        if (n > cap) n = cap;
+        LnkEsc(w, sizeof(w), WorldName());
+        LnkPut("{\"ok\":true,\"cmd\":\"listx\",\"count\":%ld,\"total\":%ld,"
+               "\"world\":\"%s\",\"frame\":%ld}\n",
+               n, (long)g_entCount, w, (long)g_frames);
+        for (i = 0; i < n; ++i) {
+            void* ent = g_entRows[i].ent;
+            char  nb[ENT_NLEN * 6], cb[64];
+            float mn[3], mx[3], fwd[3], bas[9];
+            int   haveBox = 0, haveFwd = 0;
+
+            /* The snapshot was taken microseconds ago on this same thread, so
+               nothing can have moved - but the rule is the rule: prove the
+               memory really is that entity before dereferencing it deeply. */
+            if (QuickPtr(ent) && Readable(ent, OFF_ENT_CHECK + 4) &&
+                *(void**)((char*)ent + OFF_ENT_CHECK) == g_entRows[i].ref) {
+                if (Readable(ent, OFF_ENT_XFORM + 0x40)) {
+                    const float* m = (const float*)((char*)ent + OFF_ENT_XFORM);
+                    fwd[0] = m[4]; fwd[1] = m[5]; fwd[2] = m[6];
+                    /* THE WHOLE BASIS, not just one row of it. A single vector
+                       can express YAW and nothing else, so every entity with
+                       pitch or roll - a weapon in a hand, a tilted prop - was
+                       drawn flat by anything relying on `f` alone. MEASURED on
+                       the live world: 227 of 1,500 entities carry a tilt that
+                       one vector cannot represent.
+
+                       It also retires an ambiguity this file has documented
+                       rather than fixed: `f` is LABELLED "forward" and the
+                       label is wrong - the engine's forward axis is row 0, not
+                       row 1 - which already cost one 90-degrees-out bug on
+                       levels where file angles were absent. Sending all nine
+                       floats means the client never has to know which row
+                       deserves the name.
+
+                       On `listx` only. `list` is the cheap verb and stays
+                       cheap; the client reads the full transform out of
+                       process anyway (see avmodel/worldfeed.py) and only falls
+                       back to these when that is unavailable. */
+                    bas[0] = m[0]; bas[1] = m[1]; bas[2] = m[2];
+                    bas[3] = m[4]; bas[4] = m[5]; bas[5] = m[6];
+                    bas[6] = m[8]; bas[7] = m[9]; bas[8] = m[10];
+                    haveFwd = 1;
+                }
+                mn[0] = mn[1] = mn[2] = mx[0] = mx[1] = mx[2] = 0.0f;
+                __try {
+                    ((fnWorldAABB)FN_WORLD_AABB)(ent, mn, mx);
+                    haveBox = 1;
+                }
+                __except (EXCEPTION_EXECUTE_HANDLER) { haveBox = 0; }
+            }
+            LnkEsc(nb, sizeof(nb), g_entRows[i].name);
+            LnkEsc(cb, sizeof(cb), g_entRows[i].cls);
+            LnkPut("{\"id\":\"%08lX:%08lX\",\"n\":\"%s\",\"c\":\"%s\","
+                   "\"p\":[%.3f,%.3f,%.3f]",
+                   g_entRows[i].hi, g_entRows[i].lo, nb, cb,
+                   g_entRows[i].pos[0], g_entRows[i].pos[1],
+                   g_entRows[i].pos[2]);
+            if (haveFwd) {
+                LnkPut(",\"f\":[%.4f,%.4f,%.4f]", fwd[0], fwd[1], fwd[2]);
+                /* `f` is kept alongside `b` so an older client keeps working
+                   unchanged - it simply ignores a key it does not know. */
+                LnkPut(",\"b\":[%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f]",
+                       bas[0], bas[1], bas[2], bas[3], bas[4],
+                       bas[5], bas[6], bas[7], bas[8]);
+            }
+            if (haveBox)
+                LnkPut(",\"bn\":[%.2f,%.2f,%.2f],\"bx\":[%.2f,%.2f,%.2f]",
+                       mn[0], mn[1], mn[2], mx[0], mx[1], mx[2]);
+            LnkPut("}\n");
+        }
+        LnkPut("{\"end\":\"listx\"}\n");
+        goto done;
+    }
+
+    /* ---- bones: the live POSE of ONE entity ------------------------------ *
+       SELECTION-SCOPED BY CONSTRUCTION. There is no "all entities" form and
+       there should not be: at ~17 KB and 103 bones per character, the whole
+       level would be ~520 KB a pull against the 241 KB that already costs
+       83.5 ms of main-thread time in `listx`. Up to BONE_IDS_MAX ids share one
+       round trip, and BONE_TOTAL_MAX caps the whole reply.
+
+       `bones sel` uses the DLL's own selection, so the console and the editor
+       agree about what "selected" means - the same reason `select` exists.
+
+       The reply is JSON Lines with one sub-header per entity (`"ent"`) followed
+       by that entity's bone rows, so a client can stream it and does not have
+       to know the bone count in advance. Per-entity failures are reported per
+       entity (`"err"`) rather than failing the whole request: one creature
+       whose renderable is mid-stream must not cost you the other seven.       */
+    if (_stricmp(argv[0], "bones") == 0) {
+        LARGE_INTEGER qf, q0, q1;
+        char   idbuf[LNK_REQ_MAX];
+        char*  ids[BONE_IDS_MAX];
+        LnkSlot slot[BONE_IDS_MAX];
+        int    why[BONE_IDS_MAX];
+        char*  p;
+        int    nid = 0, k, chanB = 0;
+        long   budget = BONE_TOTAL_MAX;
+        long   before = g_lnkOutLen;
+        long   dropped = 0;
+
+        if (argc < 2) {
+            LnkFail("bones", "usage: bones <HI:LO>[,<HI:LO>...] [A|B]   (or: bones sel)");
+            goto done;
+        }
+        if (argc > 2 && (argv[2][0] == 'b' || argv[2][0] == 'B')) chanB = 1;
+
+        QueryPerformanceFrequency(&qf);
+        QueryPerformanceCounter(&q0);
+
+        strncpy(idbuf, argv[1], sizeof(idbuf) - 1);
+        idbuf[sizeof(idbuf) - 1] = 0;
+        p = idbuf;
+        while (*p && nid < BONE_IDS_MAX) {
+            ids[nid++] = p;
+            p = strchr(p, ',');
+            if (!p) break;
+            *p++ = 0;
+        }
+
+        LnkPut("{\"ok\":true,\"cmd\":\"bones\",\"ids\":%d,\"frame\":%ld}\n",
+               nid, (long)g_frames);
+
+        /* ONE walk for every id, not one walk per id - see LnkResolveMany.
+           Parse first so a malformed id costs nothing and does not consume a
+           slot in the walk. */
+        for (k = 0; k < nid; ++k) {
+            slot[k].lo = slot[k].hi = 0;
+            slot[k].ent = slot[k].ref = 0;
+            why[k] = 0;
+            if (_stricmp(ids[k], "sel") == 0) {
+                slot[k].lo = g_selIdLo; slot[k].hi = g_selIdHi;
+                if (!slot[k].lo && !slot[k].hi) why[k] = 1;
+            } else if (!LnkId(ids[k], 0, &slot[k].lo, &slot[k].hi)) {
+                why[k] = 2;
+            }
+        }
+        LnkResolveMany(slot, nid);
+
+        for (k = 0; k < nid; ++k) {
+            unsigned long lo = slot[k].lo, hi = slot[k].hi;
+            void*  ent;
+            void*  arr = 0;
+            long   n = 0, ntotal = 0, i;
+            const char* src = "vt84";
+            char   nb[ENT_NLEN * 6];
+
+            if (why[k] == 1) {
+                LnkPut("{\"ent\":\"sel\",\"err\":\"nothing is selected\"}\n");
+                continue;
+            }
+            if (why[k] == 2) {
+                LnkPut("{\"ent\":\"?\",\"err\":\"bad id\"}\n");
+                continue;
+            }
+
+            ent = slot[k].ent;
+            if (!ent) {
+                LnkPut("{\"ent\":\"%08lX:%08lX\",\"err\":\"not in the live world\"}\n",
+                       hi, lo);
+                continue;
+            }
+            if (!BoneHolder(ent, VT_BONEHOLDER_A, &n, &arr)) {
+                src = "vt80";
+                if (!BoneHolder(ent, VT_BONEHOLDER_B, &n, &arr)) {
+                    LnkPut("{\"ent\":\"%08lX:%08lX\",\"err\":"
+                           "\"no renderable skeleton (not a skinned entity, "
+                           "or its mesh is not built yet)\"}\n", hi, lo);
+                    continue;
+                }
+            }
+            ntotal = n;                 /* what the entity HAS ... */
+            if (n > budget) n = budget; /* ... versus what fits in this reply */
+
+            LnkEsc(nb, sizeof(nb), EntityName(ent));
+            LnkPut("{\"ent\":\"%08lX:%08lX\",\"n\":\"%s\",\"src\":\"%s\","
+                   "\"chan\":\"%s\",\"count\":%ld,\"sent\":%ld",
+                   hi, lo, nb, src, chanB ? "B" : "A", ntotal, n);
+            if (Readable(ent, OFF_ENT_POS + 12)) {
+                const float* q = (const float*)((char*)ent + OFF_ENT_POS);
+                LnkPut(",\"p\":[%.3f,%.3f,%.3f]", q[0], q[1], q[2]);
+            }
+            if (Readable(ent, OFF_ENT_XFORM + 0x40)) {
+                const float* m = (const float*)((char*)ent + OFF_ENT_XFORM);
+                LnkPut(",\"xf\":[%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,"
+                       "%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f]",
+                       m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7],
+                       m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
+            }
+            LnkPut("}\n");
+
+            for (i = 0; i < n; ++i) {
+                const char*  e = (const char*)arr + (SIZE_T)i * BONE_STRIDE;
+                const float* m = (const float*)(e + (chanB ? OFF_BONE_MAT_B
+                                                           : OFF_BONE_MAT_A));
+                unsigned long h = *(const unsigned long*)(e + OFF_BONE_HASH);
+                if (!BoneMatFinite(m)) { ++dropped; continue; }  /* the client
+                                          treats a bone it did not receive as
+                                          bind pose, which is the right
+                                          degradation - never a collapsed mesh */
+                LnkPut("{\"i\":%ld,\"h\":\"%08lX\",\"m\":["
+                       "%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,"
+                       "%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f]}\n",
+                       i, h,
+                       m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7],
+                       m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
+            }
+            budget -= n;
+            if (budget <= 0) break;
+        }
+
+        QueryPerformanceCounter(&q1);
+        LnkPut("{\"stat\":\"bones\",\"us\":%ld,\"bytes\":%ld,\"dropped\":%ld}\n",
+               (long)((q1.QuadPart - q0.QuadPart) * 1000000 /
+                      (qf.QuadPart ? qf.QuadPart : 1)),
+               (long)(g_lnkOutLen - before), dropped);
+        LnkPut("{\"end\":\"bones\"}\n");
+        goto done;
+    }
+
+    /* ---- addr: publish WHERE the data lives, and let the client read it --- *
+       THE MEASUREMENT THAT MOTIVATES THIS. Everything `bones` costs exists
+       because the answer has to be PRODUCED BY THE GAME, on the game's own main
+       thread, inside the per-frame detour. Measured this session, 8 characters
+       and 956 bones:
+
+         resolve (EntWalkFind, once per id)     ~409 ms   main thread
+         format  (16 x _vsnprintf per bone)      ~17 ms   main thread
+         pipe + client JSON parse                ~18 ms   wall
+                                                 -------
+         total round trip                         438 ms
+
+       Read the SAME bytes out of process with ReadProcessMemory instead:
+
+         8 characters, 956 bones, read + numpy decode   0.054 ms
+         ... including the validity check below         0.060 ms
+
+       That is ~7,900x faster than the verb, and - the point - it costs the game
+       NOTHING AT ALL. ReadProcessMemory is serviced by the kernel against this
+       process's address space; it does not run on, block or interrupt any game
+       thread. Verified numerically: the matrices read out of process match what
+       `bones` returns to 5.0e-06, which is exactly the quantisation of the
+       "%.5f" this file prints them with. So no fidelity is traded - the
+       out-of-process path is if anything the MORE precise of the two, because
+       it carries the raw float32 rather than a five-decimal rendering of it.
+
+       WHY THIS VERB IS NEEDED AT ALL. The client could in principle find the
+       array itself: the bone hashes are a distinctive fingerprint at stride
+       0xA0 and a full process scan takes 0.4 s. That was tried and it is NOT
+       reliable enough to ship - entities that share a rig share a fingerprint,
+       so the scan cannot say WHICH instance belongs to which entity, and
+       matching them by pose failed on 4 of 7 animating characters. The engine
+       is the only thing that knows, and this is it saying so.
+
+       DELIBERATELY GENERAL, not "boneaddr". The shape is: publish a REGION OF
+       INTEREST - base address, element stride, element count, the offsets of
+       the fields inside an element - plus a VALIDITY TOKEN, which is a list of
+       [address, expected u32] pairs the client re-reads to answer "is this
+       still the thing I think it is". None of that vocabulary is specific to
+       skeletons; an entity transform, or a table of them, publishes through the
+       same call with a different `kind`. The entity's own transform and
+       position addresses are published here already, because they cost one hex
+       format each and they are what a future `kind` would want.
+
+       STALENESS. Addresses die: an entity is destroyed, or its mesh streams
+       out, or the level changes, or the game restarts (ASLR). The client must
+       therefore treat every address as a lease, not a fact. Two independent
+       checks, both measured to work: the generic token above (entity+0x34 still
+       points at its ref node - the same proof LnkResolve uses), and, for bones,
+       the hash column that is already inside the bytes the client just read, so
+       it costs nothing extra. A pull that fails either is discarded and the
+       client re-asks this verb. Reading a stale address cannot hurt the game -
+       the worst case is one wrong pose for one frame, which degrades to bind
+       pose exactly as a missing bone already does.
+
+       READ ONLY, AND THAT IS A DESIGN RULE, NOT AN OVERSIGHT. Addresses are
+       published so they can be READ. Writes stay in `move`, which goes through
+       the engine's own EntMoveTo: poking a position into memory would leave
+       the spatial and physics structures believing the object is still where it
+       was, i.e. visually moved and colliding somewhere else. Edits are rare and
+       user-driven and 12 ms through `move` is fine.                          */
+    /* ---- addr world: EVERY entity's address, in ONE walk ------------------ *
+       The generalisation of `addr bones`, and the one that matters most. The
+       refresh loop's other half is `list`/`listx`, which re-serialises all
+       ~3,250 entities on the game's main thread several times a second even
+       though - MEASURED - only about 4 of them have moved since last time.
+
+       This publishes each entity's ADDRESS once. The client then reads the
+       positions itself with ReadProcessMemory, at whatever rate it likes, for
+       no game-side cost at all. It only needs calling again when the set of
+       entities changes: a level load, or something spawning or dying.
+
+       ONE 0x80-BYTE READ PER ENTITY IS ALL THE CLIENT NEEDS, which is why only
+       the entity base is published rather than three separate addresses.
+       Everything wanted lives inside that block:
+
+           +0x34  the ref back-pointer   <- the identity token
+           +0x40  the 4x4 transform      <- orientation
+           +0x70  position               <- row 3 OF that same transform
+
+       So the validity check is answered out of bytes the client already has,
+       and costs no extra syscall. That is the whole reason this is cheap.
+
+       The walk is EntSnapshot's, via RefNodeEntityFast - ~24 ms for the whole
+       map, against the 262 ms a RefNodeEntity walk costs. Identity is proven
+       exactly as LnkResolveMany proves it: the ref comes from the map's own
+       node, so entity+0x34 == node is a full test, not a plausibility check. */
+    if (_stricmp(argv[0], "addr") == 0 && argc > 1 &&
+        _stricmp(argv[1], "world") == 0) {
+        LARGE_INTEGER qf, q0, q1;
+        void*  esys = *(void**)G_ENTSYS_PTR;
+        void*  stack[64];
+        int    sp = 0, guard = 0;
+        long   nsent = 0, nskip = 0;
+        long   cap = (argc > 2) ? atol(argv[2]) : 8192;
+        void  *sent, *node;
+
+        if (cap <= 0 || cap > 65536) cap = 8192;
+        QueryPerformanceFrequency(&qf);
+        QueryPerformanceCounter(&q0);
+
+        if (!Readable(esys, OFF_ESYS_MAPSENT + 4)) {
+            LnkFail("addr", "no entity system (is a level loaded?)");
+            goto done;
+        }
+        sent = *(void**)((char*)esys + OFF_ESYS_MAPSENT);
+        if (!Readable(sent, 0x48)) {
+            LnkFail("addr", "entity map is not readable yet");
+            goto done;
+        }
+
+        /* THE CHANGE DETECTOR, and the reason this verb almost never needs
+           calling twice.
+
+           Publishing addresses solves reading things that already exist. It
+           does not solve something being SPAWNED - a new entity has no address,
+           so no amount of reading out there will ever find it. Deaths are free
+           (the token stops matching and the client sees it immediately), but
+           births need telling.
+
+           Re-walking every few seconds would work and would cost ~24 ms each
+           time for nothing, most times. Instead publish the address of the
+           entity map's element count. The client reads that ONE u32 out of
+           process - about 7 us, no game involvement - and only re-asks this
+           verb when it moves. Spawns are then noticed on the next refresh
+           rather than up to N seconds later, and idle costs nothing at all.
+
+           `gen_at` is a HYPOTHESIS, not a known fact: OFF_ESYS_MAPSENT is 0x2C
+           and this is an MSVC std::map, whose layout is {_Myhead, _Mysize}, so
+           the count should sit at 0x30. It is published alongside `walked` -
+           the number this walk actually visited - precisely so the client (and
+           tools\probe_gen.py) can check the two agree instead of trusting the
+           guess. If they disagree the client must ignore gen_at and fall back
+           to periodic re-asking; nothing breaks either way. */
+        LnkPut("{\"ok\":true,\"cmd\":\"addr\",\"kind\":\"world\","
+               "\"pid\":%lu,\"frame\":%ld,\"world\":\"%s\","
+               "\"block\":%d,\"pos_off\":%d,\"xf_off\":%d,\"chk_off\":%d,"
+               "\"esys\":\"%08lX\",\"gen_at\":\"%08lX\",\"gen\":%lu,"
+               "\"lease\":\"token\"}\n",
+               (unsigned long)GetCurrentProcessId(), (long)g_frames,
+               WorldName(), (int)(OFF_ENT_XFORM + 0x40),
+               (int)OFF_ENT_POS, (int)OFF_ENT_XFORM, (int)OFF_ENT_CHECK,
+               (unsigned long)(SIZE_T)esys,
+               /* 0 = no cheap change detector exists; see OFF_ESYS_MAPCOUNT. */
+               (unsigned long)0, (unsigned long)0);
+
+        node = *(void**)((char*)sent + OFF_TN_PARENT);
+        while ((node || sp) && guard++ < 4096 && nsent < cap) {
+            while (QuickPtr(node) && Readable(node, 0x48) &&
+                   !*(unsigned char*)((char*)node + OFF_TN_ISNIL) && sp < 63) {
+                stack[sp++] = node;
+                node = *(void**)((char*)node + OFF_TN_LEFT);
+            }
+            if (!sp) break;
+            node = stack[--sp];
+            {
+                unsigned long count = *(unsigned long*)((char*)node + OFF_TN_INNERCOUNT);
+                void* in = *(void**)((char*)node + OFF_TN_INNERHEAD);
+                unsigned long i;
+                if (count > 65536) count = 0;
+                for (i = 0; i < count && QuickPtr(in) && nsent < cap; ++i) {
+                    void* ref;
+                    void* ent = RefNodeEntityFast(in, &ref);
+                    if (ent) __try {
+                        unsigned long lo = *(unsigned long*)((char*)in + OFF_IN_ID64);
+                        unsigned long hi = *(unsigned long*)((char*)in + OFF_IN_ID64 + 4);
+                        /* Prove it before publishing it - an address that fails
+                           here would be handed to the client as fact.
+
+                           NO Readable() HERE, and that is the whole difference
+                           between this walk and a slow one. Readable() is a
+                           VirtualQuery SYSCALL; two per entity across 3,245
+                           entities MEASURED at 432 ms for this verb, against
+                           the ~24 ms the same traversal costs in poslist. It is
+                           the identical trap that makes EntWalkFind's walk
+                           262 ms where RefNodeEntityFast's is 24 ms.
+
+                           The __try around this block is the protection, and it
+                           is the same protection RefNodeEntityFast relies on: a
+                           bad read raises and the entity is skipped. The
+                           back-pointer test below is unchanged and is still the
+                           full identity proof - only the redundant page-probe
+                           in front of it is gone. */
+                        if (*(void**)((char*)ent + OFF_ENT_CHECK) == ref) {
+                            char nb[ENT_NLEN * 6];
+                            /* NameFAST. EntityName() calls Readable() twice -
+                               two VirtualQuery syscalls per entity - which this
+                               file already documents as ~25 ms a pull and which
+                               EntityNameFast exists to avoid. Using the slow one
+                               here MEASURED this verb at 245 ms. */
+                            LnkEsc(nb, sizeof(nb), EntityNameFast(ent));
+                            LnkPut("{\"id\":\"%08lX:%08lX\",\"n\":\"%s\","
+                                   "\"at\":\"%08lX\",\"tok\":\"%08lX\"}\n",
+                                   hi, lo, nb,
+                                   (unsigned long)(SIZE_T)ent,
+                                   (unsigned long)(SIZE_T)ref);
+                            ++nsent;
+                        } else {
+                            ++nskip;
+                        }
+                    }
+                    __except (EXCEPTION_EXECUTE_HANDLER) { ++nskip; }
+                    in = *(void**)((char*)in + OFF_IN_NEXT);
+                }
+            }
+            node = *(void**)((char*)node + OFF_TN_RIGHT);
+        }
+
+        QueryPerformanceCounter(&q1);
+        /* `walked` is what the count at gen_at SHOULD equal if the offset
+           hypothesis holds. Reported so the client can verify rather than
+           assume - see the header comment on gen_at. */
+        LnkPut("{\"stat\":\"addr\",\"us\":%ld,\"sent\":%ld,\"skipped\":%ld,"
+               "\"walked\":%ld}\n",
+               (long)((q1.QuadPart - q0.QuadPart) * 1000000 /
+                      (qf.QuadPart ? qf.QuadPart : 1)),
+               nsent, nskip, nsent + nskip);
+        LnkPut("{\"end\":\"addr\"}\n");
+        goto done;
+    }
+
+    /* ---- cvar: set one engine CVar, through the engine's own console ------ *
+       THE EDITOR'S TIME SLIDER LIT ITS OWN VIEWPORT AND NOTHING ELSE. It was
+       always local: it recomputes the editor's lighting and the game never
+       hears about it, so dragging it made the two disagree rather than agree.
+       The game's own time of day is the CVar `env_Hour` (`env_TimeScale` and
+       `env_LegacyTimeOfDay` sit beside it in the shipped command table).
+
+       THIS WRITES, and that is a deliberate exception to the read-only rule
+       the rest of this link keeps. It is safe for the same reason `move` is:
+       it goes through `CConsole::ExecuteLine`, the engine's own entry point,
+       byte-identical to the idiom at 0x100AE6E7 - not a poke into memory. The
+       engine applies whatever a CVar change implies; we do not have to know
+       what that is, which is exactly why writing to memory directly would be
+       the wrong tool here.
+
+       Deliberately ONE CVar per call rather than an arbitrary console line.
+       An `exec` verb would let anything through the pipe, including commands
+       that load levels or quit the game, and the editor has no business with
+       those. The name must be a bare identifier and the value a number, so a
+       second command cannot be smuggled in behind either.                   */
+    if (_stricmp(argv[0], "cvar") == 0) {
+        char line[LNK_REQ_MAX];
+        void* console = *(void**)G_CONSOLE_PTR;
+        int i;
+
+        if (argc < 3) {
+            LnkFail("cvar", "usage: cvar <name> <value>");
+            goto done;
+        }
+        for (i = 0; argv[1][i]; ++i) {
+            char ch = argv[1][i];
+            if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                  (ch >= '0' && ch <= '9') || ch == '_')) {
+                LnkFail("cvar", "the name must be a bare identifier");
+                goto done;
+            }
+        }
+        for (i = 0; argv[2][i]; ++i) {
+            char ch = argv[2][i];
+            if (!((ch >= '0' && ch <= '9') || ch == '.' || ch == '-' ||
+                  ch == '+')) {
+                LnkFail("cvar", "the value must be a number");
+                goto done;
+            }
+        }
+        if (!console) {
+            LnkFail("cvar", "no console object (is a level loaded?)");
+            goto done;
+        }
+        _snprintf(line, sizeof(line) - 1, "%s %s", argv[1], argv[2]);
+        line[sizeof(line) - 1] = 0;
+        __try {
+            RunConsoleLine(console, line);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            LnkFail("cvar", "ExecuteLine faulted");
+            goto done;
+        }
+        LnkPut("{\"ok\":true,\"cmd\":\"cvar\",\"set\":\"%s\",\"value\":\"%s\"}\n",
+               argv[1], argv[2]);
+        LnkPut("{\"end\":\"cvar\"}\n");
+        goto done;
+    }
+
+    /* ---- addr kit: where an entity's GRAPHIC state lives ------------------ *
+       PUBLISHES ADDRESSES, DECODES NOTHING, and that is deliberate. Two things
+       are wrong in the editor and both come from guessing at files instead of
+       reading the entity:
+
+         * every character is drawn with the WHOLE kit library rather than the
+           parts it actually has. The index that should say which is which
+           holds 73 entries and matches 2 of 3,256 live entities, so
+           `parts_for` falls back to the archetype - a superset that mixes male
+           and female pieces. Hence a female mask floating on a male head and a
+           helmet the game never equips.
+         * things placed in a map but switched OFF are drawn anyway. The
+           editor has no idea an entity is hidden.
+
+       Both answers exist on the live entity. Rather than guess struct offsets
+       here and rebuild the DLL once per guess, this hands out the component
+       POINTERS and lets the client read them with ReadProcessMemory - so the
+       exploring happens in Python, at no cost to the game, with no rebuild per
+       experiment. `CGraphicComponent+0x38` is already known to be the part
+       count (see GraphicReport), which gives the reader a landmark to orient
+       on and a way to prove it is looking at the right object.
+
+       Class ids are CRC-32 (zlib) of the class name - VERIFIED against the two
+       already in this file, 0x035982C6 and 0x049C7D70, both of which reproduce
+       exactly.                                                                */
+    if (_stricmp(argv[0], "addr") == 0 && argc > 1 &&
+        _stricmp(argv[1], "kit") == 0) {
+        char   idbuf[LNK_REQ_MAX];
+        char*  ids[BONE_IDS_MAX];
+        LnkSlot slot[BONE_IDS_MAX];
+        char*  p;
+        int    nid = 0, k;
+        unsigned long cidGraphic = 0x035982C6;   /* CGraphicComponent        */
+        unsigned long cidKit     = 0xD1E227CB;   /* CGraphicKitComponent     */
+        unsigned long cidFdc     = 0x049C7D70;   /* CFileDescriptorComponent */
+
+        if (argc < 3) {
+            LnkFail("addr", "usage: addr kit <HI:LO>[,<HI:LO>...]");
+            goto done;
+        }
+        strncpy(idbuf, argv[2], sizeof(idbuf) - 1);
+        idbuf[sizeof(idbuf) - 1] = 0;
+        p = idbuf;
+        while (*p && nid < BONE_IDS_MAX) {
+            ids[nid++] = p;
+            p = strchr(p, ',');
+            if (!p) break;
+            *p++ = 0;
+        }
+        for (k = 0; k < nid; ++k) {
+            slot[k].lo = slot[k].hi = 0;
+            slot[k].ent = slot[k].ref = 0;
+            LnkId(ids[k], 0, &slot[k].lo, &slot[k].hi);
+        }
+        LnkResolveMany(slot, nid);
+
+        LnkPut("{\"ok\":true,\"cmd\":\"addr\",\"kind\":\"kit\",\"ids\":%d,"
+               "\"pid\":%lu,\"frame\":%ld,\"parts_off\":56}\n",
+               nid, (unsigned long)GetCurrentProcessId(), (long)g_frames);
+
+        for (k = 0; k < nid; ++k) {
+            void* ent = slot[k].ent;
+            void *g = 0, *kit = 0, *fdc = 0;
+            long  parts = -1;
+            char  nb[ENT_NLEN * 6];
+
+            if (!ent) {
+                LnkPut("{\"ent\":\"%08lX:%08lX\",\"err\":\"not in the live world\"}\n",
+                       slot[k].hi, slot[k].lo);
+                continue;
+            }
+            __try {
+                g   = ((fnGetCompVeh)FN_GETCOMP_VEH)(ent, (const void*)&cidGraphic);
+                kit = ((fnGetCompVeh)FN_GETCOMP_VEH)(ent, (const void*)&cidKit);
+                fdc = ((fnGetCompVeh)FN_GETCOMP_VEH)(ent, (const void*)&cidFdc);
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) {
+                LnkPut("{\"ent\":\"%08lX:%08lX\",\"err\":\"GetComponent faulted\"}\n",
+                       slot[k].hi, slot[k].lo);
+                continue;
+            }
+            if (Readable(g, 0x3C)) parts = *(long*)((char*)g + 0x38);
+            LnkEsc(nb, sizeof(nb), EntityNameFast(ent));
+            LnkPut("{\"ent\":\"%08lX:%08lX\",\"n\":\"%s\",\"at\":\"%08lX\","
+                   "\"gfx\":\"%08lX\",\"kit\":\"%08lX\",\"fdc\":\"%08lX\","
+                   "\"parts\":%ld}\n",
+                   slot[k].hi, slot[k].lo, nb,
+                   (unsigned long)(SIZE_T)ent,
+                   (unsigned long)(SIZE_T)g,
+                   (unsigned long)(SIZE_T)kit,
+                   (unsigned long)(SIZE_T)fdc,
+                   parts);
+        }
+        LnkPut("{\"end\":\"addr\"}\n");
+        goto done;
+    }
+
+    /* ---- addr player: the cheapest win on the whole link ------------------ *
+       `player` costs ~12 ms and the editor polls it at 20 Hz to keep the camera
+       on the player - a quarter of a second of the game's main thread, every
+       second, to answer one question about ONE entity. GetPlayerEntity needs no
+       walk at all, so publishing its address turns that into a 128-byte read
+       here and nothing at all there.
+
+       The address is re-fetched when the token stops matching, which is what
+       happens on death, level change or respawn.                             */
+    if (_stricmp(argv[0], "addr") == 0 && argc > 1 &&
+        _stricmp(argv[1], "player") == 0) {
+        void* pl = GetPlayerEntity();
+        void* ref;
+        char  nb[ENT_NLEN * 6], w[160];
+
+        if (!Readable(pl, OFF_ENT_XFORM + 0x40) ||
+            !Readable((char*)pl + OFF_ENT_CHECK, 4)) {
+            LnkFail("addr", "no player entity (is a level loaded?)");
+            goto done;
+        }
+        ref = *(void**)((char*)pl + OFF_ENT_CHECK);
+        LnkEsc(nb, sizeof(nb), EntityName(pl));
+        LnkEsc(w, sizeof(w), WorldName());
+        LnkPut("{\"ok\":true,\"cmd\":\"addr\",\"kind\":\"player\","
+               "\"pid\":%lu,\"frame\":%ld,\"world\":\"%s\","
+               "\"block\":%d,\"pos_off\":%d,\"xf_off\":%d,\"chk_off\":%d,"
+               "\"lease\":\"token\"}\n",
+               (unsigned long)GetCurrentProcessId(), (long)g_frames, w,
+               (int)(OFF_ENT_XFORM + 0x40), (int)OFF_ENT_POS,
+               (int)OFF_ENT_XFORM, (int)OFF_ENT_CHECK);
+        LnkPut("{\"id\":\"player\",\"n\":\"%s\",\"at\":\"%08lX\","
+               "\"tok\":\"%08lX\"}\n",
+               nb, (unsigned long)(SIZE_T)pl, (unsigned long)(SIZE_T)ref);
+        LnkPut("{\"end\":\"addr\"}\n");
+        goto done;
+    }
+
+    if (_stricmp(argv[0], "addr") == 0) {
+        LARGE_INTEGER qf, q0, q1;
+        char    idbuf[LNK_REQ_MAX];
+        char*   ids[BONE_IDS_MAX];
+        LnkSlot slot[BONE_IDS_MAX];
+        int     why[BONE_IDS_MAX];
+        char*   p;
+        int     nid = 0, k, chanB = 0;
+
+        if (argc < 3 || _stricmp(argv[1], "bones") != 0) {
+            LnkFail("addr", "usage: addr bones <HI:LO>[,<HI:LO>...] [A|B]"
+                            "   |   addr world [max]   |   addr player"
+                            "   |   addr kit <HI:LO>[,...]");
+            goto done;
+        }
+        if (argc > 3 && (argv[3][0] == 'b' || argv[3][0] == 'B')) chanB = 1;
+
+        QueryPerformanceFrequency(&qf);
+        QueryPerformanceCounter(&q0);
+
+        strncpy(idbuf, argv[2], sizeof(idbuf) - 1);
+        idbuf[sizeof(idbuf) - 1] = 0;
+        p = idbuf;
+        while (*p && nid < BONE_IDS_MAX) {
+            ids[nid++] = p;
+            p = strchr(p, ',');
+            if (!p) break;
+            *p++ = 0;
+        }
+
+        for (k = 0; k < nid; ++k) {
+            slot[k].lo = slot[k].hi = 0;
+            slot[k].ent = slot[k].ref = 0;
+            why[k] = 0;
+            if (_stricmp(ids[k], "sel") == 0) {
+                slot[k].lo = g_selIdLo; slot[k].hi = g_selIdHi;
+                if (!slot[k].lo && !slot[k].hi) why[k] = 1;
+            } else if (!LnkId(ids[k], 0, &slot[k].lo, &slot[k].hi)) {
+                why[k] = 2;
+            }
+        }
+        LnkResolveMany(slot, nid);
+
+        /* One header describing the LAYOUT, so the client's structured dtype is
+           built from what the DLL actually compiled against rather than from
+           constants copied into Python and left to drift. */
+        LnkPut("{\"ok\":true,\"cmd\":\"addr\",\"kind\":\"bones\",\"ids\":%d,"
+               "\"pid\":%lu,\"frame\":%ld,\"chan\":\"%s\","
+               "\"stride\":%d,\"hoff\":%d,\"moff\":%d,\"esize\":64,"
+               "\"entchk\":%d,\"lease\":\"token\"}\n",
+               nid, (unsigned long)GetCurrentProcessId(), (long)g_frames,
+               chanB ? "B" : "A", (int)BONE_STRIDE, (int)OFF_BONE_HASH,
+               (int)(chanB ? OFF_BONE_MAT_B : OFF_BONE_MAT_A),
+               (int)OFF_ENT_CHECK);
+
+        for (k = 0; k < nid; ++k) {
+            unsigned long lo = slot[k].lo, hi = slot[k].hi;
+            void* ent;
+            void* arr = 0;
+            long  n = 0;
+            const char* src = "vt84";
+            char  nb[ENT_NLEN * 6];
+
+            if (why[k] == 1) { LnkPut("{\"ent\":\"sel\",\"err\":\"nothing is selected\"}\n"); continue; }
+            if (why[k] == 2) { LnkPut("{\"ent\":\"?\",\"err\":\"bad id\"}\n"); continue; }
+
+            ent = slot[k].ent;
+            if (!ent) {
+                LnkPut("{\"ent\":\"%08lX:%08lX\",\"err\":\"not in the live world\"}\n", hi, lo);
+                continue;
+            }
+            if (!BoneHolder(ent, VT_BONEHOLDER_A, &n, &arr)) {
+                src = "vt80";
+                if (!BoneHolder(ent, VT_BONEHOLDER_B, &n, &arr)) {
+                    LnkPut("{\"ent\":\"%08lX:%08lX\",\"err\":"
+                           "\"no renderable skeleton (not a skinned entity, "
+                           "or its mesh is not built yet)\"}\n", hi, lo);
+                    continue;
+                }
+            }
+            LnkEsc(nb, sizeof(nb), EntityName(ent));
+            LnkPut("{\"ent\":\"%08lX:%08lX\",\"n\":\"%s\",\"src\":\"%s\","
+                   "\"base\":\"%08lX\",\"count\":%ld,\"bytes\":%ld,"
+                   "\"ent_at\":\"%08lX\",\"xform_at\":\"%08lX\",\"pos_at\":\"%08lX\"",
+                   hi, lo, nb, src,
+                   (unsigned long)(SIZE_T)arr, n, n * (long)BONE_STRIDE,
+                   (unsigned long)(SIZE_T)ent,
+                   (unsigned long)(SIZE_T)((char*)ent + OFF_ENT_XFORM),
+                   (unsigned long)(SIZE_T)((char*)ent + OFF_ENT_POS));
+            /* The lease. [address, expected u32] pairs; the client re-reads
+               them and throws the pull away if any disagrees. The first is
+               generic entity identity, the rest are this region's own content.
+               Two hashes rather than one because a single u32 is a weak witness
+               against a reused allocation. */
+            LnkPut(",\"tok\":[[\"%08lX\",\"%08lX\"]",
+                   (unsigned long)(SIZE_T)((char*)ent + OFF_ENT_CHECK),
+                   (unsigned long)(SIZE_T)slot[k].ref);
+            if (n >= 1 && Readable(arr, BONE_STRIDE))
+                LnkPut(",[\"%08lX\",\"%08lX\"]",
+                       (unsigned long)(SIZE_T)arr,
+                       *(const unsigned long*)((const char*)arr + OFF_BONE_HASH));
+            if (n >= 2 && Readable(arr, 2 * BONE_STRIDE))
+                LnkPut(",[\"%08lX\",\"%08lX\"]",
+                       (unsigned long)(SIZE_T)((const char*)arr + BONE_STRIDE),
+                       *(const unsigned long*)((const char*)arr + BONE_STRIDE + OFF_BONE_HASH));
+            LnkPut("]}\n");
+        }
+
+        QueryPerformanceCounter(&q1);
+        LnkPut("{\"stat\":\"addr\",\"us\":%ld}\n",
+               (long)((q1.QuadPart - q0.QuadPart) * 1000000 /
+                      (qf.QuadPart ? qf.QuadPart : 1)));
+        LnkPut("{\"end\":\"addr\"}\n");
+        goto done;
+    }
+
+    /* ---- player: the anchor for a developer's view ----------------------- *
+       The user is standing IN the world, so "where am I and which way am I
+       facing" is the one piece of state a live viewport wants every refresh.
+       One entity, no walk - cheap enough to poll a few times a second. */
+    if (_stricmp(argv[0], "player") == 0) {
+        void* pl = GetPlayerEntity();
+        char  nb[ENT_NLEN * 6], w[160];
+        if (!Readable(pl, OFF_ENT_XFORM + 0x40)) {
+            LnkFail("player", "no player entity (is a level loaded?)");
+            goto done;
+        }
+        LnkEsc(nb, sizeof(nb), EntityName(pl));
+        LnkEsc(w, sizeof(w), WorldName());
+        {
+            const float* m = (const float*)((char*)pl + OFF_ENT_XFORM);
+            const float* q = (const float*)((char*)pl + OFF_ENT_POS);
+            LnkPut("{\"ok\":true,\"cmd\":\"player\",\"n\":\"%s\","
+                   "\"world\":\"%s\",\"frame\":%ld,"
+                   "\"p\":[%.3f,%.3f,%.3f],\"f\":[%.4f,%.4f,%.4f],"
+                   "\"r\":[%.4f,%.4f,%.4f],\"u\":[%.4f,%.4f,%.4f]}\n",
+                   nb, w, (long)g_frames, q[0], q[1], q[2],
+                   m[4], m[5], m[6], m[0], m[1], m[2], m[8], m[9], m[10]);
+            LnkPut("{\"end\":\"player\"}\n");
+        }
+        goto done;
+    }
+
+    /* ---- get: where is this entity NOW ----------------------------------- */
+    if (_stricmp(argv[0], "get") == 0) {
+        unsigned long lo = 0, hi = 0;
+        void* ent;
+        if (argc < 2 || !LnkId(argv[1], argc > 2 ? argv[2] : 0, &lo, &hi)) {
+            LnkFail("get", "usage: get <HI:LO>"); goto done;
+        }
+        ent = LnkResolve(lo, hi, 0);
+        if (!ent) { LnkFail("get", "id not present in the live world"); goto done; }
+        {
+            const float* p = (const float*)((char*)ent + OFF_ENT_POS);
+            char nb[ENT_NLEN * 6];
+            LnkEsc(nb, sizeof(nb), EntityName(ent));
+            LnkPut("{\"ok\":true,\"cmd\":\"get\",\"id\":\"%08lX:%08lX\","
+                   "\"n\":\"%s\",\"p\":[%.3f,%.3f,%.3f]}\n",
+                   hi, lo, nb, p[0], p[1], p[2]);
+            LnkPut("{\"end\":\"get\"}\n");
+        }
+        goto done;
+    }
+
+    /* ---- select: mirror the DLL's own selection -------------------------- *
+       So the console's `kill`/`drive`/`delete` and the editor agree on what
+       "selected" means. This is why the editor sets it rather than keeping a
+       private notion of selection. */
+    if (_stricmp(argv[0], "select") == 0) {
+        unsigned long lo = 0, hi = 0;
+        void* ref = 0;
+        void* ent;
+        if (argc < 2 || !LnkId(argv[1], argc > 2 ? argv[2] : 0, &lo, &hi)) {
+            LnkFail("select", "usage: select <HI:LO>"); goto done;
+        }
+        ent = LnkResolve(lo, hi, &ref);
+        if (!ent) { LnkFail("select", "id not present in the live world"); goto done; }
+        g_selEnt  = ent;
+        g_selRef  = ref;
+        g_selIdLo = lo;
+        g_selIdHi = hi;
+        strncpy(g_selName, EntityName(ent), sizeof(g_selName) - 1);
+        g_selName[sizeof(g_selName) - 1] = 0;
+        {
+            const float* p = (const float*)((char*)ent + OFF_ENT_POS);
+            char nb[ENT_NLEN * 6];
+            LnkEsc(nb, sizeof(nb), g_selName);
+            if (console)
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "editor selected: %s  id %08lX:%08lX\n", g_selName, hi, lo);
+            LnkPut("{\"ok\":true,\"cmd\":\"select\",\"id\":\"%08lX:%08lX\","
+                   "\"n\":\"%s\",\"p\":[%.3f,%.3f,%.3f]}\n",
+                   hi, lo, nb, p[0], p[1], p[2]);
+            LnkPut("{\"end\":\"select\"}\n");
+        }
+        goto done;
+    }
+
+    /* ---- move: the whole point of milestone one -------------------------- *
+       Routed through EntMoveTo, so the answer says whether the entity ACTUALLY
+       moved. A lot of things silently refuse - EntMoveTo reads the transform
+       back and syncs any CStaticPhysComponent proxy, and reports honestly when
+       the object stayed put. The editor shows that instead of pretending. */
+    if (_stricmp(argv[0], "move") == 0) {
+        unsigned long lo = 0, hi = 0;
+        void* ent;
+        float x, y, z, got[3];
+        int   base = 2, r;
+        if (argc < 5) { LnkFail("move", "usage: move <HI:LO> <x> <y> <z>"); goto done; }
+        if (strchr(argv[1], ':')) {
+            if (!LnkId(argv[1], 0, &lo, &hi)) { LnkFail("move", "bad id"); goto done; }
+            base = 2;
+        } else {
+            if (argc < 6 || !LnkId(argv[1], argv[2], &lo, &hi)) {
+                LnkFail("move", "bad id"); goto done;
+            }
+            base = 3;
+        }
+        x = (float)atof(argv[base]);
+        y = (float)atof(argv[base + 1]);
+        z = (float)atof(argv[base + 2]);
+        ent = LnkResolve(lo, hi, 0);
+        if (!ent) { LnkFail("move", "id not present in the live world"); goto done; }
+        got[0] = got[1] = got[2] = 0.0f;
+        r = EntMoveTo(ent, x, y, z, got);
+        if (r > 0) InterlockedIncrement(&g_lnkMoves);
+        LnkPut("{\"ok\":%s,\"cmd\":\"move\",\"id\":\"%08lX:%08lX\","
+               "\"moved\":%d,\"asked\":[%.3f,%.3f,%.3f],\"p\":[%.3f,%.3f,%.3f]%s}\n",
+               (r >= 0) ? "true" : "false", hi, lo, r, x, y, z,
+               got[0], got[1], got[2],
+               (r == 0) ? ",\"note\":\"the engine refused the move - this entity "
+                          "is not drawn from its own transform\""
+                        : ((r < 0) ? ",\"note\":\"position could not be read\"" : ""));
+        LnkPut("{\"end\":\"move\"}\n");
+        goto done;
+    }
+
+    LnkFail(argv[0],
+            "unknown verb - try hello, list, listx, poslist, bones, addr, "
+            "player, get, select, move, cvar");
+
+done:
+    if (g_lnkOutLen <= 0) LnkFail("?", "empty response");
+    InterlockedExchange(&g_lnkState, LNK_DONE);
+}
+
+/* ---- the PIPE thread. Parses and transports. Touches no engine state. ---- *
+   PIPE_NOWAIT + PeekNamedPipe polling rather than overlapped I/O: the loop then
+   never blocks, so it notices g_shutdown within one 5 ms tick and the unload
+   path does not need to cancel I/O or connect to its own pipe to wake it. The
+   cost is up to 5 ms of latency per request, which for a mouse drag is under
+   the frame time anyway. */
+static int LnkWriteAll(HANDLE h, const char* buf, long len)
+{
+    long off = 0;
+    int  spins = 0;
+    while (off < len) {
+        DWORD wrote = 0;
+        if (!WriteFile(h, buf + off, (DWORD)(len - off), &wrote, 0)) return 0;
+        if (wrote == 0) {
+            if (++spins > 2000) return 0;      /* ~10 s: the client is gone */
+            if (g_shutdown) return 0;
+            Sleep(5);
+            continue;
+        }
+        spins = 0;
+        off += (long)wrote;
+    }
+    return 1;
+}
+
+static DWORD WINAPI LinkThread(LPVOID unused)
+{
+    char line[LNK_REQ_MAX];
+    int  ln = 0;
+    (void)unused;
+
+    g_lnkOut = (char*)malloc(LNK_OUT_MAX);
+    if (!g_lnkOut) { logf_("[link] out of memory - editor link disabled"); return 0; }
+    logf_("[link] link thread up - the pipe name is chosen on first create");
+
+    while (!g_shutdown) {
+        HANDLE h;
+        DWORD  mode;
+        if (!g_lnkOn) { Sleep(200); continue; }
+
+        if (!g_lnkPipe[0]) {
+            _snprintf(g_lnkPipe, sizeof(g_lnkPipe) - 1, "%s", LNK_PIPE_NAME);
+            g_lnkPipe[sizeof(g_lnkPipe) - 1] = 0;
+        }
+        h = CreateNamedPipeA(g_lnkPipe,
+                             PIPE_ACCESS_DUPLEX,
+                             PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT,
+                             1,                       /* ONE client at a time */
+                             64 * 1024, 64 * 1024, 0, 0);
+        if (h == INVALID_HANDLE_VALUE) {
+            DWORD err = GetLastError();
+            /* ACCESS_DENIED on a named pipe means the name exists and its one
+               permitted instance is taken - i.e. another Avatar is already
+               serving the link. Rename ourselves and retry IMMEDIATELY rather
+               than sleeping: this is a certainty, not a transient. */
+            if (err == ERROR_ACCESS_DENIED && !g_lnkPidNamed) {
+                g_lnkPidNamed = 1;
+                _snprintf(g_lnkPipe, sizeof(g_lnkPipe) - 1, "%s_%lu",
+                          LNK_PIPE_NAME, (unsigned long)GetCurrentProcessId());
+                g_lnkPipe[sizeof(g_lnkPipe) - 1] = 0;
+                logf_("[link] the canonical pipe is already served by another "
+                      "instance - listening on %s instead", g_lnkPipe);
+                continue;
+            }
+            logf_("[link] CreateNamedPipe failed (%lu) - retrying", err);
+            Sleep(2000);
+            continue;
+        }
+
+        /* wait for a client, without blocking */
+        for (;;) {
+            if (g_shutdown || !g_lnkOn) { CloseHandle(h); goto out; }
+            if (ConnectNamedPipe(h, 0)) break;
+            if (GetLastError() == ERROR_PIPE_CONNECTED) break;
+            Sleep(20);
+        }
+
+        /* Blocking mode for the session: reads are gated by PeekNamedPipe, so
+           ReadFile only ever runs when bytes are already there. */
+        mode = PIPE_READMODE_BYTE | PIPE_WAIT;
+        SetNamedPipeHandleState(h, &mode, 0, 0);
+        InterlockedExchange(&g_lnkConn, 1);
+        ln = 0;
+        logf_("[link] editor connected on %s", g_lnkPipe);
+
+        while (!g_shutdown && g_lnkOn) {
+            DWORD avail = 0;
+            char  ch;
+            DWORD got = 0;
+            if (!PeekNamedPipe(h, 0, 0, 0, &avail, 0)) break;   /* client gone */
+            if (!avail) { Sleep(5); continue; }
+            if (!ReadFile(h, &ch, 1, &got, 0) || got != 1) break;
+            if (ch == '\r') continue;
+            if (ch != '\n') {
+                if (ln < LNK_REQ_MAX - 1) line[ln++] = ch;
+                continue;
+            }
+            line[ln] = 0;
+            if (ln == 0) continue;
+            if (_stricmp(line, "bye") == 0) { ln = 0; break; }
+
+            /* hand it to the main thread and wait for the answer */
+            memcpy(g_lnkReq, line, (size_t)ln + 1);
+            ln = 0;
+            InterlockedExchange(&g_lnkState, LNK_REQ);
+            {
+                int waited = 0;
+                while (InterlockedCompareExchange(&g_lnkState, LNK_DONE, LNK_DONE)
+                           != LNK_DONE) {
+                    if (g_shutdown) goto drop;
+                    /* 4 s. A world change is modal for seconds; anything longer
+                       than this and the frame loop is genuinely not running, so
+                       say so rather than hanging the editor for ever. */
+                    if (++waited > 800) {
+                        static const char* busy =
+                            "{\"ok\":false,\"cmd\":\"?\",\"error\":\"the game's "
+                            "frame loop did not answer - is it paused or "
+                            "loading?\"}\n{\"end\":\"?\"}\n";
+                        InterlockedExchange(&g_lnkState, LNK_IDLE);
+                        if (!LnkWriteAll(h, busy, (long)strlen(busy))) goto drop;
+                        goto served;
+                    }
+                    Sleep(5);
+                }
+                if (!LnkWriteAll(h, g_lnkOut, g_lnkOutLen)) {
+                    InterlockedExchange(&g_lnkState, LNK_IDLE);
+                    goto drop;
+                }
+                InterlockedExchange(&g_lnkState, LNK_IDLE);
+            }
+        served:
+            ;
+        }
+    drop:
+        InterlockedExchange(&g_lnkConn, 0);
+        FlushFileBuffers(h);
+        DisconnectNamedPipe(h);
+        CloseHandle(h);
+        logf_("[link] editor disconnected (%ld request(s) served, %ld live move(s))",
+              (long)g_lnkReqs, (long)g_lnkMoves);
+    }
+out:
+    InterlockedExchange(&g_lnkConn, 0);
+    logf_("[link] thread stopped");
+    return 0;
+}
+
+/* Runs on the MAIN THREAD, once per frame from the detour. Neither of the
+   threads the picker lives on - the overlay thread that paints it, the input
+   thread that reads its mouse and keyboard - may call the engine at all, so
+   everything that touches it happens here: they ask by setting a flag, we do
+   the work and answer by setting another. Both directions are single-writer,
+   so no lock is needed. */
+static void PickerTick(void* console)
+{
+    if (InterlockedExchange(&g_wantArchSnap, 0)) {
+        ArchSnapshot();
+        InterlockedExchange(&g_archReady, 1);
+    }
+    if (InterlockedExchange(&g_wantEntSnap, 0)) {
+        EntSnapshot();
+        InterlockedExchange(&g_archReady, 1);   /* the window waits on this flag */
+    }
+    if (InterlockedExchange(&g_wantSpawn, 0)) {
+        char nm[ARCH_NLEN];
+        strncpy(nm, g_pendingSpawn, sizeof(nm) - 1);
+        nm[sizeof(nm) - 1] = 0;
+        if (nm[0]) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC "spawn %s\n", nm);
+            SpawnArchetype(console, nm, 0);
+        }
+    }
+    if (InterlockedExchange(&g_wantRespawn, 0)) DoRespawn(console);
+    if (InterlockedExchange(&g_wantMkPawn,  0)) DoMkPawn(console);
+    if (InterlockedExchange(&g_wantResurrect, 0)) DoResurrect(console);
+    {   /* an action the entity browser asked for */
+        long act = InterlockedExchange(&g_entAction, -1);
+        if (act >= 0) {
+            void* ent = g_entActEnt;
+            /* The snapshot may be stale - the entity could have been destroyed
+               since. Re-validate before doing anything to it. */
+            if (!Readable(ent, 0x100)) {
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "%s is gone - refresh the list ('ents')\n", g_entActName);
+            } else {
+                /* Make it THE selection, so the typed commands agree with the
+                   window and there is only ever one notion of "selected". */
+                g_selEnt  = ent;
+                g_selRef  = g_entActRef;
+                g_selIdLo = g_entActLo;
+                g_selIdHi = g_entActHi;
+                strncpy(g_selName, g_entActName, sizeof(g_selName) - 1);
+                g_selName[sizeof(g_selName) - 1] = 0;
+                g_lastSpawn = ent;          /* so vehenter/drive aim at it */
+                strncpy(g_lastSpawnName, g_entActName, sizeof(g_lastSpawnName) - 1);
+                g_lastSpawnName[sizeof(g_lastSpawnName) - 1] = 0;
+
+                switch (act) {
+                case 0: {
+                    const float* p = (const float*)((char*)ent + OFF_ENT_POS);
+                    ((fnPrintf)FN_PRINTF)(console, 0, AC
+                        "selected: %s   id %08lX:%08lX   (%.0f %.0f %.0f)\n"
+                        "  'kill' 'delete' 'vehenter' 'drive' all act on it now.\n",
+                        g_selName, g_selIdHi, g_selIdLo, p[0], p[1], p[2]);
+                    break;
+                }
+                case 1: {   /* GO TO - move the PLAYER to the entity */
+                    void* pl = GetPlayerEntity();
+                    const float* e = (const float*)((char*)ent + OFF_ENT_POS);
+                    if (!Readable(pl, OFF_ENT_POS + 12)) {
+                        ((fnPrintf)FN_PRINTF)(console, 0, AC "go to: no player\n");
+                        break;
+                    }
+                    /* Stand off a little: landing inside an 80-metre hull puts
+                       the camera in geometry. */
+                    __try {
+                        ((fnEntSetPos)FN_ENT_SETPOS)(pl, e[0], e[1] - 8.0f, e[2] + 2.0f);
+                    }
+                    __except (EXCEPTION_EXECUTE_HANDLER) { }
+                    ((fnPrintf)FN_PRINTF)(console, 0, AC
+                        "go to: moved you to %s (%.0f %.0f %.0f)\n"
+                        "  If you fall through, that sector may not be resident -\n"
+                        "  'anchor' reports whether the ground under you is loaded.\n",
+                        g_selName, e[0], e[1], e[2]);
+                    break;
+                }
+                case 2: {   /* BRING - move the ENTITY to the player */
+                    void* pl = GetPlayerEntity();
+                    if (!Readable(pl, OFF_ENT_XFORM + 0x40)) {
+                        ((fnPrintf)FN_PRINTF)(console, 0, AC "bring: no player\n");
+                        break;
+                    }
+                    {
+                        const float* m = (const float*)((char*)pl + OFF_ENT_XFORM);
+                        const float* q = (const float*)((char*)pl + OFF_ENT_POS);
+                        float x = q[0] + m[4] * SPAWN_AHEAD;
+                        float y = q[1] + m[5] * SPAWN_AHEAD;
+                        float z = q[2] + m[6] * SPAWN_AHEAD;
+                        float got[3];
+                        int   r2 = EntMoveTo(ent, x, y, z + 0.05f, got);
+                        if (r2 > 0) {
+                            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                                "bring: %s moved to you (%.0f %.0f %.0f)\n",
+                                g_selName, x, y, z);
+                        } else if (r2 == 0) {
+                            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                                "bring: %s did NOT move - it is still at "
+                                "(%.0f %.0f %.0f).\n"
+                                "  SetPosition returns void and reports nothing, so this is read\n"
+                                "  back from the entity. Something owns this transform: either the\n"
+                                "  physics body (statics are keyframed with infinite mass) or the\n"
+                                "  sector's baked geometry, which is not drawn from this entity.\n"
+                                "  Creatures and vehicles move because their bodies are dynamic.\n",
+                                g_selName, got[0], got[1], got[2]);
+                        } else {
+                            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                                "bring: %s - could not read the transform back\n",
+                                g_selName);
+                        }
+                    }
+                    break;
+                }
+                /* The browser's ENTER button asks for a DRIVER seat, matching the
+                   bare `vehenter`. A vehicle with only passenger seats needs
+                   'vehenter 3' typed instead - see the note on VehEnter. */
+                case 3: VehEnter(console, 1);    break;
+                case 4: KillSelected(console);   break;
+                case 5: DeleteSelected(console); break;
+                }
+            }
+        }
+    }
+}
+
+static void SpawnArchetypeGo(void* console, const char* name)
+{
+    void* esys = *(void**)G_ENTSYS_PTR;
+    void* amgr = *(void**)G_ARCHMGR_PTR;
+    void* node = 0;
+    void* ent  = 0;
+    void* pl;
+    float tgt[3];
+    unsigned char str[0x20];
+
+    if (!Readable(esys, 0x20)) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn: no entity system - are you loaded into a level?\n"); return;
+    }
+    if (!Readable(amgr, 0x20) || *(unsigned long*)amgr != VT_ARCHMGR) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn: archetype manager missing or unexpected - refusing to call\n"); return;
+    }
+
+    /* In front of the player, slightly up - dropping things inside the player is
+       how you get a physics explosion instead of a viperwolf. */
+    pl = GetPlayerEntity();
+    if (!pl) {
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "spawn: no player entity to spawn near\n"); return;
+    }
+    {
+        const float* m = (const float*)((char*)pl + OFF_ENT_XFORM);
+        const float* p = (const float*)((char*)pl + OFF_ENT_POS);
+        tgt[0] = p[0] + m[4] * SPAWN_AHEAD;
+        tgt[1] = p[1] + m[5] * SPAWN_AHEAD;
+        tgt[2] = p[2] + m[6] * SPAWN_AHEAD + SPAWN_UP;
+    }
+
+    memset(str, 0, sizeof(str));
+    ((fnStrCtor)FN_STR_CTOR)(str, name);
+    __try {
+        ((fnCreateArch)FN_CREATE_ARCH)(esys, &node, str, -1, -1, 0);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        ((fnStrDtor)FN_STR_DTOR)(str);
+        logf_("[spawn] *** FAULTED creating \"%s\" - caught. Restart the game.", name);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn: FAULTED creating %s - caught. Restart the game.\n", name);
+        return;
+    }
+    ((fnStrDtor)FN_STR_DTOR)(str);
+
+    /* An archetype that is not in THIS level's library returns cleanly - the
+       lookup is a hash map miss, not a fault. That is the common case. */
+    if (Readable(node, 0x10)) ent = *(void**)((char*)node + 0x0C);
+    if (!Readable(ent, 0x100)) {
+        logf_("[spawn] \"%s\" -> no entity (node=%p)", name, node);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn: '%s' is not in %s's entity library.\n"
+            "       'spawn_all' merges the full library if you have not already.\n",
+            name, WorldName());
+        SpawnSuggest(console, name);
+        return;
+    }
+    if (*(void**)((char*)ent + OFF_ENT_CHECK) != node) {
+        logf_("[spawn] back-pointer mismatch: [ent+0x34]=%p node=%p",
+              *(void**)((char*)ent + OFF_ENT_CHECK), node);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn: created something that does not validate - not touching it\n");
+        return;
+    }
+
+    __try {
+        ((fnEntSetPos)FN_ENT_SETPOS)(ent, tgt[0], tgt[1], tgt[2]);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[spawn] *** FAULTED positioning \"%s\" - caught", name);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawn: created %s but positioning it faulted - caught\n", name);
+        return;
+    }
+
+    if (g_spawnGround && !GroundTry(ent, tgt[0], tgt[1]))
+        GroundQueue(ent, tgt[0], tgt[1]);
+
+    /* Reference deliberately NOT released - see the spawn.py notes. One leaked
+       node beats a wrong refcount decrement freeing a live object. */
+    g_lastSpawn = ent;              /* so `vehenter` has something to aim at */
+    strncpy(g_lastSpawnName, name, sizeof(g_lastSpawnName) - 1);
+    g_lastSpawnName[sizeof(g_lastSpawnName) - 1] = 0;
+    logf_("[spawn] %s -> entity %p at (%.1f %.1f %.1f)", name, ent,
+          tgt[0], tgt[1], tgt[2]);
+    GraphicReport(ent, name);
+    ((fnPrintf)FN_PRINTF)(console, 0, AC "spawn: %s at (%.0f %.0f %.0f)%s\n",
+                          name, tgt[0], tgt[1], tgt[2],
+                          g_spawnGround ? " - settling onto the ground" : "");
+}
+/* =========================================================== */
+
+
+/* ---- CFCXPrepareRendererOperation guard ---------------------------------
+   Operation #16 of the 22-operation context switch. #8 destroyed the pawn's
+   cameras, #16 dereferences the resulting NULL. See WARP_CRASH.md. */
+#define VT_PREPARE_RENDERER  (0x110A4000u + g_rebase)  /* the operation's vtable */
+#define SLOT_DOEXECUTE       0x28u         /* -> 0x106D5B30                     */
+#define FN_DOEXEC_ORIG       (0x106D5B30u + g_rebase)
+#define SLOT_SETSTATE        0x38u         /* -> 0x10769B10, __thiscall(int)    */
+#define FN_SETSTATE_EXP      (0x10769B10u + g_rebase)
+
+typedef void (__fastcall *fnDoExecute)(void* self);
+typedef void (__thiscall *fnSetState )(void* self, int state);
+
+static void*  g_prepSlotSaved = 0;         /* what we replaced, for unload */
+
+/* CameraStack::GetActiveCameraComponent. Its bounds check is only the first half;
+   it then resolves the entry's node to a live component and returns NULL if that
+   entity is gone or culled. That NULL is what the engine fails to test. */
+#define FN_GET_ACTIVE_CAM (0x10248F50u + g_rebase)
+typedef void* (__fastcall *fnGetActiveCam)(void* camStack);
+
+/* Is the local player's active camera component resolvable? We CALL the engine's
+   own resolver rather than reimplementing it: the inner half (0x10248ED0)
+   decrements the node refcount that 0x10248F50 incremented, so calling it alone
+   would release a reference we never took. */
+static int ActiveCameraOK(unsigned long* pIdx, unsigned long* pCnt)
+{
+    void*  lst = *(void**)PLAYERLIST_PTR;
+    void** arr;
+    void*  elem;
+    void*  inner;
+    char*  cs;
+
+    *pIdx = *pCnt = 0xFFFFFFFFu;
+    if (!Readable(lst, 0x10))                    return 0;
+    if (*(unsigned long*)((char*)lst + 8) == 0)  return 0;
+    arr = *(void***)((char*)lst + 4);
+    if (!Readable(arr, 4))                       return 0;
+    elem = arr[0];
+    if (!Readable(elem, 8))                      return 0;
+    inner = *(void**)((char*)elem + 4);
+    if (!Readable(inner, OFF_INNER_CAMSTACK + 0x20)) return 0;
+    cs = (char*)inner + OFF_INNER_CAMSTACK;
+    *pIdx = *(unsigned long*)(cs + OFF_CS_ACTIVEIDX);
+    *pCnt = *(unsigned long*)(cs + OFF_CS_COUNT);
+    if ((long)*pIdx < 0)      return 0;          /* ActiveCamera == -1 */
+    if (*pIdx >= *pCnt)       return 0;          /* or the stack is empty */
+
+    /* The bounds check passing is NOT enough - that was the first guard's
+       mistake. The entry can index an entity the unload operation has already
+       destroyed, and only the resolver notices. */
+    {
+        void* comp = 0;
+        __try { comp = ((fnGetActiveCam)FN_GET_ACTIVE_CAM)(cs); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+        if (!comp) return 0;
+    }
+    return 1;
+}
+
+/* The stack entries survive a world unload; the ENTITIES behind them do not
+   (`[entity+0x90]` bit 4 = destroyed, which is what 0x10248F50 rejects on). So
+   ActiveCamera can point at a corpse while perfectly good entries sit beside it.
+   Walk them and select the first that resolves. Returns 1 if a live camera is
+   active when we return - either it already was, or we just made it so.
+   The repaired index is left in place ON PURPOSE: that is the fix. */
+/* Invalidate cache entries whose camera entity has been destroyed, so a
+   subsequent activate-by-name MISSES and the engine spawns a fresh camera
+   instead of handing back the corpse. Returns how many were poisoned.
+
+   Hash only - the node pointer is left alone. Releasing a reference we do not
+   fully understand is how this project has hurt itself before, and a stale
+   24-byte entry is wiped by the next world change regardless. */
+static int PoisonDeadCameraEntries(char* cs)
+{
+    unsigned long cnt, i;
+    void* arr;
+    int   poisoned = 0;
+
+    if (!Readable(cs, 0x20)) return 0;
+    cnt = *(unsigned long*)(cs + OFF_CS_COUNT);
+    arr = *(void**)(cs + OFF_CS_ARRAY);
+    if (!cnt || cnt > 64 || !Readable(arr, cnt * CS_ENTRY_STRIDE)) return 0;
+
+    for (i = 0; i < cnt; ++i) {
+        char* e    = (char*)arr + i * CS_ENTRY_STRIDE;
+        void* node = *(void**)(e + CS_ENTRY_NODE);
+        void* cam  = 0;
+        int   dead = 1;
+
+        if (Readable(node, 0x10)) cam = *(void**)((char*)node + 0x0C);
+        if (Readable(cam, 0x94)) {
+            /* the engine's own test - 0x10248ED0 rejects on exactly this */
+            dead = (*(unsigned long*)((char*)cam + 0x90) >> 4) & 1;
+        }
+        if (dead && *(unsigned long*)(e + CS_ENTRY_HASH)) {
+            logf_("[cam ] entry %lu is dead (hash %08lX) - poisoning so a fresh "
+                  "camera gets spawned", i, *(unsigned long*)(e + CS_ENTRY_HASH));
+            *(unsigned long*)(e + CS_ENTRY_HASH) = 0;
+            ++poisoned;
+        }
+    }
+    return poisoned;
+}
+
+static int RepairActiveCamera(char* cs)
+{
+    unsigned long saved, cnt, i;
+    if (!Readable(cs, 0x20)) return 0;
+    saved = *(unsigned long*)(cs + OFF_CS_ACTIVEIDX);
+    cnt   = *(unsigned long*)(cs + OFF_CS_COUNT);
+
+    {   /* already fine? */
+        void* c = 0;
+        __try { c = ((fnGetActiveCam)FN_GET_ACTIVE_CAM)(cs); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+        if (c) return 1;
+    }
+    if (!cnt || cnt > 64) return 0;
+
+    for (i = 0; i < cnt; ++i) {
+        void* c = 0;
+        *(unsigned long*)(cs + OFF_CS_ACTIVEIDX) = i;
+        __try { c = ((fnGetActiveCam)FN_GET_ACTIVE_CAM)(cs); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { c = 0; }
+        if (c) {
+            logf_("[cam ] repaired ActiveCamera %ld -> %lu of %lu", (long)saved, i, cnt);
+            return 1;
+        }
+    }
+    *(unsigned long*)(cs + OFF_CS_ACTIVEIDX) = saved;   /* nothing live - put it back */
+    logf_("[cam ] no live camera among %lu entries (index left at %ld)", cnt, (long)saved);
+    return 0;
+}
+
+static void __fastcall PrepareRendererGuard(void* self)
+{
+    unsigned long idx, cnt;
+
+    /* Try to REPAIR first. Skipping stops the crash but leaves the player looking
+       through a destroyed camera, which is the "view never comes back" symptom. */
+    {
+        void* elem = GetPlayerElem();
+        char* cs   = elem ? (char*)GetCameraStack(elem) : 0;
+        if (cs && !RepairActiveCamera(cs)) {
+            /* Nothing live to select. Poison the corpses and let the engine spawn
+               a replacement by name, then re-check. */
+            if (PoisonDeadCameraEntries(cs)) {
+                const char* nm = 0;
+                void* game = *(void**)G_GAMEOBJ_PP;
+                if (Readable(game, 0x20)) nm = ((fnPawnCamName)FN_PAWNCAM_NAME)(game);
+                if (!Readable(nm, 1)) nm = "Cameras.Camera.Third";
+                __try { ((fnActivateCam)FN_ACTIVATE_CAM)(elem, nm); }
+                __except (EXCEPTION_EXECUTE_HANDLER) { }
+                logf_("[cam ] re-activated %s after poisoning", nm);
+            }
+        }
+        if (cs && RepairActiveCamera(cs)) {
+            ((fnDoExecute)FN_DOEXEC_ORIG)(self); /* retail behaviour, untouched */
+            return;
+        }
+    }
+    if (ActiveCameraOK(&idx, &cnt)) {
+        ((fnDoExecute)FN_DOEXEC_ORIG)(self);
+        return;
+    }
+    /* The engine's OWN "subsystem absent" branch. State 2 makes the container
+       finish and remove this operation on its next tick without calling Update -
+       so Update's second unchecked dereference is never reached either. */
+    logf_("[warp] renderer warm-up skipped: activeCam=%ld count=%lu, component "
+          "unresolvable (this is the crash that used to happen here)",
+          (long)idx, cnt);
+    if (Readable(self, 4)) {
+        void** vt = *(void***)self;
+        if (Readable(vt, SLOT_SETSTATE + 4))
+            ((fnSetState)vt[SLOT_SETSTATE / 4])(self, 2);
+    }
+}
+
+static int InstallPrepareRendererGuard(void)
+{
+    DWORD old;
+    void** slot = (void**)(VT_PREPARE_RENDERER + SLOT_DOEXECUTE);
+
+    if (g_prepSlotSaved) return 1;                       /* already on */
+    if (!Readable(slot, 4)) return 0;
+    if (*(unsigned long*)slot != FN_DOEXEC_ORIG) {
+        logf_("[warp] guard: slot holds %08lX, expected %08lX - not patching",
+              *(unsigned long*)slot, (unsigned long)FN_DOEXEC_ORIG);
+        return 0;
+    }
+    /* Byte-signature the target as well, so a different build refuses rather
+       than patching something that merely happens to sit at that address.
+       0x106D5B30: push esi / mov esi,ecx / call - the call is relative, so
+       these bytes are identical whatever base the image loaded at. */
+    if (!Readable((const void*)FN_DOEXEC_ORIG, 8) ||
+        memcmp((const void*)FN_DOEXEC_ORIG, "\x56\x8B\xF1\xE8\xF8\xF0\xCD\xFF", 8) != 0) {
+        logf_("[warp] guard: DoExecute prologue does not match - not patching");
+        return 0;
+    }
+    if (*(unsigned long*)(VT_PREPARE_RENDERER + SLOT_SETSTATE) != FN_SETSTATE_EXP) {
+        logf_("[warp] guard: SetState slot moved - not patching");
+        return 0;
+    }
+    if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) return 0;
+    g_prepSlotSaved = *slot;
+    *slot = (void*)PrepareRendererGuard;
+    VirtualProtect(slot, sizeof(void*), old, &old);
+    logf_("[warp] renderer-warm-up guard installed (was %p)", g_prepSlotSaved);
+    return 1;
+}
+
+static void RemovePrepareRendererGuard(void)
+{
+    DWORD old;
+    void** slot = (void**)(VT_PREPARE_RENDERER + SLOT_DOEXECUTE);
+    if (!g_prepSlotSaved) return;
+    if (Readable(slot, 4) && VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) {
+        *slot = g_prepSlotSaved;
+        VirtualProtect(slot, sizeof(void*), old, &old);
+        logf_("[warp] renderer-warm-up guard removed");
+    }
+    g_prepSlotSaved = 0;
+}
+
+#define WM_WARP_NOW (WM_APP + 0x51)
+static HHOOK         g_msgHook = 0;
+static char          g_pendingWorld[128] = {0};
+static volatile long g_pendingWarp = 0;
+/* Set by `warp <world> default`: use the engine's -1/-1 spawn-point sentinel
+   even for an mp_* world we have a real id for. The two take different code
+   paths inside CFCXOnLoadWorldOp - see the comment at the parse site. */
+static volatile long g_pendingWarpDefault = 0;
+/* The world change is modal for seconds at a time. Without this the stall
+   watchdog fires RESCUE mid-load. */
+static volatile long g_warpQuietUntil = 0;
+static int  InstallMsgHook(void);
+
+/* Returns 1 if the line was ours and has been fully handled. */
+/* ==================== SPEEDINFO ====================
+ *
+ * Find where a creature's own walk and sprint speeds live, so driving can use
+ * the real numbers instead of a made-up multiplier.
+ *
+ * Today `drive` moves the creature at `drivespeed` and multiplies by 4 when
+ * shift is held. Both are inventions - they have no relationship to what the
+ * creature can actually do, so a hammerhead and a viperwolf drive identically
+ * and neither matches how it moves under its own AI. The engine knows better:
+ * `fWalkingMaxSpeed` and `fMaxSprintSpeed` are named float parameters, and
+ * `driveturn` already proves named CAnimal floats can be read and written
+ * straight off the pawn once their OFFSET is known.
+ *
+ * The offset is the only missing piece, and it is discoverable. The engine
+ * parses these names from data, so somewhere it binds name -> offset in a
+ * table of records like { "fMaxSprintSpeed", offset, type }. `stimscan` found
+ * the stimulus emitter by scanning code for `push <literal>`; parameter names
+ * live in DATA rather than being pushed, so this scans for a POINTER to the
+ * literal and prints the dwords around it. One of them is the offset.
+ *
+ * Nothing here is inherited from the static dump - the literal is found by its
+ * own bytes and the table by a pointer to it, both re-derived every run. The
+ * dump's addresses sit in a different range from this file's g_rebase
+ * constants, and this project's Ghidra output is on record as unreliable.
+ *
+ * READ-ONLY. It writes nothing; it reports candidates for a human to judge.
+ */
+static const unsigned char* SpdFindLiteral(const unsigned char* base,
+                                           unsigned long size, const char* lit)
+{
+    unsigned long i;
+    size_t n = strlen(lit);
+    if (!base || size < n) return 0;
+    for (i = 0; i + n + 1 < size; ++i) {
+        if (base[i] != (unsigned char)lit[0]) continue;
+        if (!Readable(base + i, n + 1)) continue;
+        if (memcmp(base + i, lit, n) == 0 && base[i + n] == 0)
+            return base + i;              /* NUL-terminated: exact name only */
+    }
+    return 0;
+}
+
+static void SpdOne(void* console, const unsigned char* base,
+                   unsigned long size, const char* name)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    const unsigned char* lit = SpdFindLiteral(base, size, name);
+    unsigned long i;
+    int refs = 0;
+
+    if (!lit) { P_(console, 0, AC "  %-24s NOT FOUND\n", name); return; }
+    P_(console, 0, AC "  %-24s @ %p\n", name, (void*)lit);
+    logf_("[spd] %s literal @ %p", name, (void*)lit);
+
+    for (i = 0; i + 4 <= size && refs < 6; i += 4) {
+        if (!Readable(base + i, 4)) continue;
+        if (*(const unsigned char* const*)(base + i) != lit) continue;
+        ++refs;
+        {   /* the record around the name pointer - one of these is the offset */
+            unsigned long a = (i >= 8  && Readable(base + i - 8, 4)) ? *(const unsigned long*)(base + i - 8) : 0;
+            unsigned long b = (i >= 4  && Readable(base + i - 4, 4)) ? *(const unsigned long*)(base + i - 4) : 0;
+            unsigned long c = (i + 8  <= size && Readable(base + i + 4, 4)) ? *(const unsigned long*)(base + i + 4) : 0;
+            unsigned long d = (i + 12 <= size && Readable(base + i + 8, 4)) ? *(const unsigned long*)(base + i + 8) : 0;
+            P_(console, 0, AC "     ref @ %p  [-8]%08lX [-4]%08lX  [+4]%08lX [+8]%08lX\n",
+               (void*)(base + i), a, b, c, d);
+            /* A struct offset is small. Flag the plausible ones so the answer
+               does not have to be eyeballed out of four hex columns. */
+            if (c && c < 0x400) P_(console, 0, AC "        [+4] = %lu (0x%lX) - plausible offset\n", c, c);
+            if (d && d < 0x400) P_(console, 0, AC "        [+8] = %lu (0x%lX) - plausible offset\n", d, d);
+            if (b && b < 0x400) P_(console, 0, AC "        [-4] = %lu (0x%lX) - plausible offset\n", b, b);
+            logf_("[spd] %s ref %p  -8=%08lX -4=%08lX +4=%08lX +8=%08lX",
+                  name, (void*)(base + i), a, b, c, d);
+        }
+    }
+    if (!refs) P_(console, 0, AC "     no data reference found\n");
+}
+
+static void SpeedInfo(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    HMODULE h = GetModuleHandleA("Dunia.dll");
+    const unsigned char* base = (const unsigned char*)h;
+    unsigned long size = 0;
+
+    if (!h) { P_(console, 0, AC "speedinfo: Dunia.dll not loaded\n"); return; }
+    {
+        IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)h;
+        if (Readable(dos, sizeof(*dos)) && dos->e_magic == IMAGE_DOS_SIGNATURE) {
+            IMAGE_NT_HEADERS32* nt =
+                (IMAGE_NT_HEADERS32*)((unsigned char*)h + dos->e_lfanew);
+            if (Readable(nt, sizeof(*nt)) && nt->Signature == IMAGE_NT_SIGNATURE)
+                size = nt->OptionalHeader.SizeOfImage;
+        }
+    }
+    if (!size) { P_(console, 0, AC "speedinfo: no image size\n"); return; }
+
+    P_(console, 0, AC "speedinfo: Dunia.dll @ %p, %lu bytes\n", (void*)base, size);
+    SpdOne(console, base, size, "fWalkingMaxSpeed");
+    SpdOne(console, base, size, "fMaxSprintSpeed");
+    SpdOne(console, base, size, "fMaxSpeedPlateau");
+    SpdOne(console, base, size, "fMoveSpeed");
+    SpdOne(console, base, size, "fScaredMaxAngularVelocity");
+    P_(console, 0, AC
+       "  The last one is the CONTROL: 'driveturn' already reaches it on the\n"
+       "  pawn, so whichever column holds its known offset is the column that\n"
+       "  holds the speeds too. Also in the log file.\n");
+}
+
+
+static int TryModCommand(void* console, const char* line)
+{
+    /* Trim before dispatching. Half these commands match EXACTLY and half match
+       by prefix, so a single trailing space silently defeated the exact half and
+       left the other half working - which is precisely the pattern that made
+       `ingame` and `playerinfo` look absent while `fixcontrol` and `warp` ran.
+       The console gives us whatever was typed, spaces and all. */
+    char trimmed[QLEN];
+    const char* p;
+    char world[128];
+    int  n = 0;
+    int  forceDefaultSpawn = 0;   /* `warp <world> default` - see below */
+
+    {
+        int a = 0, b;
+        while (line[a] == ' ' || line[a] == '\t') ++a;
+        b = 0;
+        while (line[a + b] && b < (int)sizeof(trimmed) - 1) { trimmed[b] = line[a + b]; ++b; }
+        while (b > 0 && (trimmed[b - 1] == ' ' || trimmed[b - 1] == '\t' ||
+                         trimmed[b - 1] == '\r' || trimmed[b - 1] == '\n')) --b;
+        trimmed[b] = 0;
+    }
+    p = trimmed;
+
+    if (_stricmp(p, "modhelp") == 0) { ModHelp(console); return 1; }
+    if (_strnicmp(p, "picktrace", 9) == 0) {
+        const char* a = p + 9;
+        while (*a == ' ') ++a;
+        InterlockedExchange(&g_pkTrace, _stricmp(a, "off") == 0 ? 0 : 1);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "picktrace: %s\n"
+            "  [pick] one line per click: raw SCREEN position (and whether it was\n"
+            "         frozen because the game held the foreground and was warping\n"
+            "         the cursor), the backbuffer position, the panel-local\n"
+            "         position, and the REGION it resolved to - close box, header,\n"
+            "         a named category, the scrollbar, or a numbered row with the\n"
+            "         row text. If the region is not what you clicked, say so.\n"
+            "  [act ] every foreground change, and every activation message the\n"
+            "         game window receives, with timings. This is how the audio\n"
+            "         dip gets diagnosed: one flip is fine, a repeating\n"
+            "         GAME->FOCUS->GAME pattern is the game and us fighting.\n"
+            "  [pkv ] the render-target size, viewport and presentation window,\n"
+            "         logged once and on every change - always, not just here.\n",
+            g_pkTrace ? "ON" : "off");
+        return 1;
+    }
+    if (_stricmp(p, "speedinfo") == 0) { SpeedInfo(console); return 1; }
+
+    /* `?` only knows what the ENGINE registered. Run it, then append ours so a
+       single command shows the complete set. */
+    if (_stricmp(p, "?") == 0) {
+        RunConsoleLine(console, "?");
+        ModHelp(console);
+        return 1;
+    }
+
+    if (_stricmp(p, "fixinput") == 0) { RestoreInput(console); return 1; }
+
+    /* ---- editorlink: the live link to the GUI level editor ---------------- */
+    if (_strnicmp(p, "editorlink", 10) == 0) {
+        const char* a = p + 10;
+        while (*a == ' ') ++a;
+        if (_stricmp(a, "off") == 0) {
+            InterlockedExchange(&g_lnkOn, 0);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "editorlink: OFF - the pipe is closed and the editor cannot "
+                "attach.\n  The console itself is unaffected.\n");
+            return 1;
+        }
+        if (_stricmp(a, "on") == 0) {
+            InterlockedExchange(&g_lnkOn, 1);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "editorlink: ON - listening on %s\n", LNK_PIPE_NAME);
+            return 1;
+        }
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "editorlink: %s   %s\n"
+            "  pipe    %s\n"
+            "  served  %ld request(s), %ld live move(s) this session\n"
+            "  The GUI editor (Editor\\AvatarEditor.bat) connects here; it asks,\n"
+            "  the FRAME LOOP answers. 'editorlink off' closes it.\n",
+            g_lnkOn ? "ON" : "OFF",
+            g_lnkConn ? "- an editor is CONNECTED" : "- nothing attached",
+            LNK_PIPE_NAME, (long)g_lnkReqs, (long)g_lnkMoves);
+        return 1;
+    }
+    if (_stricmp(p, "ingame") == 0) {
+        if (g_ingame) {
+            InterlockedExchange(&g_ingame, 0);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "ingame: OFF - console drawn as an overlay window again\n");
+        } else if (!InstallPresentHook()) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "ingame: could not hook Present - staying on the overlay window\n");
+        } else {
+            InterlockedExchange(&g_ingame, 1);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "ingame: ON - the console is now part of the game's frame, so\n"
+                "  Discord game-capture and screenshots will show it.\n");
+        }
+        return 1;
+    }
+    if (_stricmp(p, "fixcam") == 0) {
+        RestorePawnCamera();
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "fixcam: view restored to the player\n");
+        return 1;
+    }
+    if (_strnicmp(p, "save", 4) == 0 && (p[4] == ' ' || p[4] == '\t' || !p[4])) {
+        const char* q = p + 4;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (_stricmp(q, "force") == 0) InterlockedExchange(&g_warpedThisSession, 0);
+        RequestSave(console);
+        return 1;
+    }
+    if (_stricmp(p, "planets") == 0)  { PlanetInfo(console);   return 1; }
+    if (_stricmp(p, "mountinfo") == 0){ MountInfo(console);    return 1; }
+    if (_stricmp(p, "beastinfo") == 0){ BeastInfo(console);    return 1; }
+    if (_stricmp(p, "drive") == 0)     { DriveStart(console);   return 1; }
+
+    if (_strnicmp(p, "anchor", 6) == 0 && (p[6] == ' ' || p[6] == '\t' || !p[6])) {
+        const char* q = p + 6;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (_stricmp(q, "on") == 0) {
+            if (!Readable(g_lastSpawn, 0x100))
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "anchor: nothing spawned to anchor to\n");
+            else if (StreamAnchorAttach(g_lastSpawn)) {
+                g_anchorEnt = g_lastSpawn;
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "anchor: the world now streams around %s\n", g_lastSpawnName);
+            }
+            else
+                ((fnPrintf)FN_PRINTF)(console, 0, AC "anchor: attach failed\n");
+        } else if (_stricmp(q, "off") == 0) {
+            StreamAnchorDetach();
+            ((fnPrintf)FN_PRINTF)(console, 0, AC "anchor: ours removed\n");
+        } else {
+            AnchorInfo(console);
+        }
+        return 1;
+    }
+    /* `aisignal` FIRST: it is a prefix-free name, and `attack` is matched by
+       _strnicmp, so order only matters for readers. The two differ on purpose.
+
+       `attack` goes through the gate, exactly like a number key. It used to call
+       AgentSignal raw, so the console path silently missed the unlock the key
+       path gets and the same name behaved differently depending on how you sent
+       it. CREATURE_AUDIT B11.
+
+       `aisignal` is the RAW path: one signal, nothing before it, nothing after.
+       SIGNALS.md Â§10's test plan is written against a command of that name and
+       needs it raw - its control case is sending `start_eating`, which no state
+       machine in the game accepts, and proving that NOTHING happens. A helpful
+       unlock in front of it would invalidate the test. */
+    if (_strnicmp(p, "aisignal", 8) == 0 && (p[8] == ' ' || p[8] == '\t' || !p[8])) {
+        const char* q = p + 8;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (!*q)
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "aisignal <name>: send exactly one signal, no unlock, no follow-up\n"
+                "  (the raw path SIGNALS.md's test plan needs; 'attack' is gated)\n");
+        else
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "aisignal: \"%s\" (crc %08lX) -> %s\n", q, Crc32Str(q),
+                AgentSignal(q) ? "sent" : "FAILED");
+        return 1;
+    }
+    if (_strnicmp(p, "attack", 6) == 0 && (p[6] == ' ' || p[6] == '\t' || !p[6])) {
+        const char* q = p + 6;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (!*q) q = g_driveSignal;
+        if (!*q)
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "attack: no signal set - 'drive' a creature first\n");
+        else
+            ((fnPrintf)FN_PRINTF)(console, 0, AC "attack: \"%s\" -> %s\n", q,
+                                  AgentSignalGated(q, g_driveSpecies)
+                                      ? "sent" : "FAILED");
+        return 1;
+    }
+    if (_strnicmp(p, "drivesignal", 11) == 0 &&
+        (p[11] == ' ' || p[11] == '\t' || !p[11])) {
+        const char* q = p + 11;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (*q) { strncpy(g_driveSignal, q, sizeof(g_driveSignal) - 1);
+                  g_driveSignal[sizeof(g_driveSignal) - 1] = 0; }
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "drivesignal: \"%s\" (crc %08lX) - left mouse sends this while driving\n",
+            g_driveSignal, Crc32Str(g_driveSignal));
+        return 1;
+    }
+    if (_stricmp(p, "facinginfo") == 0) { FacingInfo(console); return 1; }
+    if (_stricmp(p, "agentinfo") == 0)  { AgentInfo(console);  return 1; }
+    if (_stricmp(p, "vehinfo") == 0)    { VehInfo(console);    return 1; }
+
+    if (_strnicmp(p, "rcprobe", 7) == 0 &&
+        (p[7] == ' ' || p[7] == '\t' || !p[7])) {
+        const char* q = p + 7;
+        double range = 500.0, fl = 5.0;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (sscanf(q, "%lf %lf", &range, &fl) < 1) { range = 500.0; fl = 5.0; }
+        if (range < 1.0)    range = 1.0;
+        if (range > 5000.0) range = 5000.0;
+        RcProbe(console, range, (unsigned)fl);
+        return 1;
+    }
+
+    if (_strnicmp(p, "facing", 6) == 0 &&
+        (p[6] == ' ' || p[6] == '\t' || !p[6])) {
+        const char* q = p + 6;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (_stricmp(q, "off") == 0) {
+            InterlockedExchange(&g_faceSuppress, 0);
+            InterlockedExchange(&g_faceProbe, 0);
+            FaceHookSet(console, 0);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "facing: off - Update unhooked, focus left alone\n");
+            return 1;
+        }
+        if (!FaceHookSet(console, 1)) return 1;
+        if (_stricmp(q, "probe") == 0) {
+            InterlockedExchange(&g_faceProbe, 1);
+            InterlockedExchange(&g_faceSuppress, 0);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "facing: PROBE only - nothing is suppressed. Logging the target,\n"
+                "  hasFocus, the focus position and the creature's forward vector\n"
+                "  every 400ms. Let it swivel, then read the log: if forward turns\n"
+                "  while hasFocus stays 1, the focus really is the driver.\n");
+            return 1;
+        }
+        InterlockedExchange(&g_faceSuppress, 1);
+        InterlockedExchange(&g_faceProbe, 1);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "facing: SUPPRESSING. sens+0x1D is zeroed before each Update, which\n"
+            "  makes the je at 0x10AB5F23 skip the ENTIRE body - mirror, focus\n"
+            "  position and charge timer all dead for that tick.\n"
+            "\n"
+            "  HONEST: whether yaw is actually driven from this focus is UNKNOWN,\n"
+            "  the last hop was never found. If it still swivels, facing lives\n"
+            "  elsewhere and the log will have proved it rather than us guessing.\n"
+            "  'facing off' reverts. 'facing probe' watches without changing.\n");
+        return 1;
+    }
+
+    if (_strnicmp(p, "driveturn", 9) == 0 &&
+        (p[9] == ' ' || p[9] == '\t' || !p[9])) {
+        const char* q = p + 9;
+        double v = 0.0;
+        while (*q == ' ' || *q == '\t') ++q;
+        if      (_stricmp(q, "off") == 0)   DriveTurnSet(console, 0, 0.0f);
+        else if (sscanf(q, "%lf", &v) == 1) DriveTurnSet(console, 1, (float)v);
+        else                                DriveTurnSet(console, 1, 0.0f);
+        return 1;
+    }
+    if (_strnicmp(p, "drivelock", 9) == 0 &&
+        (p[9] == ' ' || p[9] == '\t' || !p[9])) {
+        const char* q = p + 9;
+        long want = -1;
+        while (*q == ' ' || *q == '\t') ++q;
+        if      (!*q)                          want = -1;          /* report only */
+        else if (_stricmp(q, "off")  == 0)     want = DRIVELOCK_OFF;
+        else if (_stricmp(q, "soft") == 0)     want = DRIVELOCK_SOFT;
+        else if (_stricmp(q, "hard") == 0)     want = DRIVELOCK_HARD;
+        else if (_stricmp(q, "last") == 0)     want = DRIVELOCK_LAST;
+        else if (_stricmp(q, "aim")  == 0)     want = DRIVELOCK_AIM;
+        else if (_stricmp(q, "agent") == 0)    want = DRIVELOCK_AGENT;
+        else {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "drivelock: say 'off', 'agent', 'last', 'aim', 'soft' or 'hard'\n");
+            want = -2;
+        }
+        if (want >= 0) {
+            /* `agent` needs no vtable hook: the engine's own gate stops the
+               call, so hooking +0x208 would install a hook that never fires.
+               Every other non-off level runs THROUGH that hook. */
+            if (want != DRIVELOCK_OFF && want != DRIVELOCK_AGENT &&
+                !FaceHookSet(console, 1)) return 1;
+            InterlockedExchange(&g_lockSkipped, 0);
+            InterlockedExchange(&g_driveLock, want);
+            if (want == DRIVELOCK_OFF) FaceHookSet(console, 0);
+        }
+        if (want != -2)
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "drivelock: %s   (%ld AI update(s) skipped so far)\n"
+                "  HOW MUCH OF THE CREATURE'S BRAIN IS STOPPED. FACING.md worked\n"
+                "  out three levers and named which are shippable; until now this\n"
+                "  DLL only had the one it says NOT to ship.\n"
+                "\n"
+                "  off   the AI updates normally. Only its velocity is replaced,\n"
+                "        so it can still sense, target, re-path and turn.\n"
+                "  last  run the update, THEN clear the focus mirror, so we are the\n"
+                "        last writer for the frame. FACING Lever 1, \"most surgical,\n"
+                "        try first\". TRY THIS ONE FIRST.\n"
+                "  aim   run the update, then point the focus 20m along YOUR camera\n"
+                "        instead of at whatever it noticed - so it turns WITH you.\n"
+                "        FACING Lever 2, \"the outcome the brief asks for\".\n"
+                "  soft  zero the focus BEFORE the update - which makes the je at\n"
+                "        0x10AB5F23 skip the whole update body. This is what\n"
+                "        'facing' has always done, and FACING calls it \"diagnosis\n"
+                "        only, do not ship\".\n"
+                "  hard  do not call the update at all. The strongest bisect.\n"
+                "  agent set the ENGINE'S OWN flag, agent+0x1C4. Its per-tick\n"
+                "        entry reads that byte and skips the update itself, so\n"
+                "        this is the engine refusing to run the AI rather than\n"
+                "        us blocking it. The flag only stops NEW commands, so\n"
+                "        the stale look-at is cleared every frame too - but NOT\n"
+                "        the velocity, which is what our steering writes.\n"
+                "\n"
+                "  WHY 'last' AND 'aim' EXIST: the update copies the focus every\n"
+                "  tick, so writing before it is pointless - you are overwritten,\n"
+                "  or you skip the tick. Only writing AFTER wins the frame.\n"
+                "\n"
+                "  WHAT TO REPORT. Drive something, let it swivel, then try each:\n"
+                "    'last' stops it   -> the focus mirror IS the yaw input. Done.\n"
+                "    'aim' steers it   -> better still: it faces where you look.\n"
+                "    neither, but 'hard' stops it -> the write is inside the update\n"
+                "      but not through the mirror; it is narrowed to one function.\n"
+                "    'hard' does NOT stop it -> the agent is not responsible at all,\n"
+                "      because none of it ran. That eliminates the whole AI in one\n"
+                "      test and points at root motion or the steering engine.\n"
+                "  FACING's own stop rule: if it still swivels with the focus\n"
+                "  provably zero, SAY SO AND STOP - do not guess.\n",
+                (g_driveLock == DRIVELOCK_AGENT) ? "AGENT - the ENGINE skips its update (+0x1C4)" :
+                (g_driveLock == DRIVELOCK_HARD) ? "HARD - the agent does not update" :
+                (g_driveLock == DRIVELOCK_SOFT) ? "soft - focus zeroed BEFORE update (Lever 3)" :
+                (g_driveLock == DRIVELOCK_LAST) ? "last - focus mirror cleared AFTER update (Lever 1)" :
+                (g_driveLock == DRIVELOCK_AIM)  ? "aim - focus aimed along your camera (Lever 2)" :
+                                                  "off - the AI updates normally",
+                g_lockSkipped);
+        return 1;
+    }
+    if (_stricmp(p, "driveai") == 0) {
+        InterlockedExchange(&g_muteAI, g_muteAI ? 0 : 1);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "driveai: the creature's AI is %s\n"
+            "  MUTED means its brain still runs but every signal it requests is\n"
+            "  dropped - no attack crouch, no self-directed animation, nothing\n"
+            "  fighting your steering. Only your keys reach it.\n"
+            "  Unmute to watch what it WANTS to do (%ld requests dropped so far).\n",
+            g_muteAI ? "MUTED" : "free", g_muted);
+        return 1;
+    }
+
+    if (_stricmp(p, "drivecalm") == 0) {
+        g_driveCalm = !g_driveCalm;
+        AgentCombat(g_driveCalm ? 0 : 1);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "drivecalm: combat %s\n%s", g_driveCalm ? "SUSPENDED" : "resumed",
+            g_driveCalm
+                ? "  This suspends a BEHAVIOUR, not the animation track. It does not\n"
+                  "  gate keys 1-9: Viperwolf_Attack_Warning is an animation state and\n"
+                  "  the only thing that enters it is a signal, which is what the keys\n"
+                  "  send. The creature should stop lunging at you and keep every\n"
+                  "  animation. INFERRED from the state-machine data, not yet tested -\n"
+                  "  if the keys DO go dead, turn this back off and say so.\n" : "");
+        return 1;
+    }
+    if (_strnicmp(p, "drivespeed", 10) == 0 &&
+        (p[10] == ' ' || p[10] == '\t' || !p[10])) {
+        double v = 0;
+        if (sscanf(p + 10, "%lf", &v) == 1 && v > 0 && v < 200) g_driveSpeed = (float)v;
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "drivespeed: %.1f\n", g_driveSpeed);
+        return 1;
+    }
+    /* `drivecam` was advertised in three places - modhelp, DriveStart's own
+       on-screen text and the Tab-completion seed - and dispatched in none, so
+       typing it fell through to the engine, which does not know the name either.
+       The state it names has always existed (g_driveCamH/g_driveCamD, also on
+       the [ ] and = - keys); only the command was missing. Same clamps as the
+       keys use, so the two routes cannot disagree. */
+    if (_strnicmp(p, "drivecam", 8) == 0 &&
+        (p[8] == ' ' || p[8] == '\t' || !p[8])) {
+        double h = 0, d = 0;
+        if (sscanf(p + 8, "%lf %lf", &h, &d) == 2) {
+            if (h < -5.0)  h = -5.0;
+            if (h > 30.0)  h = 30.0;
+            if (d <   1.0) d =  1.0;
+            if (d >  60.0) d = 60.0;
+            g_driveCamH = (float)h;
+            g_driveCamD = (float)d;
+            logf_("[drive] camera %.1f %.1f (console)", g_driveCamH, g_driveCamD);
+        }
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "drivecam: height %.1f, distance %.1f%s\n"
+            "  'drivecam <height> <dist>' sets both. While driving, [ and ] move\n"
+            "  the camera up and down and = and - pull it in and out.\n"
+            "  Height -5..30, distance 1..60.\n",
+            g_driveCamH, g_driveCamD,
+            g_drive ? "" : "  (not driving - this takes effect next 'drive')");
+        return 1;
+    }
+    if (_strnicmp(p, "fixplayer", 9) == 0 &&
+        (p[9] == ' ' || p[9] == '\t' || !p[9])) {
+        /* The post-warp repair is timed off the world change and can miss - it
+           already has, twice, for two different reasons. This runs the same
+           repair on demand, so recovering control never depends on getting the
+           timing right. */
+        {
+            const char* q = p + 9;
+            while (*q == ' ' || *q == '\t') ++q;
+            g_fixForce = (_strnicmp(q, "force", 5) == 0);
+        }
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "fixplayer: checking the player list%s...\n",
+                              g_fixForce ? " (FORCE - will write)" : "");
+        RepairPlayerList(console);
+        g_fixForce = 0;
+        return 1;
+    }
+    if (_strnicmp(p, "streaming", 9) == 0 &&
+        (p[9] == ' ' || p[9] == '\t' || !p[9])) {
+        void* mode = 0;
+        int   b4 = -1, b5 = -1;
+        if (Readable((void*)G_MODEOBJ_PP, 4)) {
+            mode = *(void**)G_MODEOBJ_PP;
+            if (Readable(mode, 8)) {
+                b4 = *(unsigned char*)((char*)mode + 4);
+                b5 = *(unsigned char*)((char*)mode + 5);
+            }
+        }
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "streaming: mode object %p  byte+4 = %d  byte+5 = %d\n"
+            "  byte+4 is the DYNAMIC-LOAD KILL SWITCH. ~30 streaming functions\n"
+            "  read it and every one treats a non-zero value as \"skip this step\",\n"
+            "  including the sector-preload EnsureLoaded at 0x102ABCA8. It is set\n"
+            "  from world-load state at 0x106DC12E and FORCED TO 1 at 0x106DC511.\n"
+            "\n"
+            "  If this reads 1 after warping to another world and 0 in the world\n"
+            "  the game booted into, that is very likely why a spawned creature\n"
+            "  gets AI but no mesh: CGraphicComponent's part count stays 0, so\n"
+            "  Activate skips the scene insert AND the bounding box unions\n"
+            "  nothing - one cause, both symptoms, no error anywhere.\n"
+            "  Run this in a good world and again after a warp, and compare.\n",
+            mode, b4, b5);
+        logf_("[stream] mode=%p byte+4=%d byte+5=%d", mode, b4, b5);
+        return 1;
+    }
+    if (_strnicmp(p, "drivewait", 9) == 0 &&
+        (p[9] == ' ' || p[9] == '\t' || !p[9])) {
+        int v = -1;
+        if (sscanf(p + 9, "%d", &v) == 1 && v >= 0 && v <= 5000)
+            InterlockedExchange(&g_sigWaitMin, v);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "drivewait: %ld ms\n"
+            "  Gap between an unlock and the signal it unlocks. The unlock has to\n"
+            "  be processed by the move tree before the target state exists; sent\n"
+            "  in the same frame the second signal matches nothing and is silently\n"
+            "  dropped - which looked like \"it only does the attack warning\".\n"
+            "  350 is a guess. Raise it if signals still get eaten, lower it if\n"
+            "  the creature feels sluggish. 0 restores the old same-frame behaviour.\n",
+            g_sigWaitMin);
+        return 1;
+    }
+    if ((_strnicmp(p, "resurrect", 9) == 0 &&
+         (p[9] == ' ' || p[9] == '\t' || !p[9])) ||
+        (_strnicmp(p, "revive", 6) == 0 &&
+         (p[6] == ' ' || p[6] == '\t' || !p[6]))) {
+        const char* q = p + ((_strnicmp(p, "resurrect", 9) == 0) ? 9 : 6);
+        int i = 0;
+        while (*q == ' ' || *q == '\t') ++q;
+        while (*q && i < (int)sizeof(g_resName) - 1) g_resName[i++] = *q++;
+        g_resName[i] = 0;
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "resurrect: queued for the main thread%s%s\n"
+            "  Restores health through the sheet's own setter (slot 33), which\n"
+            "  is what the engine's liveness test reads - slot 80 is literally\n"
+            "  health > 0 ? alive : dead, with no stored state behind it.\n"
+            "  It does NOT rewind the death animation, the ragdoll, or a death\n"
+            "  event the mission already got. Watch whether the body gets up.\n",
+            g_resName[0] ? " - target " : " - the current selection",
+            g_resName[0] ? g_resName : "");
+        InterlockedExchange(&g_wantResurrect, 1);
+        return 1;
+    }
+    if (_stricmp(p, "playerinfo") == 0){ PlayerInfo(console);
+                                         RespawnReadiness(console); return 1; }
+    if (_stricmp(p, "actmap") == 0)    { ActMapInfo(console); return 1; }
+    if (_stricmp(p, "pick") == 0)      { PickEntity(console);  return 1; }
+    if (_strnicmp(p, "pickfov", 7) == 0 && (p[7] == ' ' || p[7] == '\t' || !p[7])) {
+        double v = 0;
+        if (sscanf(p + 7, "%lf", &v) == 1 && v > 20 && v < 140) g_pickFov = (float)v;
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "pickfov: %.1f degrees (vertical). If clicking selects things off to\n"
+            "  one side, adjust until a click at screen CENTRE matches 'pick'.\n",
+            g_pickFov);
+        return 1;
+    }
+    if (_stricmp(p, "pickclick") == 0) {
+        InterlockedExchange(&g_pickOnClick, g_pickOnClick ? 0 : 1);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "pickclick: %s\n",
+            g_pickOnClick ? "ON - click the game view with the console open" : "off");
+        return 1;
+    }
+    if (_stricmp(p, "kill") == 0)      { KillSelected(console); return 1; }
+    if (_stricmp(p, "entbox") == 0)    { EntBox(console);       return 1; }
+    if (_stricmp(p, "ents") == 0)      { OpenEntPicker(console); return 1; }
+
+    /* mkpawn - create a pawn where the world has a spawn point, using the
+       engine's own CPlayer::Spawn on the object that really is a CPlayer.
+       See the block above FindRealPlayer for why this is not `respawn`. */
+    if (_strnicmp(p, "mkpawn", 6) == 0 &&
+        (p[6] == ' ' || p[6] == '\t' || !p[6])) {
+        const char* q = p + 6;
+        double x, y, z;
+        while (*q == ' ' || *q == '\t') ++q;
+        g_mkPawnHavePos = 0;
+        if (sscanf(q, "%lf %lf %lf", &x, &y, &z) == 3) {
+            g_mkPawnAt[0] = (float)x;
+            g_mkPawnAt[1] = (float)y;
+            g_mkPawnAt[2] = (float)z;
+            g_mkPawnHavePos = 1;
+        }
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "mkpawn: queued for the main thread%s.\n"
+            "  Scans for the real CPlayer (the player LIST holds a CPlayerElem,\n"
+            "  which is why 'respawn' calls the wrong slot), then calls\n"
+            "  CPlayer::Spawn at %s.\n",
+            g_mkPawnHavePos ? "" : " (will pick a *Start* spawn point)",
+            g_mkPawnHavePos ? "the coordinates you gave"
+                            : "one of this world's own spawn points");
+        InterlockedExchange(&g_wantMkPawn, 1);
+        return 1;
+    }
+
+    if (_strnicmp(p, "respawn", 7) == 0 &&
+        (p[7] == ' ' || p[7] == '\t' || !p[7])) {
+        const char* q = p + 7;
+        double x, y, z;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (sscanf(q, "%lf %lf %lf", &x, &y, &z) == 3) {
+            g_respawnAt[0] = (float)x;
+            g_respawnAt[1] = (float)y;
+            g_respawnAt[2] = (float)z;
+            g_respawnHavePos = 1;
+        } else if (g_flyPosValid) {
+            /* No coordinates given: use wherever the free camera is, which is
+               almost always where you are looking when you notice the problem. */
+            g_respawnAt[0] = g_flyPos[0];
+            g_respawnAt[1] = g_flyPos[1];
+            g_respawnAt[2] = g_flyPos[2];
+            g_respawnHavePos = 1;
+        } else {
+            /* A still-alive pawn, or the selected entity: both are real places on
+               real ground, which is what the worker's spawn-point search needs.
+               Defaulting to (0,0,0) instead just produced a call that ran and did
+               nothing, which reads exactly like a broken command. */
+            void* pl2  = GetPlayerObject();
+            void* pawn = pl2 ? PawnOf(pl2) : 0;
+            const float* src = 0;
+            if (pawn)                           src = (const float*)((char*)pawn + OFF_ENT_POS);
+            else if (Readable(g_selEnt, 0x100)) src = (const float*)((char*)g_selEnt + OFF_ENT_POS);
+            if (src) {
+                g_respawnAt[0] = src[0];
+                g_respawnAt[1] = src[1];
+                g_respawnAt[2] = src[2];
+                g_respawnHavePos = 1;
+            } else if (!g_respawnHavePos) {
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "respawn: nowhere to put you. Give coordinates -\n"
+                    "  'respawn <x> <y> <z>' - or move the free camera somewhere real\n"
+                    "  first, or select an entity in 'ents' to borrow its spot.\n"
+                    "  Run 'playerinfo' first; it says up front whether this can work.\n");
+                return 1;
+            }
+        }
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "respawn: queued for the main thread, target (%.1f %.1f %.1f)\n"
+            "  Uses CPlayer::Spawn (vt[2]) when the game-mode byte allows it -\n"
+            "  measured as 1 here - and drops to the worker it calls, vt[8]\n"
+            "  0x107612A0, only if that byte reads 0. Both bail conditions are\n"
+            "  checked first and named if they fail, and success is confirmed by\n"
+            "  comparing the pawn pointer before and after.\n",
+            g_respawnAt[0], g_respawnAt[1], g_respawnAt[2]);
+        InterlockedExchange(&g_wantRespawn, 1);
+        return 1;
+    }
+
+    if (_strnicmp(p, "allsectors", 10) == 0 &&
+        (p[10] == ' ' || p[10] == '\t' || !p[10])) {
+        const char* q = p + 10;
+        void* it;
+        while (*q == ' ' || *q == '\t') ++q;
+        it = SectorInterest();
+        if (!it) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "allsectors: no streaming interest on the player - 'anchor' shows\n"
+                "  whether the pawn carries the component at all.\n");
+            return 1;
+        }
+        if (!SectorRadiiSave(it)) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "allsectors: the radii are not the shape we expect - refusing to\n"
+                "  write. The log says what was found.\n");
+            return 1;
+        }
+        if (_stricmp(q, "off") == 0) {
+            SectorRadiiRestore(it);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "allsectors: off - shipped radii restored\n");
+        } else {
+            double v = 0;
+            int n;
+            /* `allsectors` / `allsectors on` = the whole grid. A bare number
+               is still honoured for working up gradually. */
+            if (sscanf(q, "%lf", &v) != 1) v = 20;
+            if (v < 1) v = 1;
+            if (v > 64) v = 64;
+            n = (int)v;
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "allsectors: streaming radii raised to at least %d sectors\n"
+                "  (about %d m). This RAISES radii only - it never lowers one.\n"
+                "\n"
+                "  HONEST STATUS: this is not proven to keep sectors resident.\n"
+                "  The master radius already ships at 20, which spans the map, so\n"
+                "  radii may not be the gate at all. An earlier build also poked a\n"
+                "  byte I had misidentified; that corrupted the streaming tracker\n"
+                "  and made the player model vanish. That poke is gone - what is\n"
+                "  left only calls the engine's own setters and is reversible.\n"
+                "\n"
+                "  The frame may STALL while it streams - the engine waits with no\n"
+                "  timeout. 'allsectors off' puts the shipped radii back.\n", n, n * 64);
+            SectorRadiiSet(it, n);
+        }
+        return 1;
+    }
+
+
+    if (_strnicmp(p, "timescale", 9) == 0 &&
+        (p[9] == ' ' || p[9] == '\t' || !p[9])) {
+        double v;
+        if (sscanf(p + 9, "%lf", &v) == 1 && v >= 0.0 && v <= 10.0) {
+            if (TimeScaleSet(v)) {
+                g_frozen = (v == 0.0);
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "timescale: %.2f%s\n", v,
+                    (v == 0.0) ? " - stopped" :
+                    (v < 1.0)  ? " - slow motion" :
+                    (v > 1.0)  ? " - fast" : " - normal");
+            } else {
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "timescale: could not reach the time manager\n");
+            }
+        } else {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "timescale <0..10>   1 = normal, 0.25 = slow, 0 = frozen\n"
+                "  currently %.2f\n", TimeScaleGet());
+        }
+        return 1;
+    }
+
+    if (_stricmp(p, "freeze") == 0) {
+        /* `cheat_pause_toggle` was a dead end and is gone. It is never registered
+           - the frame function looks it up by name every frame and gets NULL -
+           and the value behind it is 0.03f, a fixed 30ms timedemo step, not a
+           pause. See FREEZE.md.
+
+           This is the real one: the time manager's SCALE, a double at +0x50,
+           default 1.0, applied by a single multiply. Zero it and the world stops.
+
+           Why the scale rather than the engine's own Pause(): the scale is
+           applied BEFORE the frame delta is stored, so it kills both the delta
+           the getter hands out AND the raw one the entity system, renderer and
+           frame loop read directly - a complete stop. And it never touches the
+           update mask, so all ~46 per-frame calls still run, including our
+           console and the streaming flush. Nothing is skipped, so nothing can
+           wedge on a step it missed. Pause() by contrast is only partial, and
+           its Unpause is unrefcounted - the pause menu would silently clear it. */
+        if (!g_frozen) {
+            double cur = TimeScaleGet();
+            if (cur <= 0.0) cur = 1.0;             /* never save a zero */
+            if (!TimeScaleSet(0.0)) {
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "freeze: could not reach the time manager\n");
+                return 1;
+            }
+            g_savedScale = cur;
+            g_frozen = 1;
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "freeze: the world is STOPPED (time scale 0, was %.2f)\n"
+                "  'freeze' again to resume. 'freecam' to fly through it.\n"
+                "  Rendering, the console and streaming all keep running - only\n"
+                "  time stopped. Audio may keep playing; that one is untested.\n", cur);
+        } else {
+            TimeScaleSet(g_savedScale > 0.0 ? g_savedScale : 1.0);
+            g_frozen = 0;
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "freeze: running again (time scale %.2f)\n",
+                g_savedScale > 0.0 ? g_savedScale : 1.0);
+        }
+        logf_("[frz ] time scale -> %.2f", TimeScaleGet());
+        return 1;
+    }
+
+    if (_stricmp(p, "spawnground") == 0) {
+        InterlockedExchange(&g_spawnGround, g_spawnGround ? 0 : 1);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "spawnground: %s\n"
+            "  ON  = sit the spawn's bounding box on the floor, using YOUR feet\n"
+            "        as the ground height. Exact on flat ground; off by the\n"
+            "        height difference on a slope, because there is no raycast\n"
+            "        to sample terrain where the thing actually lands.\n"
+            "  OFF = the old behaviour, %.1fm up, and let it fall.\n",
+            g_spawnGround ? "ON" : "OFF", SPAWN_UP);
+        return 1;
+    }
+
+    if (_strnicmp(p, "drivebind", 9) == 0 &&
+        (p[9] == ' ' || p[9] == '\t' || !p[9])) {
+        const char* q = p + 9;
+        int slot;
+        while (*q == ' ' || *q == '\t') ++q;
+        slot = (*q >= '1' && *q <= '9') ? (*q - '1') : -1;
+        if (slot >= 0) {
+            int idx = g_drivePage * DRIVE_SLOTS + slot;
+            ++q;
+            while (*q == ' ' || *q == '\t') ++q;
+            if (*q && idx < DRIVE_MAX) {
+                strncpy(g_driveSig[idx], q, sizeof(g_driveSig[0]) - 1);
+                g_driveSig[idx][sizeof(g_driveSig[0]) - 1] = 0;
+                g_driveNote[idx] = "(yours)";
+                /* THE ACTION HAS TO BE SET TOO. g_driveAct[idx] was left holding
+                   whatever the PREVIOUS species' table put there, and the number
+                   keys dispatch on it - so binding over a slot that used to be a
+                   "combat" entry made your key toggle combat instead of sending
+                   your signal. DriveSigBuild resets the COUNT between species but
+                   not the arrays, so the stale value survives the change. */
+                g_driveAct[idx] = DRIVE_ACT_SIGNAL;
+                /* And do not promote the gap. Raising g_driveSigN past unbound
+                   slots put the previous species' signal names back under the
+                   number keys; the dispatch only rejects EMPTY names, not stale
+                   ones. Blank them instead. */
+                if (idx >= g_driveSigN) {
+                    int h;
+                    for (h = g_driveSigN; h < idx; ++h) {
+                        g_driveSig[h][0] = 0;
+                        g_driveNote[h]   = "(unbound)";
+                        g_driveAct[h]    = DRIVE_ACT_SIGNAL;
+                    }
+                    g_driveSigN = idx + 1;
+                }
+            }
+        }
+        {
+            int i;
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "drivebind: %d signal(s), page %d of %d  (0 turns the page in game)\n",
+                g_driveSigN, g_drivePage + 1, DrivePages());
+            for (i = 0; i < g_driveSigN; ++i)
+                ((fnPrintf)FN_PRINTF)(console, 0, AC "  %s%d  %-32s %s\n",
+                    (i / DRIVE_SLOTS == g_drivePage) ? "*" : " ",
+                    (i % DRIVE_SLOTS) + 1, g_driveSig[i],
+                    g_driveNote[i] ? g_driveNote[i] : "");
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "  Names are CASE-SENSITIVE and a name the creature does not connect\n"
+                "  is NOT an error - the hash matches nothing and nothing happens.\n"
+                "  The [square brackets] in each note are the states the signal is\n"
+                "  accepted from; where we know a way into one, the key sends it for\n"
+                "  you first. 'HOLDS' means the state has no exit of its own and the\n"
+                "  same key sends its stop partner.\n");
+        }
+        return 1;
+    }
+
+    if (_strnicmp(p, "attackhold", 10) == 0 &&
+        (p[10] == ' ' || p[10] == '\t' || !p[10])) {
+        double v;
+        if (sscanf(p + 10, "%lf", &v) == 1 && v >= 0 && v < 10000)
+            g_attackHold = (DWORD)v;
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "attackhold: %lu ms - how long the creature's OWN movement wins after\n"
+            "  an attack. Too short and our steering fights the attack animation\n"
+            "  (that is the flicker); too long and it feels unresponsive.\n",
+            (unsigned long)g_attackHold);
+        return 1;
+    }
+    if (_stricmp(p, "delete") == 0 || _stricmp(p, "despawn") == 0) {
+        DeleteSelected(console); return 1;
+    }
+    if (_strnicmp(p, "entlist", 7) == 0 && (p[7] == ' ' || p[7] == '\t' || !p[7])) {
+        const char* q = p + 7;
+        while (*q == ' ' || *q == '\t') ++q;
+        EntList(console, q);
+        return 1;
+    }
+    if (_stricmp(p, "animinfo") == 0)  { AnimInfo(console);   return 1; }
+    if (_stricmp(p, "pawntype") == 0)  { PawnType(console);   return 1; }
+    if (_strnicmp(p, "entflag", 7) == 0 && (p[7] == ' ' || p[7] == '	' || !p[7])) {
+        const char* q = p + 7;
+        while (*q == ' ' || *q == '	') ++q;
+        EntFlag(console, q);
+        return 1;
+    }
+    if (_strnicmp(p, "gamelog", 7) == 0 && (p[7] == ' ' || p[7] == '\t' || !p[7])) {
+        const char* q = p + 7;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (_stricmp(q, "off") == 0) {
+            InterlockedExchange(&g_gamelog, 0);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC "gamelog: off\n");
+        } else {
+            g_glLast = -1;
+            InterlockedExchange(&g_gamelog, 1);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "gamelog: on -> %s\n"
+                "  Mirrors the ENGINE's own console output - what it loads, what it\n"
+                "  binds, what it plays. Nothing of ours goes in it.\n", GAMELOG_PATH);
+        }
+        return 1;
+    }
+    if (_strnicmp(p, "fixcontrol", 10) == 0 &&
+        (p[10] == ' ' || p[10] == '\t' || !p[10])) {
+        const char* q = p + 10;
+        while (*q == ' ' || *q == '\t') ++q;
+        FixControl(console, _stricmp(q, "undo") == 0);
+        return 1;
+    }
+
+    if (_strnicmp(p, "trace", 5) == 0 && (p[5] == ' ' || p[5] == '\t' || !p[5])) {
+        const char* q = p + 5;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (_stricmp(q, "off") == 0) {
+            InterlockedExchange(&g_trace, 0);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC "trace: off\n");
+        } else if (_stricmp(q, "now") == 0) {
+            g_prevValid = 0;
+            TraceSnapshot(0);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC "trace: one snapshot written\n");
+        } else if (_stricmp(q, "fast") == 0) {
+            g_prevValid = 0;
+            InterlockedExchange(&g_trace, 2);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "trace: EVERY FRAME - this gets big fast, 'trace off' when done\n");
+        } else {
+            g_prevValid = 0;
+            InterlockedExchange(&g_trace, 1);
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "trace: on (~4Hz) -> %s\n"
+                "  Logs every pointer we can resolve, plus every byte that CHANGES\n"
+                "  in the player entity and CPlayer. Do the thing that breaks, then\n"
+                "  'trace off' and send the file.\n"
+                "  'trace fast' = every frame, 'trace now' = one snapshot.\n",
+                TRACE_PATH);
+        }
+        return 1;
+    }
+    if (_strnicmp(p, "vehenter", 8) == 0 &&
+        (p[8] == ' ' || p[8] == '	' || !p[8])) {
+        const char* q = p + 8;
+        int st = 1;                       /* driver, the shipped default */
+        while (*q == ' ' || *q == '	') ++q;
+        if (*q) st = atoi(q);
+        VehEnter(console, st);
+        return 1;
+    }
+    if (_stricmp(p, "vehexit") == 0)  { VehExit(console);      return 1; }
+    if (_stricmp(p, "vehstatus") == 0){ VehStatus(console);    return 1; }
+    if (_strnicmp(p, "camspeed", 8) == 0 && (p[8] == ' ' || p[8] == '\t' || !p[8])) {
+        double v = 0;
+        if (sscanf(p + 8, "%lf", &v) == 1 && v > 0) {
+            if (v < CAMSPD_MIN) v = CAMSPD_MIN;
+            if (v > CAMSPD_MAX) v = CAMSPD_MAX;
+            g_camSpeed = (float)v;
+            logf_("[freecam] speed = %.1f (console)", g_camSpeed);
+        }
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "camspeed: %.0f   (PgUp/PgDn while flying, or the mouse wheel -\n"
+            "  the engine binds that to the camera's own acceleration)\n", g_camSpeed);
+        return 1;
+    }
+    if (_strnicmp(p, "firstperson", 11) == 0 &&
+        (p[11] == ' ' || p[11] == '\t' || !p[11])) {
+        if (g_firstperson) FirstPersonLeave(console);
+        else               FirstPersonEnter(console);
+        return 1;
+    }
+    if (_strnicmp(p, "verbose", 7) == 0 &&
+        (p[7] == ' ' || p[7] == '\t' || !p[7])) {
+        const char* q = p + 7;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (!*q) InterlockedExchange(&g_logEcho, g_logEcho ? 0 : 1);
+        else     InterlockedExchange(&g_logEcho,
+                     (_strnicmp(q, "off", 3) == 0) ? 0 : 1);
+        ((fnPrintf)FN_PRINTF)(console, 0, AC
+            "verbose: %s - every internal log line is mirrored here.\n"
+            "  This is what the DLL already knew and only wrote to the file:\n"
+            "  which signal went out, which clip it resolved to, why a command\n"
+            "  did nothing. F1 toggles it too.\n",
+            g_logEcho ? "ON" : "off");
+        return 1;
+    }
+    if (_stricmp(p, "fpdiag") == 0) { FirstPersonDiag(console); return 1; }
+    if (_stricmp(p, "fpbody") == 0) { FirstPersonBody(console); return 1; }
+    if (_strnicmp(p, "fpaim", 5) == 0 &&
+        (p[5] == ' ' || p[5] == '	' || !p[5])) {
+        const char* q = p + 5;
+        while (*q == ' ' || *q == '	') ++q;
+        if (!*q)                       FirstPersonAim(console, 0, 0);
+        else if (_strnicmp(q, "off", 3) == 0)    FirstPersonAim(console, 1, -1);
+        else if (_strnicmp(q, "lookat", 6) == 0) FirstPersonAim(console, 1, -2);
+        else if (_strnicmp(q, "body", 4) == 0)   FirstPersonAim(console, 1, -3);
+        else if (_strnicmp(q, "look", 4) == 0)   FirstPersonAim(console, 1, -4);
+        else if (_strnicmp(q, "yaw", 3) == 0) {
+            const char* v = q + 3;
+            while (*v == ' ' || *v == '\t') ++v;
+            g_fpYawOff = atof(v) * 3.14159265358979 / 180.0;
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "fpaim: yaw offset %.1f deg\n", atof(v));
+            return 1;
+        }
+        else if (_strnicmp(q, "pitch", 5) == 0) {
+            g_fpPitchSgn = -g_fpPitchSgn;
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "fpaim: pitch sign %s\n", g_fpPitchSgn < 0 ? "inverted" : "normal");
+            return 1;
+        }
+        else                           FirstPersonAim(console, 1, atoi(q));
+        return 1;
+    }
+    if (_strnicmp(p, "fpfov", 5) == 0 &&
+        (p[5] == ' ' || p[5] == '	' || !p[5])) {
+        double a = 0;
+        int n = sscanf(p + 5, "%lf", &a);
+        FirstPersonFov(console, n == 1, (float)a);
+        return 1;
+    }
+    if (_strnicmp(p, "fpoffset", 8) == 0 &&
+        (p[8] == ' ' || p[8] == '\t' || !p[8])) {
+        double a = 0, b = 0, c = 0;
+        int n = sscanf(p + 8, "%lf %lf %lf", &a, &b, &c);
+        FirstPersonOffset(console, n == 3, (float)a, (float)b, (float)c);
+        return 1;
+    }
+    if (_strnicmp(p, "freecam", 7) == 0 &&
+        (p[7] == ' ' || p[7] == '\t' || !p[7])) {
+        const char* q = p + 7;
+        while (*q == ' ' || *q == '\t') ++q;
+        if (g_freecam) {
+            FreecamLeave(console);
+            return 1;
+        }
+        FreecamEnter(console);
+        /* `freecam 1` = the sectors follow the CAMERA. Plain `freecam` leaves
+           them on the player, which is deliberate: flying away from a
+           player-anchored world is how you look at what is actually loaded
+           around you, and that is worth keeping. */
+        if (*q == '1' && g_freecam) {
+            if (g_drive) {
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "freecam: the creature already anchors streaming while you\n"
+                    "  are driving - leaving it there, it is the better anchor.\n");
+            } else {
+                g_fcAnchor     = 1;
+                g_fcAnchorEnt  = 0;      /* attached on the next frame */
+                g_fcAnchorComp = 0;
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "freecam: sectors will FOLLOW THE CAMERA.\n"
+                    "  Terrain loads and unloads around where you fly, not where\n"
+                    "  the player stands. The engine BLOCKS on a sector it has\n"
+                    "  asked for, so flying faster than it can stream shows up as\n"
+                    "  a hitch, not a hole. 'freecam' again puts it back.\n");
+            }
+        }
+        return 1;
+    }
+
+    if (_stricmp(p, "spawn_all") == 0) { SpawnMergeFull(console); return 1; }
+
+    if (_strnicmp(p, "mergelib", 8) == 0 &&
+        (p[8] == ' ' || p[8] == '\t' || p[8] == '!' || !p[8])) {
+        const char* q = p + 8;
+        char rel[MAX_PATH];
+        int  n = 0;
+        int  force = (p[8] == '!');            /* skip the existence check */
+        if (force) ++q;
+        while (*q == ' ' || *q == '\t') ++q;
+        /* Strip surrounding quotes - a path with spaces invites them, and the
+           engine would take them as part of the filename. */
+        if (*q == '"') {
+            ++q;
+            while (*q && *q != '"' && n < (int)sizeof(rel) - 1) rel[n++] = *q++;
+        } else {
+            while (*q && n < (int)sizeof(rel) - 1) rel[n++] = *q++;
+        }
+        while (n > 0 && (rel[n-1] == ' ' || rel[n-1] == '\t')) --n;
+        rel[n] = 0;
+
+        if (!n) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "mergelib <path>   merge an entity library into the live table\n"
+                "  The path is GAME-RELATIVE, resolved under Data_Win32\\Data - the same\n"
+                "  form spawn_all uses:\n"
+                "    mergelib worlds\\sp_hellsgate_01\\generated\\mylib.fcb\n"
+                "  Re-registering a name OVERWRITES that one archetype in place, so a\n"
+                "  file holding a single edited prototype replaces just that one and\n"
+                "  leaves the rest alone. Loose files beat the archives, so the file can\n"
+                "  simply be dropped into the Data tree - no repacking.\n"
+                "  Gone on any level change; merge again after a warp.\n");
+        } else if (rel[1] == ':' || rel[0] == '\\' || rel[0] == '/') {
+            /* An absolute path is not merely unsupported - it FAULTS inside the
+               loader instead of failing cleanly. Refuse it with an explanation
+               rather than letting it take the game down. */
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "mergelib: that is an absolute path, and the engine's file manager\n"
+                "  cannot resolve one - it faults inside the loader rather than\n"
+                "  failing cleanly. Use a path relative to Data_Win32\\Data, e.g.\n"
+                "    mergelib worlds\\sp_hellsgate_01\\generated\\valkyrie_seats.fcb\n"
+                "  Put the file there first; loose files win over the archives.\n");
+        } else if (!force && LooseFileExists(rel) == 0) {
+            /* The loader faults on a file it cannot open, so a typo or a
+               forgotten copy would crash the game. Refuse and say where we
+               looked - and offer the override, because a file living inside
+               patch.pak is legitimate and invisible to this check. */
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "mergelib: no loose file at Data_Win32\\Data\\%s\n"
+                "  Not merging: the engine's loader FAULTS on a file it cannot\n"
+                "  open, so this would take the game down rather than fail.\n"
+                "  Copy it there, or if it is inside patch.pak use 'mergelib!' to\n"
+                "  skip this check.\n", rel);
+        } else {
+            MergeLibPath(console, rel, "mergelib");
+        }
+        return 1;
+    }
+
+    if (_strnicmp(p, "spawn_list", 10) == 0 &&
+        (p[10] == ' ' || p[10] == '\t' || !p[10])) {
+        const char* q = p + 10;
+        while (*q == ' ' || *q == '\t') ++q;
+        SpawnList(console, q);
+        return 1;
+    }
+    if (_strnicmp(p, "spawn", 5) == 0 &&
+        (p[5] == ' ' || p[5] == '\t' || p[5] == '!' || !p[5])) {
+        int force = (p[5] == '!');
+        const char* q = p + 5 + force;
+        char arch[192];
+        int  k = 0;
+        while (*q == ' ' || *q == '\t') ++q;
+        /* Take the WHOLE remainder, spaces included. Archetype names contain
+           them - "enemy_archetypes.Avatar.Navi1.Female.Key NPC.Tsahik" - and
+           stopping at the first space made every such name unspawnable. */
+        while (*q && k < (int)sizeof(arch) - 1) arch[k++] = *q++;
+        while (k > 0 && (arch[k - 1] == ' ' || arch[k - 1] == '\t')) --k;
+        arch[k] = 0;
+        if (!k) {
+            /* No name typed - open the picker rather than printing usage at
+               someone who has to know a name before they can search for one. */
+            OpenSpawnPicker(console);
+        } else
+            SpawnArchetype(console, arch, force);
+        return 1;
+    }
+
+    if (_strnicmp(p, "tp", 2) == 0 && (p[2] == ' ' || p[2] == '\t' || !p[2])) {
+        double x, y, z;
+        int haveXYZ = (sscanf(p + 2, "%lf %lf %lf", &x, &y, &z) == 3);
+
+        /* MUST come before GetCameraEntity(). That function reads g_lastInner,
+           which only GetPlayerEntity() populates - its own comment says "call
+           AFTER GetPlayerEntity so g_lastInner is current". The first version of
+           the bare-`tp` path resolved the camera first and so reported "no camera
+           resolvable" while sitting in freecam with a perfectly good camera. */
+        if (!GetPlayerEntity()) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC "tp: no player entity\n");
+            return 1;
+        }
+
+        if (!haveXYZ) {
+            /* No coordinates: bring the player to the ACTIVE CAMERA. In freecam
+               the active camera IS the freecam, so this is "put my body where I
+               have been flying" - which is the thing `respawn` cannot do, since
+               respawn builds a new body and the engine substitutes a level spawn
+               point for whatever position you ask for. */
+            void* cam = GetCameraEntity();
+            const float* cp;
+            if (!cam) {
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "tp <x> <y> <z>   move the player there (Z is up)\n"
+                    "tp               move the player to the ACTIVE CAMERA\n"
+                    "  (in freecam that is the freecam - your body comes to you)\n"
+                    "  Engages free-fly, so the entity, both physics proxies and the\n"
+                    "  camera all follow. F8 to drop back out of it.\n"
+                    "  No camera resolvable right now, so give coordinates.\n");
+                return 1;
+            }
+            cp = (const float*)((char*)cam + OFF_ENT_POS);
+            x = cp[0]; y = cp[1]; z = cp[2];
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "tp: to the active camera (%.1f %.1f %.1f)\n", x, y, z);
+        }
+        NoclipSet(1);
+        if (!g_noclip) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC "tp: free-fly refused - cannot move you safely\n");
+            return 1;
+        }
+        g_flyAcc[0] = x; g_flyAcc[1] = y; g_flyAcc[2] = z;
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "tp: (%.1f %.1f %.1f), free-fly on\n", x, y, z);
+        logf_("[tp  ] (%.1f %.1f %.1f)", x, y, z);
+        return 1;
+    }
+
+    if (_strnicmp(p, "warp", 4) != 0) return 0;
+    if (p[4] && p[4] != ' ' && p[4] != '\t') return 0;   /* don't eat "warpfoo" */
+    p += 4;
+    while (*p == ' ' || *p == '\t') ++p;
+    while (*p && *p != ' ' && *p != '\t' && n < (int)sizeof(world) - 1) world[n++] = *p++;
+    world[n] = 0;
+
+    if (n == 0 || _stricmp(world, "?") == 0 || _stricmp(world, "help") == 0) {
+        WarpUsage(console, 0); return 1;
+    }
+    if (_stricmp(world, "list") == 0) { WarpList(console); return 1; }
+
+    /* ---- `warp <world> default` -------------------------------------------
+       Force the engine's own -1/-1 "you pick one" spawn-point sentinel even on
+       an mp_* world, i.e. bypass mp_spawns.h.
+
+       This is not cosmetic. `CFCXOnLoadWorldOp::DoExecute 0x106D8DC0` opens by
+       calling the sentinel test `0x10783A60`:
+
+           mov eax,[ecx+0x58] / and eax,[ecx+0x5c] / cmp eax,-1 / je -> return 0
+
+       and BRANCHES ON IT. Sentinel -> it calls its own completion handler
+       (`push -1 / call 0x106D85D0`) and the operation finishes in the same
+       frame. A real id -> it subscribes to an event and returns, and its
+       Update vfunc is `ret 4` with a zero timeout, so the operation can only
+       ever be finished by that event arriving.
+
+       So the spawn-point id decides which of two completely different code
+       paths the load takes, and being able to pick from the console is the
+       only way to compare them without a rebuild. See MULTIPLAYER.md §10.
+
+       Parsed into its own buffer and compared with `_stricmp(opt, ...)` on
+       purpose. check_cmds.py finds the dispatched command names by matching a
+       case-insensitive compare of the parse pointer `p` against a string
+       literal; comparing the modifier that way would make the build believe
+       `default` is a top-level console command and fail the Tab-completion
+       consistency gate. (Do not spell that idiom out in this comment either -
+       the checker reads comments too, and this exact paragraph failed the
+       build once for saying it in full.) */
+    {
+        char opt[16];
+        int  k = 0;
+        while (*p == ' ' || *p == '\t') ++p;
+        while (*p && *p != ' ' && *p != '\t' && k < (int)sizeof(opt) - 1)
+            opt[k++] = *p++;
+        opt[k] = 0;
+        if (_stricmp(opt, "default") == 0) forceDefaultSpawn = 1;
+    }
+
+    {
+        void* game = *(void**)G_PGAME_PTR;
+        if (!Readable(game, 0x50) || *(unsigned long*)game != VT_CBTZGAME) {
+            WarpUsage(console, "warp: no game object (are you loaded into a save?)"); return 1;
+        }
+    }
+    if (!g_gameWnd || !IsWindow(g_gameWnd)) {
+        WarpUsage(console, "warp: game window not found yet - try again in a second"); return 1;
+    }
+    if (!InstallMsgHook()) {
+        WarpUsage(console, "warp: could not hook the message pump - refusing to load"); return 1;
+    }
+    /* Without this the switch faults at operation #16 every time. Not fatal to
+       refuse - the warp simply will not survive - so say so and stop. */
+    if (!InstallPrepareRendererGuard()) {
+        WarpUsage(console, "warp: could not install the renderer guard - the load "
+                           "would crash at CFCXPrepareRendererOperation. Refusing.");
+        return 1;
+    }
+
+    /* Carrying stale fly coordinates into a fresh world dumped the player through
+       the floor once already. Do it here, while the old world still exists. */
+    if (g_noclip) NoclipSet(0);
+    /* Leave freecam too. The crash at 0x1006F594 during a world change landed in
+       camera-stack teardown with a NULL base, and freecam had been used earlier
+       in that session - which puts an extra camera entity in the stack's cache.
+       Unproven as the cause, but making the active camera the pawn camera before
+       a switch costs nothing. */
+    if (g_freecam) FreecamLeave(0);   /* main thread here - the console
+                                         dispatch runs inside the detour */
+    {   /* warping while seated is UNKNOWN territory; leave first rather than
+           discover the answer in the middle of a context switch. */
+        unsigned long cLo, cHi;
+        if (CurrentVehicle(&cLo, &cHi)) {
+            ((fnPrintf)FN_PRINTF)(console, 0, AC "warp: leaving the vehicle first\n");
+            VehExit(0);
+        }
+    }
+
+    InterlockedExchange(&g_pendingWarpDefault, forceDefaultSpawn);
+    strncpy(g_pendingWorld, world, sizeof(g_pendingWorld) - 1);
+    g_pendingWorld[sizeof(g_pendingWorld) - 1] = 0;
+    InterlockedExchange(&g_pendingWarp, 1);
+    /* From here on this session cannot safely write a savegame - see RequestSave.
+       Also blocks the game's OWN autosave request while the flag is set. */
+    InterlockedExchange(&g_warpedThisSession, 1);
+    /* Deliberately NOT closing the console here. It is our own overlay, not an
+       engine-owned panel, and poking engine UI state one frame before a world
+       teardown is exactly the kind of extra surface this call does not need. */
+
+    /* Multiplayer worlds load fine, but nothing sets up a match: their game-mode
+       mission layers all ship with State="0" and CMissionManager::Init only
+       activates a layer whose mission flag bit 0 is set, so no mode content is
+       switched on. You keep the single-player pawn and its coordinates, and mp_*
+       worlds are 640m square against single-player's 1024m - so you usually
+       arrive outside the map rather than in it. See MULTIPLAYER.md. */
+    if (IsMp(g_pendingWorld)) {
+        const MpSpawn* sp = MpSpawnFor(g_pendingWorld);
+        if (sp)
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "warp: %s is a multiplayer world - landing on one of its own\n"
+                "      spawn points (%08lX:%08lX). No match is set up, so there\n"
+                "      is no mode, no scoring and no respawn, but you should be\n"
+                "      inside the map rather than in the void.\n",
+                g_pendingWorld, sp->lo, sp->hi);
+        else
+            ((fnPrintf)FN_PRINTF)(console, 0, AC
+                "warp: %s is a multiplayer world and this build has no spawn\n"
+                "      point for it, so the load will use the DEFAULT one - which\n"
+                "      no mp_* world can resolve. Expect it to hang on the loading\n"
+                "      screen. Re-run mp_spawnpoints.py to add it.\n",
+                g_pendingWorld);
+    }
+    ((fnPrintf)FN_PRINTF)(console, 0, AC
+        "warp: changing world to %s\n"
+        "  *** DO NOT SAVE AFTER THIS, AND DO NOT USE THE PAUSE MENU'S SAVE OR\n"
+        "      'SAVE AND QUIT'. The save system labels the file with a level it\n"
+        "      takes from its own field, which this does not update - so the save\n"
+        "      claims one world and contains another, loads wrong, and crashes.\n"
+        "      One save has already been lost this way. Restart to save normally.\n",
+        g_pendingWorld);
+    logf_("[warp] queued \"%s\" - waiting for the message pump", g_pendingWorld);
+    PostMessage(g_gameWnd, WM_WARP_NOW, 0, 0);
+    return 1;
+}
+
+/* Runs on the game's own thread, from inside its PeekMessage/GetMessage call -
+   the top of the frame loop, not the middle of the UI update. Calling LoadWorld
+   from CConsole::UpdateUI loaded the world successfully and then crashed on the
+   way back out; this is the shallowest main-thread point reachable without
+   rebuilding the engine's CFCX*LoadWorld*Op sequence. */
+static void DoPendingWarp(void)
+{
+    DuniaStrVal v;
+    const MpSpawn* sp = g_pendingWarpDefault ? 0 : MpSpawnFor(g_pendingWorld);
+
+    if (!Readable((const void*)FN_CHANGEWORLD, 16)) {
+        logf_("[warp] aborted: GameChangeWorldDefaultSpawnPoint not readable");
+        return;
+    }
+    /* A multiplayer world has no DEFAULT spawn point, so the wrapper's -1/-1
+       never resolves and the world change never returns - see the block above
+       FN_CHANGEWORLD_AT. Name one that the map actually places. */
+    if (sp && !Readable((const void*)FN_CHANGEWORLD_AT, 16)) {
+        logf_("[warp] ChangeWorld(world,lo,hi) not readable - falling back to "
+              "the default-spawn wrapper, which will probably hang on mp_*");
+        sp = 0;
+    }
+
+    memset(&v, 0, sizeof(v));
+    ((fnStrCtor)FN_STR_CTOR)(&v, g_pendingWorld);
+
+    __try {
+        if (sp) {
+            logf_("[warp] ChangeWorld(\"%s\", %08lX:%08lX)  [mp spawn point]",
+                  g_pendingWorld, sp->lo, sp->hi);
+            ((fnChangeWorldAt)FN_CHANGEWORLD_AT)(v, sp->lo, sp->hi);
+        } else {
+            logf_("[warp] GameChangeWorldDefaultSpawnPoint(\"%s\")%s",
+                  g_pendingWorld,
+                  g_pendingWarpDefault ? "  [-1/-1 sentinel FORCED]" : "");
+            ((fnChangeWorld)FN_CHANGEWORLD)(v);   /* by value - see the typedef */
+        }
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        logf_("[warp] *** FAULTED - caught. Restart the game.");
+        return;
+    }
+    /* NO dtor here. The callee destroys its by-value copy. */
+
+    /* SwitchContext only ENQUEUES; CGameOperationContainer::Update drains it over
+       the next frames, and the loading loop is modal - so the detour going quiet
+       is expected, not a stall. Tell the watchdog before it fires RESCUE and
+       forces noclip off in the middle of a legitimate load. */
+    InterlockedExchange(&g_warpQuietUntil, (long)(GetTickCount() + 60000));
+    logf_("[warp] queued with the engine - watchdog muted for 60s");
+}
+
+/* The engine now handles the pawn: CFCXCreateGameModeOperation ->
+   GameMode::InitFromContext -> GREventPlayerJoin -> CPlayer::vt[8] spawns you at
+   the destination's default spawn point, and CFCXPostLoadWorldOp reloads the
+   input bindings. All this does is notice that it happened and say so. */
+static volatile long g_repairIn = 0;    /* frames until the post-warp repair */
+
+/* ---- THE WARP BUG, measured rather than guessed -----------------------------
+   A continuous read-only sample of the player list across a WORKING fast travel
+   and then across our `warp` (scripts/livewatch.py) showed the whole thing in
+   twenty rows:
+
+     fast travel   refnode  0x18040640 -> 0x1979b6e0
+                   entity           0 -> 0x194eb900
+                   entity+0x34        -> 0x1979b6e0     backptr_ok -> TRUE
+
+     our warp      entity           0 -> 0x18a86c00
+                   entity+0x34        -> 0x1979aec0     <- the entity's REAL node
+                   refnode  0x18040640 -> 0x1979b6e0     <- the PREVIOUS world's
+
+   The engine rebuilds the player entity either way. The fast travel also
+   re-points the player list at the new ref node; our warp leaves the old one in
+   place, so `inner+8` and `entity+0x34` disagree for ever after. Every downstream
+   symptom - noclip and freecam refusing to start, "no player entity to spawn
+   near", the pick shortlist crashing on freed entities - is that one mismatch.
+
+   So repair it with the engine's own setter. `0x101A3E60(element, node)` is what
+   the shipped `Game:SetPlayerId` and `Game:BindTerminal` bindings call: it
+   AddRefs the new node, Releases the old, and retargets the camera through
+   0x101A3990 -> 0x10249470. That last part is why this runs BEFORE
+   RestorePawnCamera - it moves the camera itself, and doing it afterwards would
+   undo the camera fix.
+
+   It refuses unless the entity's own back-pointer is self-consistent, so a
+   half-built pawn cannot be installed. */
+#define FN_SET_PAWNREF (0x101A3E60u + g_rebase)
+/* `this` is the player-list WRAPPER arr[i], NOT the inner/_localplayer at
+   wrapper+4 - the callee does that hop itself. ret 4, one stack arg. */
+typedef void (__thiscall *fnSetPawnRef)(void* wrapper, void* node);
+
+/* Retry in REAL TIME, not tick counts.
+   The first version counted 20 tries at 60 ticks each, intending ~10 seconds.
+   The log showed try 1 at t=10984 and try 10 at t=11390 - 45ms apart, because
+   this tick runs about 1300 times a second, not 60. The whole retry window was
+   0.9s and the world was still populating: the entity map held 320 entities
+   (a healthy session has ~1270) and every name in it was a SpawnPoint.
+
+   Frames are not seconds. Use the clock. */
+#define REPAIR_WINDOW_MS 30000
+#define REPAIR_STEP_MS     500
+static DWORD g_repairUntil = 0;
+static DWORD g_repairNext  = 0;
+static long  g_repairTries = 0;
+
+static long EntityCount(void);
+static void LogPlayerishNames(void);
+
+static void RepairPlayerList(void* console)
+{
+    void  *lst, *arr, *wrapper, *inner, *node, *ent, *real;
+    unsigned long n, i;
+
+    if (!Readable((void*)PLAYERLIST_PTR, 4)) return;
+    lst = *(void**)PLAYERLIST_PTR;              if (!Readable(lst, 0x10)) return;
+    arr = *(void**)((char*)lst + 4);            if (!Readable(arr, 4))    return;
+    n   = *(unsigned long*)((char*)lst + 8);
+    if (!n || n > 64 || !Readable(arr, n * 4)) return;
+
+    for (i = 0; i < n; ++i) {
+        wrapper = ((void**)arr)[i];              if (!Readable(wrapper, 0x10)) continue;
+        inner   = *(void**)((char*)wrapper + 4); if (!Readable(inner, 0x10))   continue;
+        node    = *(void**)((char*)inner + 8);
+        ent     = Readable(node, 0x10) ? *(void**)((char*)node + 0x0C) : 0;
+
+        /* Already consistent - the fast-travel case. Leave it alone, but SAY SO.
+           Returning silently here meant `fixplayer` printed "repairing..." and
+           then nothing at all, which is indistinguishable from still running -
+           and it sent the last debugging session after the wrong thing. A
+           diagnostic that cannot report "nothing was wrong" is not a diagnostic. */
+        if (Readable(ent, 0x100) &&
+            *(void**)((char*)ent + OFF_ENT_CHECK) == node) {
+            logf_("[warp] player list [%lu] is already consistent "
+                  "(ent=%p node=%p) - nothing to repair", i, ent, node);
+            if (console)
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "fixplayer: the player list is FINE - entry %lu already points\n"
+                    "  at a live pawn (%p). So this is not what is stopping you\n"
+                    "  moving. If the game is ignoring keys entirely, try 'fixinput';\n"
+                    "  if the camera is wrong, 'fixcam'.\n", i, ent);
+            return;
+        }
+
+        /* Find the body the engine actually built, and take ITS node. */
+        real = FindPlayerByName();
+        if (!Readable(real, 0x100)) {
+            /* NOT a failure - almost certainly just early. The first attempt
+               fired 250ms after the world change and the pawn is built by the
+               last operations of the switch. Ask to be called again rather than
+               giving up, and say what the map actually contained so a wrong NAME
+               is distinguishable from a pawn that does not exist yet. */
+            {
+                DWORD now = GetTickCount();
+                if ((long)(now - g_repairUntil) < 0) {
+                    ++g_repairTries;
+                    g_repairNext = now + REPAIR_STEP_MS;
+                    InterlockedExchange(&g_repairIn, 1);   /* keep being called */
+                    /* Log the entity count as it climbs - that is what says
+                       whether the world is still populating or genuinely done
+                       and simply has no player in it. */
+                    logf_("[warp] waiting for the pawn (%lus left) - %ld entities",
+                          (unsigned long)((g_repairUntil - now) / 1000),
+                          EntityCount());
+                } else {
+                    logf_("[warp] gave up after %ld tries / %ds: no entity "
+                          "matching MainCharacter+PawnPlayer. %ld entities in the "
+                          "map. Names seen:",
+                          g_repairTries, REPAIR_WINDOW_MS / 1000, EntityCount());
+                    LogPlayerishNames();
+                }
+            }
+            return;
+        }
+        g_repairTries = 0;
+        {
+            void* want = *(void**)((char*)real + OFF_ENT_CHECK);
+            if (!Readable(want, 0x10) ||
+                *(void**)((char*)want + 0x0C) != real) {
+                logf_("[warp] pawn %p has an inconsistent node %p - not repairing",
+                      real, want);
+                return;
+            }
+            if (want == node) return;            /* nothing to do */
+
+            /* THE SETTER FAULTED IN THE FIELD, so it is no longer called unless
+               asked for explicitly.
+
+               `0x101A3E60` was taken from NPC_POSSESSION.md as `(element, node)`.
+               That document ALSO describes a different setter, `0x10804BB0`, as
+               taking an `EntityRefNode**` - a pointer to the pointer. I picked
+               one signature and shipped it without verifying which applies here,
+               and the log said `player-list repair FAULTED`.
+
+               Nothing was corrupted (the __try caught it), but calling an engine
+               function with guessed arguments is precisely the mistake this
+               project keeps paying for. Diagnose by default; write only when the
+               user explicitly asks with `fixplayer force`, and try BOTH argument
+               shapes so one run settles which is right. */
+            logf_("[warp] player list [%lu] IS STALE: node %p -> should be %p "
+                  "(pawn %p)", i, node, want, real);
+            if (console)
+                ((fnPrintf)FN_PRINTF)(console, 0, AC
+                    "fixplayer: the list IS stale - entry %lu holds %p but the live\n"
+                    "  pawn (%p) belongs to %p.\n"
+                    "  Not writing: the engine setter faulted last time it was called\n"
+                    "  with a guessed argument shape. 'fixplayer force' tries it\n"
+                    "  anyway and reports which form works.\n", i, node, real, want);
+            if (!g_fixForce) return;
+
+            /* CORRECTED, and the earlier version could never have worked.
+               `0x101A3E60` is __thiscall(void* wrapper, RefNode* node), ret 4,
+               and its `this` is the player-list WRAPPER arr[i] - not `inner`.
+               It does the +4 hop itself (`mov esi,[ebp+4]`) and then treats
+               [esi+8] as the node slot. Passing `inner` made that a wild
+               decrement on whatever sat at inner+4, which is why it faulted;
+               the argument SHAPE was never the problem, the `this` was.
+
+               And the callee is NET-ZERO on the node it installs: AddRef at
+               entry, Release at exit. So the CALLER must donate a reference, or
+               the node we just installed is destroyed under us. The shipped
+               Game:SetPlayerId does exactly that - `add [eax+8],1` before the
+               call. Note 0x10804BB0 has the OPPOSITE contract and keeps its
+               AddRef; getting those two the same way round is the whole risk. */
+            logf_("[warp] FORCED repair: 0x101A3E60(wrapper=%p, node=%p) "
+                  "with caller-side AddRef", wrapper, want);
+            __try {
+                *(long*)((char*)want + 8) += 1;          /* donate the reference */
+                ((fnSetPawnRef)FN_SET_PAWNREF)(wrapper, want);
+                logf_("[warp]   returned without faulting");
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) {
+                logf_("[warp]   FAULTED even with the corrected this/refcount - "
+                      "0x101A3E60 is the wrong lever here");
+                return;
+            }
+            {   /* Say whether it took, rather than assuming. */
+                void* now = Readable(inner, 0x10) ? *(void**)((char*)inner + 8) : 0;
+                logf_("[warp] after repair: inner+8 = %p (%s)", now,
+                      now == want ? "OK" : "DID NOT TAKE");
+                if (console && now == want)
+                    ((fnPrintf)FN_PRINTF)(console, 0, AC
+                        "warp: player list repaired - noclip/freecam should work.\n");
+            }
+        }
+        return;
+    }
+}
+
+static void PostWarpTick(void* console)
+{
+    {   /* Post-warp repair: the switch completes but does not rebind the view to
+           the pawn. This is the half we can fix with code already proven here. */
+        long n = g_repairIn;
+        if (n > 0) {
+            InterlockedExchange(&g_repairIn, n - 1);
+            if (n == 1) {
+                /* Rate-gate the retry: this tick runs ~1300x/sec, and walking the
+                   entity map that often would be a real cost for no benefit. */
+                if (g_repairNext && (long)(GetTickCount() - g_repairNext) < 0) {
+                    InterlockedExchange(&g_repairIn, 1);
+                    return;
+                }
+                RepairPlayerList(console);   /* BEFORE the camera - see below */
+                if (g_repairIn) return;      /* still waiting for the pawn */
+                RestorePawnCamera();
+                if (console)
+                    ((fnPrintf)FN_PRINTF)(console, 0, AC
+                        "warp: view restored to the player.\n"
+                        "  No control? try 'fixinput'.\n"
+                        "  Spawned badly or under the map? 'tp <x> <y> <z>' moves you.\n"
+                        "  'fixcam' redoes the camera.\n");
+            }
+        }
+    }
+
+    static char last[64] = {0};
+    const char* now = WorldName();
+    if (!now || !*now || *now == '?') return;
+    if (_stricmp(last, now) == 0) return;
+    if (last[0]) {
+        logf_("[warp] world is now \"%s\"", now);
+        if (console)
+            ((fnPrintf)FN_PRINTF)(console, 0, AC "warp: now in %s\n", now);
+        /* The pawn is rebuilt by the last operations of the switch, so asking for
+           its camera now would just fail. Give it a moment.
+
+           ARM THE DEADLINE HERE. Leaving g_repairUntil at 0 meant the retry test
+           `now - g_repairUntil < 0` was false on the very first call, so the
+           repair "gave up after 0 tries / 30s" - it reported a window it never
+           waited. The log then showed the pawn being recovered 34 seconds later
+           by the fallback, so the retry would have worked; it simply never ran. */
+        g_repairUntil = GetTickCount() + REPAIR_WINDOW_MS;
+        g_repairNext  = 0;
+        g_repairTries = 0;
+        InterlockedExchange(&g_repairIn, 120);
+    }
+    strncpy(last, now, sizeof(last) - 1);
+    last[sizeof(last) - 1] = 0;
+}
+
+static LRESULT CALLBACK MsgHookProc(int code, WPARAM wp, LPARAM lp)
+{
+    if (code >= 0 && lp) {
+        MSG* m = (MSG*)lp;
+        if (m->message == WM_WARP_NOW && InterlockedExchange(&g_pendingWarp, 0))
+            DoPendingWarp();
+    }
+    return CallNextHookEx(g_msgHook, code, wp, lp);
+}
+
+/* Installed lazily - nothing else in the DLL needs it, and a hook we never arm
+   is a hook that can never be left dangling on unload. */
+static int InstallMsgHook(void)
+{
+    DWORD tid;
+    if (g_msgHook) return 1;
+    tid = GetWindowThreadProcessId(g_gameWnd, 0);
+    if (!tid) return 0;
+    g_msgHook = SetWindowsHookExW(WH_GETMESSAGE, MsgHookProc, g_self, tid);
+    logf_("[warp] message hook on thread %lu -> %p", tid, (void*)g_msgHook);
+    return g_msgHook != 0;
+}
+/* ================================================================= */
+
+
+/* ==================== crash reporter ==================== */
+/* Dunia.dll loads at its preferred base 0x10000000, so a faulting address is
+   already the address in the decompile - no rebasing needed. */
+static PVOID         g_veh      = 0;
+static volatile long g_vehCount = 0;
+
+/* ---- GUARDED PROBES, and why the crash reporter has to know about them ------
+   This VEH is registered FIRST in the chain, so it sees every exception in the
+   process before any __except frame gets the chance to handle it. Several of
+   our engine walks are built on exactly that: they follow raw pointers out of
+   live engine structures inside __try/__except(EXCEPTION_EXECUTE_HANDLER) and
+   skip the row when one turns out to be stale. A fault there is not a crash, it
+   is the design working.
+
+   OBSERVED: `ents` logged a full [CRASH] ACCESS_VIOLATION block reading
+   0x4D776F78, with ESI=0x4D776F6C - the ASCII bytes "lowM", i.e. a linked-list
+   next-pointer that had walked into string data. 0x4D776F6C is in range and
+   4-byte aligned, so it passes QuickPtr's cheap screen, and the deref at
+   +0x0C is EntSnapshotEx reading OFF_IN_ID64+4. Its __except skipped the row
+   and the snapshot completed normally with 3574 entities. The report was
+   correct about the fault and completely misleading about its significance: it
+   cost a reader a full round of investigation into a bug that does not exist.
+
+   So the probe regions announce themselves. VehProc stays quiet for faults
+   raised on the announcing thread while a probe is open - one short [probe]
+   line instead of a twenty-line crash dump, and crucially it does not spend the
+   twelve-report budget that a real crash needs. Thread-scoped rather than a
+   bare flag, so a genuine fault on the render thread is still reported in full
+   while the main thread is mid-walk. */
+static volatile long g_probeDepth  = 0;
+static volatile long g_probeThread = 0;
+
+static void ProbeEnter(void)
+{
+    InterlockedExchange(&g_probeThread, (long)GetCurrentThreadId());
+    InterlockedIncrement(&g_probeDepth);
+}
+static void ProbeLeave(void)
+{
+    if (InterlockedDecrement(&g_probeDepth) <= 0)
+        InterlockedExchange(&g_probeThread, 0);
+}
+static unsigned char* g_duniaBase = 0;
+static SIZE_T         g_duniaSize = 0;
+
+static int InDunia(const void* p)
+{
+    return g_duniaBase && (const unsigned char*)p >= g_duniaBase
+                       && (const unsigned char*)p <  g_duniaBase + g_duniaSize;
+}
+
+static const char* ExcName(DWORD code)
+{
+    switch (code) {
+    case EXCEPTION_ACCESS_VIOLATION:      return "ACCESS_VIOLATION";
+    case EXCEPTION_STACK_OVERFLOW:        return "STACK_OVERFLOW";
+    case EXCEPTION_ILLEGAL_INSTRUCTION:   return "ILLEGAL_INSTRUCTION";
+    case EXCEPTION_PRIV_INSTRUCTION:      return "PRIV_INSTRUCTION";
+    case EXCEPTION_INT_DIVIDE_BY_ZERO:    return "INT_DIVIDE_BY_ZERO";
+    case EXCEPTION_ARRAY_BOUNDS_EXCEEDED: return "ARRAY_BOUNDS_EXCEEDED";
+    case EXCEPTION_IN_PAGE_ERROR:         return "IN_PAGE_ERROR";
+    default:                              return "other";
+    }
+}
+
+static LONG CALLBACK VehProc(EXCEPTION_POINTERS* ep)
+{
+    DWORD code;
+    if (!ep || !ep->ExceptionRecord || !ep->ContextRecord)
+        return EXCEPTION_CONTINUE_SEARCH;
+    code = ep->ExceptionRecord->ExceptionCode;
+
+    /* Only things that are fatal in practice. A game engine throws first-chance
+       exceptions as ordinary control flow; logging all of them drowns the file. */
+    switch (code) {
+    case EXCEPTION_ACCESS_VIOLATION:
+    case EXCEPTION_STACK_OVERFLOW:
+    case EXCEPTION_ILLEGAL_INSTRUCTION:
+    case EXCEPTION_PRIV_INSTRUCTION:
+    case EXCEPTION_INT_DIVIDE_BY_ZERO:
+    case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+    case EXCEPTION_IN_PAGE_ERROR:
+        break;
+    default:
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    /* A fault inside one of our own guarded engine walks, on the thread that
+       opened it: expected, about to be handled by that walk's __except, and not
+       a crash. Say so in one line and do not spend the crash budget. */
+    if (g_probeDepth > 0 && (long)GetCurrentThreadId() == g_probeThread) {
+        static volatile long probeReports = 0;
+        if (InterlockedIncrement(&probeReports) <= 4)
+            logf_("[probe] guarded read faulted at %p (address %p) - row skipped. "
+                  "Expected: the walk races the engine and its __except handles "
+                  "this. Not a crash.",
+                  (void*)ep->ExceptionRecord->ExceptionAddress,
+                  (ep->ExceptionRecord->NumberParameters >= 2)
+                      ? (void*)ep->ExceptionRecord->ExceptionInformation[1] : 0);
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+
+    if (InterlockedIncrement(&g_vehCount) > 12) return EXCEPTION_CONTINUE_SEARCH;
+
+    {
+        const EXCEPTION_RECORD* er = ep->ExceptionRecord;
+        const CONTEXT*          c  = ep->ContextRecord;
+        void* at = er->ExceptionAddress;
+
+        /* Report BOTH the live address and its preferred-base equivalent. The
+           decompile is written against 0x10000000, so on a relocated load the
+           raw address is not directly lookup-able and reporting it alone would
+           send the next investigation to the wrong function. */
+        if (InDunia(at))
+            logf_("[CRASH] %s (0x%08lX) at %p  =  %08lX in the decompile  "
+                  "thread=%lu  frame=%ld",
+                  ExcName(code), (unsigned long)code, at,
+                  (unsigned long)at - g_rebase, GetCurrentThreadId(), g_frames);
+        else {
+            /* NAME THE MODULE. "(not in Dunia.dll)" was a dead end - the Home
+               Tree crash landed at 5AA31063 and there was no way to tell whether
+               that was this DLL, dvm.dll, the sound middleware or a system
+               library, which is most of what you need to know before reading a
+               single stack candidate. GetModuleHandleEx does it in one call and
+               is safe here: it takes no lock we could already hold, and we are
+               about to die anyway. */
+            char  mod[MAX_PATH];
+            HMODULE hm = 0;
+            mod[0] = 0;
+            if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                   GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                   (LPCSTR)at, &hm) && hm) {
+                char full[MAX_PATH];
+                if (GetModuleFileNameA(hm, full, MAX_PATH)) {
+                    const char* b = strrchr(full, '\\');
+                    strncpy(mod, b ? b + 1 : full, sizeof(mod) - 1);
+                    mod[sizeof(mod) - 1] = 0;
+                }
+            }
+            if (mod[0])
+                logf_("[CRASH] %s (0x%08lX) at %p = %s+0x%lX  thread=%lu  frame=%ld",
+                      ExcName(code), (unsigned long)code, at, mod,
+                      (unsigned long)((char*)at - (char*)hm),
+                      GetCurrentThreadId(), g_frames);
+            else
+                logf_("[CRASH] %s (0x%08lX) at %p (NO MODULE - JIT/freed/stack?)  "
+                      "thread=%lu  frame=%ld",
+                      ExcName(code), (unsigned long)code, at,
+                      GetCurrentThreadId(), g_frames);
+        }
+
+        if (code == EXCEPTION_ACCESS_VIOLATION && er->NumberParameters >= 2) {
+            logf_("[CRASH]   %s address %p",
+                  er->ExceptionInformation[0] ? "writing" : "reading",
+                  (void*)er->ExceptionInformation[1]);
+        }
+        logf_("[CRASH]   EAX=%08lX EBX=%08lX ECX=%08lX EDX=%08lX",
+              c->Eax, c->Ebx, c->Ecx, c->Edx);
+        logf_("[CRASH]   ESI=%08lX EDI=%08lX EBP=%08lX ESP=%08lX EIP=%08lX",
+              c->Esi, c->Edi, c->Ebp, c->Esp, c->Eip);
+        logf_("[CRASH]   warp pending=%ld world=\"%s\" noclip=%ld freecam=%ld "
+              "drive=%ld firstperson=%ld",
+              g_pendingWarp, g_pendingWorld, g_noclip, g_freecam,
+              g_drive, g_firstperson);
+
+        /* Crude: scan the stack for anything pointing into Dunia's text. Not an
+           unwind - no frame pointers assumed, no unwind tables - so it reports
+           CANDIDATES, some of which are stale slots. Enough to find the function. */
+        {
+            unsigned char** sp = (unsigned char**)c->Esp;
+            int found = 0, i;
+            for (i = 0; i < 512 && found < 12; ++i) {
+                if (!Readable(sp + i, 4)) break;
+                if (InDunia(sp[i])) {
+                    logf_("[CRASH]   stack candidate %p  = %08lX in the decompile",
+                          (void*)sp[i], (unsigned long)sp[i] - g_rebase);
+                    ++found;
+                }
+            }
+        }
+    }
+    return EXCEPTION_CONTINUE_SEARCH;    /* observe only - never intervene */
+}
+
+static void InstallCrashReporter(void)
+{
+    HMODULE h = GetModuleHandleA("Dunia.dll");
+    if (h) {
+        MEMORY_BASIC_INFORMATION mbi;
+        g_duniaBase = (unsigned char*)h;
+        /* Section-walk-free size: the image size from the PE headers. */
+        {
+            IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)h;
+            if (Readable(dos, sizeof(*dos)) && dos->e_magic == IMAGE_DOS_SIGNATURE) {
+                IMAGE_NT_HEADERS32* nt =
+                    (IMAGE_NT_HEADERS32*)((unsigned char*)h + dos->e_lfanew);
+                if (Readable(nt, sizeof(*nt)) && nt->Signature == IMAGE_NT_SIGNATURE)
+                    g_duniaSize = nt->OptionalHeader.SizeOfImage;
+            }
+        }
+        if (!g_duniaSize && VirtualQuery(h, &mbi, sizeof(mbi)))
+            g_duniaSize = mbi.RegionSize;
+    }
+    g_veh = AddVectoredExceptionHandler(1, VehProc);
+    logf_("[CRASH] reporter %s; Dunia.dll %p + %08lX",
+          g_veh ? "armed" : "FAILED", (void*)g_duniaBase, (unsigned long)g_duniaSize);
+}
+
+static void RemoveCrashReporter(void)
+{
+    if (g_veh) { RemoveVectoredExceptionHandler(g_veh); g_veh = 0; }
+}
+/* ======================================================== */
+
+/* ---- the detour: main thread, once per frame, ECX = g_console --------------- */
+static void __fastcall hkUpdateUI(void* thisptr, void* edx, float dt)
+{
+    char line[QLEN];
+
+    if (thisptr && thisptr != g_lastConsole) {
+        g_lastConsole = thisptr;
+        logf_("[hook] first frame, console=%p", thisptr);
+        /* Seed the scrollback so the DLL's own commands are discoverable - `?`
+           only knows what the ENGINE registered, so warp would be invisible. */
+        /* The build stamp is not decoration. Twice now a symptom has been chased
+           that was really "an older DLL is loaded", so the DLL states which build
+           it is, every session, unprompted. */
+        ((fnPrintf)FN_PRINTF)(thisptr, 0,
+            "avatar_console.dll ready (built " __DATE__ " " __TIME__ ") - "
+            "type 'modhelp' for added commands\n");
+    }
+
+    InterlockedIncrement(&g_frames);
+
+    if (thisptr) {
+        if (InterlockedExchange(&g_wantRestoreAll, 0)) {
+            logf_("[exit] restoring game state on the main thread");
+            if (g_drive)   DriveStop(thisptr);   /* camera, input, AI, vtable */
+            if (g_freecam) FreecamLeave(thisptr);
+            /* FIRST PERSON HAS TO COME DOWN HERE TOO, and it was missing.
+               Pressing End with first person on crashed the game every time and
+               never reached the log, because logging is already gone by the time
+               it faults.
+
+               The cause is the look-at coupling: it installs a pointer to
+               g_fpLookArr - STATIC MEMORY INSIDE THIS DLL - into the engine's
+               live camera component. Unmap with it still attached and the next
+               camera update dereferences freed memory. The other leftovers are
+               no better: the body-point patch is a write into the engine's
+               .text, and the pawn would stay hidden with FirstPersonMode set.
+
+               The detaches run UNCONDITIONALLY, not under g_firstperson: the one
+               case that matters is precisely the one where that flag has got out
+               of step with what is actually installed. */
+            if (g_firstperson) FirstPersonLeave(thisptr);
+            FirstPersonLookDetach();   /* our memory out of the engine's hands */
+            FirstPersonAimPatch(0);    /* our byte out of the engine's .text   */
+            FirstPersonShotBranch(0);
+            if (g_noclip)  NoclipSet(0);
+            TimeScaleRestore();   /* never unload with the world stopped */
+        }
+        {   /* CLICK TO PICK. With the console open the cursor is already
+               released, so clicking the game view selects what is under it -
+               the Skyrim interaction. We POLL the button rather than waiting for
+               a delivered click, because the click lands on whichever window has
+               focus and we do not need to own it. Edge-triggered on the HIGH bit;
+               the low bit is consumed by the read. */
+            static int lastClick = 0;
+            int down = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+            /* ...but NOT while the spawn/entity panel is up, or every click on
+               its list would also try to select something in the world - and NOT
+               when the cursor is over the console panel itself. Clicking your
+               own output to bring the window forward should not also shoot a
+               ray into the world.
+
+               The panel's own clicks are read by PkPollMouse, on the input
+               thread, under the mirror-image condition (g_pickerOpen). The two
+               polls read the same physical button through the same
+               non-destructive high bit and are gated so that exactly one of them
+               is live at a time. */
+            static int lastRight = 0;
+            int rdown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+            int onPanel = 0;
+            /* Cursor inside the game AND the foreground ours - see the note at
+               PickForegroundIsOurs. Without both, a click in any other
+               application fired a pick in the game. */
+            int inGame = PickCursorInGame(&onPanel) && PickForegroundIsOurs();
+            if (down && !lastClick && g_consoleOpen && g_pickOnClick &&
+                !g_pickerOpen && inGame && !onPanel)
+                PickAtCursor(thisptr, 1);
+            /* RIGHT click steps through what the left click found, instead of
+               the old "click the same spot twice" rule - which fired by accident
+               and quietly re-aimed kill at something else. */
+            if (rdown && !lastRight && g_consoleOpen && g_pickOnClick &&
+                !g_pickerOpen && inGame && !onPanel)
+                PickCycle(thisptr);
+            lastClick = down;
+            lastRight = rdown;
+        }
+        /* ARM IN-GAME RENDERING BY DEFAULT.
+           This used to be opt-in via the `ingame` command, which meant the
+           normal experience was the FALLBACK: a separate layered window that
+           sits over the game rather than inside it. That window cannot follow a
+           window drag - it is repositioned from a 15Hz thread - so it hung in
+           place while the game moved out from under it, and long drags could
+           trip its paint-failure counter and switch it off for good.
+
+           Drawn inside the game's own frame there is nothing to keep in sync:
+           it IS the frame. Armed here rather than at load because the D3D
+           device does not exist until the game has rendered something, and
+           InstallPresentHook checks for it and refuses cleanly if it is early.
+           One attempt per second, given up after ten - if the hook never takes,
+           the overlay window is still there and still works. */
+        {
+            static DWORD lastTry = 0;
+            static int   tries   = 0;
+            /* NOT while unloading. RemovePresentHook clears g_ingame, which made
+               this re-arm on the way out - seen in the log as "Present hooked"
+               immediately after "overlay stopped". It was removed again a beat
+               later by luck of ordering; the other order leaves the game calling
+               into an unmapped DLL on the next frame. */
+            if (!g_ingame && !g_shutdown && !g_wantRestoreAll &&
+                tries < 10 && GetTickCount() - lastTry > 1000) {
+                lastTry = GetTickCount();
+                ++tries;
+                if (InstallPresentHook()) {
+                    InterlockedExchange(&g_ingame, 1);
+                    logf_("[d3d ] in-game rendering armed automatically "
+                          "(attempt %d) - the console is part of the frame now",
+                          tries);
+                } else if (tries == 10) {
+                    logf_("[d3d ] could not arm in-game rendering after %d tries"
+                          " - staying on the overlay window", tries);
+                }
+            }
+        }
+
+        /* ESCAPE IN FREECAM WEDGES THE GAME.
+           Opening the pause menu while the free camera owns the view leaves the
+           game paused and unable to take input: our own report was that leaving
+           freecam afterwards restores the camera but the game stays paused, with
+           no way back. The mechanism is not established - FREECAM.md records that
+           NO Frozen/Paused flag exists on the camera component or the stack, so
+           there is nothing of ours to clear - and until it is, the honest fix is
+           not to let it happen.
+
+           So Escape leaves freecam instead. The game still sees the key and may
+           open its menu, but from a normal camera with the normal action map,
+           which is a state it can cope with. Done here because this is the main
+           thread, which is where FreecamLeave's engine calls belong. */
+        if ((g_freecam || g_drive) && !g_consoleOpen) {
+            static int lastEsc = 0;
+            int esc = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
+            if (esc && !lastEsc) {
+                /* While DRIVING, leaving only the camera is a half-state: the
+                   velocity hook, the input block and the streaming anchor would
+                   all still be live with the view back on the player. Stop the
+                   whole thing. */
+                if (g_drive) {
+                    logf_("[cam ] Escape while driving - full stop, not just the camera");
+                    DriveStop(0);
+                } else {
+                    logf_("[cam ] Escape in freecam - leaving it rather than letting "
+                          "the pause menu wedge the game");
+                    FreecamLeave(0);
+                }
+                /* The menu opens regardless - the key reaches the game through
+                   DirectInput, which we cannot intercept. So make sure it is at
+                   least USABLE when it does: hand input back, unclip and show the
+                   cursor. A mitigation, not a diagnosis - the wedge itself is
+                   still unexplained, and FREECAM.md records that there is no
+                   pause flag on our side to clear. */
+                SetGameInput(1);
+                ClipCursor(NULL);
+                while (ShowCursor(TRUE) < 0) { }
+            }
+            lastEsc = esc;
+        }
+
+        /* THE CREATURE DIED AND WE KEPT DRIVING IT.
+           Steering a corpse leaves the camera pinned to a body that no longer
+           moves, the player still parked, input still blocked - which reads as
+           the game having frozen, with no obvious way out. Nothing detected it
+           before. Checked here, on the main thread, so the stop can make the
+           engine calls it needs to. */
+        if (g_drive) {
+            void* ent  = g_lastSpawn;
+            int   dead = 0;
+            if (!Readable(ent, 0x94)) {
+                dead = 1;                                   /* destroyed outright */
+            } else if ((*(unsigned long*)((char*)ent + 0x90) >> 4) & 1) {
+                dead = 1;                                   /* pending delete */
+            } else {
+                void* sheet = CharacterSheetOf(ent);
+                if (sheet) {
+                    void** vt = *(void***)sheet;
+                    if (Readable(vt, 81 * 4)) {
+                        int st = 1;
+                        __try { st = ((fnSheetState)vt[80])(sheet); }
+                        __except (EXCEPTION_EXECUTE_HANDLER) { st = 1; }
+                        if (st != 1) dead = 1;              /* 3 = health <= 0 */
+                    }
+                }
+            }
+            if (dead) {
+                logf_("[drive] the creature died or was destroyed - stopping");
+                DriveStop(0);
+                _snprintf(g_note, sizeof(g_note) - 1,
+                          "the creature died - drive stopped, camera restored");
+                g_note[sizeof(g_note) - 1] = 0;
+                InterlockedExchange(&g_haveNote, 1);
+            }
+        }
+
+        FreecamAnchorTick();
+        PostWarpTick(thisptr);
+        PickerTick(thisptr);
+        /* The editor link's engine half. Costs nothing when no request is
+           pending - one interlocked compare - and is the ONLY place the link
+           is allowed to touch the engine. */
+        LinkTick(thisptr);
+        GroundTick();
+        TraceTick();
+        GameLogTick(thisptr);
+
+        /* SUPPRESS THE GAME'S OWN AUTOSAVE while this session has warped.
+           Blocking our `save` command was not enough: the game autosaves by
+           itself on checkpoints, on walking far enough, and from the pause menu -
+           and a save written after a warp is the one that already cost a slot.
+           The request is a single byte that a later frame consumes, so clearing
+           it here each frame drops the request before it is ever acted on. */
+        if (g_warpedThisSession) {
+            void* owner = *(void**)G_SAVEFLAG_OWNER;
+            if (Readable(owner, OFF_SAVE_REQUEST + 1) &&
+                *(unsigned char*)((char*)owner + OFF_SAVE_REQUEST)) {
+                *(unsigned char*)((char*)owner + OFF_SAVE_REQUEST) = 0;
+                logf_("[save] suppressed the game's own autosave (warped session)");
+            }
+        }
+        if (InterlockedExchange(&g_wantFreecamOff, 0) && g_freecam)
+            FreecamLeave(thisptr);      /* main thread - safe here */
+        FreecamTick();
+        DriveHoldPlayer();
+        DrivePush();      /* do not wait to be asked - see DrivePush's comment */
+        DriveLockTick();  /* the agent-gate half - see its comment for why it
+                             cannot live inside hkAgentUpdate */
+
+        if (InterlockedExchange(&g_haveNote, 0))
+            ((fnPrintf)FN_PRINTF)(thisptr, 0, AC "%s\n", g_note);
+
+        if (g_logEcho) {              /* verbose mirror, drained before commands */
+            char le[220];
+            int n = 0;
+            while (n < 12 && LogEchoPop(le)) {   /* cap per frame, never stall */
+                ((fnPrintf)FN_PRINTF)(thisptr, 0, PC "%s\n", le);
+                ++n;
+            }
+            if (g_leDropped) {
+                ((fnPrintf)FN_PRINTF)(thisptr, 0, PC
+                    "[verbose] %d line(s) dropped - echo cannot keep up\n",
+                    g_leDropped);
+                g_leDropped = 0;
+            }
+        }
+        while (QueuePop(line)) {
+            logf_("[exec] %s", line);
+            /* echo into the panel: dim chevron, then the command in orchid */
+            ((fnPrintf)FN_PRINTF)(thisptr, 0, PC "> " UC "%s\n", line);
+            if (!TryModCommand(thisptr, line))      /* our own commands first */
+                RunConsoleLine(thisptr, line);
+        }
+
+        /* self-verifying smoke test: drive a CVar whose storage we can read back */
+        if (InterlockedExchange(&g_wantSmoke, 0)) {
+            unsigned char* base = FindProfileBase();
+            if (!base) {
+                logf_("[smoke] FAIL: GameProfile fingerprint not found "
+                      "(are you loaded into a save?)");
+            } else {
+                unsigned long* gm = (unsigned long*)(base + OFF_GODMODE);
+                unsigned long before, after;
+                logf_("[smoke] profile base = %p, GodMode @ %p", base, gm);
+                *gm = 0;                                  /* known starting state */
+                before = *gm;
+                RunConsoleLine(thisptr, "cheat_GodMode 1");
+                after = *gm;
+                logf_("[smoke] cheat_GodMode: before=%lu after=%lu  => %s",
+                      before, after,
+                      (after == 1) ? "PASS - ExecuteLine WORKS, the console "
+                                     "interpreter is reachable"
+                                   : "FAIL - command did not take effect");
+                if (after != 1) {
+                    /* prove the field itself is writable, so a FAIL above can only
+                       mean the console did not process the line */
+                    *gm = 1;
+                    logf_("[smoke] control: direct write gives %lu "
+                          "(1 => field fine, so the fault is ExecuteLine)", *gm);
+                    *gm = 0;
+                }
+            }
+        }
+        /* CLOSE - always provide the inverse of anything that changes UI state.
+           Omitting this stranded the user with an open console and no input. */
+        if (InterlockedExchange(&g_wantClose, 0)) {
+            void* pUI = *(void**)((char*)thisptr + UI_OFFSET);
+            logf_("[close] SetUIActive(0)");
+            ((fnSetUIAct)FN_SET_UIACTIVE)(thisptr, 0);
+            ClipCursor(NULL);                    /* the game clips the mouse; let it go */
+            if (pUI) {
+                *(int*)((char*)pUI + 0x5C) = 0;      /* force height back to 0 */
+                logf_("[close] state=%d height=%d active=%d",
+                      *(int*)((char*)pUI + 0x58), *(int*)((char*)pUI + 0x5C),
+                      (int)*(unsigned char*)((char*)thisptr + 0x69));
+            }
+        }
+
+        /* REMOVED HERE: the "stage 4" SetUIActive(1) call and the panel-geometry
+           watch. Both were gated on flags (g_wantUI, g_watch) that nothing in the
+           DLL ever set, so neither branch had run in any session. `DumpState`
+           still prints the same geometry on demand, and F10 dumps the ring, so
+           nothing observable was lost - two dead reads left the per-frame path. */
+    }
+
+    {   /* engine calls must happen here, never on the hotkey thread */
+        long req = InterlockedExchange(&g_wantNoclip, 0);
+        if (req) NoclipSet(req == 1);
+    }
+    NoclipTick();          /* main thread, every frame - required for both */
+    FirstPersonLookTick(); /* same thread, same reason */
+
+    if (g_origUpdateUI)
+        g_origUpdateUI(thisptr, edx, dt);
+
+
+    /* NOTE: an earlier version wrote into the engine's DuniaStringW edit line here
+       to stop it double-submitting. That crashed the game - DuniaStringW uses
+       small-string optimisation, so +0x04 is inline character data for short
+       strings, not a pointer, and zeroing the length broke the object under the
+       engine. Double-submit is now prevented by swallowing keys in the hook
+       instead, which touches no engine memory. */
+}
+
+/* ---- diagnostics: pure reads, exactly the checks in MAINTHREAD_HOOK.md sec.4 */
+static void DumpState(void* con)
+{
+    void*  pUI;
+    if (!con) { logf_("[diag] g_console NULL"); return; }
+    pUI = *(void**)((char*)con + UI_OFFSET);
+    logf_("[diag] g_console      = %p", con);
+    logf_("[diag] vtable         = %p (expect %p)", *(void**)con, (void*)VT_CCONSOLE);
+    logf_("[diag] m_pUI          = %p", pUI);
+    if (pUI) {
+        logf_("[diag] m_pUI vtable   = %p (expect %p)", *(void**)pUI, (void*)UI_VTABLE_EXP);
+        logf_("[diag] ui state       = %d (expect 2 idle)", *(int*)((char*)pUI + 0x58));
+        logf_("[diag] ui height      = %d", *(int*)((char*)pUI + 0x5C));
+    }
+    logf_("[diag] m_bUIActive    = %d", (int)*(unsigned char*)((char*)con + 0x69));
+    logf_("[diag] SetActive guard= 0x%08X (0 => console never opened)",
+          (Readable((const void*)G_SETACT_GUARD, 4)
+           ? *(unsigned long*)G_SETACT_GUARD : 0xFFFFFFFFu));
+}
+
+static int InstallHook(void)
+{
+    void** vt;
+    DWORD  old;
+    void*  con = *(void**)G_CONSOLE_PTR;
+
+    if (!con) return 0;
+
+    vt = *(void***)con;
+    logf_("[hook] console=%p vtable=%p", con, vt);
+
+    if (vt[1] != (void*)FN_UPDATE_UI) {
+        logf_("[hook] ABORT: vtable[1]=%p but expected UpdateUI %p "
+              "(already hooked, or layout differs)", vt[1], (void*)FN_UPDATE_UI);
+        return 0;
+    }
+    if (!VirtualProtect(&vt[1], sizeof(void*), PAGE_READWRITE, &old)) {
+        logf_("[hook] ABORT: VirtualProtect failed %lu", GetLastError());
+        return 0;
+    }
+    g_origUpdateUI = (fnUpdateUI)vt[1];
+    vt[1] = (void*)hkUpdateUI;
+    VirtualProtect(&vt[1], sizeof(void*), old, &old);
+    g_vtable = vt;
+
+    DumpState(con);
+    logf_("[hook] installed: vtable[1] %p -> %p", g_origUpdateUI, (void*)hkUpdateUI);
+    return 1;
+}
+
+static void RemoveHook(void)
+{
+    DWORD old;
+    /* A hook proc left pointing into an unmapped DLL kills the game on the next
+       message. This must come off before FreeLibrary, same rule as the vtable. */
+    /* Same rule as the message hook: a handler pointing into an unmapped DLL is
+       fatal on the next exception, and exceptions are exactly what it catches. */
+    /* PUT THE GAME BACK THE WAY WE FOUND IT - ON THE MAIN THREAD.
+       The first version of this called DriveStop/FreecamLeave/NoclipSet right
+       here, on the WORKER thread, and those make engine calls. Pressing End while
+       driving crashed two threads at once. Engine calls are main-thread-only and
+       teardown is the worst possible place to break that rule, because the game
+       is mid-frame and we are about to unmap.
+
+       So ask the detour to do it and wait. If the detour never runs - frame loop
+       already dead - proceed anyway: an un-restored camera is survivable, a fault
+       during unload is not. */
+    if (g_drive || g_freecam || g_noclip || g_frozen) {
+        int waited = 0;
+        InterlockedExchange(&g_wantRestoreAll, 1);
+        while (g_wantRestoreAll && waited < 1500) { Sleep(25); waited += 25; }
+        logf_("[exit] main-thread restore %s after %dms",
+              g_wantRestoreAll ? "TIMED OUT - unloading without it" : "done", waited);
+        InterlockedExchange(&g_wantRestoreAll, 0);
+    }
+    SetGameInput(1);                    /* Win32 only - safe from any thread */
+    ClipCursor(NULL);
+    while (ShowCursor(TRUE) < 0) { }
+
+    RemovePresentHook();
+    RemovePrepareRendererGuard();
+    /* Before the crash reporter, and well before the mapping goes: this is an
+       IAT thunk pointing at hkOutputDebugStringA inside this DLL, and GFx can
+       call it from the dedicated render thread at any moment. It carries its own
+       120 ms drain, and the Sleep(300) in Worker sits after this as well. */
+    RemoveDebugStringHook();
+    RemoveMultiInstanceHook();
+    RemoveProfileRedirect();
+    RemoveCrashReporter();
+    if (g_msgHook) {
+        UnhookWindowsHookEx(g_msgHook);
+        g_msgHook = 0;
+        InterlockedExchange(&g_pendingWarp, 0);
+        logf_("[warp] message hook removed");
+    }
+    if (g_vtable && g_origUpdateUI) {
+        if (VirtualProtect(&g_vtable[1], sizeof(void*), PAGE_READWRITE, &old)) {
+            g_vtable[1] = (void*)g_origUpdateUI;
+            VirtualProtect(&g_vtable[1], sizeof(void*), old, &old);
+            logf_("[hook] removed");
+        }
+    }
+}
+
+/* The overlay window class, and the two windows created from it. These sit
+   here rather than with the other HWND statics because both windows are made
+   by the overlay code below and nothing above this point touches them.
+   `g_focusWnd` is the invisible 1x1 window SetGameInput parks the foreground on
+   so DirectInput unacquires - it eats nothing and covers nothing, whatever the
+   comments used to say; `g_ovl` is the layered window the text overlay draws
+   into when the in-frame D3D path is not available. */
+#define OVL_CLASS L"AvatarConsoleOverlay"
+static HWND g_ovl      = 0;
+static HWND g_focusWnd = 0;
+
+static HWND  g_gameWndFwd(void) { return g_gameWnd; }
+static HWND  g_focusWndFwd(void) { return g_focusWnd; }
+static HWND  g_ovlFwd(void) { return g_ovl; }
+static volatile long g_ovlOn = 1;
+/* g_shutdown is declared up with the other flags - the frame detour's in-game
+   auto-arm has to see it, and that runs long before this point in the file. */
+
+/* Cached GDI state.  The first version created a DIB section, a memory DC and a
+   font, ran a per-pixel alpha pass over ~1,000,000 pixels, and called
+   UpdateLayeredWindow - 25 times a second.  That volume of GDI churn next to the
+   game's own renderer is the most likely cause of the freeze that forced a Task
+   Manager kill.  Everything below is created once and reused. */
+/* Where the overlay bitmap lands, in game-client pixels. 0,0 for the console;
+   bottom-right for the driving panel. Both the layered window and the D3D quad
+   read it, so the two paths can never disagree about position. */
+static int     g_ovlOffX = 0, g_ovlOffY = 0;
+
+static HDC     g_mdc  = 0;
+static HBITMAP g_dib  = 0;
+static HBITMAP g_oldb = 0;
+static void*   g_bits = 0;
+static HFONT   g_font = 0;
+static int     g_cw = 0, g_ch = 0;      /* cached surface size */
+static long    g_paintFails = 0;
+
+static void OverlayFreeGdi(void)
+{
+    if (g_mdc) {
+        if (g_font) { SelectObject(g_mdc, GetStockObject(SYSTEM_FONT)); DeleteObject(g_font); g_font = 0; }
+        if (g_oldb) { SelectObject(g_mdc, g_oldb); g_oldb = 0; }
+        if (g_dib)  { DeleteObject(g_dib); g_dib = 0; }
+        DeleteDC(g_mdc); g_mdc = 0;
+    }
+    g_bits = 0; g_cw = g_ch = 0;
+}
+
+static int OverlayEnsureGdi(int w, int h, int lineH)
+{
+    BITMAPINFO bi;
+    HDC sdc;
+    if (g_mdc && g_cw == w && g_ch == h) return 1;
+    OverlayFreeGdi();
+    sdc = GetDC(0);
+    if (!sdc) return 0;
+    g_mdc = CreateCompatibleDC(sdc);
+    if (!g_mdc) { ReleaseDC(0, sdc); return 0; }
+    memset(&bi, 0, sizeof(bi));
+    bi.bmiHeader.biSize        = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth       = w;
+    bi.bmiHeader.biHeight      = -h;
+    bi.bmiHeader.biPlanes      = 1;
+    bi.bmiHeader.biBitCount    = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    g_dib = CreateDIBSection(sdc, &bi, DIB_RGB_COLORS, &g_bits, 0, 0);
+    ReleaseDC(0, sdc);
+    if (!g_dib) { DeleteDC(g_mdc); g_mdc = 0; return 0; }
+    g_oldb = (HBITMAP)SelectObject(g_mdc, g_dib);
+    g_font = CreateFontW(lineH, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET,
+                         OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                         FIXED_PITCH | FF_MODERN, L"Consolas");
+    SelectObject(g_mdc, g_font);
+    SetBkMode(g_mdc, TRANSPARENT);
+    g_cw = w; g_ch = h;
+    return 1;
+}
+
+/* ==================== in-game rendering (D3D9) ====================
+   Draws the console into the game's own frame so screen capture and screenshots
+   include it. See INGAME_RENDER.md. */
+#define G_RENDERDEV_PP    (0x111E3E54u + g_rebase)  /* g_pRenderDevice          */
+#define VT_RENDERDEV_D3D9 (0x11141390u + g_rebase)  /* its class vtable         */
+#define OFF_RD_D3DDEVICE  0x38                      /* IDirect3DDevice9* inside */
+#define RD_SLOT_PRESENT   0x40                      /* CRenderDeviceD3D9::Present */
+
+typedef void (__thiscall *fnRDPresent)(void* self, HWND hwnd);
+
+/* g_ingame is declared up with the other flags - the console dispatch needs it
+   long before this point in the file. */
+static void*              g_rdPresent  = 0;   /* what we replaced */
+/* The same pointer, but NEVER cleared. VerifyUnhooked runs after RemoveHook, and
+   RemoveHook has already zeroed g_rdPresent by then - so the sweep's repair
+   (`if (g_rdPresent && VirtualProtect(...))`) could never execute. It logged
+   "Present slot STILL ours - restoring" and restored nothing, which is worse
+   than a no-op because the log claimed the opposite. The one scenario the sweep
+   exists for is the in-game auto-arm re-installing the hook DURING unload, and
+   that is exactly when this copy is needed. */
+static void*              g_rdPresentEver = 0;
+static IDirect3DTexture9* g_tex        = 0;
+static int                g_texW = 0, g_texH = 0;
+
+static IDirect3DDevice9* GetD3DDevice(void)
+{
+    char* rd = *(char**)G_RENDERDEV_PP;
+    IDirect3DDevice9* dev;
+    if (!Readable(rd, OFF_RD_D3DDEVICE + 4)) return 0;
+    if (*(unsigned long*)rd != VT_RENDERDEV_D3D9) return 0;   /* identity */
+    dev = *(IDirect3DDevice9**)(rd + OFF_RD_D3DDEVICE);
+    return Readable(dev, 4) ? dev : 0;
+}
+
+static void ReleaseOverlayTexture(void)
+{
+    if (g_tex) { g_tex->Release(); g_tex = 0; }
+    g_texW = g_texH = 0;
+}
+
+/* ---- the flicker -----------------------------------------------------------
+   THE TEAR. g_bits is written by the OVERLAY thread (GDI text, ~15Hz) and was
+   read by the RENDER thread (this upload, every single frame) with nothing in
+   between. Catch a paint mid-flight and the top of the texture is the new frame
+   while the bottom is still the old one - a seam that sweeps down the panel,
+   which is exactly the top-to-bottom flicker.
+
+   Fixed with a snapshot rather than a lock around the paint: the overlay thread
+   publishes a finished copy under a short lock, and the render thread uploads
+   from that copy. Neither ever waits on the other for longer than a memcpy.
+
+   It also stops re-uploading a megabyte-ish texture EVERY frame at whatever
+   rate this engine is running - the upload now happens only when the content
+   actually changed, which at 15Hz of text is a small fraction of frames. */
+static unsigned char*   g_snap      = 0;
+static int              g_snapW = 0, g_snapH = 0;
+static volatile long    g_snapDirty = 0;
+static CRITICAL_SECTION g_snapCs;
+static volatile long    g_snapReady = 0;   /* the critical section is live */
+
+/* Overlay thread, once the bitmap holds a finished frame. */
+static void SnapPublish(int w, int h)
+{
+    if (!g_snapReady || !g_bits || w <= 0 || h <= 0) return;
+    EnterCriticalSection(&g_snapCs);
+    if (g_snapW != w || g_snapH != h) {
+        void* n = realloc(g_snap, (size_t)w * h * 4);
+        if (!n) { LeaveCriticalSection(&g_snapCs); return; }
+        g_snap = (unsigned char*)n;
+        g_snapW = w; g_snapH = h;
+    }
+    memcpy(g_snap, g_bits, (size_t)w * h * 4);
+    InterlockedExchange(&g_snapDirty, 1);
+    LeaveCriticalSection(&g_snapCs);
+}
+
+/* The picker's own texture. Kept separate from the console's rather than
+   enlarging that surface to full-screen: the console's geometry, scaling and
+   snapshot logic all work, and widening it would have put every one of those at
+   risk to gain nothing the second quad does not. */
+#define PK_W 540
+#define PK_H 580
+static unsigned char* g_pkSnap;          /* defined with the picker, below */
+static int            g_pkSnapReady;
+static volatile long  g_pkSnapDirty;
+static int            g_pkX, g_pkY;      /* panel origin, in BACKBUFFER pixels */
+/* Placed over the frame once, then left alone - dragging it somewhere must
+   survive closing and reopening the panel. Only latches once a frame size is
+   known, so a first open before the render thread has published one does not
+   pin the panel to a guess. */
+static int            g_pkPlaced = 0;
+/* ---- THE ROW CACHE, and why it exists --------------------------------------
+   This is the picker's model, and it is the ONLY one - the Win32 listbox that
+   used to hold the rows has been deleted along with the rest of that window.
+
+   Why it exists, kept because it is the reason the controls went: PkPaint runs
+   on the OVERLAY thread and the listbox was created on the MAIN thread, so every
+   LB_GETTEXT/LB_GETCOUNT/LB_GETCURSEL in the painter was a CROSS-THREAD
+   SendMessage - about fifty per frame - and a cross-thread SendMessage blocks
+   until the owning thread pumps its queue. Switch category and the main thread
+   was inside PickerRefill doing hundreds of LB_ADDSTRING calls, so the painter's
+   fifty messages queued behind all of them and the panel visibly stalled: a
+   measured second to produce thirty-four rows.
+
+   PickerRefill now filters straight into these arrays and the painter reads only
+   them. No window messages on the paint path at all, and no window. */
+/* REMOVED: PkNowMs(), the QPC stopwatch added to time the three phases of a
+   category switch (filter, snapshot, paint). The measurement was taken,
+   PickerRefill was rewritten to filter straight into the cache, and the timer
+   was never called again - it had one occurrence in the whole file, its own
+   definition. */
+
+#define PKC_MAX  4096
+#define PKC_TEXT 132
+static char  g_pkcRow[PKC_MAX][PKC_TEXT];
+static long  g_pkcData[PKC_MAX];
+static long  g_pkcN   = 0;
+static long  g_pkcSel = 0, g_pkcTop = 0;
+static char  g_pkcQuery[128] = "";
+/* The painter was running ~70 times a second and costing ~100ms of every second
+   redrawing a panel that had not changed. It only needs to redraw when state
+   moves - or twice a second, for the caret blink. */
+static volatile long g_pkcDirty = 1;
+/* THE REFILL IS A REQUEST, NOT A CALL, when it comes from the input thread.
+   PickerRefill walks up to 4096 entities, and for each one that survives the
+   name match it runs CategoryOf, which is up to thirty Stristr calls. On the
+   3574-entity level in the measurement log that is order 100,000 substring
+   searches per refill - tens of milliseconds.
+
+   It used to run inline on whichever thread asked, and after the mouse moved to
+   the input thread's poll that meant the INPUT THREAD: once per category click,
+   and once per keystroke while typing a search. That thread also owns the key
+   harvest and the foreground re-assert, both of which stop dead for the
+   duration.
+
+   The measurement shows it plainly. During the fast sweep across the category
+   buttons the delay between a click and the game's input being blocked again
+   grew monotonically - 62ms, 141ms, 203ms, 219ms - because each click queued
+   another full refill in front of the re-assert that was trying to run. The
+   harder the user drove the mouse, the further behind the block fell. That is
+   the "the game still receives the motion for half a second" report, and the
+   button reaching the game's fire action is the same gap.
+
+   So the input thread raises a flag and the OVERLAY thread does the work. That
+   is where the refill lived before the mouse moved, it already runs at 10ms
+   while the panel is open, and it owns nothing that a slow pass can starve. */
+static volatile long g_pkWantRefill = 0;
+static int            g_pkDragging = 0, g_pkDragDX = 0, g_pkDragDY = 0;
+static int            g_pkBarDrag  = 0;   /* dragging the scrollbar thumb */
+/* ---- THE TWO PIXEL SPACES, reconciled ---------------------------------------
+   These were deleted once as "written every frame and read nowhere", and that
+   was true - but the reason they were written in the first place was right and
+   the hit test never grew the code that needed them. Putting them back with a
+   consumer this time.
+
+   The panel is drawn as RHW=1 transformed vertices, so g_pkX/g_pkY and PK_W/PK_H
+   are in BACKBUFFER pixels - the render target's own space. Mouse positions,
+   however it is we get hold of them, are in the game window's CLIENT pixels.
+   The two are equal only when the game is rendering at exactly the window's
+   client size. Set the render resolution to anything else - which the game's own
+   video options let you do, and which every borderless/upscaled setup does - and
+   they diverge, at which point every hit test on the panel is wrong by the ratio
+   between them. Nothing in the file reconciled them: DrawOverlayD3D asked for the
+   viewport and then ignored it, and PkHitLocal did a bare `cx - g_pkX`.
+
+   So the render thread publishes the viewport it actually drew into, and
+   PkClientToBB scales client pixels into that space before anything is compared
+   against a layout constant. Plain longs: torn reads are impossible on x86 for
+   an aligned 32-bit word, and a one-frame-stale resolution costs at worst one
+   mis-scaled mouse sample during a mode change. */
+static volatile long g_pkBBW = 0, g_pkBBH = 0;   /* TRUE render-target extent */
+/* The viewport as it stood at Present time, and the window D3D actually presents
+   into. All three are diagnostics first and inputs second, and they exist
+   because the first version of this got the space wrong in a way that could not
+   be seen from inside the process.
+
+   g_pkBBW/H used to be filled from GetViewport, which is NOT the same question.
+   The viewport is whatever the engine last set - it can be a sub-rectangle left
+   over from a post-process or half-resolution pass - whereas what the panel's
+   RHW=1 vertices are measured in is the RENDER TARGET. Asking the render target
+   for its own description (GetRenderTarget(0) -> GetDesc) is the question that
+   was meant all along, and the two are logged side by side so a disagreement is
+   visible rather than silently scaling every hit test.
+
+   g_pkDevWnd is the swap chain's hDeviceWindow: the window whose client area the
+   backbuffer is actually presented into. It is NOT necessarily g_gameWnd. Plenty
+   of engines create a child window to render into and keep the top-level window
+   for chrome and messages, and if this one does, then converting the cursor
+   through g_gameWnd's client area is off by a constant - which is exactly the
+   shape of the reported bug (see PkCursorToPanel). */
+static volatile long g_pkVpX = 0, g_pkVpY = 0, g_pkVpW = 0, g_pkVpH = 0;
+static HWND          g_pkDevWnd = 0;
+/* What the poll actually sampled, for picktrace to print. Set by PkPollMouse
+   immediately before it calls PkClick, so the log shows the RAW screen position
+   next to the converted one and whether we chose to distrust it. */
+static POINT         g_pkTraceScreen = { 0, 0 };
+static int           g_pkTraceFrozen = 0;
+/* (Also removed here, and staying removed: `extern unsigned char*
+   g_pkSnapFwd(void);` - a declaration of a function that is not defined anywhere
+   in this file and is never called.) */
+static IDirect3DTexture9* g_pkTex = 0;
+static int g_pkTexW = 0, g_pkTexH = 0;
+static void ReleasePickerTexture(void)
+{
+    if (g_pkTex) { g_pkTex->Release(); g_pkTex = 0; }
+    g_pkTexW = g_pkTexH = 0;
+}
+
+static void DrawOverlayD3D(IDirect3DDevice9* dev)
+{
+    struct V { float x, y, z, rhw, u, v; } q[4];
+    D3DLOCKED_RECT lr;
+    D3DVIEWPORT9   vp;
+    IDirect3DVertexShader9*      oldVS = 0;
+    IDirect3DPixelShader9*       oldPS = 0;
+    IDirect3DVertexDeclaration9* oldDecl = 0;
+    IDirect3DBaseTexture9*       oldTex = 0;
+    DWORD oldFVF = 0;
+    DWORD rsAB, rsSB, rsDB, rsZ, rsZW, rsCull, rsLight, rsFog, rsAT, rsSten, rsScis, rsCW;
+    int   w = g_cw, h = g_ch, y;
+
+    /* Draw from the published SNAPSHOT, never from the live bitmap. */
+    if (!g_snapReady || !g_snap || w <= 0 || h <= 0) return;
+    if (g_snapW != w || g_snapH != h) return;      /* mid-resize: skip a frame */
+
+    if (!g_tex || g_texW != w || g_texH != h) {
+        ReleaseOverlayTexture();
+        if (FAILED(dev->CreateTexture((UINT)w, (UINT)h, 1, 0, D3DFMT_A8R8G8B8,
+                                      D3DPOOL_MANAGED, &g_tex, 0)) || !g_tex) {
+            logf_("[d3d ] CreateTexture failed (%dx%d)", w, h);
+            InterlockedExchange(&g_ingame, 0);   /* do not retry every frame */
+            return;
+        }
+        g_texW = w; g_texH = h;
+        InterlockedExchange(&g_snapDirty, 1);      /* a new texture needs filling */
+        logf_("[d3d ] overlay texture %dx%d", w, h);
+    }
+
+    /* Upload only when the overlay thread has published something new. The DIB
+       is top-down, so rows copy straight across. */
+    if (InterlockedExchange(&g_snapDirty, 0)) {
+        EnterCriticalSection(&g_snapCs);
+        if (g_snapW == w && g_snapH == h &&
+            SUCCEEDED(g_tex->LockRect(0, &lr, 0, 0))) {
+            for (y = 0; y < h; ++y)
+                memcpy((char*)lr.pBits + (size_t)y * lr.Pitch,
+                       g_snap + (size_t)y * w * 4, (size_t)w * 4);
+            g_tex->UnlockRect(0);
+        }
+        LeaveCriticalSection(&g_snapCs);
+    }
+
+    if (FAILED(dev->GetViewport(&vp))) return;
+
+    /* ---- PUBLISH THE SPACE THE PANEL IS DRAWN IN ---------------------------
+       Everything the input side needs to convert a cursor position is known
+       here and nowhere else. Cheap - two COM calls next to the thirty render
+       states below - and it logs itself the first time and on every change, so
+       the answer is in the log without anyone having to ask for it. */
+    InterlockedExchange(&g_pkVpX, (long)vp.X);
+    InterlockedExchange(&g_pkVpY, (long)vp.Y);
+    InterlockedExchange(&g_pkVpW, (long)vp.Width);
+    InterlockedExchange(&g_pkVpH, (long)vp.Height);
+    {
+        IDirect3DSurface9* rt = 0;
+        if (SUCCEEDED(dev->GetRenderTarget(0, &rt)) && rt) {
+            D3DSURFACE_DESC sd;
+            if (SUCCEEDED(rt->GetDesc(&sd))) {
+                InterlockedExchange(&g_pkBBW, (long)sd.Width);
+                InterlockedExchange(&g_pkBBH, (long)sd.Height);
+            }
+            rt->Release();          /* GetRenderTarget AddRefs - it is ours now */
+        }
+    }
+    {   /* The presentation window. Queried once and then only re-queried if it
+           came back null, because a swap chain does not change its device
+           window without a device reset, and a reset re-runs this anyway. */
+        if (!g_pkDevWnd) {
+            IDirect3DSwapChain9* sc = 0;
+            if (SUCCEEDED(dev->GetSwapChain(0, &sc)) && sc) {
+                D3DPRESENT_PARAMETERS pp;
+                memset(&pp, 0, sizeof(pp));
+                if (SUCCEEDED(sc->GetPresentParameters(&pp)))
+                    g_pkDevWnd = pp.hDeviceWindow;
+                sc->Release();
+            }
+        }
+    }
+    {   /* Log on change only. This one line is what settles, from the user's
+           own machine, every question the hit test cannot answer from inside:
+           whether the render target matches the window, whether the viewport is
+           the whole target, and whether D3D presents into the window we have
+           been converting coordinates through. */
+        static long lw = -1, lh = -1, lvx = -1, lvy = -1, lvw = -1, lvh = -1;
+        static HWND ldw = (HWND)-1;
+        static HWND lgw = (HWND)-1;
+        if (lw != g_pkBBW || lh != g_pkBBH || lvx != g_pkVpX || lvy != g_pkVpY ||
+            lvw != g_pkVpW || lvh != g_pkVpH || ldw != g_pkDevWnd ||
+            lgw != g_gameWnd) {
+            RECT gc, dc2;
+            gc.right = gc.bottom = dc2.right = dc2.bottom = -1;
+            if (g_gameWnd && IsWindow(g_gameWnd)) GetClientRect(g_gameWnd, &gc);
+            if (g_pkDevWnd && IsWindow(g_pkDevWnd)) GetClientRect(g_pkDevWnd, &dc2);
+            logf_("[pkv ] SPACES rt=%ldx%ld vp=(%ld,%ld %ldx%ld) "
+                  "devWnd=%p client=%ldx%ld gameWnd=%p client=%ldx%ld %s",
+                  g_pkBBW, g_pkBBH, g_pkVpX, g_pkVpY, g_pkVpW, g_pkVpH,
+                  (void*)g_pkDevWnd, (long)dc2.right, (long)dc2.bottom,
+                  (void*)g_gameWnd, (long)gc.right, (long)gc.bottom,
+                  (g_pkDevWnd && g_gameWnd && g_pkDevWnd != g_gameWnd)
+                      ? "*** DEVICE WINDOW IS NOT THE GAME WINDOW ***" : "");
+            lw = g_pkBBW; lh = g_pkBBH; lvx = g_pkVpX; lvy = g_pkVpY;
+            lvw = g_pkVpW; lvh = g_pkVpH; ldw = g_pkDevWnd; lgw = g_gameWnd;
+        }
+    }
+
+    /* Save everything we are about to touch. The device has no PUREDEVICE flag,
+       so these Get* calls are valid. */
+    dev->GetVertexShader(&oldVS);
+    dev->GetPixelShader(&oldPS);
+    dev->GetVertexDeclaration(&oldDecl);
+    dev->GetFVF(&oldFVF);
+    dev->GetTexture(0, &oldTex);
+    dev->GetRenderState(D3DRS_ALPHABLENDENABLE, &rsAB);
+    dev->GetRenderState(D3DRS_SRCBLEND,         &rsSB);
+    dev->GetRenderState(D3DRS_DESTBLEND,        &rsDB);
+    dev->GetRenderState(D3DRS_ZENABLE,          &rsZ);
+    dev->GetRenderState(D3DRS_ZWRITEENABLE,     &rsZW);
+    dev->GetRenderState(D3DRS_CULLMODE,         &rsCull);
+    dev->GetRenderState(D3DRS_LIGHTING,         &rsLight);
+    dev->GetRenderState(D3DRS_FOGENABLE,        &rsFog);
+    dev->GetRenderState(D3DRS_ALPHATESTENABLE,  &rsAT);
+    dev->GetRenderState(D3DRS_STENCILENABLE,    &rsSten);
+    dev->GetRenderState(D3DRS_SCISSORTESTENABLE,&rsScis);
+    dev->GetRenderState(D3DRS_COLORWRITEENABLE, &rsCW);
+
+    dev->SetVertexShader(0);
+    dev->SetPixelShader(0);
+    dev->SetFVF(D3DFVF_XYZRHW | D3DFVF_TEX1);
+    dev->SetTexture(0, g_tex);
+    dev->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+    /* PREMULTIPLIED alpha - the DIB is built for UpdateLayeredWindow. SRCALPHA
+       here would wash the text out. */
+    dev->SetRenderState(D3DRS_SRCBLEND,  D3DBLEND_ONE);
+    dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+    dev->SetRenderState(D3DRS_ZENABLE,           FALSE);
+    dev->SetRenderState(D3DRS_ZWRITEENABLE,      FALSE);
+    dev->SetRenderState(D3DRS_CULLMODE,          D3DCULL_NONE);
+    dev->SetRenderState(D3DRS_LIGHTING,          FALSE);
+    dev->SetRenderState(D3DRS_FOGENABLE,         FALSE);
+    dev->SetRenderState(D3DRS_ALPHATESTENABLE,   FALSE);
+    dev->SetRenderState(D3DRS_STENCILENABLE,     FALSE);
+    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+    dev->SetRenderState(D3DRS_COLORWRITEENABLE,  0x0F);
+    dev->SetTextureStageState(0, D3DTSS_COLOROP,   D3DTOP_SELECTARG1);
+    dev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+    dev->SetTextureStageState(0, D3DTSS_ALPHAOP,   D3DTOP_SELECTARG1);
+    dev->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+    dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+    dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+    dev->SetSamplerState(0, D3DSAMP_ADDRESSU,  D3DTADDRESS_CLAMP);
+    dev->SetSamplerState(0, D3DSAMP_ADDRESSV,  D3DTADDRESS_CLAMP);
+
+    {   /* -0.5 texel offset is the D3D9 pixel-centre rule; without it the text
+           samples between texels and looks soft. */
+        float x0 = (float)g_ovlOffX - 0.5f, y0 = (float)g_ovlOffY - 0.5f;
+        float x1 = (float)(g_ovlOffX + w) - 0.5f, y1 = (float)(g_ovlOffY + h) - 0.5f;
+        q[0].x=x0; q[0].y=y0; q[0].z=0; q[0].rhw=1; q[0].u=0; q[0].v=0;
+        q[1].x=x1; q[1].y=y0; q[1].z=0; q[1].rhw=1; q[1].u=1; q[1].v=0;
+        q[2].x=x0; q[2].y=y1; q[2].z=0; q[2].rhw=1; q[2].u=0; q[2].v=1;
+        q[3].x=x1; q[3].y=y1; q[3].z=0; q[3].rhw=1; q[3].u=1; q[3].v=1;
+    }
+
+    /* We are outside the engine's BeginScene/EndScene here, so issue our own. */
+    if (SUCCEEDED(dev->BeginScene())) {
+        dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, q, sizeof(q[0]));
+
+        /* ---- the picker, as a SECOND QUAD in the same state block -----------
+           Everything set up above - alpha blend, Z off, lighting off, point
+           sampling, clamped addressing - is exactly what this needs, so it rides
+           along instead of saving and restoring the device a second time. This
+           is the whole reason the picker is now capturable: it is written into
+           the game's own back buffer, not into a window of its own. */
+        if (g_pickerOpen && g_pkSnapReady && g_pkSnap) {
+            if (!g_pkTex || g_pkTexW != PK_W || g_pkTexH != PK_H) {
+                ReleasePickerTexture();
+                if (SUCCEEDED(dev->CreateTexture((UINT)PK_W, (UINT)PK_H, 1, 0,
+                                                 D3DFMT_A8R8G8B8,
+                                                 D3DPOOL_MANAGED, &g_pkTex, 0))
+                    && g_pkTex) {
+                    g_pkTexW = PK_W; g_pkTexH = PK_H;
+                    InterlockedExchange(&g_pkSnapDirty, 1);
+                    logf_("[pkv ] picker texture %dx%d", PK_W, PK_H);
+                }
+            }
+            if (g_pkTex) {
+                if (InterlockedExchange(&g_pkSnapDirty, 0)) {
+                    D3DLOCKED_RECT pr;
+                    if (SUCCEEDED(g_pkTex->LockRect(0, &pr, 0, 0))) {
+                        int yy;
+                        for (yy = 0; yy < PK_H; ++yy)
+                            memcpy((char*)pr.pBits + (size_t)yy * pr.Pitch,
+                                   g_pkSnap + (size_t)yy * PK_W * 4,
+                                   (size_t)PK_W * 4);
+                        g_pkTex->UnlockRect(0);
+                    }
+                }
+                {
+                    struct V pq[4];
+                    float x0 = (float)g_pkX - 0.5f, y0 = (float)g_pkY - 0.5f;
+                    float x1 = x0 + (float)PK_W,    y1 = y0 + (float)PK_H;
+                    pq[0].x=x0; pq[0].y=y0; pq[0].z=0; pq[0].rhw=1; pq[0].u=0; pq[0].v=0;
+                    pq[1].x=x1; pq[1].y=y0; pq[1].z=0; pq[1].rhw=1; pq[1].u=1; pq[1].v=0;
+                    pq[2].x=x0; pq[2].y=y1; pq[2].z=0; pq[2].rhw=1; pq[2].u=0; pq[2].v=1;
+                    pq[3].x=x1; pq[3].y=y1; pq[3].z=0; pq[3].rhw=1; pq[3].u=1; pq[3].v=1;
+                    dev->SetTexture(0, g_pkTex);
+                    dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, pq, sizeof(pq[0]));
+                }
+            }
+        }
+        dev->EndScene();
+    }
+
+    dev->SetTexture(0, oldTex);
+    if (oldTex) oldTex->Release();
+    dev->SetRenderState(D3DRS_ALPHABLENDENABLE, rsAB);
+    dev->SetRenderState(D3DRS_SRCBLEND,         rsSB);
+    dev->SetRenderState(D3DRS_DESTBLEND,        rsDB);
+    dev->SetRenderState(D3DRS_ZENABLE,          rsZ);
+    dev->SetRenderState(D3DRS_ZWRITEENABLE,     rsZW);
+    dev->SetRenderState(D3DRS_CULLMODE,         rsCull);
+    dev->SetRenderState(D3DRS_LIGHTING,         rsLight);
+    dev->SetRenderState(D3DRS_FOGENABLE,        rsFog);
+    dev->SetRenderState(D3DRS_ALPHATESTENABLE,  rsAT);
+    dev->SetRenderState(D3DRS_STENCILENABLE,    rsSten);
+    dev->SetRenderState(D3DRS_SCISSORTESTENABLE,rsScis);
+    dev->SetRenderState(D3DRS_COLORWRITEENABLE, rsCW);
+    dev->SetFVF(oldFVF);
+    /* Declaration after FVF: setting FVF invalidates it, so this must come last
+       or the engine's next draw uses ours. */
+    dev->SetVertexDeclaration(oldDecl);
+    if (oldDecl) oldDecl->Release();
+    dev->SetVertexShader(oldVS);
+    if (oldVS) oldVS->Release();
+    dev->SetPixelShader(oldPS);
+    if (oldPS) oldPS->Release();
+}
+
+/* Runs on the ENGINE'S RENDER THREAD. Everything here must be safe there:
+   no engine calls, no locks the main thread holds, no logging in the hot path. */
+static void __fastcall hkRDPresent(void* self, void* edx, HWND hwnd)
+{
+    (void)edx;
+    if (g_ingame && (g_ourPanel || (g_drive && g_hudOn)) && !g_shutdown) {
+        IDirect3DDevice9* dev = GetD3DDevice();
+        if (dev) {
+            __try { DrawOverlayD3D(dev); }
+            __except (EXCEPTION_EXECUTE_HANDLER) {
+                InterlockedExchange(&g_ingame, 0);
+                logf_("[d3d ] overlay draw faulted - in-game rendering disabled");
+            }
+        }
+    }
+    ((fnRDPresent)g_rdPresent)(self, hwnd);
+}
+
+static int InstallPresentHook(void)
+{
+    DWORD  old;
+    void** slot = (void**)(VT_RENDERDEV_D3D9 + RD_SLOT_PRESENT);
+    if (g_rdPresent) return 1;
+    if (!Readable(slot, 4)) return 0;
+    if (!GetD3DDevice()) { logf_("[d3d ] no D3D9 device - not hooking"); return 0; }
+    if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) return 0;
+    g_rdPresent = *slot;
+    g_rdPresentEver = g_rdPresent;      /* survives RemovePresentHook - see decl */
+    *slot = (void*)hkRDPresent;
+    VirtualProtect(slot, sizeof(void*), old, &old);
+    logf_("[d3d ] Present hooked (was %p)", g_rdPresent);
+    return 1;
+}
+
+static void RemovePresentHook(void)
+{
+    DWORD  old;
+    void** slot = (void**)(VT_RENDERDEV_D3D9 + RD_SLOT_PRESENT);
+    if (!g_rdPresent) return;
+    InterlockedExchange(&g_ingame, 0);
+    if (Readable(slot, 4) && VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) {
+        *slot = g_rdPresent;
+        VirtualProtect(slot, sizeof(void*), old, &old);
+    }
+    /* THE SLEEP HAS TO COVER THE STORE IT IS GUARDING.
+       `g_rdPresent = 0;` used to come BEFORE this Sleep. hkRDPresent ends with an
+       unconditional `((fnRDPresent)g_rdPresent)(self, hwnd);` - so a render
+       thread already inside the hook, having entered through the still-live
+       slot, read the pointer AFTER we zeroed it and called address 0. The sleep
+       exists precisely to let that thread finish, and it was placed one line too
+       late to do it. Restoring the slot stops new entries; the sleep drains the
+       ones in flight; only then is it safe to drop the pointer they call. */
+    Sleep(120);
+    g_rdPresent = 0;
+    ReleaseOverlayTexture();
+    /* The picker's texture was leaked on every unload - ReleasePickerTexture had
+       exactly one call site, the size-change path inside DrawOverlayD3D, so a
+       D3DPOOL_MANAGED 540x580 surface and its reference on a device the game
+       keeps using survived FreeLibrary. */
+    ReleasePickerTexture();
+    logf_("[d3d ] Present hook removed");
+}
+/* ================================================================== */
+
+static HANDLE        g_ovlThread = 0;
+
+static BOOL CALLBACK FindGameWnd(HWND h, LPARAM lp)
+{
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (pid == GetCurrentProcessId() && IsWindowVisible(h) && GetWindow(h, GW_OWNER) == 0) {
+        RECT r;
+        GetClientRect(h, &r);
+        if (r.right > 320 && r.bottom > 240) { *(HWND*)lp = h; return FALSE; }
+    }
+    return TRUE;
+}
+
+/* Read a DuniaStringW into a caller buffer; returns character count.
+ *
+ * DuniaStringW uses small-string optimisation: +0x04 is a POINTER for long
+ * strings but INLINE CHARACTER DATA for short ones, exactly like std::wstring.
+ * Capacity lives at +0x18; the inline buffer holds 7 characters plus a NUL.
+ * Treating inline data as a pointer is what crashed the game when we wrote to
+ * the edit line, and here it silently dropped every console line of <= 7
+ * characters from the display. */
+#define DW_SSO_CAP 7
+static int ReadDuniaW(const void* str, wchar_t* out, int cap)
+{
+    const wchar_t* buf;
+    int len, capacity;
+    out[0] = 0;
+    if (!Readable(str, 0x20)) return 0;
+    len      = *(const int*)((const char*)str + 0x14);
+    capacity = *(const int*)((const char*)str + 0x18);
+    if (len <= 0 || len > 4096) return 0;
+    if (len > cap - 1) len = cap - 1;
+
+    if (capacity <= DW_SSO_CAP) {
+        buf = (const wchar_t*)((const char*)str + 0x04);   /* inline */
+        if (len > DW_SSO_CAP) return 0;                    /* inconsistent */
+    } else {
+        buf = *(const wchar_t* const*)((const char*)str + 0x04);
+        if (!Readable(buf, (SIZE_T)len * 2)) return 0;
+    }
+    memcpy(out, buf, (size_t)len * 2);
+    out[len] = 0;
+    return len;
+}
+
+/* The engine embeds colour markup in console lines: a control character (<0x20)
+   followed by six hex digits of RRGGBB, then the text, with further control
+   characters delimiting runs.  Printing the raw line shows "80C0FF" plus box
+   glyphs, which is what the first version did.  This draws each run in its own
+   colour and swallows the control codes. */
+static void DrawMarkupLine(HDC dc, const wchar_t* t, int x, int y, int right,
+                           COLORREF defColour)
+{
+    COLORREF col = defColour;
+    wchar_t  seg[1024];
+    int      n = 0;
+    SIZE     sz;
+
+    while (*t) {
+        if ((unsigned)*t < 0x20) {
+            /* flush what we have, then try to read a colour */
+            if (n) {
+                seg[n] = 0;
+                SetTextColor(dc, col);
+                TextOutW(dc, x, y, seg, n);
+                if (GetTextExtentPoint32W(dc, seg, n, &sz)) x += sz.cx;
+                n = 0;
+            }
+            ++t;
+            {
+                int i, v = 0, ok = 1;
+                for (i = 0; i < 6; ++i) {
+                    wchar_t c = t[i];
+                    int d;
+                    if (c >= L'0' && c <= L'9') d = c - L'0';
+                    else if (c >= L'a' && c <= L'f') d = c - L'a' + 10;
+                    else if (c >= L'A' && c <= L'F') d = c - L'A' + 10;
+                    else { ok = 0; break; }
+                    v = (v << 4) | d;
+                }
+                if (ok) {
+                    /* stored RRGGBB; COLORREF wants BGR */
+                    col = RGB((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF);
+                    t += 6;
+                }
+            }
+            continue;
+        }
+        if (n < 1022) seg[n++] = *t;
+        ++t;
+        if (x > right) break;
+    }
+    if (n) {
+        seg[n] = 0;
+        SetTextColor(dc, col);
+        TextOutW(dc, x, y, seg, n);
+    }
+}
+
+
+/* ---- our own console input line -------------------------------------------
+ * Why: the engine's char map has no Shift, so '?', '_', '"' etc. are untypeable
+ * and its own "?" help command is unreachable. ToUnicode gives us the real
+ * character for the current layout and modifier state.
+ *
+ * We do NOT swallow keys - CallNextHookEx always runs - so the engine keeps
+ * doing whatever it normally does. We simply display and execute OUR line.
+ */
+#define INBUF 512
+#define HISTN 32
+#define CMDMAX 1600
+#define CMDLEN 64
+static char  g_cmds[CMDMAX][CMDLEN];
+static int   g_cmdCount = 0;
+/* TAB-COMPLETION RUN STATE. Deliberately buffer-derived - see TabComplete.
+   g_tabIdx used to live here as "-1 = not cycling", and InKey cleared it on any
+   key that was not Tab. The input thread polls ~240 virtual keys every 8 ms and
+   hands InKey anything with an event, so that reset fired between two Tab
+   presses and the cycle could never advance. It is gone. g_tabLast replaces it
+   and cannot be clobbered from outside, because the thing it is compared against
+   is the input line itself. */
+static wchar_t g_tabStem[INBUF];   /* what the user typed before the first Tab */
+static wchar_t g_tabLast[INBUF];   /* exactly what Tab last wrote into g_in     */
+static int     g_tabRun = 0;       /* presses in this run; 2 = list once        */
+static int     g_tabListed = 0;    /* candidates already listed for THIS run    */
+static wchar_t g_in[INBUF];
+static int     g_inLen = 0, g_inCol = 0;
+static wchar_t g_hist[HISTN][INBUF];
+static int     g_histCount = 0, g_histPos = -1;
+/* REMOVED: g_kbHook / g_kbThread / g_kbTid. A WH_KEYBOARD_LL hook was the first
+   design; it was replaced by the polling InputThread below and the three handles
+   were left behind, always zero. Nothing installed or waited on them, so the
+   unload path was already correct - but a reader checking "do we unhook the
+   keyboard hook on exit?" had to prove that from absence, which is the kind of
+   question dead state invents. */
+static HANDLE  g_inThread = 0;
+static volatile long g_scroll = 0;   /* lines scrolled back, 0 = newest */
+static volatile long g_pendingSubmit = 0;/* set by hook, drained by hotkey thread */
+static volatile long g_wantClearIn   = 0;/* close asks; InputThread performs */
+static char          g_pendingCmd[INBUF];
+
+/* RawKey survived the move off the keyboard hook: InputThread fills one on the
+   stack and hands it straight to InKey. The RING it used to travel through
+   (g_kq / g_kqHead / g_kqTail) and the hook's liveness counters (g_hookCalls,
+   g_lastHookCalls) did not - producer and consumer are the same thread now, so
+   there is nothing to queue between them. All five were dead; removed. */
+typedef struct { DWORD vk, scan; BYTE shift, ctrl, alt, caps; } RawKey;
+
+static int ConsoleIsOpen(void)
+{
+    void* con = *(void**)G_CONSOLE_PTR;
+    void* pUI;
+    if (!Readable(con, 0x80)) return 0;
+    pUI = *(void**)((char*)con + UI_OFFSET);
+    if (!Readable(pUI, 0x90)) return 0;
+    return *(int*)((char*)pUI + 0x5C) > 0;
+}
+
+/* Parse console_dump.txt (written by F6 from the live registry) into a completion
+   list. Lines look like "name : help" or "Usage: ...". */
+static int g_cmdsFromFile = 0;
+
+/* Add one name if it is not already known. Returns 1 if it was new. */
+static int CmdAdd(const char* name, int n)
+{
+    int i;
+    if (n < 2 || n >= CMDLEN || g_cmdCount >= CMDMAX) return 0;
+    for (i = 0; i < g_cmdCount; ++i)
+        if (_strnicmp(g_cmds[i], name, n) == 0 && (int)strlen(g_cmds[i]) == n) return 0;
+    memcpy(g_cmds[g_cmdCount], name, n);
+    g_cmds[g_cmdCount][n] = 0;
+    ++g_cmdCount;
+    return 1;
+}
+
+/* The persistent name list. Seeded from static analysis of the binary, so Tab
+   works from the moment of injection, and grown by every F10 thereafter. */
+#define CMDS_FILE "console_cmds.txt"
+
+/* The seed is COMPILED IN (console_cmds_seed.h, generated by
+   scripts/seed_cmds.py). A shipped game's command set is fixed, so a baked-in
+   list is exactly as correct as walking the live registry would be, and it
+   cannot be deleted, moved, or truncated. console_cmds.txt is now only an
+   additive cache layered on top: losing it costs nothing. */
+#include "console_cmds_seed.h"
+
+static void SeedCmdNames(void)
+{
+    int i, added = 0;
+    for (i = 0; i < (int)CMD_SEED_COUNT; ++i)
+        added += CmdAdd(kCmdSeed[i], (int)strlen(kCmdSeed[i]));
+    logf_("[tab ] built-in seed: +%d names (%d total)", added, g_cmdCount);
+}
+
+static void LoadCmdNames(void)
+{
+    char path[MAX_PATH], line[256];
+    FILE* f;
+    int added = 0;
+    _snprintf(path, sizeof(path), "%s\\" CMDS_FILE, g_dir);
+    f = fopen(path, "r");
+    if (!f) { logf_("[tab ] no " CMDS_FILE " (fine - the seed is compiled in)"); return; }
+    while (fgets(line, sizeof(line), f)) {
+        int n = 0;
+        while (line[n] && (line[n] == '_' || (line[n] >= '0' && line[n] <= '9') ||
+                           (line[n] >= 'A' && line[n] <= 'Z') ||
+                           (line[n] >= 'a' && line[n] <= 'z'))) ++n;
+        added += CmdAdd(line, n);
+    }
+    fclose(f);
+    logf_("[tab ] " CMDS_FILE ": +%d names (%d total)", added, g_cmdCount);
+}
+
+/* Write the union back. Never removes anything - that is the whole point.
+
+   The union has to be taken against the FILE, not just against what we happen to
+   hold in RAM. fopen("w") truncates, so if LoadCmdNames ever failed - file not
+   next to the DLL, g_dir pointing somewhere else - then g_cmds holds only our own
+   built-ins and this function would quietly rewrite the file down to those. That
+   is not hypothetical: it is how the list lost all 464 of the game's own names and
+   Tab stopped completing gfx_/cheat_/env_/net_ while still completing ours.
+   Re-loading first makes the save idempotent under a failed load. */
+static void SaveCmdNames(void)
+{
+    char path[MAX_PATH];
+    FILE* f;
+    int i;
+    LoadCmdNames();
+    _snprintf(path, sizeof(path), "%s\\" CMDS_FILE, g_dir);
+    f = fopen(path, "w");
+    if (!f) { logf_("[tab ] cannot write %s", path); return; }
+    for (i = 0; i < g_cmdCount; ++i) fprintf(f, "%s\n", g_cmds[i]);
+    fclose(f);
+    logf_("[tab ] " CMDS_FILE ": saved %d names", g_cmdCount);
+}
+
+/* THE DLL'S OWN COMMANDS - ONE TABLE, checked against the dispatch.
+
+   This was 70 hand-written strcpy lines, and a second hand-maintained
+   copy of the same set lives in console_cmds_seed.h. Two lists for one
+   set drift, and both had: eleven commands were dispatched and in
+   NEITHER list, so Tab could not complete them however many times you
+   pressed it, while `grab` and `drivecam` were advertised and dispatched
+   by nothing.
+
+   A table can at least be CHECKED. check_cmds.py greps the
+   _stricmp(p, "...") / _strnicmp(p, "...") arms out of TryModCommand and
+   diffs them against this array, and build.bat fails on any mismatch -
+   so a command added to the dispatch and forgotten here cannot ship. It
+   is not derivation from a single source, which C cannot do across a
+   chain of string compares, but it makes the drift impossible to miss.
+   Keep it sorted the way the dispatch reads; order only affects which
+   completion Tab offers first, and exact matches are hoisted anyway. */
+static const char* const kOurCmds[] = {
+    "speedinfo", "picktrace",
+    "warp", "modhelp", "tp", "fixinput",
+    "fixcam", "ingame", "save", "planets",
+    "mountinfo", "beastinfo", "drive", "drivespeed",
+    "drivewait", "streaming", "fixplayer", "drivecam",
+    "attack", "aisignal", "drivesignal", "drivecalm",
+    "playerinfo", "actmap", "entlist", "pick",
+    "pickfov", "pickclick", "kill", "entbox",
+    "ents", "allsectors", "attackhold", "drivebind",
+    "spawnground", "freeze", "timescale", "delete",
+    "despawn", "pawntype", "animinfo", "gamelog",
+    "entflag", "fixcontrol", "trace", "freecam",
+    "firstperson", "fpoffset", "fpfov", "fpaim",
+    "fpdiag", "verbose", "fpbody", "camspeed",
+    "vehenter", "vehexit", "vehstatus", "spawn",
+    "spawn_list", "spawn_all", "anchor", "editorlink",
+    "agentinfo", "vehinfo", "facing", "facinginfo",
+    "driveai", "rcprobe", "respawn", "resurrect",
+    "revive", "mergelib", "drivelock", "driveturn",
+    "mkpawn",
+};
+#define OURCMD_COUNT ((int)(sizeof(kOurCmds) / sizeof(kOurCmds[0])))
+
+static void LoadCmdList(void)
+{
+    char path[MAX_PATH], line[512];
+    FILE* f;
+
+    /* Seed the DLL's own commands first, so they complete even before anyone has
+       dumped the engine registry. The dedupe below keeps them unique. */
+    if (g_cmdCount == 0) {
+        int q;
+        /* CmdAdd, not a raw strcpy: it bounds-checks against CMDMAX and dedupes.
+           The old loop-free block wrote 70 entries with neither check - safe only
+           because it ran first, which is a property of the call order rather than
+           of the code. */
+        for (q = 0; q < OURCMD_COUNT; ++q)
+            CmdAdd(kOurCmds[q], (int)strlen(kOurCmds[q]));
+        logf_("[tab ] %d of our own commands seeded", g_cmdCount);
+    }
+    /* NOT a reset. F10 taken while our own help filled the scrollback dumped a
+       4-line file, and resetting here cut completion from 443 names to 4. */
+    SeedCmdNames();      /* compiled in - always present, cannot be lost */
+    LoadCmdNames();      /* optional cache on top - may add, never removes */
+
+    _snprintf(path, sizeof(path), "%s\\console_dump.txt", g_dir);
+    f = fopen(path, "r");
+    if (!f) { logf_("[tab ] no console_dump.txt yet - press F10 after '?' to build one"); return; }
+    g_cmdsFromFile = 1;
+    while (fgets(line, sizeof(line), f) && g_cmdCount < CMDMAX) {
+        char* p = line;
+        int n = 0;
+        if (!(*p == '_' || (*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z'))) continue;
+        while (p[n] && (p[n] == '_' || (p[n] >= '0' && p[n] <= '9') ||
+                        (p[n] >= 'A' && p[n] <= 'Z') || (p[n] >= 'a' && p[n] <= 'z')))
+            ++n;
+        if (n < 2 || n >= CMDLEN) continue;
+        /* only accept lines that look like a registry entry, not prose */
+        if (p[n] != ' ' && p[n] != '\0' && p[n] != '\n') continue;
+        CmdAdd(p, n);
+    }
+    fclose(f);
+    logf_("[tab ] %d command names loaded for completion", g_cmdCount);
+}
+
+/* Cycle through commands sharing the typed prefix. Shift+Tab goes backwards. */
+/* Completion is context-sensitive: the command table normally, the world list
+   once the line begins "warp ". Without this, Tab after `warp` offered engine
+   command names, which is never what is wanted there. */
+static int WarpArgOffset(const wchar_t* line)
+{
+    int i = 0;
+    static const wchar_t* kw = L"warp";
+    while (kw[i] && line[i] && towlower(line[i]) == kw[i]) ++i;
+    if (kw[i]) return -1;                       /* line does not start with warp */
+    if (line[i] != L' ' && line[i] != L'\t') return -1;
+    while (line[i] == L' ' || line[i] == L'\t') ++i;
+    return i;
+}
+
+static void TabCompleteWorld(int back, int argOff, int fresh)
+{
+    static int wIdx = -1;
+    char stem[128];
+    int  i, n, start, tries;
+
+    if (fresh) wIdx = -1;                       /* fresh Tab run */
+    for (n = 0; n < (int)sizeof(stem) - 1 && g_tabStem[argOff + n]; ++n)
+        stem[n] = (g_tabStem[argOff + n] < 0x80) ? (char)g_tabStem[argOff + n] : '?';
+    stem[n] = 0;
+
+    start = (wIdx < 0) ? (back ? NWORLDS - 1 : 0)
+                       : (wIdx + (back ? -1 : 1) + NWORLDS) % NWORLDS;
+    for (tries = 0; tries < NWORLDS; ++tries) {
+        i = (start + (back ? -tries : tries) + NWORLDS * 2) % NWORLDS;
+        if (n == 0 || _strnicmp(g_worlds[i], stem, n) == 0) {
+            int k;
+            wIdx = i;
+            for (k = 0; g_worlds[i][k] && argOff + k < INBUF - 2; ++k)
+                g_in[argOff + k] = (wchar_t)g_worlds[i][k];
+            g_in[argOff + k] = 0;
+            g_inLen = argOff + k; g_inCol = g_inLen;
+            return;
+        }
+    }
+}
+
+/* ---- one canonical candidate order, used by BOTH the cycler and the listing --
+   Ordinal 0 is the exact match if there is one, then every other prefix match in
+   table order. The previous attempt had the cycler start at the exact match
+   while the LISTING walked g_cmds from index 0, so the console announced
+   "spawnground spawn spawn_list ..." while the next press would have gone
+   somewhere else entirely. A display that disagrees with what the key does is
+   worse than no display: it is confidently wrong about the one thing it exists
+   to explain. These two helpers are the single source of that order. */
+static int TabNth(const char* stem, int n, int exact, int ord)
+{
+    int i, seen = 0;
+    if (exact >= 0) {
+        if (ord == 0) return exact;
+        --ord;
+    }
+    for (i = 0; i < g_cmdCount; ++i) {
+        if (i == exact) continue;
+        if (n && _strnicmp(g_cmds[i], stem, n) != 0) continue;
+        if (seen == ord) return i;
+        ++seen;
+    }
+    return -1;
+}
+
+static int TabOrdOf(const char* stem, int n, int exact, int idx)
+{
+    int i, seen;
+    if (idx < 0) return -1;
+    if (idx == exact) return 0;
+    seen = (exact >= 0) ? 1 : 0;
+    for (i = 0; i < g_cmdCount; ++i) {
+        if (i == exact) continue;
+        if (n && _strnicmp(g_cmds[i], stem, n) != 0) continue;
+        if (i == idx) return seen;
+        ++seen;
+    }
+    return -1;
+}
+
+/* TAB REWRITES THE INPUT LINE. That is the whole job; the candidate listing is a
+   supplement and must never replace it.
+
+   THE REGRESSION THIS IS THE FIX FOR, because its shape is the reason for the
+   design below. An "exact match first" branch was added that set the index and
+   jumped straight to the announcement WITHOUT writing g_in - reasoning that the
+   buffer already held that text. It did, so nothing moved on screen. And the
+   fresh-run test keyed off g_tabIdx, which InKey clears on any key that is not
+   Tab:
+
+       if (vk == VK_TAB) { TabComplete(...); return; }
+       g_tabIdx = -1;
+
+   That line fires far more often than "the user typed something": the input
+   thread polls ~240 virtual keys every 8 ms and hands InKey anything with an
+   event. So g_tabIdx did not survive between two Tab presses. EVERY press was a
+   fresh run, every fresh run found the exact match, and every one of them
+   announced and wrote nothing - twenty presses, twenty identical lines, no
+   completion. The same clobbering had been quietly breaking the cycle all along:
+   before the exact-match branch existed it simply re-offered the first prefix
+   match each time, which is the original "it only offers a few of them" report.
+
+   SO THE RUN STATE IS THE BUFFER, not a counter that other code can reset.
+   g_tabLast holds exactly what we last wrote, and a run continues if and only if
+   g_in still equals it. Typing, backspacing or submitting changes the buffer and
+   ends the run by construction; a stray InKey call cannot end it at all. */
+static void TabComplete(int back)
+{
+    char    stem[CMDLEN], cur[CMDLEN];
+    wchar_t before[INBUF];          /* the line as it stood before we wrote it */
+    int     i, n, exact = -1, total = 0, curIdx = -1, curOrd, ord, idx, fresh;
+    int     changed = 0;            /* did this press actually move the line?  */
+
+    /* Retry the dump file until it actually loads - the seeded names alone would
+       otherwise make g_cmdCount non-zero and permanently skip the engine list. */
+    if (!g_cmdsFromFile) { LoadCmdList(); }
+    if (!g_cmdCount) return;
+
+    fresh = (g_tabLast[0] == 0) || (wcscmp(g_in, g_tabLast) != 0);
+    if (fresh) {
+        wcsncpy(g_tabStem, g_in, INBUF - 1);
+        g_tabStem[INBUF - 1] = 0;
+        g_tabRun = 0;
+        g_tabListed = 0;
+    }
+    ++g_tabRun;
+
+    {   /* `warp <TAB>` completes WORLD names - unchanged, but it gets the same
+           buffer-derived freshness so its own cycle cannot be reset either. */
+        int argOff = WarpArgOffset(g_tabStem);
+        if (argOff >= 0) {
+            TabCompleteWorld(back, argOff, fresh);
+            wcsncpy(g_tabLast, g_in, INBUF - 1);
+            g_tabLast[INBUF - 1] = 0;
+            return;
+        }
+    }
+
+    /* ANYTHING PAST THE COMMAND WORD IS AN ARGUMENT, and there is no argument
+       completion here except warp's, handled above. Do nothing, QUIETLY.
+       This used to fall through to the command matcher, so completing `spawn`
+       and then typing a space produced
+
+           tab: no command starts with "spawn "
+
+       - reporting failure against a stem the completer itself had just built,
+       including a trailing space it should never have been matching on. */
+    for (i = 0; g_tabStem[i]; ++i)
+        if (g_tabStem[i] == L' ' || g_tabStem[i] == L'\t') {
+            /* Record the run even though we changed nothing, so a held Tab does
+               not restart it over and over - see the note at the !total case. */
+            wcsncpy(g_tabLast, g_in, INBUF - 1);
+            g_tabLast[INBUF - 1] = 0;
+            return;
+        }
+
+    for (n = 0; n < CMDLEN - 1 && g_tabStem[n]; ++n)
+        stem[n] = (g_tabStem[n] < 0x80) ? (char)g_tabStem[n] : '?';
+    stem[n] = 0;
+
+    if (n > 0)
+        for (i = 0; i < g_cmdCount; ++i)
+            if (_stricmp(g_cmds[i], stem) == 0) { exact = i; break; }
+    for (i = 0; i < g_cmdCount; ++i)
+        if (n == 0 || _strnicmp(g_cmds[i], stem, n) == 0) ++total;
+
+    if (!total) {
+        /* THE RUN HAS TO BE RECORDED EVEN THOUGH NOTHING WAS COMPLETED.
+           Returning without touching g_tabLast leaves g_in different from it, so
+           the NEXT press is "fresh" again, g_tabRun goes back to 1, and the
+           message repeats for every press - the same flooding this whole change
+           exists to stop, just on the failure path. Marking the buffer as ours
+           makes the second and later presses continue a run that has already had
+           its say. */
+        wcsncpy(g_tabLast, g_in, INBUF - 1);
+        g_tabLast[INBUF - 1] = 0;
+        /* Once per RUN, not once per press. */
+        if (g_tabRun == 1 && n > 0) {
+            _snprintf(g_note, sizeof(g_note) - 1,
+                      "tab: no command starts with \"%s\"", stem);
+            g_note[sizeof(g_note) - 1] = 0;
+            InterlockedExchange(&g_haveNote, 1);
+        }
+        return;
+    }
+
+    /* WHERE ARE WE? Read it back out of the buffer rather than trusting an
+       index - whatever we last offered is still sitting in g_in. */
+    for (i = 0; i < g_inLen && i < CMDLEN - 1; ++i)
+        cur[i] = (g_in[i] < 0x80) ? (char)g_in[i] : '?';
+    cur[i] = 0;
+    for (i = 0; i < g_cmdCount; ++i)
+        if (_stricmp(g_cmds[i], cur) == 0) { curIdx = i; break; }
+    curOrd = TabOrdOf(stem, n, exact, curIdx);
+
+    /* A fresh run starts at ordinal 0 - the exact match when there is one, so
+       typing `spawn` and pressing Tab gives you `spawn`. Otherwise step on. */
+    if (fresh || curOrd < 0) ord = 0;
+    else                     ord = (curOrd + (back ? -1 : 1) + total) % total;
+
+    idx = TabNth(stem, n, exact, ord);
+    if (idx < 0) return;
+
+    {   /* ALWAYS write the line - even when the text is identical to what is
+           already there. That keeps g_tabLast honest, and it is precisely the
+           branch whose omission caused the regression. */
+        int k;
+        wcsncpy(before, g_in, INBUF - 1);       /* to tell "wrote nothing new" */
+        before[INBUF - 1] = 0;
+        for (k = 0; g_cmds[idx][k] && k < INBUF - 2; ++k)
+            g_in[k] = (wchar_t)g_cmds[idx][k];
+        g_in[k] = 0;
+        g_inLen = k; g_inCol = k;
+        wcsncpy(g_tabLast, g_in, INBUF - 1);
+        g_tabLast[INBUF - 1] = 0;
+        changed = (wcscmp(before, g_in) != 0);
+    }
+
+    if (g_pkTrace)
+        logf_("[tab ] run=%d fresh=%d total=%d exact=%d ord=%d changed=%d "
+              "stem=\"%s\" -> \"%s\"",
+              g_tabRun, fresh, total, exact, ord, changed, stem, g_cmds[idx]);
+
+    /* THE SHELL CONVENTION, with the dead first press taken out of it.
+
+       The rule was "the first Tab completes SILENTLY, the second lists", and it
+       is right whenever the first Tab actually completes something. It is wrong
+       in the one case the user hit: type a command that is BOTH a complete name
+       and a prefix of others - `spawn`, with `spawnlist` and friends behind it -
+       and a fresh run starts at ordinal 0, which is the exact match, which is
+       the text already on the line. So the first press wrote `spawn` over
+       `spawn`, said nothing because it was press one, and looked broken. The
+       second press stepped to ordinal 1 and listed, so the key "needed two
+       presses". Nothing was eating the first edge - it arrived and did its job,
+       and its job was invisible.
+
+       So: list when the run has had a press that changed nothing, as well as on
+       the conventional second press. A silent completion is only worth being
+       silent about if something moved. g_tabListed keeps it to once per run
+       either way - twenty repetitions of one line tell the user no more than
+       silence did, and cost them their scrollback as well.
+
+       Through g_note because this is the INPUT thread and printf is
+       main-thread-only - the hand-off the hotkey thread uses for fly speed. */
+    if (!g_tabListed && total > 1 && (g_tabRun >= 2 || !changed)) {
+        char list[sizeof(g_note)];
+        int  used = 0, shown = 0;
+        list[0] = 0;
+        for (i = 0; i < total; ++i) {
+            int t = TabNth(stem, n, exact, i);
+            int w;
+            if (t < 0) break;
+            if (used >= (int)sizeof(list) - 24) break;
+            /* MSVC's _snprintf returns -1 on truncation rather than the length
+               it wanted - the same trap already found in PickSelect - so test
+               the return, never accumulate it blind. */
+            w = _snprintf(list + used, sizeof(list) - 1 - used,
+                          "%s%s", used ? " " : "", g_cmds[t]);
+            if (w < 0) { list[sizeof(list) - 1] = 0; break; }
+            used += w; ++shown;
+        }
+        _snprintf(g_note, sizeof(g_note) - 1, "tab: %d matches - %s%s",
+                  total, list, (shown < total) ? " ..." : "");
+        g_note[sizeof(g_note) - 1] = 0;
+        InterlockedExchange(&g_haveNote, 1);
+        g_tabListed = 1;
+    }
+}
+
+static void InSubmit(void)
+{
+    char narrow[INBUF];
+    int i;
+    if (g_inLen <= 0) return;
+    for (i = 0; i < g_inLen && i < INBUF - 1; ++i)
+        narrow[i] = (g_in[i] < 0x80) ? (char)g_in[i] : '?';
+    narrow[i] = 0;
+
+    if (g_histCount < HISTN) {
+        wcsncpy(g_hist[g_histCount], g_in, INBUF - 1);
+        g_hist[g_histCount][INBUF - 1] = 0;
+        ++g_histCount;
+    } else {
+        memmove(g_hist[0], g_hist[1], sizeof(g_hist[0]) * (HISTN - 1));
+        wcsncpy(g_hist[HISTN - 1], g_in, INBUF - 1);
+    }
+    g_histPos = -1;
+
+    /* Do NOT QueuePush or logf_ here. This runs inside a WH_KEYBOARD_LL callback,
+       and both take a lock / touch the disk. A hook that overruns
+       LowLevelHooksTimeout is silently unhooked by Windows - which is how typing
+       broke before. Hand off with a plain flag; the hotkey thread does the work. */
+    strncpy(g_pendingCmd, narrow, INBUF - 1);
+    g_pendingCmd[INBUF - 1] = 0;
+    InterlockedExchange(&g_pendingSubmit, 1);
+    g_in[0] = 0; g_inLen = 0; g_inCol = 0;
+}
+
+static void InKey(const RawKey* rk)
+{
+    DWORD vk = rk->vk, scan = rk->scan;
+    BYTE  ks[256];
+    WCHAR ch[8];
+    int   n;
+
+    /* THE CONSOLE MUST NOT EAT THE KEYBOARD WHILE IT IS CLOSED.
+       This is the console's line editor and the raw key poll reached it
+       unconditionally, so every key pressed during normal play was appended to
+       the input buffer. Walking around on WASD quietly built up a line of text,
+       and the next command typed came out as `wfpaim look` -> "Unknown
+       command", with a stray movement key on the front.
+
+       The hotkeys (F7-F10, End, PgUp/PgDn, the picker keys) are handled in the
+       poll loop and never come through here, so gating on "open" costs nothing.
+       The picker is exempt: it is opened from the console and owns the keyboard
+       while it is up. */
+    if (!g_consoleOpen && !g_pickerOpen) {
+        if (g_inLen) { g_in[0] = 0; g_inLen = 0; g_inCol = 0; }
+        return;
+    }
+
+    /* ---- THE PICKER TAKES THE KEYBOARD WHILE IT IS OPEN --------------------
+       It used to be a real window with a real edit control, so Windows gave it
+       focus and typing simply went there. Painted into the game's frame there is
+       no focus to receive - keys arrive here, by polling, like everything else.
+       Routing them explicitly reproduces the old feel: the picker is the thing
+       you are typing at until you close it.
+
+       Escape closes the picker and hands the keyboard back to the console, and
+       that matters more than it used to: there is no other window left to click
+       on to change where typing goes. */
+    if (g_pickerOpen) {
+        switch (vk) {
+        case VK_UP: case VK_DOWN: case VK_PRIOR: case VK_NEXT:
+        case VK_RETURN: case VK_ESCAPE:
+            if (PkKey((int)vk)) return;
+            break;
+        case VK_BACK:
+            if (PkChar('\b')) return;
+            break;
+        case VK_TAB:
+            return;                       /* no completion inside the picker */
+        default:
+            break;
+        }
+        /* Printable keys: translate with a real keyboard state so layout, Shift
+           and CapsLock behave. Ctrl/Alt are excluded because ToUnicode turns
+           Ctrl+letter into a control character. */
+        if (!rk->ctrl && !rk->alt) {
+            BYTE  ks2[256];
+            WCHAR c2[8];
+            int   n2;
+            memset(ks2, 0, sizeof(ks2));
+            if (rk->shift) ks2[VK_SHIFT]   = 0x80;
+            if (rk->caps)  ks2[VK_CAPITAL] = 0x01;
+            /* rk->scan and flag 0x4, exactly as the console path below does.
+               Passing 0 for the flags - as this did at first - lets ToUnicode
+               MODIFY the kernel keyboard state, which swallows dead keys and
+               makes subsequent calls return nothing. That is why typing into
+               the search box did nothing at all. */
+            n2 = ToUnicode((UINT)vk, (UINT)scan, ks2, c2, 8, 0x4);
+            if (n2 == 1 && c2[0] >= 32 && c2[0] < 127 && PkChar((int)c2[0]))
+                return;
+        }
+        return;                           /* swallow the rest; never leak it */
+    }
+
+    if (vk == VK_TAB) { TabComplete(rk->shift ? 1 : 0); return; }
+    /* REMOVED: `g_tabIdx = -1;` - "any other key ends the completion cycle".
+       The intent was right and the mechanism was not. This runs for every InKey
+       call that is not Tab, and the input thread polls ~240 virtual keys every
+       8 ms and delivers anything with an event - so it fired BETWEEN two Tab
+       presses and reset the cycle that was still in progress. Ending the run is
+       now implicit and exact: a key that changes the line makes g_in differ from
+       g_tabLast, and TabComplete starts a fresh run. A key that does not change
+       the line no longer interrupts anything. */
+
+    switch (vk) {
+    case VK_RETURN:  InSubmit(); return;
+    case VK_ESCAPE:  g_in[0] = 0; g_inLen = 0; g_inCol = 0; return;
+    case VK_BACK:
+        if (g_inCol > 0) {
+            memmove(g_in + g_inCol - 1, g_in + g_inCol,
+                    (size_t)(g_inLen - g_inCol + 1) * 2);
+            --g_inCol; --g_inLen;
+        }
+        return;
+    case VK_DELETE:
+        if (g_inCol < g_inLen) {
+            memmove(g_in + g_inCol, g_in + g_inCol + 1,
+                    (size_t)(g_inLen - g_inCol) * 2);
+            --g_inLen;
+        }
+        return;
+    case VK_LEFT:  if (g_inCol > 0) --g_inCol; return;
+    case VK_RIGHT: if (g_inCol < g_inLen) ++g_inCol; return;
+    case VK_HOME:  g_inCol = 0; return;
+    case VK_PRIOR: InterlockedExchange(&g_scroll, g_scroll + 10); return;  /* PageUp */
+    case VK_NEXT:  {                                                       /* PageDown */
+        long v = g_scroll - 10; if (v < 0) v = 0;
+        InterlockedExchange(&g_scroll, v);
+        return;
+    }
+    case VK_UP:
+        if (g_histCount) {
+            if (g_histPos < 0) g_histPos = g_histCount - 1;
+            else if (g_histPos > 0) --g_histPos;
+            wcsncpy(g_in, g_hist[g_histPos], INBUF - 1);
+            g_in[INBUF - 1] = 0;
+            g_inLen = (int)wcslen(g_in); g_inCol = g_inLen;
+        }
+        return;
+    case VK_DOWN:
+        if (g_histCount && g_histPos >= 0) {
+            if (g_histPos < g_histCount - 1) {
+                ++g_histPos;
+                wcsncpy(g_in, g_hist[g_histPos], INBUF - 1);
+                g_in[INBUF - 1] = 0;
+            } else { g_histPos = -1; g_in[0] = 0; }
+            g_inLen = (int)wcslen(g_in); g_inCol = g_inLen;
+        }
+        return;
+    default: break;
+    }
+
+    /* Ctrl+V paste. Ctrl makes ToUnicode emit a control character, which we
+       filter, so paste has to be handled explicitly - and the user relies on it
+       because the engine cannot type '?' at all. */
+    if (vk == 'V' && rk->ctrl) {
+        if (OpenClipboard(0)) {
+            HANDLE h = GetClipboardData(CF_UNICODETEXT);
+            if (h) {
+                const wchar_t* p = (const wchar_t*)GlobalLock(h);
+                if (p) {
+                    while (*p && g_inLen < INBUF - 2) {
+                        if (*p >= 0x20 && *p != 0x7F) {
+                            memmove(g_in + g_inCol + 1, g_in + g_inCol,
+                                    (size_t)(g_inLen - g_inCol + 1) * 2);
+                            g_in[g_inCol] = *p;
+                            ++g_inCol; ++g_inLen;
+                        }
+                        ++p;
+                    }
+                    g_in[g_inLen] = 0;
+                    GlobalUnlock(h);
+                }
+            }
+            CloseClipboard();
+        }
+        return;
+    }
+
+    /* real character translation - this is what the engine's table cannot do */
+    memset(ks, 0, sizeof(ks));
+    if (rk->shift) ks[VK_SHIFT]   = 0x80;
+    if (rk->ctrl)  ks[VK_CONTROL] = 0x80;
+    if (rk->alt)   ks[VK_MENU]    = 0x80;
+    if (rk->caps)  ks[VK_CAPITAL] = 0x01;
+
+    /* flag 0x4 = do not change the kernel keyboard state; without it ToUnicode
+       can consume dead keys and corrupt typing in OTHER applications. */
+    n = ToUnicode(vk, scan, ks, ch, 8, 0x4);
+    if (n == 1 && ch[0] >= 0x20 && ch[0] != 0x7F && g_inLen < INBUF - 2) {
+        memmove(g_in + g_inCol + 1, g_in + g_inCol,
+                (size_t)(g_inLen - g_inCol + 1) * 2);
+        g_in[g_inCol] = ch[0];
+        ++g_inCol; ++g_inLen;
+        g_in[g_inLen] = 0;
+    }
+}
+
+/* Poll every key each tick. GetAsyncKeyState's low bit means "pressed since the
+   last call", which gives us edge detection without a hook. This is the same
+   mechanism the F-key hotkeys have always used here, and it has never failed -
+   unlike WH_KEYBOARD_LL, which installed cleanly and was never once invoked. */
+/* Poll the keyboard. GetAsyncKeyState's LOW bit ("pressed since last call") is
+   set again by OS auto-repeat, which at a 15ms poll produced a hundred copies of
+   one character. Use the HIGH bit (current physical state) and act only on the
+   up->down transition, then apply our own repeat delay/rate. */
+static DWORD WINAPI InputThread(LPVOID unused)
+{
+    static BYTE  down[256];
+    static DWORD downAt[256];
+    static DWORD lastRep[256];
+    DWORD lastReassert = 0;
+    int   prevFgWasGame = 0;   /* edge detect for the re-assert - see below */
+    DWORD lastTick      = 0;   /* poll-period watchdog, armed by picktrace */
+    const DWORD REPEAT_DELAY = 450;   /* ms before a held key repeats */
+    const DWORD REPEAT_RATE  = 45;    /* ms between repeats */
+    (void)unused;
+
+    int pickerWasOpen = 0;
+    int wasActive     = 0;          /* were we polling on the previous tick? */
+    while (!g_shutdown) {
+        HWND fg   = GetForegroundWindow();
+        /* ONE TEST FOR "OUR APPLICATION IS IN FRONT", not a third private copy.
+           This used to be spelled out here as `fg == g_gameWnd || fg ==
+           g_focusWnd`, and that hand-rolled copy is what broke typing: it did
+           not list the picker window, so clicking a category button - a real
+           Win32 control that took the foreground - made `mine` false, stopped
+           the key harvest, and nothing reached PkChar. AppHasFocus had the
+           same question and a different answer.
+
+           The picker window is gone, so that particular disagreement cannot
+           recur, but the reason it happened can: two copies of a predicate
+           drift. Call the one definition. */
+        int  mine = AppHasFocus();
+
+        /* THIS USED TO SKIP THE KEY POLL ENTIRELY WHILE THE PICKER WAS OPEN, and
+           that is why typing into the search box did nothing.
+
+           The reasoning was sound for the old design: the picker was a real
+           window with a real EDIT control, so Windows delivered keys to it
+           through focus, and polling here as well would have appended every
+           letter to the console input line too - GetAsyncKeyState does not care
+           which window has focus.
+
+           The picker has no window now. It is painted into the game's frame and
+           there is no focus to deliver anything, so polling is the ONLY way it
+           can ever see a keystroke. The double-typing this guarded against is
+           prevented properly instead: InKey routes to the picker first and
+           returns, so nothing reaches the console line while the picker is up.
+
+           (The keyboard-state reset is kept for the transition itself, so a key
+           held down as the picker opens does not auto-repeat into it.) */
+        if (g_pickerOpen && !pickerWasOpen) {
+            /* DRAIN THE OS EDGES TOO, not just our own tracking.
+             *
+             * This cleared `down[]` and nothing else, and `down[]` is OUR
+             * record - GetAsyncKeyState keeps its own "pressed since the last
+             * read" bit per key, and only a READ consumes it. The picker is
+             * opened by typing `spawn` and pressing ENTER, so on the frame it
+             * appears there is a pending VK_RETURN edge sitting in the OS.
+             * PkKey maps VK_RETURN to PickerCommit, which is PickerAct(0) -
+             * so the picker spawned the first row the instant it opened, every
+             * time, before the user could touch anything.
+             *
+             * The console-activation path a few lines below already does this
+             * correctly; the picker path was the one that only did half of it.
+             * Reading every VK once consumes the backlog, and `downAt` and
+             * `lastRep` go with it so no key looks held-since-forever either. */
+            int vk;
+            for (vk = 0x08; vk <= 0xFE; ++vk) (void)GetAsyncKeyState(vk);
+            memset(down,    0, sizeof(down));
+            memset(downAt,  0, sizeof(downAt));
+            memset(lastRep, 0, sizeof(lastRep));
+        }
+        pickerWasOpen = g_pickerOpen;
+
+        /* ---- THE FOREGROUND WATCHER ----------------------------------------
+           Polled, for the same reason everything else here is: no message tells
+           us about a foreground change we are not party to, and the change we
+           need to see is precisely the one nobody notifies us of. 8ms
+           resolution is far finer than the 400ms re-assert it is meant to
+           catch fighting with, so a single flip and an oscillation cannot be
+           confused for one another.
+
+           Logs only transitions, so an idle session costs one line. */
+        if (g_pkTrace) {
+            static HWND  lastFg = (HWND)-1;
+            static DWORD lastAt = 0;
+            if (fg != lastFg) {
+                DWORD now = GetTickCount();
+                logf_("[act ] foreground %p(%s) -> %p(%s) after %lums "
+                      "(ourPanel=%ld pickerOpen=%ld gameDisabled=%ld)",
+                      (void*)lastFg, (lastFg == (HWND)-1) ? "?" : WndTag(lastFg),
+                      (void*)fg, WndTag(fg),
+                      (unsigned long)(lastAt ? now - lastAt : 0),
+                      g_ourPanel, g_pickerOpen, g_gameDisabled);
+                lastFg = fg;
+                lastAt = now;
+            }
+        }
+
+        /* THE PANEL'S MOUSE, on the same tick as its keyboard. See PkPollMouse
+           for why this is polled rather than delivered: no mouse message of any
+           kind reaches any window of ours in this process. This is what makes
+           the panel draggable and its close box clickable. */
+        PkPollMouse();
+
+        /* If the console is open and the game has taken foreground back (alt-tab,
+           or a click into the window), re-assert the block - otherwise DirectInput
+           re-acquires and keystrokes start driving the game again. Rate-limited so
+           we never end up fighting the window manager. */
+        /* CONSOLE ONLY. Including the picker here re-asserted the foreground
+           grab twice a second while the spawn/entity window was open, which
+           made it undraggable, made its close box unclickable, and trapped the
+           foreground inside the game. The picker gets its keyboard from the
+           `mine` test below instead, which costs nothing and steals nothing. */
+        /* ---- ACT ON THE EDGE, NOT ON A TIMER -------------------------------
+           This was gated purely on a 400ms rate limiter, and the measurement
+           log shows that limiter SATURATED: every interval between consecutive
+           re-asserts was 406ms or more, never less. It was firing as fast as it
+           was allowed to, continuously, which means the game had the foreground
+           essentially all the time and the only thing deciding how long it kept
+           it was where the user's click happened to fall inside our 400ms
+           window. Hence a leak of anywhere from 0 to 220ms, unpredictably.
+
+           So: the moment the foreground ARRIVES on the game window, take it
+           back on that same tick. The rate limiter is kept for the case it was
+           actually written for - the foreground STAYING on the game window,
+           which means our SetForegroundWindow is being refused rather than
+           beaten, and hammering it 125 times a second would help nobody.
+
+           The 50ms floor bounds the other failure mode: a grab that succeeds
+           and is stolen again within one tick would otherwise re-assert at the
+           full poll rate. Worst case now is a ~50ms leak instead of ~220ms, and
+           in the common case - the game taking the foreground on a click, a
+           second or more apart - the floor never binds and the leak is one poll
+           interval, 8ms. */
+        if (g_ourPanel && g_blockGame && fg == g_gameWnd && !g_gameMoving) {
+            DWORD nowFg = GetTickCount();
+            int   arrived = !prevFgWasGame;      /* it just landed there */
+            DWORD since   = (DWORD)(nowFg - lastReassert);
+            if ((arrived && since > 50) || since > 400) {
+                lastReassert = nowFg;
+                InterlockedExchange(&g_gameDisabled, 0);   /* force a re-apply */
+                SetGameInput(0);
+            }
+        }
+        prevFgWasGame = (fg == g_gameWnd);
+
+        {
+        int active = (g_ownInput && g_consoleOpen && g_gameWnd && mine);
+
+        /* THE LEAK INTO THE INPUT LINE LIVES HERE.
+           GetAsyncKeyState's low bit is "pressed since the PREVIOUS CALL for
+           this key" and is cleared only by a read. While the console is closed
+           this loop does not run, so nothing reads it - and every W/A/S/D of
+           normal play leaves its bit set, PENDING, for the whole closed period.
+           The `else if (tapped)` branch below then honours all of them in one
+           burst on the first pass after F9, landing in g_in in ascending VK
+           order (a, d, s, w). That is the gibberish that is already in the line
+           the moment the console is opened - the console never received
+           anything while it was shut, it harvests the OS's record of the shut
+           period in one go.
+
+           Note this is why guarding InKey on !g_consoleOpen did nothing: the
+           characters are produced when g_consoleOpen is already 1.
+
+           That branch's own justification - "a press and release fitted inside
+           one 8ms poll window" - only holds if the previous poll actually
+           happened. On the open edge it did not. So discard the backlog once,
+           here, and let the branch mean what it says from the next tick on.
+           A drain on EVERY tick would be wrong: it would eat the `& 1` edges
+           the drive-camera keys read while !g_consoleOpen. */
+        if (active && !wasActive) {
+            int vk;
+            for (vk = 0x08; vk <= 0xFE; ++vk) (void)GetAsyncKeyState(vk);
+            memset(down,    0, sizeof(down));
+            memset(downAt,  0, sizeof(downAt));
+            memset(lastRep, 0, sizeof(lastRep));
+        }
+        wasActive = active;
+
+        if (active) {
+            DWORD now = GetTickCount();
+            int vk;
+            for (vk = 0x08; vk <= 0xFE; ++vk) {
+                int isDown;
+                if (vk == VK_F5 || vk == VK_F6 || vk == VK_F7 || vk == VK_F8 ||
+                    vk == VK_F9 || vk == VK_F10 || vk == VK_F12 ||
+                    vk == VK_PAUSE || vk == VK_END ||
+                    vk == VK_SHIFT || vk == VK_CONTROL || vk == VK_MENU ||
+                    vk == VK_LSHIFT || vk == VK_RSHIFT || vk == VK_LCONTROL ||
+                    vk == VK_RCONTROL || vk == VK_LMENU || vk == VK_RMENU ||
+                    vk == VK_CAPITAL) continue;
+
+                /* Read ONCE and use both bits. The low bit is destructive - it
+                   is cleared by whoever reads it first - so calling
+                   GetAsyncKeyState twice for the same key here would throw the
+                   tap away and reintroduce the bug this branch exists to fix. */
+                int async  = GetAsyncKeyState(vk);
+                int tapped = (async & 0x0001) != 0;  /* pressed since last poll */
+                isDown     = (async & 0x8000) != 0;  /* physically down NOW      */
+
+                if (isDown && !down[vk]) {
+                    down[vk]    = 1;
+                    downAt[vk]  = now;
+                    lastRep[vk] = now;
+                } else if (!isDown && down[vk]) {
+                    down[vk] = 0;
+                    continue;                        /* release; press already sent */
+                } else if (isDown && down[vk]) {
+                    if (now - downAt[vk] < REPEAT_DELAY) continue;
+                    if (now - lastRep[vk] < REPEAT_RATE) continue;
+                    lastRep[vk] = now;
+                } else if (tapped) {
+                    /* DROPPED KEYSTROKES LIVE HERE. Up now, up at the previous
+                       poll, but the low bit says it went down in between: a whole
+                       press AND release fitted inside one 8ms window. Edge
+                       detection on the high bit alone cannot see that - both
+                       samples read "up" - so the character was silently lost.
+                       That is the intermittent "typing doesn't register".
+
+                       Emitting on the low bit ALONE was tried before and was
+                       wrong: the OS sets it again on auto-repeat, which produced
+                       a hundred copies of one character. It is only safe here,
+                       in the branch where the key is confirmed up and was not
+                       down last time, so a held key can never reach it. */
+                    down[vk] = 0;
+                } else {
+                    continue;
+                }
+                {
+                    RawKey rk;
+                    rk.vk    = (DWORD)vk;
+                    rk.scan  = MapVirtualKeyW((UINT)vk, MAPVK_VK_TO_VSC);
+                    rk.shift = (BYTE)(GetAsyncKeyState(VK_SHIFT)   < 0);
+                    rk.ctrl  = (BYTE)(GetAsyncKeyState(VK_CONTROL) < 0);
+                    rk.alt   = (BYTE)(GetAsyncKeyState(VK_MENU)    < 0);
+                    rk.caps  = (BYTE)(GetKeyState(VK_CAPITAL) & 1);
+                    InKey(&rk);
+                }
+            }
+        } else {
+            memset(down, 0, sizeof(down));   /* forget held keys when we lose focus */
+        }
+        }
+
+        /* Closing asks for the line to be cleared; InputThread performs it, so
+           InputThread stays the ONLY writer of g_in and the buffer can keep
+           going unlocked. Without this, each open/close cycle left its harvest
+           behind and the next one added to it - which is how a stray letter
+           grew into a full line of gibberish. */
+        if (InterlockedExchange(&g_wantClearIn, 0)) {
+            g_in[0] = 0; g_inLen = 0; g_inCol = 0;
+            g_histPos = -1;
+            g_tabLast[0] = 0; g_tabRun = 0;   /* end any Tab run with the line */
+        }
+
+        if (InterlockedExchange(&g_pendingSubmit, 0)) {
+            QueuePush(g_pendingCmd);
+            logf_("[in  ] submit: %s", g_pendingCmd);
+        }
+        /* 8ms, not 15. Halving the window halves the number of taps that have to
+           be recovered by the low-bit branch above, and the poll itself is ~240
+           GetAsyncKeyState calls - microseconds. The two changes are belt and
+           braces on purpose: the low bit is destructive and other code
+           (FlyKeys, DriveKeysToVel) reads WASD from the main thread, so it can
+           be consumed before we see it. A shorter window is what protects those
+           keys; the low bit protects everything else. */
+        /* ---- POLL-PERIOD WATCHDOG ------------------------------------------
+           Everything this thread guarantees - the 8ms key harvest, the panel's
+           mouse, and the foreground re-assert above - is only as prompt as this
+           loop is. When PickerRefill still ran inline here a category click
+           could stall it for tens of milliseconds, and nothing said so; the
+           symptom appeared three layers away as "the game keeps receiving my
+           mouse". If that ever comes back, this names it directly instead. */
+        if (g_pkTrace) {
+            DWORD nowT = GetTickCount();
+            if (lastTick && (DWORD)(nowT - lastTick) > 40)
+                logf_("[act ] input thread tick was %lums (budget 8ms) - "
+                      "the block and the key harvest were both late by that much",
+                      (unsigned long)(nowT - lastTick));
+            lastTick = nowT;
+        }
+        Sleep(8);
+    }
+    return 0;
+}
+
+static void OverlayPaint(void* console, void* pUI, int panelH)
+{
+    static wchar_t line[4096];
+    static wchar_t buf[1024];
+    HDC     sdc;
+    RECT    cr;
+    POINT   src, dst;
+    SIZE    sz;
+    BLENDFUNCTION bf;
+    int     w, h, y, i, count, head, capn, shown, lineH, pad;
+
+    if (!g_gameWnd || !IsWindow(g_gameWnd)) return;
+    if (!GetClientRect(g_gameWnd, &cr)) return;
+    w = cr.right - cr.left;
+
+    /* panelH is in the engine's virtual UI space (height 576); 300/576 = 52%,
+       which matches the fraction of screen the panel covers. Scale the PANEL but
+       not the font - scaling the font made the text enormous and fitted only a
+       dozen lines. */
+    {
+        int clientH = cr.bottom - cr.top;
+        double scale = (clientH > 0) ? (double)clientH / 576.0 : 1.0;
+        if (scale < 0.5) scale = 0.5;
+        if (scale > 6.0) scale = 6.0;
+        h = (int)(panelH * scale + 0.5);
+        if (h > clientH) h = clientH;
+        lineH = 15;
+        pad   = 8;
+    }
+    if (w < 64 || h < 32) return;
+    if (!OverlayEnsureGdi(w, h, lineH)) {
+        /* Was a PERMANENT switch-off after 20 failures, which is how a long
+           window drag could kill the overlay for the rest of the session with
+           no way back but F7. Transient failures during a move are expected;
+           back off and keep trying instead of giving up forever. */
+        if (++g_paintFails % 100 == 0)
+            logf_("[ovl] GDI setup still failing (%d) - will keep retrying",
+                  g_paintFails);
+        return;
+    }
+    if (g_paintFails) {
+        logf_("[ovl] GDI setup recovered after %d failure(s)", g_paintFails);
+        g_paintFails = 0;
+    }
+
+    dst.x = cr.left; dst.y = cr.top;
+    ClientToScreen(g_gameWnd, &dst);
+    src.x = 0; src.y = 0;
+
+    /* Our own translucent backdrop - we no longer open the engine's panel. */
+    {
+        unsigned char* px = (unsigned char*)g_bits;
+        int total = w * h, k;
+        for (k = 0; k < total; ++k) {
+            px[k*4+0] = 12; px[k*4+1] = 6; px[k*4+2] = 2; px[k*4+3] = 205;
+        }
+    }
+
+    /* ---- scrollback, drawn upward from just above the prompt ----
+       head is the OLDEST index, so the newest line is head+count-1. Using head-1
+       read an empty slot and looked like the scrollback erasing itself. */
+    capn  = *(int*)((char*)console + 0x10);
+    head  = *(int*)((char*)console + 0x14);
+    count = *(int*)((char*)console + 0x18);
+    if (count < 0) count = 0;
+    shown = (h - lineH - 8) / lineH;
+    if (shown < 1) shown = 1;
+
+    y = h - (2 * lineH) - 2;
+    {
+        void** arr   = (void**)(*(void**)((char*)console + 0x0C));
+        int    total = count;
+        int    skip  = (int)g_scroll;
+        int    n;
+        if (skip > count - 1) { skip = (count > 0) ? count - 1 : 0;
+                                InterlockedExchange(&g_scroll, skip); }
+        total -= skip;
+        n = (total > shown) ? shown : total;
+        if (capn > 0 && n > 0 && Readable(arr, (SIZE_T)capn * 4)) {
+            for (i = 0; i < n; ++i) {
+                int idx = ((head + total - 1 - i) % capn + capn) % capn;
+                if (ReadDuniaW(arr[idx], line, 4096) > 0)
+                    DrawMarkupLine(g_mdc, line, pad, y, w - pad, RGB(196, 236, 255));
+                y -= lineH;
+                if (y < 2) break;
+            }
+        }
+    }
+
+    /* ---- prompt, our edit line, blinking block cursor ---- */
+    {
+        RECT tr;
+        int  n, col;
+        if (g_ownInput) {
+            wcsncpy(buf, g_in, 1023); buf[1023] = 0;
+            n = g_inLen; col = g_inCol;
+        } else {
+            n   = ReadDuniaW((char*)pUI + 0x60, buf, 1024);
+            col = *(int*)((char*)pUI + 0x7C);
+        }
+        if (col < 0 || col > n) col = n;
+
+        _snwprintf(line, 4096, L"> %s", buf);
+        tr.left = pad; tr.top = h - lineH - 4; tr.right = w - pad; tr.bottom = h - 2;
+        SetTextColor(g_mdc, UC_RGB);       /* match the echoed command */
+        DrawTextW(g_mdc, line, -1, &tr, DT_LEFT | DT_SINGLELINE | DT_NOPREFIX);
+
+        _snwprintf(line, 4096, L"> %.*s", col, buf);
+        if (((GetTickCount() / 500) & 1) &&
+            GetTextExtentPoint32W(g_mdc, line, (int)wcslen(line), &sz)) {
+            RECT cur;
+            HBRUSH br;
+            cur.left = pad + sz.cx; cur.top = h - lineH - 4;
+            cur.right = cur.left + (lineH / 2); cur.bottom = h - 3;
+            br = CreateSolidBrush(UC_RGB);
+            FillRect(g_mdc, &cur, br);
+            DeleteObject(br);
+        }
+    }
+
+    /* GDI text leaves alpha at 0; make glyphs opaque without touching the
+       translucent backdrop. */
+    {
+        unsigned char* px = (unsigned char*)g_bits;
+        int r, c;
+        for (r = 0; r < h; ++r) {
+            unsigned char* row = px + (size_t)r * w * 4;
+            for (c = 0; c < w; ++c)
+                if (row[c*4+0] > 20 || row[c*4+1] > 20 || row[c*4+2] > 20)
+                    row[c*4+3] = 255;
+        }
+    }
+
+    /* THE LAGGING GHOST. When the in-game D3D path is on, the very same bitmap
+       is uploaded as a texture and drawn inside the game's own frame - so it
+       tracks the window perfectly, because it IS the window's contents. Putting
+       a second copy on screen in a separate layered window duplicates it, and
+       that copy can only be repositioned at our 15Hz paint rate. Drag the game
+       and the layered copy trails behind, catches up, and looks like it is
+       rescaling. Fill the bitmap either way; only PRESENT the window when the
+       D3D path is not doing it for us.
+
+       Skipped entirely while the window is being dragged: repositioning a
+       layered window every frame of a move is what made it flicker and, when
+       the calls started failing, vanish for good. */
+    SnapPublish(w, h);      /* hand the finished frame to the render thread */
+
+    if (!g_ingame && !g_gameMoving) {
+        sdc = GetDC(0);
+        if (sdc) {
+            sz.cx = w; sz.cy = h;
+            bf.BlendOp = AC_SRC_OVER; bf.BlendFlags = 0;
+            bf.SourceConstantAlpha = 255; bf.AlphaFormat = AC_SRC_ALPHA;
+            UpdateLayeredWindow(g_ovl, sdc, &dst, &sz, g_mdc, &src, 0, &bf, ULW_ALPHA);
+            ReleaseDC(0, sdc);
+        }
+    }
+}
+
+/* ==========================================================================
+ * SPAWN PICKER - a searchable list of everything spawnable on this map.
+ *
+ * Lives entirely on the OVERLAY THREAD and never calls the engine. It reads
+ * g_archNames, which the main thread fills in ArchSnapshot(), and it asks for
+ * a spawn by writing g_pendingSpawn and raising g_wantSpawn - which the main
+ * thread performs in PickerTick(). That split is not ceremony: the archetype
+ * name lookup and the spawn call are both engine calls, and doing either from
+ * this thread is the exact mistake that has deadlocked and crashed us before.
+ *
+ * THERE IS NO PICKER WINDOW ANY MORE. There used to be one - g_pickWnd, a
+ * WS_EX_TOPMOST popup with a real EDIT, a real LISTBOX and eleven owner-drawn
+ * BUTTONs - and by the end it was created, laid out, and then hidden by
+ * ShowWindow(SW_HIDE) at every one of the three places that could have shown it.
+ * Nothing ever showed it. Its window procedure implemented a WM_NCHITTEST ->
+ * HTCAPTION drag and a close-glyph hit test that no click could ever reach, its
+ * WM_PAINT drew a panel nobody could see, and its controls were kept as a
+ * "headless data model" that PickerRefill had already stopped using when it
+ * started filtering straight into the row cache.
+ *
+ * It is deleted rather than shown, and that is the deliberate choice the shape
+ * of this subsystem turned on. Showing it would have meant giving up the one
+ * property the in-frame panel exists for: being drawn into the game's own back
+ * buffer, so that OBS and Discord can see it. A separate HWND never touches that
+ * buffer. Showing it would also have put a SECOND copy of the panel on screen
+ * next to the one PkPaint draws, which is the bug the in-frame path replaced.
+ *
+ * So: one panel, drawn in-frame, hit-tested against its own layout constants,
+ * with its mouse and keyboard polled. Nothing below asks Windows about geometry,
+ * focus, or z-order, because there is no window left to ask about.
+ * ========================================================================== */
+#define PICK_NBTN   6
+
+#define PK_PAD     12
+#define PK_HEAD    34
+#define PK_BTNY    42
+#define PK_BTNH    26
+#define PK_EDY     78
+#define PK_EDH     26
+#define PK_LBY    116
+#define PK_ROWH    20
+#define PK_SBW      8    /* our own scrollbar - the stock one is Windows grey */
+#define PK_SPH     30    /* the button row along the bottom */
+
+/* Height available to the list, given the panel height. */
+#define PK_LBH(ch) ((ch) - PK_LBY - PK_PAD - PK_SPH - 8)
+
+static const char* const kCatNames[PICK_NBTN] = {
+    "All", "Creatures", "NPCs", "Vehicles", "Flora", "Weapons"
+};
+
+/* The two fonts the in-frame painter draws with. They are created in
+   PickerRegister and destroyed in the overlay thread's teardown. Everything else
+   that used to live here - five HWNDs, two arrays of HWNDs, two subclass
+   WNDPROCs, two brushes and a "placed over the game once" flag - belonged to the
+   window that no longer exists. */
+static HFONT   g_fontUI = 0, g_fontHd = 0;
+static int     g_pickCat = 0;
+static long    g_pickShown = 0, g_pickTotal = 0;
+
+/* Categories are a HEURISTIC ON THE NAME. The archetype carries no category we
+   can read, and the prefixes are not consistent - `Animals.`, `Avatar.` and
+   `vehicle.` all carry creatures - so this classifies by what the name
+   contains. It will misfile things, which is why "All" is the default and the
+   search box always searches everything. */
+static int CategoryOf(const char* n)
+{
+    /* WEAPONS FIRST, and the order is the whole point. The spawn list is full of
+       weapons, projectiles and mounted racks - they were the bulk of what showed
+       under "All" - so they get their own category (5).
+
+       It has to be tested BEFORE vehicles because several weapon names contain a
+       vehicle token and would otherwise be filed as vehicles:
+         weapons.Avatar_Guns.AmpSuit_Gun          -> matches "ampsuit"
+         weapons.Avatar_MountedWeapons.ScorpionGunRack -> matches "scorpion"
+         weapons.Avatar_Projectiles.SamsonMissile      -> matches nothing else
+       The `weapons.` / `WeaponProperties.` prefix is decisive, so it wins.
+
+       Still a name heuristic, as the note above says - the archetype carries no
+       category we can read. "All" remains the default and search covers
+       everything regardless of category. */
+    if (Stristr(n, "weapon")   || Stristr(n, "projectile") || Stristr(n, "ammo") ||
+        Stristr(n, "missile")  || Stristr(n, "rocket")     || Stristr(n, "grenade") ||
+        Stristr(n, "_gun")     || Stristr(n, ".gun")       || Stristr(n, "gunrack") ||
+        Stristr(n, "rifle")    || Stristr(n, "pistol")     || Stristr(n, "shotgun") ||
+        Stristr(n, "melee")    || Stristr(n, "machetee")   || Stristr(n, "axe")   ||
+        Stristr(n, "club")     || Stristr(n, "bow")        || Stristr(n, "dart")  ||
+        Stristr(n, "bola")     || Stristr(n, "m60")        || Stristr(n, "m30")   ||
+        Stristr(n, "wasp")     || Stristr(n, "launcher")   || Stristr(n, "turret"))
+        return 5;
+    if (Stristr(n, "vehicle")  || Stristr(n, "aircraft") || Stristr(n, "buggy")  ||
+        Stristr(n, "tank")     || Stristr(n, "heli")     || Stristr(n, "boat")   ||
+        Stristr(n, "banshee")  || Stristr(n, "dragon")   || Stristr(n, "ampsuit")||
+        Stristr(n, "amp_suit") || Stristr(n, "scorpion")) return 3;
+    if (Stristr(n, "npc")      || Stristr(n, "navi")     || Stristr(n, "rda")    ||
+        Stristr(n, "enemy")    || Stristr(n, "soldier")  || Stristr(n, "human")  ||
+        Stristr(n, "character")|| Stristr(n, "trooper")) return 2;
+    if (Stristr(n, "animal")   || Stristr(n, "creature") || Stristr(n, "beast")  ||
+        Stristr(n, "wolf")     || Stristr(n, "thanator") || Stristr(n, "hybrid") ||
+        Stristr(n, "hexapede") || Stristr(n, "viper")    || Stristr(n, "titano") ||
+        Stristr(n, "sturm")    || Stristr(n, "stingbat")) return 1;
+    if (Stristr(n, "plant")    || Stristr(n, "flora")    || Stristr(n, "tree")   ||
+        Stristr(n, "veg")      || Stristr(n, "bush")     || Stristr(n, "grass")  ||
+        Stristr(n, "fern")     || Stristr(n, "fungus")   || Stristr(n, "phant")) return 4;
+    return 0;
+}
+
+/* Every token must appear SOMEWHERE in the name, in any order. Typing
+   "avatar banshee" has to find "vehicle.Avatar.Banshee", and typing "ban"
+   has to find it too - a plain prefix match (which is what a stock listbox
+   does with its own incremental search) finds neither. */
+static int NameMatches(const char* nm, const char* q)
+{
+    char tok[64];
+    const char* p = q;
+    int i;
+    if (!q || !*q) return 1;
+    while (*p) {
+        while (*p == ' ' || *p == '\t') ++p;
+        if (!*p) break;
+        i = 0;
+        while (*p && *p != ' ' && *p != '\t' && i < (int)sizeof(tok) - 1) tok[i++] = *p++;
+        tok[i] = 0;
+        if (i && !Stristr(nm, tok)) return 0;
+    }
+    return 1;
+}
+
+/* REMOVED with the picker window: g_barDrag, PickerBarRect(), PickerScrollBy()
+   and FillRound().
+
+   PickerBarRect computed the scrollbar's geometry from GetClientRect on the
+   picker HWND and from LB_GETCOUNT/LB_GETTOPINDEX on the listbox - a window with
+   no on-screen rect and a control with no rows in it. PickerScrollBy drove that
+   same listbox and then invalidated a window nobody could see. FillRound was the
+   rounded-rectangle helper for the window's WM_PAINT and its owner-drawn
+   buttons. g_barDrag was that window's "the thumb has the mouse" flag.
+
+   The live equivalents all exist and are the ones that were actually running:
+   PkBarRect (one source of truth for drawing AND hit-testing the bar), PkWheel /
+   PkKey for scrolling, PkFillRect / PkButton for painting, and g_pkBarDrag for
+   the thumb. Nothing was reimplemented to delete these; they were the second,
+   dead copy. */
+
+static void PickerRefill(void)
+{
+    /* FILTERS STRAIGHT INTO THE CACHE. No listbox, no window messages.
+       Measured before this change, on the same 777-archetype library:
+
+           refill  19.04ms  rows=352   (All)
+           refill 327.00ms  rows=9     (Creatures)
+           refill 998.11ms  rows=34    (NPCs)
+           refill 763.37ms  rows=23    (Vehicles)
+
+       A full second to produce thirty-four rows, and the cost went UP as the
+       result got smaller - so it was never the filtering. It was per-message
+       overhead: this runs on the overlay thread (and now, for a click, on the
+       input thread), while the listbox belonged to the main thread. Every
+       LB_ADDSTRING and every LB_GETTEXT in the snapshot was therefore a blocking
+       cross-thread SendMessage.
+
+       Keeping the listbox as a "headless model" was my decision and it was the
+       wrong one: it bought reuse of the filter logic and paid for it with a
+       message round-trip per row per refill. The filter logic is twenty lines,
+       so it is reproduced here directly and the control is out of the path
+       entirely. Selection is preserved the same way it always was - by the
+       source index, not the row number. */
+    long i, n, shown = 0, total = 0;
+    long keepData = (g_pkcSel >= 0 && g_pkcSel < g_pkcN) ? g_pkcData[g_pkcSel] : -1;
+    long keepTop  = g_pkcTop;
+    const char* needle = g_pkcQuery;
+
+    shown = 0;
+    if (g_pickMode == PK_MODE_ENTS) {
+        /* The rows may currently be the editor's position-only pull, with every
+           name blank - see g_entMetaValid. Rebuilding from those would empty the
+           list. Keep what is on screen; the overlay loop has already asked for a
+           snapshot with names and will call us again when it arrives. */
+        if (!g_entMetaValid) return;
+        n = g_entCount;
+        for (i = 0; i < n && i < ENT_MAX && shown < PKC_MAX; ++i) {
+            const char* nm = g_entRows[i].name;
+            if (!nm[0]) continue;
+            ++total;
+            if (!NameMatches(nm, needle)) continue;
+            if (g_pickCat > 0 && CategoryOf(nm) != g_pickCat) continue;
+            _snprintf(g_pkcRow[shown], PKC_TEXT - 1, "%-44s  %5.0f %5.0f %5.0f",
+                      nm, g_entRows[i].pos[0], g_entRows[i].pos[1],
+                      g_entRows[i].pos[2]);
+            g_pkcRow[shown][PKC_TEXT - 1] = 0;
+            g_pkcData[shown] = i;
+            ++shown;
+        }
+    } else {
+        n = g_archCount;
+        for (i = 0; i < n && i < ARCH_MAX && shown < PKC_MAX; ++i) {
+            const char* nm = g_archNames[i];
+            if (!nm[0]) continue;
+            if (!ArchIsEntity(i)) continue;      /* never offer data archetypes */
+            ++total;
+            if (!NameMatches(nm, needle)) continue;
+            if (g_pickCat > 0 && CategoryOf(nm) != g_pickCat) continue;
+            strncpy(g_pkcRow[shown], nm, PKC_TEXT - 1);
+            g_pkcRow[shown][PKC_TEXT - 1] = 0;
+            g_pkcData[shown] = i;
+            ++shown;
+        }
+    }
+    g_pkcN = shown;
+    InterlockedExchange(&g_pkcDirty, 1);
+
+    /* Put the selection back on the SAME item if it survived the filter, and the
+       scroll where it was; otherwise fall back to the top. */
+    {
+        long put = -1, k;
+        if (keepData >= 0)
+            for (k = 0; k < g_pkcN; ++k)
+                if (g_pkcData[k] == keepData) { put = k; break; }
+        if (put >= 0) { g_pkcSel = put;  g_pkcTop = keepTop; }
+        else          { g_pkcSel = 0;    g_pkcTop = 0; }
+        if (g_pkcTop > g_pkcN - 1) g_pkcTop = g_pkcN ? g_pkcN - 1 : 0;
+        if (g_pkcTop < 0) g_pkcTop = 0;
+    }
+
+    g_pickShown = shown;
+    g_pickTotal = total;          /* spawnable, NOT the raw table size */
+}
+
+/* Hand the selected name to the main thread. The window stays open on purpose -
+   spawning one of something is rarely what you want. */
+/* Ask the main thread to act on the highlighted row. `act` is an index into
+   kActNames in entity mode; in spawn mode it is ignored and we spawn. */
+/* REMOVED: PkCacheSync(). The pre-rewrite listbox snapshotter - 22 lines of
+   cross-thread SendMessage, the exact storm the row cache above was built to
+   end. PickerRefill now filters straight into the cache and nothing has called
+   this since; it had two occurrences in the file, its forward declaration and
+   its definition. */
+
+static void PickerAct(int act)
+{
+    long sel = g_pkcSel, idx;
+    if (sel < 0 || sel >= g_pkcN) return;
+    idx = g_pkcData[sel];
+
+    if (g_pickMode == PK_MODE_ENTS) {
+        if (idx < 0 || idx >= g_entCount) return;
+        g_entActEnt = g_entRows[idx].ent;
+        g_entActRef = g_entRows[idx].ref;
+        g_entActLo  = g_entRows[idx].lo;
+        g_entActHi  = g_entRows[idx].hi;
+        strncpy(g_entActName, g_entRows[idx].name, sizeof(g_entActName) - 1);
+        g_entActName[sizeof(g_entActName) - 1] = 0;
+        InterlockedExchange(&g_entAction, act);
+        return;
+    }
+    if (idx < 0 || idx >= g_archCount) return;
+    strncpy(g_pendingSpawn, g_archNames[idx], ARCH_NLEN - 1);
+    g_pendingSpawn[ARCH_NLEN - 1] = 0;
+    InterlockedExchange(&g_wantSpawn, 1);
+}
+
+static void PickerCommit(void)
+{
+    /* Enter / double-click: spawn in spawn mode, plain SELECT in entity mode -
+       the safe default, never one of the destructive actions. */
+    PickerAct(0);
+}
+
+/* "The user wants this window", as distinct from "it is on screen right now".
+   Closing the console hides it but leaves this set, so reopening the console
+   brings it back exactly as it was - same search text, same category, same
+   selection. Only Esc, the X, or a fresh `spawn` clear or re-arm it. */
+static volatile long g_pickerSticky = 0;
+
+/* Called from the close box, from Esc, and from PickerEditProc's ancestors that
+   no longer exist. Runs on the INPUT thread (via PkClick / PkKey), which is not
+   the thread that owns g_focusWnd - but SetForegroundWindow is legal from any
+   thread in the foreground process, and SetFocus is a no-op from the wrong one,
+   which is why the foreground call is the load-bearing half. */
+static void PickerHide(void)
+{
+    InterlockedExchange(&g_pickerSticky, 0);      /* deliberate close */
+    InterlockedExchange(&g_pickerOpen, 0);
+    /* Put the foreground back on the invisible focus window rather than leaving
+       it wherever the close click landed, so the console keeps the keyboard and
+       DirectInput stays unacquired.
+
+       ONLY IF IT IS NOT ALREADY THERE. It usually is - the console is open, so
+       SetGameInput(0) has already parked it - and calling SetForegroundWindow
+       on the window that already holds the foreground still generates an
+       activation round trip. Every one of those costs a frame refresh and an
+       audio duck on this engine (measured: the game re-primes audio on any
+       activation change), so the cheapest one to remove is the one that was
+       never needed. */
+    if (g_focusWnd && IsWindow(g_focusWnd) &&
+        GetForegroundWindow() != g_focusWnd) {
+        SetForegroundWindow(g_focusWnd);
+        SetFocus(g_focusWnd);
+    }
+}
+
+/* REMOVED with the picker window: PickerFocusEdit() and WM_PICK_REFOCUS.
+
+   Their whole job was a Win32 focus problem that no longer exists. SetFocus is
+   thread-local - it can only focus a window attached to the CALLING thread's
+   queue - and PickerSetCat had two callers on two different threads, so the
+   overlay thread's call was a silent no-op and typing died after the first
+   category click. PickerFocusEdit worked around that by POSTing a private
+   message to the thread that owned the EDIT control.
+
+   There is no EDIT control now and no focus to move: the search string lives in
+   g_pkcQuery and is fed by PkChar from the input thread's poll, which does not
+   care what has focus. Typing survives a category click because nothing about a
+   category click can take anything away from it. */
+
+static void PickerSetCat(int c)
+{
+    if (c < 0 || c >= PICK_NBTN) return;
+    g_pickCat = c;
+    /* Requested, not performed - this runs on the INPUT thread, which must not
+       stall. See g_pkWantRefill. */
+    InterlockedExchange(&g_pkWantRefill, 1);
+    InterlockedExchange(&g_pkcDirty, 1);   /* the active-button highlight moved */
+}
+
+/* ---- REMOVED: the picker window's three window procedures -------------------
+   PickerEditProc, PickerListProc and PickerProc - about 350 lines - together
+   with g_pickWndFwd(). Every one of them was unreachable.
+
+   PickerEditProc subclassed the EDIT control to give it Return, Escape and the
+   arrow keys, and painted a "type to search" hint over it. PickerListProc
+   subclassed the LISTBOX to stop its prefix-only incremental search stealing
+   keystrokes, to erase its background, and to drive the wheel. PickerProc was
+   the frame: WM_PAINT drew the header, the search-field frame, the close glyph
+   and the scrollbar; WM_DRAWITEM drew every button and every row; WM_NCHITTEST
+   returned HTCAPTION over the header so the window could be dragged and
+   HTBOTTOMRIGHT in the corner so it could be resized; WM_LBUTTONDOWN hit-tested
+   the close glyph and the scrollbar thumb; WM_SIZE laid the controls out;
+   WM_ACTIVATE juggled the z-order with the game window.
+
+   All of it operated on a window that PickerShow created and then immediately
+   hid, and that nothing anywhere ever showed. Not one of those messages could
+   be delivered. The drag and the close box that users report as broken were
+   implemented HERE, in code that could never run, while the panel they were
+   actually clicking on was the in-frame one - which had a close box and a drag
+   of its own, in PkClick and PkDrag, reached only through a mouse path that
+   turned out to be dead for a different reason. Two implementations of the same
+   two features, neither of them connected to the mouse. That is the mess this
+   pass exists to end.
+
+   Everything worth keeping already had a live counterpart in the in-frame
+   painter: PkPaint for the frame, PkButton for the buttons, PkBarRect/PkBarSeek
+   for the scrollbar, PkClick for the close box and the drag handle, PkKey and
+   PkChar for the keyboard. Nothing here was ported; it was duplicated. */
+
+/* The name is historic: this used to register the picker's WINDOW CLASS as well
+   as create its GDI objects. There is no class and no window any more, so all
+   that is left is the two fonts the in-frame painter selects into its DIB - and
+   they still have to be made on a thread that outlives every paint, which is the
+   overlay thread, which is the one caller. The brushes went with the window:
+   g_brField answered WM_CTLCOLOREDIT for the EDIT control and g_brList answered
+   WM_CTLCOLORLISTBOX and the listbox's WM_ERASEBKGND. PkPaint fills its own
+   background with PkFillRect and never used either. */
+static void PickerRegister(void)
+{
+    g_fontUI  = CreateFontA(-12, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET,
+                            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                            CLEARTYPE_QUALITY, DEFAULT_PITCH, "Segoe UI");
+    g_fontHd  = CreateFontA(-15, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET,
+                            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                            CLEARTYPE_QUALITY, DEFAULT_PITCH, "Segoe UI");
+    if (!g_fontUI) g_fontUI = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+    if (!g_fontHd) g_fontHd = g_fontUI;
+}
+
+/* ==================== the picker, drawn INTO THE GAME FRAME ==================
+   The picker used to be a real top-level window. That is why OBS and Discord
+   could see the console but not it: the console is composited into the game's
+   own back buffer by the Present hook, and a separate HWND never touches that
+   buffer. Everything below draws the picker into a second overlay surface which
+   the same hook uploads and blits, so it is part of the rendered frame.
+
+   THE WIN32 CONTROLS ARE GONE. They were kept for a while as a "headless data
+   model" - the listbox held the filtered rows, the per-row source index and the
+   selection - and that was a reasonable call at the time. It stopped being true
+   when PickerRefill was rewritten to filter straight into the row cache
+   (g_pkcRow / g_pkcData / g_pkcSel / g_pkcTop) because cross-thread SendMessage
+   was costing a second per category switch. From that point the controls held
+   nothing anybody read, and they stayed only because deleting them was work.
+
+   So: the row cache IS the model, this file's own layout constants ARE the
+   geometry, and nothing here asks Windows anything. There is no HWND to hit-test
+   against, no LB_ITEMFROMPOINT, no caret. The panel's position lives in
+   g_pkX/g_pkY in BACKBUFFER pixels; incoming mouse positions are converted into
+   that space once, by PkClientToBB, before any of the rects below are consulted. */
+#define PKV_BG      RGB(0x0E, 0x1A, 0x26)
+#define PKV_EDGE    RGB(0x2C, 0x4A, 0x66)
+#define PKV_FIELD   RGB(0x14, 0x24, 0x33)
+#define PKV_TEXT    RGB(0xB8, 0xC8, 0xD8)
+#define PKV_GOLD    RGB(0xFF, 0xC8, 0x64)
+#define PKV_ORCHID  RGB(0xC0, 0x8C, 0xD8)
+#define PKV_SLATE   RGB(0x7A, 0x88, 0x99)
+#define PKV_SEL     RGB(0x1E, 0x3A, 0x52)
+#define PKV_DANGER  RGB(0xE2, 0x4B, 0x4A)
+
+static HDC     g_pkDc   = 0;
+static HBITMAP g_pkDib  = 0, g_pkOldB = 0;
+static void*   g_pkBits = 0;
+/* g_pkSnap / g_pkSnapDirty / g_pkSnapReady / g_pkX / g_pkY / g_pkPlaced /
+   g_pkBBW / g_pkBBH are declared up with DrawOverlayD3D, which writes or reads
+   them from the RENDER thread; the rest of the picker lives down here.
+   g_pkDragging and g_pkBarDrag are declared up there too - they used to be read
+   by OverlayWndProc, which is gone; they are now written and read only by
+   PkClick/PkDrag, both of which run on the input thread. */
+
+static int PkEnsureGdi(void)
+{
+    BITMAPINFO bi;
+    HDC sdc;
+    if (g_pkDc) return 1;
+    sdc = GetDC(0);
+    if (!sdc) return 0;
+    g_pkDc = CreateCompatibleDC(sdc);
+    if (!g_pkDc) { ReleaseDC(0, sdc); return 0; }
+    memset(&bi, 0, sizeof(bi));
+    bi.bmiHeader.biSize        = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth       = PK_W;
+    bi.bmiHeader.biHeight      = -PK_H;          /* top-down */
+    bi.bmiHeader.biPlanes      = 1;
+    bi.bmiHeader.biBitCount    = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    g_pkDib = CreateDIBSection(sdc, &bi, DIB_RGB_COLORS, &g_pkBits, 0, 0);
+    ReleaseDC(0, sdc);
+    if (!g_pkDib) { DeleteDC(g_pkDc); g_pkDc = 0; return 0; }
+    g_pkOldB = (HBITMAP)SelectObject(g_pkDc, g_pkDib);
+    SetBkMode(g_pkDc, TRANSPARENT);
+    if (!g_pkSnap) g_pkSnap = (unsigned char*)malloc((size_t)PK_W * PK_H * 4);
+    logf_("[pkv ] in-frame picker surface %dx%d", PK_W, PK_H);
+    return g_pkSnap != 0;
+}
+
+/* The counterpart PkEnsureGdi never had. Everything it creates - a DC, a 540x580
+   32-bit DIB section and a 1.25 MB heap buffer - survived FreeLibrary, once per
+   injection, because nothing anywhere deleted or freed any of it and g_pkOldB
+   was saved by SelectObject and then never used to put the DC back. The console
+   surface has had OverlayFreeGdi doing exactly this all along; the picker
+   surface was simply never given one. Shaped after it, including reselecting the
+   original bitmap BEFORE deleting ours - a DIB that is still selected into a DC
+   is not deleted, it is merely marked, and the memory stays. */
+static void PkFreeGdi(void)
+{
+    if (g_pkDc) {
+        if (g_pkOldB) { SelectObject(g_pkDc, g_pkOldB); g_pkOldB = 0; }
+        if (g_pkDib)  { DeleteObject(g_pkDib); g_pkDib = 0; }
+        DeleteDC(g_pkDc); g_pkDc = 0;
+    }
+    g_pkBits = 0;
+    /* g_pkSnap is read by the RENDER thread in DrawOverlayD3D. The caller frees
+       it only after the Present hook is off - see the OverlayThread teardown. */
+}
+
+/* --- layout, in panel-local coordinates. One source of truth for both the
+       painter and the hit test, so they cannot drift apart. --- */
+static void PkCatRect(int i, RECT* r)
+{
+    int bw = (PK_W - 2 * PK_PAD - (PICK_NBTN - 1) * 6) / PICK_NBTN;
+    r->left = PK_PAD + i * (bw + 6); r->top = PK_BTNY;
+    r->right = r->left + bw;         r->bottom = PK_BTNY + PK_BTNH;
+}
+/* The close box, top-right of the header. Its rect lives here beside the other
+   layout helpers so the painter and the hit test cannot disagree about where it
+   is - the same reason every other region has one. */
+#define PK_XBTN 22
+static void PkCloseRect(RECT* r)
+{
+    r->right  = PK_W - PK_PAD;
+    r->left   = r->right - PK_XBTN;
+    r->top    = 7;
+    r->bottom = r->top + PK_XBTN;
+}
+
+static void PkEdRect(RECT* r)
+{
+    r->left = PK_PAD; r->top = PK_EDY;
+    r->right = PK_W - PK_PAD; r->bottom = PK_EDY + PK_EDH;
+}
+static int PkListH(void) { return PK_LBH(PK_H); }
+static int PkVisRows(void) { int v = PkListH() / PK_ROWH; return v < 1 ? 1 : v; }
+static void PkListRect(RECT* r)
+{
+    r->left = PK_PAD; r->top = PK_LBY;
+    r->right = PK_W - PK_PAD - PK_SBW - 2; r->bottom = PK_LBY + PkListH();
+}
+
+/* ---- the scrollbar, in ONE place --------------------------------------------
+   This used to be computed twice: once in PkPaint to draw it, and once in the
+   old PickerProc window message handler to hit-test it. When the listbox came
+   out of the path (it cost ~1s per category switch in cross-thread SendMessage)
+   the window-proc copy was left behind driving a headless listbox, so the bar
+   was still DRAWN from the row cache but nothing hit-tested it - clicking the
+   thumb fell through PkClick's final "swallow it" return and did nothing.
+
+   Geometry that is drawn and geometry that is clicked must come from the same
+   function, or they drift the moment one of them is edited. Returns 0 when
+   there is nothing to scroll, in which case neither rect is written. */
+static int PkBarRect(RECT* track, RECT* thumb, int* pMaxTop)
+{
+    int count = (int)g_pkcN;
+    int vis   = PkVisRows();
+    int trackH, thumbH, maxTop, top, off;
+
+    if (count <= vis) return 0;
+
+    trackH = PkListH();
+    thumbH = trackH * vis / count;  if (thumbH < 16) thumbH = 16;
+    if (thumbH > trackH) thumbH = trackH;
+    maxTop = count - vis;
+    top    = (int)g_pkcTop;
+    if (top < 0) top = 0;
+    if (top > maxTop) top = maxTop;
+    off = (maxTop > 0 && trackH > thumbH)
+          ? (trackH - thumbH) * top / maxTop : 0;
+
+    track->left  = PK_W - PK_PAD - PK_SBW;  track->right  = PK_W - PK_PAD;
+    track->top   = PK_LBY;                  track->bottom = PK_LBY + trackH;
+    thumb->left  = track->left;             thumb->right  = track->right;
+    thumb->top   = PK_LBY + off;            thumb->bottom = thumb->top + thumbH;
+    if (pMaxTop) *pMaxTop = maxTop;
+    return 1;
+}
+
+/* Put the thumb's CENTRE at local y. Shared by the initial click and the drag,
+   so grabbing the thumb never makes it jump. */
+static void PkBarSeek(int y)
+{
+    RECT track, thumb;
+    int  maxTop = 0, trackH, thumbH, span, want;
+
+    if (!PkBarRect(&track, &thumb, &maxTop)) return;
+    trackH = track.bottom - track.top;
+    thumbH = thumb.bottom - thumb.top;
+    span   = trackH - thumbH;
+    if (span <= 0) return;
+
+    want = (y - track.top - thumbH / 2) * maxTop / span;
+    if (want < 0) want = 0;
+    if (want > maxTop) want = maxTop;
+    g_pkcTop = want;
+    InterlockedExchange(&g_pkcDirty, 1);
+}
+static void PkBotRect(int i, int n, RECT* r)
+{
+    int roww = PK_W - 2 * PK_PAD;
+    int bw   = (roww - (n - 1) * 6) / n;
+    r->left = PK_PAD + i * (bw + 6); r->top = PK_H - PK_PAD - PK_SPH;
+    r->right = r->left + bw;         r->bottom = r->top + PK_SPH;
+}
+
+static void PkFillRect(const RECT* r, COLORREF c)
+{
+    HBRUSH b = CreateSolidBrush(c);
+    if (b) { FillRect(g_pkDc, (RECT*)r, b); DeleteObject(b); }
+}
+
+static void PkButton(const RECT* r, const char* text, int active, COLORREF fg)
+{
+    RECT t = *r;
+    PkFillRect(r, active ? PKV_SEL : PKV_FIELD);
+    {   /* a one-pixel edge, brighter when active */
+        HBRUSH e = CreateSolidBrush(active ? fg : PKV_EDGE);
+        if (e) { FrameRect(g_pkDc, &t, e); DeleteObject(e); }
+    }
+    SetTextColor(g_pkDc, active ? fg : PKV_TEXT);
+    SelectObject(g_pkDc, g_fontUI ? g_fontUI : GetStockObject(DEFAULT_GUI_FONT));
+    DrawTextA(g_pkDc, text, -1, &t, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+}
+
+/* Paint the whole panel. Called from the overlay thread, like the console. */
+static void PkPaint(void)
+{
+    {   /* nothing moved and the caret has not flipped: keep the last frame */
+        static int lastPhase = -1;
+        int phase = (int)((GetTickCount() / 500) & 1);
+        if (!InterlockedExchange(&g_pkcDirty, 0) && phase == lastPhase) return;
+        lastPhase = phase;
+    }
+    RECT r, full;
+    char buf[256];
+    int  i, vis, top, sel, count;
+
+    if (!PkEnsureGdi()) return;
+
+    full.left = 0; full.top = 0; full.right = PK_W; full.bottom = PK_H;
+    PkFillRect(&full, PKV_BG);
+    {   HBRUSH e = CreateSolidBrush(PKV_EDGE);
+        if (e) { FrameRect(g_pkDc, &full, e); DeleteObject(e); } }
+
+    /* header */
+    SelectObject(g_pkDc, g_fontHd ? g_fontHd : GetStockObject(DEFAULT_GUI_FONT));
+    SetTextColor(g_pkDc, PKV_GOLD);
+    r.left = PK_PAD; r.top = 8; r.right = PK_W - PK_PAD; r.bottom = PK_HEAD;
+    DrawTextA(g_pkDc, (g_pickMode == PK_MODE_ENTS) ? "ENTITIES" : "SPAWN", -1, &r,
+              DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(g_pkDc, g_fontUI ? g_fontUI : GetStockObject(DEFAULT_GUI_FONT));
+    SetTextColor(g_pkDc, PKV_SLATE);
+    _snprintf(buf, sizeof(buf) - 1, "%ld of %ld %s", g_pickShown, g_pickTotal,
+              (g_pickMode == PK_MODE_ENTS) ? "in the world" : "spawnable");
+    buf[sizeof(buf) - 1] = 0;
+    r.right -= PK_XBTN + 8;              /* leave room for the close box */
+    DrawTextA(g_pkDc, buf, -1, &r, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+    {   /* the X itself: two strokes, so it needs no font or glyph */
+        RECT xb;
+        HPEN pen, old2;
+        PkCloseRect(&xb);
+        PkFillRect(&xb, PKV_FIELD);
+        pen = CreatePen(PS_SOLID, 2, PKV_DANGER);
+        if (pen) {
+            old2 = (HPEN)SelectObject(g_pkDc, pen);
+            MoveToEx(g_pkDc, xb.left + 6, xb.top + 6, 0);
+            LineTo  (g_pkDc, xb.right - 6, xb.bottom - 6);
+            MoveToEx(g_pkDc, xb.right - 6, xb.top + 6, 0);
+            LineTo  (g_pkDc, xb.left + 6, xb.bottom - 6);
+            SelectObject(g_pkDc, old2);
+            DeleteObject(pen);
+        }
+    }
+
+    for (i = 0; i < PICK_NBTN; ++i) {
+        PkCatRect(i, &r);
+        PkButton(&r, kCatNames[i], i == g_pickCat, PKV_GOLD);
+    }
+
+    /* search field */
+    PkEdRect(&r);
+    PkFillRect(&r, PKV_FIELD);
+    {   HBRUSH e = CreateSolidBrush(PKV_EDGE);
+        if (e) { FrameRect(g_pkDc, &r, e); DeleteObject(e); } }
+    strncpy(buf, g_pkcQuery, sizeof(buf) - 2);
+    buf[sizeof(buf) - 2] = 0;
+    {
+        RECT t = r; t.left += 6;
+        SetTextColor(g_pkDc, buf[0] ? PKV_ORCHID : PKV_SLATE);
+        if (!buf[0]) strcpy(buf, "type to search");
+        else if ((GetTickCount() / 500) & 1) strcat(buf, "_");
+        DrawTextA(g_pkDc, buf, -1, &t, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    /* rows, straight out of the headless listbox */
+    PkListRect(&r);
+    PkFillRect(&r, PKV_FIELD);
+    vis   = PkVisRows();
+    count = (int)g_pkcN;              /* the published snapshot - no window messages */
+    sel   = (int)g_pkcSel;
+    top   = (int)g_pkcTop;
+    if (top < 0) top = 0;
+    for (i = 0; i < vis && top + i < count; ++i) {
+        RECT rw;
+        char row[256];
+        int  idx = top + i;
+        rw.left = r.left; rw.right = r.right;
+        rw.top  = r.top + i * PK_ROWH; rw.bottom = rw.top + PK_ROWH;
+        if (idx == sel) PkFillRect(&rw, PKV_SEL);
+        strncpy(row, g_pkcRow[idx], sizeof(row) - 1);
+        row[sizeof(row) - 1] = 0;
+        rw.left += 6;
+        SetTextColor(g_pkDc, idx == sel ? PKV_GOLD : PKV_TEXT);
+        DrawTextA(g_pkDc, row, -1, &rw, DT_LEFT | DT_VCENTER | DT_SINGLELINE |
+                                        DT_NOPREFIX | DT_END_ELLIPSIS);
+    }
+    /* scrollbar - same geometry the click path uses, by construction */
+    {
+        RECT track, thumb;
+        if (PkBarRect(&track, &thumb, 0)) {
+            PkFillRect(&track, PKV_BG);
+            PkFillRect(&thumb, g_pkBarDrag ? PKV_GOLD : PKV_SLATE);
+        }
+    }
+
+    /* bottom row */
+    if (g_pickMode == PK_MODE_ENTS) {
+        for (i = 0; i < PK_NACT; ++i) {
+            PkBotRect(i, PK_NACT, &r);
+            PkButton(&r, kActNames[i], 0, (i == 5) ? PKV_DANGER : PKV_GOLD);
+        }
+    } else {
+        PkBotRect(0, 2, &r); r.right = PK_PAD + (PK_W - 2 * PK_PAD) * 62 / 100;
+        PkButton(&r, "SPAWN", 1, PKV_GOLD);
+        r.left = r.right + 6; PkBotRect(1, 2, &full); r.right = PK_W - PK_PAD;
+        r.top = PK_H - PK_PAD - PK_SPH; r.bottom = r.top + PK_SPH;
+        PkButton(&r, g_spawnGround ? "ON THE FLOOR" : "AT THE CAMERA",
+                 g_spawnGround, PKV_ORCHID);
+    }
+
+    /* GDI leaves alpha at 0; force the panel opaque so the blit shows it. */
+    {
+        unsigned char* px = (unsigned char*)g_pkBits;
+        int n = PK_W * PK_H, k;
+        for (k = 0; k < n; ++k) px[k * 4 + 3] = 240;
+    }
+    if (g_pkSnap) {
+        memcpy(g_pkSnap, g_pkBits, (size_t)PK_W * PK_H * 4);
+        g_pkSnapReady = 1;
+        InterlockedExchange(&g_pkSnapDirty, 1);
+    }
+}
+
+/* --- input ------------------------------------------------------------------
+   EVERYTHING BELOW THIS LINE WORKS IN BACKBUFFER PIXELS, because that is the
+   space the panel is drawn in (RHW=1 transformed vertices at g_pkX,g_pkY). The
+   conversion from the game window's client pixels happens once, at the boundary,
+   in PkClientToBB - not scattered through the hit tests, which is how the two
+   spaces were allowed to drift apart in the first place. */
+
+/* The window the backbuffer is actually presented into. Normally the game
+   window; g_pkDevWnd is the swap chain's own answer and wins if it differs.
+   MEASURED on this engine: they are the same window and the client rect is
+   1920x1080 against a 1920x1080 render target, so every conversion below is
+   currently the identity. The machinery stays because it is what proves that. */
+static HWND PkCursorWnd(void)
+{
+    if (g_pkDevWnd && IsWindow(g_pkDevWnd)) return g_pkDevWnd;
+    return g_gameWnd;
+}
+
+/* CLIENT pixels of the presenting window -> BACKBUFFER pixels. Identity in the
+   common case where the game renders at its window size; a straight ratio
+   otherwise. Falls back to identity - not to zero - if we have not seen a frame
+   yet or the window is gone, because being wrong by a scale factor is
+   recoverable and collapsing every coordinate to the origin is not. */
+static void PkClientToBB(int cx, int cy, int* bx, int* by)
+{
+    RECT cr;
+    HWND w  = PkCursorWnd();
+    long bw = g_pkBBW, bh = g_pkBBH;
+    *bx = cx; *by = cy;
+    if (bw <= 0 || bh <= 0) return;
+    if (!w || !IsWindow(w)) return;
+    if (!GetClientRect(w, &cr)) return;
+    if (cr.right <= 0 || cr.bottom <= 0) return;
+    if (cr.right == bw && cr.bottom == bh) return;   /* the measured case */
+    *bx = (int)(((__int64)cx * bw) / cr.right);
+    *by = (int)(((__int64)cy * bh) / cr.bottom);
+}
+
+/* Backbuffer point -> panel-local. */
+static int PkHitLocal(int bx, int by, int* lx, int* ly)
+{
+    *lx = bx - g_pkX; *ly = by - g_pkY;
+    return (*lx >= 0 && *lx < PK_W && *ly >= 0 && *ly < PK_H);
+}
+
+/* REMOVED: PkOverPanel(). Its one caller was the escape hatch inside
+   GameWndProc's WM_MOUSEACTIVATE handler - "if the pointer is over the in-frame
+   panel, return MA_NOACTIVATE instead of eating the click" - which was reasoning
+   about a message that never arrived, in order to dodge an ...ANDEAT that is now
+   gone entirely. Nothing else asks "is the cursor over the panel" as a question
+   separate from "what did it hit": PkClick answers both at once and returns
+   whether the click belonged to the panel. */
+
+/* Which region of the panel a panel-local point lands in, as text. Purely for
+   picktrace: the log used to print a local position and leave the reader to do
+   the layout arithmetic in their head, which is how a phantom click at
+   panel-local (26,192) went several rounds before anyone noticed it was always
+   selecting the same row. Now the log says which row. */
+static const char* PkRegionAt(int x, int y, char* buf, int cap)
+{
+    RECT r, track, thumb;
+    int  i;
+    if (x < 0 || x >= PK_W || y < 0 || y >= PK_H)
+        { _snprintf(buf, cap - 1, "OUTSIDE"); buf[cap-1]=0; return buf; }
+    PkCloseRect(&r);
+    if (x >= r.left && x < r.right && y >= r.top && y < r.bottom)
+        { _snprintf(buf, cap - 1, "CLOSE"); buf[cap-1]=0; return buf; }
+    if (y < PK_BTNY) { _snprintf(buf, cap - 1, "HEADER/drag"); buf[cap-1]=0; return buf; }
+    for (i = 0; i < PICK_NBTN; ++i) {
+        PkCatRect(i, &r);
+        if (x >= r.left && x < r.right && y >= r.top && y < r.bottom)
+            { _snprintf(buf, cap-1, "CATEGORY %d (%s)", i, kCatNames[i]);
+              buf[cap-1]=0; return buf; }
+    }
+    if (PkBarRect(&track, &thumb, 0) &&
+        x >= track.left && x < track.right && y >= track.top && y < track.bottom)
+        { _snprintf(buf, cap-1, "SCROLLBAR %s",
+                    (y >= thumb.top && y < thumb.bottom) ? "thumb" : "track");
+          buf[cap-1]=0; return buf; }
+    PkListRect(&r);
+    if (x >= r.left && x < r.right && y >= r.top && y < r.bottom) {
+        long idx = g_pkcTop + (y - r.top) / PK_ROWH;
+        _snprintf(buf, cap-1, "ROW %ld of %ld \"%s\"", idx, g_pkcN,
+                  (idx >= 0 && idx < g_pkcN) ? g_pkcRow[idx] : "<none>");
+        buf[cap-1]=0; return buf;
+    }
+    if (y >= PK_H - PK_PAD - PK_SPH)
+        { _snprintf(buf, cap-1, "BOTTOM ROW"); buf[cap-1]=0; return buf; }
+    _snprintf(buf, cap-1, "dead space"); buf[cap-1]=0; return buf;
+}
+
+/* `bx,by` are BACKBUFFER pixels - PkClientToBB has already run. Returns 1 if the
+   click belongs to the panel (and must not also be treated as a click into the
+   world), 0 if it landed outside it. */
+static int PkClick(int bx, int by)
+{
+    RECT r;
+    int  x, y, i;
+    /* MOUSE DIAGNOSTIC, kept. It now reports both spaces, because the two
+       failure modes it separates are still the two that matter: a click that
+       never arrives logs nothing at all, and a click that arrives in the wrong
+       space logs a panel position that does not match where the user clicked.
+       The backbuffer size is printed too - if it disagrees with the client size
+       the scaling is live and worth reading carefully. */
+    if (g_pkTrace) {
+        char what[192];
+        int  lx = bx - g_pkX, ly = by - g_pkY;
+        logf_("[pick] click screen=(%ld,%ld)%s bb=(%d,%d) panel=(%d,%d) "
+              "origin=(%d,%d) bbsize=%ldx%ld -> %s",
+              g_pkTraceScreen.x, g_pkTraceScreen.y,
+              g_pkTraceFrozen ? " FROZEN(game had fg)" : "",
+              bx, by, lx, ly, g_pkX, g_pkY, g_pkBBW, g_pkBBH,
+              PkRegionAt(lx, ly, what, sizeof(what)));
+    }
+    if (!g_pickerOpen || !PkHitLocal(bx, by, &x, &y)) return 0;
+
+    {   /* the close box first - it sits inside the header band, so testing the
+           drag handle first would swallow it and start a drag instead. */
+        RECT xb;
+        PkCloseRect(&xb);
+        if (x >= xb.left && x < xb.right && y >= xb.top && y < xb.bottom) {
+            PickerHide();
+            return 1;
+        }
+    }
+    if (y < PK_BTNY) {                       /* the rest of the header drags */
+        g_pkDragging = 1; g_pkDragDX = x; g_pkDragDY = y;
+        return 1;
+    }
+    for (i = 0; i < PICK_NBTN; ++i) {
+        PkCatRect(i, &r);
+        if (x >= r.left && x < r.right && y >= r.top && y < r.bottom) {
+            PickerSetCat(i);
+            return 1;
+        }
+    }
+    {   /* the scrollbar, BEFORE the list - it sits outside PkListRect (which
+           stops short of PK_SBW), so without this the click reached neither the
+           rows nor the bar and was silently swallowed. That was the bug.
+
+           THE HIT ZONE IS WIDER THAN THE DRAWN BAR, deliberately. PK_SBW is 8
+           pixels, and a picktrace session caught a user aiming for it twice and
+           landing on a list row at panel x=517 - three pixels short of the
+           track, which starts at 520. Eight pixels is a poor target. Reaching
+           six pixels to the LEFT turns it into a fourteen-pixel one and costs
+           the rows four pixels off a 494-pixel width at the far right edge,
+           where their text has long since been ellipsised. The BAR is not
+           widened - only what counts as aiming at it. */
+        RECT track, thumb;
+        int  grab;
+        if (PkBarRect(&track, &thumb, 0) &&
+            (grab = track.left - 6, x >= grab) && x < track.right &&
+            y >= track.top  && y < track.bottom) {
+            if (y >= thumb.top && y < thumb.bottom) {
+                g_pkBarDrag = 1;          /* grabbed the thumb - no jump */
+            } else {
+                PkBarSeek(y);             /* clicked the track - jump there */
+                g_pkBarDrag = 1;          /* and keep tracking the mouse */
+            }
+            InterlockedExchange(&g_pkcDirty, 1);
+            return 1;
+        }
+    }
+    PkListRect(&r);
+    if (x >= r.left && x < r.right && y >= r.top && y < r.bottom) {
+        /* PkListRect's height is not a whole number of rows - 414px over a 20px
+           row leaves 14px at the bottom of the track that is INSIDE the list
+           rect but below the last row PkPaint drew. Clicking there used to
+           resolve to top+PkVisRows(), one past the last visible row, and select
+           something that was not on screen. Bound it by what was actually
+           painted, which is the same `vis` the painter loops over. */
+        int  row = (y - r.top) / PK_ROWH;
+        long idx;
+        if (row >= PkVisRows()) row = PkVisRows() - 1;
+        idx = g_pkcTop + row;
+        if (idx >= 0 && idx < g_pkcN) g_pkcSel = idx;
+        InterlockedExchange(&g_pkcDirty, 1);
+        return 1;
+    }
+    /* Bounded at BOTH ends. The lower bound was the panel edge, so the 12px of
+       padding beneath the buttons - drawn as background - acted as whichever
+       button was above it. */
+    if (y >= PK_H - PK_PAD - PK_SPH && y < PK_H - PK_PAD) {
+        if (g_pickMode == PK_MODE_ENTS) {
+            for (i = 0; i < PK_NACT; ++i) {
+                PkBotRect(i, PK_NACT, &r);
+                if (x >= r.left && x < r.right) { PickerAct(i); return 1; }
+            }
+        } else {
+            int split = PK_PAD + (PK_W - 2 * PK_PAD) * 62 / 100;
+            if (x < split) PickerAct(0);                    /* SPAWN */
+            else InterlockedExchange(&g_spawnGround, !g_spawnGround);
+            return 1;
+        }
+    }
+    return 1;         /* inside the panel: swallow it either way */
+}
+
+/* Dragging the panel by its header, and dragging the scrollbar thumb. `bx,by`
+   are BACKBUFFER pixels; `down` is 0 for a move, -1 for button-up.
+   Clamped so it can never be dragged fully off the visible frame - there is no
+   real window and so no title bar left to grab it back by. The clamp is against
+   the BACKBUFFER extent, not the client rect: g_pkX lives in backbuffer pixels,
+   so clamping it against client pixels would have let the panel walk off the
+   right-hand side of the frame on any upscaled setup. */
+static int PkDrag(int bx, int by, int down)
+{
+    if (down < 0) { g_pkDragging = 0; g_pkBarDrag = 0; return 0; }
+    if (!g_pickerOpen) return 0;
+    if (g_pkBarDrag) {                 /* scrollbar thumb has the mouse */
+        int x, y;
+        PkHitLocal(bx, by, &x, &y);    /* deliberately unchecked: dragging past
+                                          the panel edge must keep scrolling
+                                          rather than stop dead at the border */
+        PkBarSeek(y);
+        return 1;
+    }
+    if (!g_pkDragging) return 0;
+    g_pkX = bx - g_pkDragDX;
+    InterlockedExchange(&g_pkcDirty, 1);
+    g_pkY = by - g_pkDragDY;
+    {
+        long bw = g_pkBBW, bh = g_pkBBH;
+        if (bw > 0 && bh > 0) {
+            int maxX = (int)bw - 80, maxY = (int)bh - 40;
+            if (g_pkX > maxX) g_pkX = maxX;
+            if (g_pkY > maxY) g_pkY = maxY;
+        }
+    }
+    if (g_pkX < -(PK_W - 80)) g_pkX = -(PK_W - 80);
+    if (g_pkY < 0) g_pkY = 0;
+    return 1;
+}
+
+/* `bx,by` are BACKBUFFER pixels. */
+static int PkWheel(int bx, int by, int delta)
+{
+    int x, y, top, cnt, vis;
+    /* Nothing here consults a Win32 control. Everything reads the row cache,
+       which is the truth. */
+    if (!g_pickerOpen || !PkHitLocal(bx, by, &x, &y)) return 0;
+    top = (int)g_pkcTop;
+    cnt = (int)g_pkcN;
+    vis = PkVisRows();
+    top -= (delta / WHEEL_DELTA) * 3;
+    if (top > cnt - vis) top = cnt - vis;
+    if (top < 0) top = 0;
+    g_pkcTop = top;
+    InterlockedExchange(&g_pkcDirty, 1);
+    return 1;
+}
+
+/* Keys arrive from the console's own input path while the picker is up. */
+static int PkKey(int vk)
+{
+    int sel, cnt, vis, top;
+    /* No `&& g_pickLb`. That listbox is gone, and requiring it here made every
+       arrow key, Enter and Escape dead whenever it was absent - the same trap
+       PkWheel had and had already been freed from. Everything below reads the
+       row cache, which is the only model there is. */
+    if (!g_pickerOpen) return 0;
+    sel = (int)g_pkcSel;
+    cnt = (int)g_pkcN;
+    vis = PkVisRows();
+    switch (vk) {
+    case VK_UP:     if (sel > 0) --sel; break;
+    case VK_DOWN:   if (sel + 1 < cnt) ++sel; break;
+    case VK_PRIOR:  sel -= vis; if (sel < 0) sel = 0; break;
+    case VK_NEXT:   sel += vis; if (sel >= cnt) sel = cnt - 1; break;
+    case VK_RETURN: PickerCommit(); return 1;
+    case VK_ESCAPE: PickerHide();   return 1;
+    default: return 0;
+    }
+    if (sel >= 0) {
+        g_pkcSel = sel;
+        top = (int)g_pkcTop;
+        if (sel < top)             g_pkcTop = sel;
+        else if (sel >= top + vis) g_pkcTop = sel - vis + 1;
+    }
+    return 1;
+}
+
+static int PkChar(int ch)
+{
+    char q[128];
+    int  n;
+    if (!g_pickerOpen) return 0;
+    strncpy(q, g_pkcQuery, sizeof(q) - 1);
+    q[sizeof(q) - 1] = 0;
+    n = (int)strlen(q);
+    if (ch == '\b') { if (n) q[n - 1] = 0; else return 1; }
+    else if (ch >= 32 && ch < 127 && n < (int)sizeof(q) - 1) {
+        q[n] = (char)ch; q[n + 1] = 0;
+    } else return 0;
+    strncpy(g_pkcQuery, q, sizeof(g_pkcQuery) - 1);
+    g_pkcQuery[sizeof(g_pkcQuery) - 1] = 0;
+    /* Requested, not performed - one refill per keystroke on the input thread
+       is what made the block fall behind. See g_pkWantRefill. */
+    InterlockedExchange(&g_pkWantRefill, 1);
+    InterlockedExchange(&g_pkcDirty, 1);
+    return 1;
+}
+
+/* ==== THE PANEL'S MOUSE, POLLED ==============================================
+ * WHY THIS IS NOT DONE WITH WINDOW MESSAGES, which is what it used to be.
+ *
+ * MEASURED: with `picktrace` armed for 74 seconds, the panel open and being
+ * clicked, ZERO mouse messages of any kind were logged - not at GameWndProc on
+ * the game's own window, not at the overlay window, not at the focus window. Not
+ * a WM_LBUTTONDOWN, not a WM_MOUSEMOVE, not even a WM_MOUSEACTIVATE. Three
+ * separate window procedures, one of them unconditional and ahead of every gate,
+ * and none of them saw a single mouse message.
+ *
+ * That rules out every explanation that lives inside a window procedure. It is
+ * not the WM_MOUSEACTIVATE gate returning the wrong thing, it is not the hit
+ * test, it is not the z-order: the messages do not exist. The most likely
+ * mechanism is that something in the process has registered the mouse for raw
+ * input with RIDEV_NOLEGACY, which suppresses legacy mouse messages
+ * process-wide - that is a HYPOTHESIS, not a measurement, and I could not
+ * confirm it: dunia.dll's import table (ENGINE_MAP/IAT.tsv) contains no raw
+ * input entry points at all, so if it happens it happens in the executable or
+ * another module, and I had no dump of those to check. It does not matter which
+ * mechanism it is. What matters is the shape of the evidence, and the shape is
+ * "no mouse messages ever, at any of our windows".
+ *
+ * What DOES work in this process, measured, is polling. Click-to-pick reads
+ * GetAsyncKeyState(VK_LBUTTON) on the frame detour and has always worked.
+ * Typing into the panel works because InputThread polls the keyboard. Both are
+ * blind to focus, to activation, to the message queue - which is precisely the
+ * property needed here.
+ *
+ * So the panel's mouse is polled from the same 8ms loop that polls its keyboard.
+ * 125 Hz is more than a drag needs, the cost is two Win32 calls per tick, and
+ * there is now ONE producer of button events instead of three window procedures
+ * that disagreed about coordinate space and about who had the right to eat a
+ * click.
+ *
+ * The one thing polling cannot see is the wheel - there is no GetAsyncKeyState
+ * for it. That is handled where it has to be, as a message, and documented as
+ * best-effort at the WM_MOUSEWHEEL case in GameWndProc. PgUp/PgDn scroll the
+ * list from the keyboard and always work.
+ */
+static void PkPollMouse(void)
+{
+    static int   wasDown  = 0;
+    static int   wasOpen  = 0;
+    static POINT good     = { 0, 0 };   /* last cursor position we believe */
+    static int   haveGood = 0;
+    POINT pt, use;
+    int   bx, by, isDown;
+
+    /* Panel gone, or the user is in another application: end any drag in
+       progress and read nothing. Dropping the drag matters - without it,
+       alt-tabbing out mid-drag leaves g_pkDragging set, and the panel then
+       teleports to wherever the cursor happens to be on the next click.
+       Gating on AppHasFocus is also half of "the user must be able to click
+       another application": nothing we do here can act on a click that was
+       aimed somewhere else. */
+    if (!g_pickerOpen || !AppHasFocus()) {
+        if (wasDown) { PkDrag(0, 0, -1); wasDown = 0; }
+        if (!g_pickerOpen) wasOpen = 0;   /* arm the open-edge rule below */
+        return;
+    }
+
+    /* HIGH bit only. The low bit of GetAsyncKeyState is "pressed since the last
+       read" and is consumed by whoever reads it first - the click-to-pick poll
+       on the main thread reads VK_LBUTTON too. Edge-detecting the high bit
+       against our own `wasDown` is the only form that two independent readers
+       can both use without stealing from each other. */
+    isDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+
+    /* ADOPT THE BUTTON STATE ON THE OPEN EDGE, do not act on it. Exactly the
+       same discipline the key harvest applies when the panel opens: a button
+       that was already held when the panel appeared under the cursor must not
+       read as a fresh press on it. Without this, opening the panel with the
+       button down fires a click at whatever the panel happens to have placed
+       beneath the pointer. */
+    if (!wasOpen) {
+        wasOpen  = 1;
+        wasDown  = isDown;
+        haveGood = 0;      /* and do not carry a cursor across a close/open */
+        return;
+    }
+
+    /* ---- THE CURSOR THE GAME KEEPS TAKING BACK ----------------------------
+       MEASURED, from a picktrace session: seven of nineteen clicks logged the
+       identical position bb=(960,528) - the exact horizontal centre of a
+       1920-wide frame - interleaved with a perfectly clean sweep of real
+       positions along the category row. That value is the game's mouselook
+       re-centring the physical cursor, and GetCursorPos was sampling it after
+       the warp instead of where the user was pointing. Every one of those seven
+       resolved to panel-local (26,192), which is list row top+3: it is exactly
+       the reported "it selects something else instead of what I clicked".
+
+       The warp only happens while the GAME holds the foreground, because that
+       is the only time its mouselook is running. The same log shows why that
+       happens at all: every click is followed within 0-32ms by "game input
+       blocked", i.e. the game takes the foreground on a click and our re-assert
+       takes it back. So the two reported bugs are one mechanism.
+
+       The rule below is therefore: a cursor sample is TRUSTED only while the
+       game does not hold the foreground. While it does, we keep using the last
+       trusted position rather than the warped one. Freezing is the honest
+       answer, not a compromise - while the game is driving the pointer, the
+       user's intended position is genuinely unknowable, and the last position
+       from before it took over is the best estimate available. It is certainly
+       better than the centre of the screen, which is guaranteed wrong.
+
+       This does NOT depend on knowing where the game warps to. Learning the
+       warp point was the alternative and it needs calibration, a history buffer
+       and a tolerance; this needs one comparison and no state that can go
+       stale. If phantom clicks survive it, the raw screen position is now in
+       the trace and will say so directly. */
+    if (!GetCursorPos(&pt)) return;
+    {
+        HWND cw = PkCursorWnd();
+        int  gameHasFg = (GetForegroundWindow() == g_gameWnd);
+
+        if (!gameHasFg || !haveGood) { good = pt; haveGood = 1; }
+        g_pkTraceFrozen = (gameHasFg && (good.x != pt.x || good.y != pt.y));
+        g_pkTraceScreen = good;
+
+        use = good;
+        if (!cw || !IsWindow(cw)) return;
+        if (!ScreenToClient(cw, &use)) return;
+        PkClientToBB(use.x, use.y, &bx, &by);
+    }
+
+    if (isDown && !wasDown)      PkClick(bx, by);
+    else if (!isDown && wasDown) PkDrag(bx, by, -1);
+    else if (isDown)             PkDrag(bx, by, 0);
+    wasDown = isDown;
+}
+
+static void PickerShow(void)
+{
+    /* PLACE IT ONCE, then never again - re-placing it on every open would undo
+       the fact that you dragged it somewhere you wanted it. In BACKBUFFER
+       pixels, because that is the space the panel is drawn and hit-tested in.
+       Deliberately not centred: the console occupies the top of the frame.
+
+       This used to be a SetWindowPos against the game's window rect, which had
+       to be done once too, for the same reason - but through a HWND that was
+       never visible, so all it moved was a rectangle nobody drew. */
+    if (!g_pkPlaced) {
+        long bw = g_pkBBW, bh = g_pkBBH;
+        g_pkX = 48;
+        g_pkY = 90;
+        if (bw > 0 && bh > 0) {
+            /* Nudge it back on screen if the frame is small enough that the
+               default corner would hang the panel off the bottom or right. */
+            if (g_pkX + PK_W > (int)bw) g_pkX = (int)bw - PK_W - 16;
+            if (g_pkY + PK_H > (int)bh) g_pkY = (int)bh - PK_H - 16;
+            if (g_pkX < 0) g_pkX = 0;
+            if (g_pkY < 0) g_pkY = 0;
+            g_pkPlaced = 1;      /* only latch once we have a real frame size */
+        }
+        logf_("[pick] panel placed at (%d,%d) in a %ldx%ld frame",
+              g_pkX, g_pkY, g_pkBBW, g_pkBBH);
+    }
+
+    /* REMOVED here: the window and control creation (a WS_EX_TOPMOST popup, an
+       EDIT, a LISTBOX, eleven owner-drawn BUTTONs and two subclasses), the
+       "re-run the layout on every show" WM_SIZE resend that swapped the bottom
+       button row between spawn and entity mode, the EM_SETSEL, and the
+       ShowWindow(SW_HIDE) that made all of it moot. The bottom row is now chosen
+       by PkPaint from g_pickMode on every frame, which is why the mode bug that
+       WM_SIZE resend existed to fix cannot recur: there is no per-window state
+       left to be born wrong. */
+
+    /* Search text, category and selection are deliberately NOT reset - reopening
+       should land you back where you left off, not at the top of a blank list. */
+    PickerRefill();
+    InterlockedExchange(&g_pkcDirty, 1);
+    InterlockedExchange(&g_pickerOpen, 1);
+    InterlockedExchange(&g_pickerSticky, 1);
+}
+
+
+/* ==========================================================================
+ * DRIVING CONTROLS PANEL
+ *
+ * Drawn into the SAME bitmap the console overlay uses, which is also what the
+ * D3D hook uploads - so it appears inside the game's own frame, and a screen
+ * capture sees it. Bottom-right, and deliberately NOT interactive: while you
+ * are driving, the mouse is aiming the camera, so there is no cursor to click
+ * a button with. F6 hides and restores it.
+ * ========================================================================== */
+#define HUD_W    390
+#define HUD_LINE  15
+#define HUD_PAD   10
+
+/* Panel background, as BGRA in the DIB. */
+#define HUD_B 32
+#define HUD_G 19
+#define HUD_R 10
+
+static int DriveHudLines(char out[][96], int max)
+{
+    int n = 0, i;
+    const char* leaf;
+
+    if (max < 6) return 0;
+
+    leaf = g_lastSpawnName[0] ? strrchr(g_lastSpawnName, '.') : 0;
+    leaf = leaf ? leaf + 1 : (g_lastSpawnName[0] ? g_lastSpawnName : "creature");
+
+    _snprintf(out[n++], 95, "DRIVING   %s", leaf);
+    _snprintf(out[n++], 95, "W A S D   steer      mouse   look");
+    _snprintf(out[n++], 95, "E / Q     up / down  (flyers)");
+    _snprintf(out[n++], 95, "Shift     sprint     Ctrl    slow   (%.1f / %.1f)",
+              g_driveSpeed, g_driveMax);
+    _snprintf(out[n++], 95, "LMB       %s",
+              g_driveSignal[0] ? g_driveSignal : "attack - no signal known");
+    _snprintf(out[n++], 95, "= / -     camera distance %.1f", g_driveCamD);
+    _snprintf(out[n++], 95, "[  /  ]   camera height   %.1f", g_driveCamH);
+
+    for (i = 0; i < DRIVE_SLOTS && n < max - 2; ++i) {
+        int idx = g_drivePage * DRIVE_SLOTS + i;
+        if (idx >= g_driveSigN || !g_driveSig[idx][0]) continue;
+        if (g_driveAct[idx] == DRIVE_ACT_COMBAT)
+            _snprintf(out[n++], 95, "%d         combat: %s", i + 1,
+                      g_driveCalm ? "OFF (it leaves you alone)" : "ON");
+        else if (idx == g_driveLoop)
+            _snprintf(out[n++], 95, "%d       * %s  (press again to stop)",
+                      i + 1, g_driveSig[idx]);
+        else
+            _snprintf(out[n++], 95, "%d         %s", i + 1, g_driveSig[idx]);
+    }
+    if (n < max - 1 && DrivePages() > 1)
+        _snprintf(out[n++], 95, "0         page %d of %d",
+                  g_drivePage + 1, DrivePages());
+    if (n < max)
+        _snprintf(out[n++], 95, "F6 hide    End stop driving");
+    for (i = 0; i < n; ++i) out[i][95] = 0;
+    return n;
+}
+
+static void OverlayPaintDrive(void)
+{
+    RECT  cr;
+    POINT dst, src;
+    SIZE  sz;
+    BLENDFUNCTION bf;
+    char  lines[24][96];
+    int   nl, w = HUD_W, h, i, total;
+    HDC   sdc;
+    unsigned char* px;
+
+    if (!g_gameWnd || !IsWindow(g_gameWnd)) return;
+    if (!GetClientRect(g_gameWnd, &cr)) return;
+
+    nl = DriveHudLines(lines, 24);
+    if (nl <= 0) return;
+    h = HUD_PAD * 2 + nl * HUD_LINE;
+    if (cr.right < w + 40 || cr.bottom < h + 40) return;
+    if (!OverlayEnsureGdi(w, h, HUD_LINE)) return;
+
+    px    = (unsigned char*)g_bits;
+    total = w * h;
+    for (i = 0; i < total; ++i) {
+        px[i*4+0] = HUD_B; px[i*4+1] = HUD_G; px[i*4+2] = HUD_R; px[i*4+3] = 214;
+    }
+
+    SetBkMode(g_mdc, TRANSPARENT);
+    for (i = 0; i < nl; ++i) {
+        SetTextColor(g_mdc, (i == 0) ? RGB(96, 206, 238) : RGB(198, 222, 238));
+        TextOutA(g_mdc, HUD_PAD, HUD_PAD + i * HUD_LINE,
+                 lines[i], (int)strlen(lines[i]));
+    }
+
+    /* Text is drawn with no alpha, so lift every pixel that is no longer the
+       panel colour to fully opaque - otherwise the glyphs come out washed. */
+    for (i = 0; i < total; ++i) {
+        unsigned char* p = px + i * 4;
+        if (p[0] != HUD_B || p[1] != HUD_G || p[2] != HUD_R) p[3] = 255;
+    }
+
+    g_ovlOffX = cr.right  - w - 18;
+    g_ovlOffY = cr.bottom - h - 18;
+    dst.x = g_ovlOffX; dst.y = g_ovlOffY;
+    ClientToScreen(g_gameWnd, &dst);
+    src.x = 0; src.y = 0;
+    sz.cx = w; sz.cy = h;
+    bf.BlendOp = AC_SRC_OVER; bf.BlendFlags = 0;
+    bf.SourceConstantAlpha = 255; bf.AlphaFormat = AC_SRC_ALPHA;
+
+    SnapPublish(w, h);
+
+    /* Same rule as the console panel: the D3D path draws this bitmap inside the
+       game's frame, so a second layered copy is a lagging duplicate. */
+    if (!g_ingame && !g_gameMoving) {
+        sdc = GetDC(0);
+        if (sdc) {
+            UpdateLayeredWindow(g_ovl, sdc, &dst, &sz, g_mdc, &src, 0, &bf, ULW_ALPHA);
+            ReleaseDC(0, sdc);
+        }
+    }
+}
+
+/* ---- REMOVED: OverlayWndProc ------------------------------------------------
+   The overlay class's window procedure, which existed only to route mouse
+   messages for the in-frame panel, and which is deleted for three independent
+   reasons - any one of which is sufficient.
+
+   1. IT NEVER RECEIVED ANY. Measured, with `picktrace` armed for 74 seconds and
+      the panel being clicked: not one mouse message arrived at either window of
+      this class. See PkPollMouse for what that evidence means and what replaced
+      it.
+   2. ONE OF ITS TWO WINDOWS CANNOT RECEIVE THEM BY CONSTRUCTION. g_ovl is
+      WS_EX_TRANSPARENT, which means it is not hit-tested at all - clicks pass
+      straight through it. That is correct and deliberate for an overlay, and it
+      makes the routing code on it dead on arrival.
+   3. ITS PREMISE WAS FALSE. The comment that justified it said the mouse
+      messages arrive here because "g_focusWnd is deliberately stretched over the
+      game's client area". It never was. It is created 1x1 and the only
+      SetWindowPos anywhere near it passes SWP_NOMOVE | SWP_NOSIZE. A 1x1 window
+      at the origin swallows nothing. That sentence cost two debugging sessions.
+
+   It also called SetCapture on a button-down and released it on button-up, which
+   is a genuine hazard for "the user must be able to click another application":
+   a capture that is taken and, for any reason, not released routes every
+   subsequent mouse message in the desktop to the capturing window. With the
+   panel's mouse polled there is no capture to leak.
+
+   The class now uses DefWindowProcW, which is what it used before the routing
+   was added and what it needs again. */
+
+static DWORD WINAPI OverlayThread(LPVOID unused)
+{
+    WNDCLASSEXW wc;
+    MSG msg;
+    (void)unused;
+
+    memset(&wc, 0, sizeof(wc));
+    wc.cbSize        = sizeof(wc);
+    wc.lpfnWndProc   = DefWindowProcW;   /* see the note where OverlayWndProc was */
+    wc.hInstance     = (HINSTANCE)g_self;
+    /* THE SPINNING CURSOR, half of it. With hCursor left NULL the class never
+       answers WM_SETCURSOR, so the cursor keeps whatever shape it had when it
+       entered our window - including the "application starting" spinner. Say
+       arrow explicitly. */
+    wc.hCursor       = LoadCursorW(0, (LPCWSTR)IDC_ARROW);
+    wc.lpszClassName = OVL_CLASS;
+    RegisterClassExW(&wc);
+
+    /* No WS_EX_TOPMOST: the window is OWNED by the game window instead (set once
+       g_gameWnd is known). An owned window always sits above its owner and never
+       above other applications, which is exactly what we want and what the
+       topmost/z-order juggling failed to achieve. */
+    g_ovl = CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT |
+                            WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+                            OVL_CLASS, L"", WS_POPUP, 0, 0, 16, 16,
+                            0, 0, (HINSTANCE)g_self, 0);
+    if (!g_ovl) { logf_("[ovl] CreateWindowEx failed %lu", GetLastError()); return 0; }
+    logf_("[ovl] overlay window %p created", (void*)g_ovl);
+
+    /* Must exist before the first paint publishes, and before the render thread
+       can read a snapshot. Both check g_snapReady. */
+    InitializeCriticalSection(&g_snapCs);
+    InterlockedExchange(&g_snapReady, 1);
+
+    PickerRegister();
+
+    /* THE FOCUS WINDOW. It has exactly one job: be somewhere for the foreground
+       to sit that is not the game window, so the game's foreground-cooperative
+       DirectInput devices unacquire and stop delivering the keys we are typing
+       into the console. That is the whole mechanism, and it is the one that was
+       measured to work - EnableWindow does not, because DirectInput ignores the
+       disabled state.
+
+       Deliberately NOT WS_EX_NOACTIVATE: a window that cannot be activated
+       cannot hold the foreground, which is the job.
+
+       WS_EX_LAYERED at alpha 1/255 so it is invisible. It is 1x1 at the origin
+       and STAYS 1x1 - this is the point where the file used to claim that
+       "SetGameInput grows it over the game's client area to swallow clicks",
+       which was never true in any version of this code: it is created 1x1 and
+       the only SetWindowPos it ever receives passes SWP_NOMOVE | SWP_NOSIZE.
+       Two debugging sessions were spent reasoning from that sentence.
+
+       WS_EX_TRANSPARENT is NEW and is the one behavioural change here. The old
+       reasoning for leaving it off was the stretched-cover story above, which
+       was fiction; what the flag actually buys is that this window - one pixel,
+       invisible, permanently in the top-left corner - can no longer eat a click
+       aimed at whatever is genuinely underneath it. It does not affect
+       activation or focus, only hit-testing. */
+    g_focusWnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_LAYERED |
+                                 WS_EX_TRANSPARENT,
+                                 OVL_CLASS, L"", WS_POPUP,
+                                 0, 0, 1, 1, 0, 0, (HINSTANCE)g_self, 0);
+    if (g_focusWnd) SetLayeredWindowAttributes(g_focusWnd, 0, 1, LWA_ALPHA);
+    logf_("[ovl] focus window %p created (1x1, invisible, click-through)",
+          (void*)g_focusWnd);
+
+
+
+
+    for (;;) {
+        if (g_shutdown) goto done;
+        while (PeekMessageW(&msg, 0, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) goto done;
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        /* Only once the main thread has actually taken the snapshot - opening
+           an empty list would look like "nothing is spawnable here". */
+        if (g_wantPicker && g_archReady) {
+            InterlockedExchange(&g_wantPicker, 0);
+            PickerShow();
+        }
+        /* THE ENTITY BROWSER AND `poslist` SHARE g_entRows. See g_entMetaValid.
+           If the last writer was the editor's position-only pull, every name is
+           empty and PickerRefill would render an empty list - so ask the main
+           thread for a snapshot WITH names and refill when it lands, instead of
+           showing the user "there is nothing in this world". */
+        if (g_pickerOpen && g_pickMode == PK_MODE_ENTS &&
+            !g_entMetaValid && !g_wantEntSnap && !g_entRefillWait) {
+            InterlockedExchange(&g_entRefillWait, 1);
+            InterlockedExchange(&g_archReady, 0);
+            InterlockedExchange(&g_wantEntSnap, 1);
+        }
+        if (g_entRefillWait && g_archReady && g_entMetaValid) {
+            InterlockedExchange(&g_entRefillWait, 0);
+            PickerRefill();
+        }
+        /* Refills asked for by the input thread - a category click or a
+           keystroke in the search box. Done HERE so that thread never stalls
+           behind a hundred thousand substring searches; see g_pkWantRefill. */
+        if (InterlockedExchange(&g_pkWantRefill, 0)) PickerRefill();
+        /* Close the console (or press End) and the picker goes with it. Hidden
+           WITHOUT grabbing the foreground - the input thread is about to hand it
+           back to the game, and two claims on it is a fight we would lose.
+           g_pickerSticky is left alone, so reopening the console brings it back. */
+        if (g_pickerOpen && !g_ourPanel) {
+            InterlockedExchange(&g_pickerOpen, 0);
+        }
+        /* ...and bring it back when the console returns, in the state it had. */
+        if (g_pickerSticky && !g_pickerOpen && g_ourPanel && !g_wantPicker) {
+            InterlockedExchange(&g_archReady, 0);
+            InterlockedExchange(&g_wantArchSnap, 1);   /* the level may have changed */
+            InterlockedExchange(&g_wantPicker, 1);
+        }
+        if (!g_gameWnd || !IsWindow(g_gameWnd)) {
+            HWND prev = g_gameWnd;
+            g_gameWnd = 0;
+            EnumWindows(FindGameWnd, (LPARAM)&g_gameWnd);
+            if (g_gameWnd && g_gameWnd != prev) {
+                SetWindowLongPtrW(g_ovl, GWLP_HWNDPARENT, (LONG_PTR)g_gameWnd);
+                logf_("[ovl] owner set to game window %p", (void*)g_gameWnd);
+                InstallGameWndProc(g_gameWnd);
+            }
+        }
+        {
+            void* con = *(void**)G_CONSOLE_PTR;
+            void* pUI = 0;
+            int   ph  = 0;
+            if (Readable(con, 0x80)) {
+                pUI = *(void**)((char*)con + UI_OFFSET);
+                if (Readable(pUI, 0x90)) ph = *(int*)((char*)pUI + 0x5C);
+            }
+
+            {
+            }
+            /* Ownership does the stacking now - just show/hide with the panel. */
+            if (g_ovlOn && g_ourPanel && con && pUI && g_gameWnd &&
+                IsWindowVisible(g_gameWnd) && !IsIconic(g_gameWnd)) {
+                /* our focus window is in front now, so keep the overlay above it */
+                if (g_focusWnd && GetForegroundWindow() == g_focusWnd)
+                    SetWindowPos(g_ovl, HWND_TOP, 0, 0, 0, 0,
+                                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                ph = 300;                       /* our own panel height, engine-independent */
+                if (g_ingame) {
+                    /* drawn inside the game's frame - the window is redundant */
+                    if (IsWindowVisible(g_ovl)) ShowWindow(g_ovl, SW_HIDE);
+                } else if (!IsWindowVisible(g_ovl)) {
+                    ShowWindow(g_ovl, SW_SHOWNOACTIVATE);
+                }
+                g_ovlOffX = g_ovlOffY = 0;
+                /* THE CONSOLE PAINTER IS RATE-LIMITED TO ~15 Hz INDEPENDENTLY OF
+                   THE TICK. Opening the picker drops this loop's wait from 66 ms
+                   to 10 ms so a list you are typing into feels live - and that
+                   silently made the CONSOLE painter, which has no change gate at
+                   all, 6.6x more expensive. Per pass it fills, alpha-lifts and
+                   snapshots a full-client-width surface (~1920x300 = 576,000
+                   pixels twice over, plus a 2.3 MB memcpy under g_snapCs and one
+                   VirtualQuery per visible scrollback line), and then
+                   SnapPublish raises g_snapDirty unconditionally, so the render
+                   thread re-uploads 2.3 MB to VRAM every time. At 100 Hz, to
+                   redraw text that changes at typing speed.
+                   PkPaint keeps the fast cadence: it HAS a change gate and
+                   returns immediately when nothing moved, which is the whole
+                   reason the picker could afford 10 ms in the first place. */
+                {
+                    static DWORD lastOvlPaint = 0;
+                    DWORD nowP = GetTickCount();
+                    if ((DWORD)(nowP - lastOvlPaint) >= 60) {
+                        lastOvlPaint = nowP;
+                        OverlayPaint(con, pUI, ph);
+                    }
+                }
+                /* ...and the picker, into its own surface. Same thread, same
+                   cadence; the Present hook blits both. */
+                if (g_pickerOpen) PkPaint();
+            } else if (g_ovlOn && g_drive && g_hudOn && g_gameWnd &&
+                       IsWindowVisible(g_gameWnd) && !IsIconic(g_gameWnd)) {
+                /* Console closed but still driving - show the controls panel. */
+                if (g_ingame) {
+                    /* drawn inside the game's frame - the window is redundant */
+                    if (IsWindowVisible(g_ovl)) ShowWindow(g_ovl, SW_HIDE);
+                } else if (!IsWindowVisible(g_ovl)) {
+                    ShowWindow(g_ovl, SW_SHOWNOACTIVATE);
+                }
+                OverlayPaintDrive();
+            } else if (IsWindowVisible(g_ovl)) {
+                ShowWindow(g_ovl, SW_HIDE);
+            }
+        }
+        /* THE SPINNING CURSOR, the other half. This thread OWNS the window we
+           hand the foreground to, and it used to spend its life in Sleep().
+           A foreground thread that is asleep rather than waiting on messages is
+           exactly what Windows draws the busy cursor for - it cannot tell "idle"
+           from "wedged", so it assumes the worst until the thread pumps again.
+
+           MsgWaitForMultipleObjects parks the thread in a real message wait: it
+           returns the instant anything arrives, and otherwise times out on the
+           same schedule as before. Same cost, but the thread is now visibly
+           alive to the window manager - and the picker reacts immediately
+           instead of on the next tick.
+
+           15 Hz is ample for text, but not for a list you are typing into. */
+        MsgWaitForMultipleObjects(0, 0, FALSE,
+                                  g_pickerOpen ? 10 : 66, QS_ALLINPUT);
+    }
+done:
+    OverlayFreeGdi();
+    PkFreeGdi();                    /* the picker surface had no counterpart at all */
+    RemoveGameWndProc(g_gameWnd);   /* before we unmap - the game keeps running */
+    if (g_focusWnd) { DestroyWindow(g_focusWnd); g_focusWnd = 0; }
+    if (g_ovl) { DestroyWindow(g_ovl); g_ovl = 0; }
+    UnregisterClassW(OVL_CLASS, (HINSTANCE)g_self);
+    /* The fonts and brushes PickerRegister created, once per injection and
+       deleted nowhere. g_fontHd ALIASES g_fontUI when its CreateFontA failed
+       (see PickerRegister), so compare before the second delete or this is a
+       double-free of a GDI handle; and a stock object must never be deleted,
+       which is the other case that assignment produces. */
+    if (g_fontHd && g_fontHd != g_fontUI) DeleteObject(g_fontHd);
+    g_fontHd = 0;
+    if (g_fontUI && g_fontUI != (HFONT)GetStockObject(DEFAULT_GUI_FONT))
+        DeleteObject(g_fontUI);
+    g_fontUI = 0;
+
+    /* Stop the render thread reading it, THEN tear it down. */
+    InterlockedExchange(&g_snapReady, 0);
+    EnterCriticalSection(&g_snapCs);
+    if (g_snap) { free(g_snap); g_snap = 0; g_snapW = g_snapH = 0; }
+    LeaveCriticalSection(&g_snapCs);
+    DeleteCriticalSection(&g_snapCs);
+    /* g_pkSnap is NOT freed here. The render thread reads it in DrawOverlayD3D
+       and this thread's exit races with Worker's RemovePresentHook, so the free
+       is done by Worker instead - after the hook is off AND this thread has been
+       joined, which is the only point where no reader can exist. Lowering the
+       ready flag here is free and narrows the window in the meantime. */
+    g_pkSnapReady = 0;
+    logf_("[ovl] overlay stopped");
+    return 0;
+}
+
+/* Dump the entire console scrollback to a file.  The `?` command prints the whole
+   command registry with help text - far more than fits on screen and far too
+   useful to leave trapped in a ring buffer. */
+static void DumpRing(void)
+{
+    static wchar_t line[4096];
+    char  path[MAX_PATH];
+    FILE* f;
+    void* con = *(void**)G_CONSOLE_PTR;
+    void** arr;
+    int capn, head, count, i, written = 0;
+
+    if (!Readable(con, 0x80)) { logf_("[dump] no console"); return; }
+    arr   = (void**)(*(void**)((char*)con + 0x0C));
+    capn  = *(int*)((char*)con + 0x10);
+    head  = *(int*)((char*)con + 0x14);
+    count = *(int*)((char*)con + 0x18);
+    if (capn <= 0 || count <= 0 || !Readable(arr, (SIZE_T)capn * 4)) {
+        logf_("[dump] ring not readable (capn=%d count=%d)", capn, count);
+        return;
+    }
+    _snprintf(path, sizeof(path), "%s\\console_dump.txt", g_dir);
+    f = fopen(path, "w");
+    if (!f) { logf_("[dump] cannot write %s", path); return; }
+    for (i = 0; i < count; ++i) {
+        int idx = ((head + i) % capn + capn) % capn;   /* oldest -> newest */
+        if (ReadDuniaW(arr[idx], line, 4096) > 0) {
+            /* strip the colour markup so the file is plain text */
+            wchar_t out[4096];
+            int n = 0;
+            const wchar_t* t = line;
+            while (*t && n < 4090) {
+                if ((unsigned)*t < 0x20) {
+                    int k;
+                    ++t;
+                    for (k = 0; k < 6 && iswxdigit(t[k]); ++k) { }
+                    if (k == 6) t += 6;
+                    continue;
+                }
+                out[n++] = *t++;
+            }
+            out[n] = 0;
+            fprintf(f, "%ls\n", out);
+            ++written;
+        }
+    }
+    fclose(f);
+    logf_("[dump] wrote %d line(s) to console_dump.txt", written);
+}
+
+
+/* ==================== RESCUE ====================
+   Every control we expose is consumed by the detour, so a stalled frame loop
+   takes all of them away at once: noclip cannot be switched off, the console
+   cannot be closed, and the game window stays disabled so the pause menu is dead
+   too. Everything below must therefore work with the detour never running again.
+
+   HARD RULE: no engine calls. This runs on the hotkey thread, and calling into
+   the engine off the main thread is a documented way to crash this game. Clearing
+   our own flags stops us writing the player's position, which is the part that
+   actually traps the user; restoring physics is left to the detour if it lives. */
+static volatile long g_lastRescue = 0;
+
+static void Rescue(const char* why)
+{
+    logf_("[rescue] %s", why);
+    logf_("[rescue] noclip=%ld frames=%ld gameDisabled=%ld consoleOpen=%ld "
+          "panel=%ld blockGame=%ld speed=%ld fly=(%.1f %.1f %.1f)",
+          g_noclip, g_frames, g_gameDisabled, g_consoleOpen, g_ourPanel,
+          g_blockGame, g_flySpeedM, g_flyAcc[0], g_flyAcc[1], g_flyAcc[2]);
+    {
+        /* Reads only - Readable() guards every hop, so this is safe from here.
+           It is the snapshot we have never had when this happened before. */
+        void* ent = GetPlayerEntity();
+        void* cam = GetCameraEntity();
+        logf_("[rescue] player=%p camera=%p physComp=%p console=%p",
+              ent, cam, g_physComp, *(void**)G_CONSOLE_PTR);
+    }
+
+    InterlockedExchange(&g_noclip, 0);       /* stop authoring the position   */
+    g_flyPosValid = 0;
+    InterlockedExchange(&g_wantNoclip, 2);   /* detour finishes it if it lives */
+    InterlockedExchange(&g_consoleOpen, 0);
+    InterlockedExchange(&g_ourPanel, 0);
+    InterlockedExchange(&g_wantClose, 1);
+
+    /* NOT calling FreecamLeave here. It makes three engine calls, and this
+       function runs on the hotkey thread - the hard rule at the top of this
+       comment block exists for exactly that reason, and calling it anyway is
+       what froze the game when Pause was pressed in freecam. The detour does it
+       instead, like every other main-thread-only action. */
+    if (g_freecam) InterlockedExchange(&g_wantFreecamOff, 1);
+    SetGameInput(1);                         /* Win32 only - always works      */
+    ClipCursor(NULL);
+    while (ShowCursor(TRUE) < 0) { }
+
+    logf_("[rescue] done - noclip forced off, input and cursor released");
+}
+/* ================================================ */
+
+/* Is this pointer inside OUR module? Anything that is, and is still reachable
+   from the game after we unmap, is a guaranteed silent crash. */
+static int PointsAtUs(const void* p)
+{
+    static char* base = 0;
+    static size_t size = 0;
+    if (!base) {
+        MEMORY_BASIC_INFORMATION mbi;
+        IMAGE_DOS_HEADER* dos;
+        base = (char*)g_self;
+        if (!base) return 0;
+        dos = (IMAGE_DOS_HEADER*)base;
+        if (dos->e_magic == IMAGE_DOS_SIGNATURE) {
+            IMAGE_NT_HEADERS* nt = (IMAGE_NT_HEADERS*)(base + dos->e_lfanew);
+            if (nt->Signature == IMAGE_NT_SIGNATURE)
+                size = nt->OptionalHeader.SizeOfImage;
+        }
+        if (!size && VirtualQuery(base, &mbi, sizeof(mbi)))
+            size = mbi.RegionSize;
+    }
+    return (size && (const char*)p >= base && (const char*)p < base + size);
+}
+
+/* Last line of defence before FreeLibrary. Every slot we ever wrote, checked -
+   and put back where we still hold the original. */
+static void VerifyUnhooked(void)
+{
+    int bad = 0;
+    DWORD old;
+
+    {   /* D3D9 Present - the one that actually bit us: the in-game auto-arm
+           re-installed it during unload, after it had already been removed. */
+        void** slot = (void**)(VT_RENDERDEV_D3D9 + RD_SLOT_PRESENT);
+        if (Readable(slot, 4) && PointsAtUs(*slot)) {
+            ++bad;
+            logf_("[exit] *** Present slot STILL ours (%p) - restoring", *slot);
+            /* g_rdPresentEver, NOT g_rdPresent: RemoveHook has already run and
+               zeroed the latter, so this repair never fired. See the declaration. */
+            if (g_rdPresentEver &&
+                VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) {
+                *slot = g_rdPresentEver;
+                VirtualProtect(slot, sizeof(void*), old, &old);
+                logf_("[exit]     restored to %p", g_rdPresentEver);
+            } else {
+                logf_("[exit]     CANNOT restore - no saved original. The game "
+                      "will call into an unmapped DLL on its next frame.");
+            }
+        }
+    }
+    {   /* the OutputDebugStringA IAT thunk. Newly swept: the hook is newly
+           wired up, and "every slot we ever wrote" is the contract here. */
+        void** slot = (void**)IAT_OUTPUTDEBUGSTRINGA;
+        if (Readable(slot, 4) && PointsAtUs(*slot)) {
+            ++bad;
+            logf_("[exit] *** OutputDebugStringA IAT STILL ours (%p) - restoring",
+                  *slot);
+            if (g_odsOrigEver &&
+                VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) {
+                *slot = (void*)g_odsOrigEver;
+                VirtualProtect(slot, sizeof(void*), old, &old);
+                logf_("[exit]     restored to %p", (void*)g_odsOrigEver);
+            } else {
+                logf_("[exit]     CANNOT restore - no saved original. The next "
+                      "GFx or Dunia message calls into an unmapped DLL.");
+            }
+        }
+    }
+    {   /* the OpenMutexA IAT thunk - the multi-instance gate. Installed from
+           DllMain, so it can outlive an EARLY unload that never reached
+           RemoveHook, which is exactly what this sweep exists for. */
+        void** slot = g_omSlot;
+        if (slot && Readable(slot, 4) && PointsAtUs(*slot)) {
+            ++bad;
+            logf_("[exit] *** OpenMutexA IAT STILL ours (%p) - restoring", *slot);
+            if (g_omOrigEver &&
+                VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) {
+                *slot = (void*)g_omOrigEver;
+                VirtualProtect(slot, sizeof(void*), old, &old);
+                logf_("[exit]     restored to %p", (void*)g_omOrigEver);
+            } else {
+                logf_("[exit]     CANNOT restore - no saved original. The next "
+                      "OpenMutexA call in the process enters an unmapped DLL.");
+            }
+        }
+    }
+    {   /* the renderer warm-up guard */
+        void** slot = (void**)(VT_PREPARE_RENDERER + SLOT_DOEXECUTE);
+        if (Readable(slot, 4) && PointsAtUs(*slot)) {
+            ++bad;
+            logf_("[exit] *** PrepareRenderer slot STILL ours - restoring");
+            if (g_prepSlotSaved &&
+                VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) {
+                *slot = g_prepSlotSaved;
+                VirtualProtect(slot, sizeof(void*), old, &old);
+            }
+        }
+    }
+    if (g_vtable && Readable(&g_vtable[1], 4) && PointsAtUs(g_vtable[1])) {
+        ++bad;
+        logf_("[exit] *** console vtable[1] STILL ours - restoring");
+        if (g_origUpdateUI &&
+            VirtualProtect(&g_vtable[1], sizeof(void*), PAGE_READWRITE, &old)) {
+            g_vtable[1] = (void*)g_origUpdateUI;
+            VirtualProtect(&g_vtable[1], sizeof(void*), old, &old);
+        }
+    }
+    /* EVERY vtable slot, via the registry - not one hardcoded slot on one
+       vtable. This used to check only g_driveVt + AGENT_SLOT_SETVEL, which is
+       one of THREE slots we patch (+0x128 velocity, +0x148 signal, +0x208
+       Update) and only ever the LAST species vtable touched. g_vtPatch[] was
+       added precisely so "how many species did this session drive" stops
+       mattering, and then the safety net that backs it up did not use it. A
+       creature vtable left pointing into an unmapped DLL is a silent crash on
+       the next AI tick, which is this file's most-repeated lesson. */
+    {
+        int i, still = 0;
+        for (i = 0; i < g_vtPatchN; ++i)
+            if (Readable(g_vtPatch[i].slot, sizeof(void*)) &&
+                PointsAtUs(*g_vtPatch[i].slot)) ++still;
+        if (still) {
+            bad += still;
+            logf_("[exit] *** %d agent vtable slot(s) STILL ours - restoring via "
+                  "the patch registry", still);
+            VtRestoreAll();          /* logs how many of how many went back */
+        }
+    }
+    /* Backstop for the one case the registry cannot cover: a slot patched, then
+       VtRestoreAll cleared the table while the restore itself failed. */
+    if (g_driveVt && Readable((char*)g_driveVt + AGENT_SLOT_SETVEL, 4)) {
+        void** slot = (void**)((char*)g_driveVt + AGENT_SLOT_SETVEL);
+        if (PointsAtUs(*slot)) {
+            ++bad;
+            logf_("[exit] *** agent velocity slot STILL ours after the registry "
+                  "restore - forcing it back");
+            if (g_driveOrig &&
+                VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) {
+                *slot = g_driveOrig;
+                VirtualProtect(slot, sizeof(void*), old, &old);
+            } else {
+                logf_("[exit]     CANNOT - no saved original for %p", (void*)slot);
+            }
+        }
+    }
+    if (g_gameWnd && IsWindow(g_gameWnd)) {
+        void* wp = (void*)GetWindowLongPtrW(g_gameWnd, GWLP_WNDPROC);
+        if (PointsAtUs(wp)) {
+            ++bad;
+            logf_("[exit] *** game WndProc STILL ours - restoring");
+            if (g_gameProcOrig)
+                SetWindowLongPtrW(g_gameWnd, GWLP_WNDPROC, (LONG_PTR)g_gameProcOrig);
+        }
+    }
+
+    /* The first-person look-at is not a hook, so the sweep above cannot see it -
+       it is a DATA pointer into this DLL sitting in the engine's camera
+       component, and leaving it behind is just as fatal. It is what made End
+       crash the game. Check it explicitly. */
+    if (g_fpLookOn || g_fpLookComp) {
+        ++bad;
+        logf_("[exit] *** first-person look-at STILL attached - detaching");
+        FirstPersonLookDetach();
+    }
+    if (g_fpAimOn) {
+        ++bad;
+        logf_("[exit] *** first-person body-point patch STILL in .text - restoring");
+        FirstPersonAimPatch(0);
+    }
+
+    if (bad) logf_("[exit] %d dangling hook(s) found and repaired before unload", bad);
+    else     logf_("[exit] verified: nothing points into this DLL any more");
+}
+
+/* THE ONLY WAY THIS THREAD IS ALLOWED TO LEAVE.
+   Every "give up and unload" path in Worker used to call FreeLibraryAndExitThread
+   directly. That is right when we were injected: nothing in the process refers to
+   us except the hooks we just took back out, so unmapping frees the file for the
+   next build and lets inject.py run again instead of refusing with "already
+   injected".
+
+   It is FATAL in proxy mode. Loaded as dinput8.dll we are a static dependency of
+   Dunia.dll: its import address table holds the address of Proxy_DirectInput8Create,
+   which lives in this image. FreeLibrary would drop our reference count to zero,
+   the loader would unmap us, and the next call the engine makes through that
+   thunk - the first time it initialises DirectInput, i.e. within a second of the
+   splash screen - would jump into unmapped memory. The crash reporter is off by
+   then and the module is gone, so it leaves nothing in the log: exactly the
+   silent unload crash the VerifyUnhooked() block below exists to prevent, only
+   from the other direction.
+
+   So in proxy mode we park instead: every hook is off, every thread is joined,
+   the mod is inert, and 190 KB of resident image is the price of the export stub
+   staying valid for as long as the process lives. */
+static void SelfUnload(void)
+{
+    if (g_proxy) {
+        logf_("[exit] proxy build - hooks are off but the image STAYS RESIDENT "
+              "(Dunia's DirectInput8Create thunk points into it). Restart the "
+              "game to re-arm.");
+        ExitThread(0);
+    }
+    FreeLibraryAndExitThread(g_self, 0);
+}
+
+static DWORD WINAPI Worker(LPVOID unused)
+{
+    int tries = 0;
+    (void)unused;
+    logf_("---- avatar_console.dll attached (built " __DATE__ " " __TIME__ ") ----");
+    logf_("[init] load mode: %s", g_proxy
+          ? "PROXY (auto-loaded as dinput8.dll next to Avatar.exe)"
+          : "INJECTED (inject.py)");
+
+    /* FIRST. Nothing below this is meaningful until the delta is known, and the
+       old code's very first act was to dereference a hardcoded address. */
+    {
+        HMODULE dunia = GetModuleHandleA("Dunia.dll");
+        if (!dunia) {
+            logf_("[init] Dunia.dll is not loaded - unloading, nothing here can work");
+            InterlockedExchange(&g_csAlive, 0);
+            DeleteCriticalSection(&g_cs);
+            SelfUnload();
+            return 0;
+        }
+        g_rebase = (unsigned long)(ULONG_PTR)dunia - DUNIA_PREFERRED;
+        if (g_rebase)
+            logf_("[init] Dunia.dll at %p, NOT the preferred base - rebasing every "
+                  "address by %+ld (0x%08lX)", (void*)dunia, (long)g_rebase, g_rebase);
+        else
+            logf_("[init] Dunia.dll at its preferred base - no rebasing needed");
+    }
+
+    /* Reported here rather than at install: that runs under the loader lock,
+       this is a normal thread.
+
+       AND VERIFIED, not merely reported. The install happens in DllMain while
+       the loader is still walking Dunia's import descriptors, and the argument
+       that this is safe rests on KERNEL32 being snapped before DINPUT8 -
+       measured as index 1 against index 10 in Dunia's own descriptor list, so
+       nine entries of margin. That is evidence, but it is evidence about a
+       loader we do not control, so the slot is read back here and the actual
+       pointers are printed. If the loader ever did overwrite us, the log says
+       CLOBBERED with both values rather than leaving a silent no-op that looks
+       exactly like a wrong mutex name. */
+    if (g_multiOn) {
+        void** slot   = g_omSlot;
+        void*  holds  = (slot && Readable(slot, 4)) ? *slot : 0;
+        int    intact = (holds == (void*)hkOpenMutexA);
+        logf_("[mult] multi-instance ARMED - IAT slot %p holds %p, ours is %p : %s",
+              (void*)slot, holds, (void*)hkOpenMutexA,
+              intact ? "INTACT" : "*** CLOBBERED ***");
+        if (!intact && slot && Readable(slot, 4)) {
+            DWORD old;
+            if (VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) {
+                *slot = (void*)hkOpenMutexA;
+                VirtualProtect(slot, sizeof(void*), old, &old);
+                logf_("[mult] re-armed. If Dunia's gate has ALREADY run this is "
+                      "too late for this launch - restart and it will hold.");
+            } else {
+                logf_("[mult] could not re-arm - VirtualProtect refused the slot.");
+            }
+        }
+        logf_("[mult] OpenMutexA(\"%s\") will answer NOT FOUND, so the "
+              "single-instance gate cannot close", MULTI_MUTEX_NAME);
+        logf_("[prof] this is game instance %ld. %s", (long)g_instIndex,
+              g_instIndex > 1
+                ? "GamerProfile.xml is redirected to a per-instance copy - give "
+                  "this one its own account in the game's account screen."
+                : "Instance 1 keeps the stock profile, untouched.");
+    } else if (MultiInstanceWanted()) {
+        logf_("[mult] multi-instance was REQUESTED but is NOT armed. Injected "
+              "after startup? The gate runs during Dunia's init, so only the "
+              "dinput8.dll drop-in is early enough. (marker or "
+              "AVATAR_MULTI_INSTANCE was seen, the IAT slot was not usable)");
+    }
+
+    InstallCrashReporter();
+    /* WIRED UP HERE, next to the crash reporter, because it is the same kind of
+       thing and wants the same lifetime: on as early as possible, off only at
+       unload. Install had zero call sites, so avatar_debug.log was never written
+       and Scaleform GFx's log - ActionScript, font, image and SWF errors - plus
+       Dunia's fatal path went uncaptured for the whole life of this project.
+       Given how much time here has gone into crashes that left nothing behind,
+       that is the cheapest diagnostic available.
+       AFTER the g_rebase block above: the IAT entry is Dunia's, so its address
+       is meaningless until the rebase delta is known. */
+    if (!InstallDebugStringHook())
+        logf_("[dbg ] OutputDebugStringA NOT hooked - the IAT slot at 0x11000098 "
+              "did not validate. Harmless: nothing else depends on it.");
+
+    /* wait for the console object to exist (it is built during service init) */
+    /* THE TIMEOUT HAS TO DEPEND ON HOW WE GOT HERE.
+       Injected, this thread starts when the user runs inject.py - which the
+       instructions say to do with a save already loaded - so g_console either
+       exists now or something is wrong, and 60 s is generous.
+
+       Auto-loaded it starts during PROCESS STARTUP, before the splash bitmap is
+       on screen. Between here and a level there is the Ubisoft launcher, the
+       intro videos, the main menu, and however long the user spends in it: 60 s
+       is not a timeout, it is a guarantee that the mod is gone before the game is
+       ready for it. Nothing about a slow menu is an error, so in proxy mode do
+       not time out at all - poll and say so occasionally. The cost is one thread
+       waking 4x a second, which is less than the hotkey loop already does.
+
+       The heartbeat interval widens on purpose: avatar_console_dll.log is opened,
+       appended and closed per line (see logf_), and a line every 100 ms while
+       someone reads the manual would be thousands of file writes for no
+       information. */
+    if (g_proxy) {
+        DWORD waited = 0, nextSay = 30000, step = 30000;
+        logf_("[init] waiting for a level - the console object does not exist "
+              "until one is loaded. Menus and intro videos are not an error.");
+        while (!*(void**)G_CONSOLE_PTR) {
+            Sleep(250);
+            waited += 250;
+            if (waited >= nextSay) {
+                logf_("[init] still waiting for g_console (%lu s)",
+                      (unsigned long)(waited / 1000));
+                step *= 2;                        /* 30s, 1m, 2m, 4m, then 5m */
+                if (step > 300000) step = 300000;
+                nextSay = waited + step;
+            }
+        }
+        logf_("[init] g_console appeared after %lu s", (unsigned long)(waited / 1000));
+    } else {
+        while (!*(void**)G_CONSOLE_PTR && tries++ < 600) Sleep(100);
+    }
+    if (!*(void**)G_CONSOLE_PTR) {
+        /* This used to `return 0` with the crash reporter still armed and the
+           DLL resident - no thread left to unload it, so inject.py would then
+           refuse with "already injected" and only a restart cleared it. That is
+           the same trap the InstallHook path below was fixed for. Take our two
+           hooks back out and unload, so a retry is possible. */
+        logf_("[init] g_console never appeared - unloading");
+        RemoveDebugStringHook();
+    RemoveMultiInstanceHook();
+    RemoveProfileRedirect();
+        RemoveCrashReporter();
+        InterlockedExchange(&g_csAlive, 0);
+        DeleteCriticalSection(&g_cs);
+        SelfUnload();
+        return 0;
+    }
+
+    if (!InstallHook()) {
+        /* Returning here used to leave the DLL resident with no way to unload it:
+           inject.py would then refuse with "already injected" and the only fix was
+           restarting the game. Unload ourselves instead. */
+        logf_("[init] hook not installed - unloading");
+        /* Both hooks installed above this point must come off before the unmap:
+           the VEH handler and the IAT thunk both point inside this DLL. */
+        RemoveDebugStringHook();
+    RemoveMultiInstanceHook();
+    RemoveProfileRedirect();
+        RemoveCrashReporter();
+        InterlockedExchange(&g_csAlive, 0);
+        DeleteCriticalSection(&g_cs);
+        SelfUnload();
+        return 0;
+    }
+
+    g_ovlThread = CreateThread(0, 0, OverlayThread, 0, 0, 0);  /* we draw the text */
+    g_inThread  = CreateThread(0, 0, InputThread, 0, 0, 0);     /* drains the ring */
+    /* The editor link. Inert with no client attached, and the console is fully
+       functional whether or not anything ever connects. */
+    g_lnkThread = CreateThread(0, 0, LinkThread, 0, 0, 0);
+
+    logf_("[keys] F9=OPEN  F10=CLOSE  Pause=PANIC(close+free mouse)  "
+          "F9=console toggle  Shift+F9=block-input  F10=dump  F7=overlay  F8=NOCLIP(PgUp/PgDn=speed)  Tab=complete  "
+          "F12=smoke  End=unload (only when console closed)");
+
+    for (;;) {
+        /* IMPORTANT: GetAsyncKeyState's low bit is CONSUMED by the read. Calling it
+           twice for the same key in one pass makes the second read miss the press -
+           that bug made ScrollLock fire erratically. Sample every key exactly once. */
+        /* While we own the input line, Delete/Home/End belong to text editing.
+           Binding them to hotkeys as well meant typing could unload the DLL. */
+        /* FRAME-LOOP WATCHDOG. This thread ticks every 25ms regardless of what
+           the game is doing, so it can see the detour stop. A freeze that shows
+           up here is the game stalling; a freeze that does NOT is ours. */
+        {
+            static long  lastFrames = -1;
+            static DWORD lastChange = 0;
+            static int   stalled    = 0;
+            DWORD now = GetTickCount();
+            long  f   = g_frames;
+            if (f != lastFrames) {
+                if (stalled) {
+                    logf_("[wdog] frame loop RESUMED after %lums",
+                          (unsigned long)(now - lastChange));
+                    stalled = 0;
+                }
+                lastFrames = f;
+                lastChange = now;
+            } else if (!stalled && lastChange && (now - lastChange) > 1000 &&
+                       (long)(now - (DWORD)g_warpQuietUntil) > 0) {
+                stalled = 1;
+                logf_("[wdog] frame loop STALLED - no detour for %lums "
+                      "(noclip=%ld speed=%ld fly=(%.0f %.0f %.0f))",
+                      (unsigned long)(now - lastChange), g_noclip, g_flySpeedM,
+                      g_flyAcc[0], g_flyAcc[1], g_flyAcc[2]);
+            } else if (stalled && (now - lastChange) > 2000 &&
+                       (long)(now - (DWORD)g_warpQuietUntil) > 0 &&
+                       (g_noclip || g_gameDisabled) &&
+                       (now - (DWORD)g_lastRescue) > 5000) {
+                /* The state the user gets trapped in: the detour is gone, so F8
+                   and the console keys are being queued for something that will
+                   never read them. Take the controls back by hand. */
+                InterlockedExchange(&g_lastRescue, (long)now);
+                Rescue("frame loop stalled - taking the controls back");
+            }
+        }
+
+        /* The game binds F1-F4 (cameras), F5 (quicksave) and F6 (free camera), so
+           we stay on F7-F12 to avoid firing game actions. F9 toggles. */
+        int kTgl   = GetAsyncKeyState(VK_F9)     & 1;
+        int kDump  = GetAsyncKeyState(VK_F10)    & 1;
+        /* F1 = verbose echo. Shift+F9 was tried first and was a bad choice:
+           SHIFT IS BOUND TO JUMP, so arming the log made the character hop.
+           F1 is the game's own camera key, so while the game has input it will
+           still fire that as well - but with the console open the game keyboard
+           is blocked, which is exactly when this gets used. */
+        int kVerb  = GetAsyncKeyState(VK_F1) & 1;
+        int kOpen  = (kTgl && !g_ourPanel);
+        int kClose = (kTgl &&  g_ourPanel);
+        int kPanic = GetAsyncKeyState(VK_PAUSE)  & 1;
+        if (kPanic) Rescue("Pause pressed");
+        int kSmoke = GetAsyncKeyState(VK_F12)    & 1;
+        int kQuit  = GetAsyncKeyState(VK_END)    & 1;
+
+        if (kSmoke) { InterlockedExchange(&g_wantSmoke, 1); logf_("[keys] smoke test"); }
+
+        if (kTgl && GetAsyncKeyState(VK_SHIFT) < 0) {
+            long v = g_blockGame ? 0 : 1;
+            InterlockedExchange(&g_blockGame, v);
+            if (!v) SetGameInput(1);
+            else if (g_ourPanel) SetGameInput(0);
+            logf_("[keys] Shift+F9: block game input while typing = %s", v ? "ON" : "OFF");
+        }
+        if (GetAsyncKeyState(VK_F7) & 1) {          /* moved off Home - editing key */
+            long v = g_ovlOn ? 0 : 1;
+            InterlockedExchange(&g_ovlOn, v);
+            logf_("[keys] F7: text overlay %s", v ? "ON" : "OFF");
+        }
+        if (GetAsyncKeyState(VK_F6) & 1) {          /* controls panel */
+            /* BACK TO A PLAIN TOGGLE. Making this three-way pushed the creature
+               controls onto the SECOND press, which is a regression on something
+               that worked - the panel is meant to be there the moment you ask
+               for it, not one press further in. */
+            long v = g_hudOn ? 0 : 1;
+            InterlockedExchange(&g_hudOn, v);
+            logf_("[keys] F6: controls panel %s", v ? "ON" : "OFF");
+        }
+        /* Flight speed. Context-sensitive on purpose: while the console is OPEN
+           these keys scroll the scrollback (handled in InKey) and must NOT change
+           speed, otherwise reading back through output silently rewrites it. */
+        /* Freecam speed, on the same keys as flight speed and with the same
+           console-closed rule - so scrolling the scrollback never changes it. */
+        /* PgUp/PgDn are freecam's speed keys, driving or not - camera height
+           moved to [ and ] precisely so these two stop being overloaded. */
+        if (g_freecam && !g_consoleOpen) {
+            int ch = 0;
+            float v = g_camSpeed;
+            if (GetAsyncKeyState(VK_PRIOR) & 1) { v *= 1.35f; ch = 1; }
+            if (GetAsyncKeyState(VK_NEXT)  & 1) { v /= 1.35f; ch = 1; }
+            if (ch) {
+                if (v < CAMSPD_MIN) v = CAMSPD_MIN;
+                if (v > CAMSPD_MAX) v = CAMSPD_MAX;
+                g_camSpeed = v;
+                logf_("[freecam] speed = %.1f", v);
+                _snprintf(g_note, sizeof(g_note) - 1, "freecam speed %.0f%s", v,
+                          (v <= CAMSPD_MIN) ? "  (slowest)" :
+                          (v >= CAMSPD_MAX) ? "  (fastest)" : "");
+                g_note[sizeof(g_note) - 1] = 0;
+                InterlockedExchange(&g_haveNote, 1);
+            }
+        }
+        else if (g_noclip && !g_consoleOpen) {
+            long v = g_flySpeedM;
+            int  ch = 0;
+            if (GetAsyncKeyState(VK_PRIOR) & 1) { v = (v * 6) / 5 + 1; ch = 1; }
+            if (GetAsyncKeyState(VK_NEXT)  & 1) { v = (v * 5) / 6;     ch = 1; }
+            if (ch) {
+                if (v < FLY_MIN_M) v = FLY_MIN_M;
+                if (v > FLY_MAX_M) v = FLY_MAX_M;
+                InterlockedExchange(&g_flySpeedM, v);
+                logf_("[fly ] speed = %ld.%03ld units/frame", v / 1000, v % 1000);
+                /* Say it on screen too. Silently bottoming out at the floor is
+                   what made "I pressed PageDown a lot" look like a freeze. */
+                _snprintf(g_note, sizeof(g_note) - 1, "fly speed %ld.%03ld/frame%s",
+                          v / 1000, v % 1000,
+                          (v == FLY_MIN_M) ? "  (slowest)" :
+                          (v == FLY_MAX_M) ? "  (fastest)" : "");
+                g_note[sizeof(g_note) - 1] = 0;
+                InterlockedExchange(&g_haveNote, 1);
+            }
+        }
+        /* DEBOUNCE. `& 1` is "pressed since the last call", and the OS sets it
+           again on auto-repeat - so holding F8 for a moment toggled noclip on and
+           off every ~30ms and left it in whichever state the last bounce chose.
+           The log showed eight ON/OFF pairs inside half a second. A toggle is not
+           a repeatable action, so require a gap and the key to have been let go. */
+        {
+            /* ONE GetAsyncKeyState call, both bits taken from it.
+               This used to call it TWICE - once for 0x8000, once for &1 - and the
+               low bit is "pressed since the PREVIOUS CALL to GetAsyncKeyState",
+               so the first call consumed the edge and the second read 0 nearly
+               every time. f8Edge was therefore almost always 0 and the
+               `if (!f8Edge) goto f8_done` below swallowed every press: F8 did
+               nothing at all. Same defect as the dropped-keystroke bug in the
+               console input poll - reading this API twice destroys the event. */
+            static DWORD lastF8 = 0;
+            static int   f8Held = 0;
+            SHORT st    = GetAsyncKeyState(VK_F8);
+            int   f8Now = (st & 0x8000) != 0;   /* held right now              */
+            int   f8Tap = (st & 1) != 0;        /* pressed since the last poll */
+            DWORD nowT  = GetTickCount();
+            int   fire  = 0;
+            /* Release the latch only when the key is genuinely idle: a tap that
+               began and ended between two polls still has to count. */
+            if (!f8Now && !f8Tap) f8Held = 0;
+            if ((f8Now || f8Tap) && !f8Held && (nowT - lastF8) > 250) {
+                f8Held = 1;
+                lastF8 = nowT;
+                fire   = 1;
+            }
+            if (!fire) goto f8_done;            /* swallow auto-repeat */
+        }
+        if (1) {
+            /* If the detour has not run recently, queueing a request is useless -
+               that is precisely the "F8 does nothing and I am stuck flying" case.
+               Turn it off here instead, where no frame is needed. */
+            static long lastSeenFrames = -1;
+            static DWORD lastSeenAt    = 0;
+            DWORD nowF = GetTickCount();
+            if (g_frames != lastSeenFrames) { lastSeenFrames = g_frames; lastSeenAt = nowF; }
+
+            if (g_noclip && lastSeenAt && (nowF - lastSeenAt) > 500) {
+                Rescue("F8 with a stalled detour - forcing noclip off directly");
+            } else {
+                InterlockedExchange(&g_wantNoclip, g_noclip ? 2 : 1);
+                logf_("[keys] F8: noclip toggle requested");
+            }
+        }
+f8_done:
+        if (kDump) {                             /* F10 = dump scrollback, refresh Tab list */
+            DumpRing();
+            LoadCmdList();
+            SaveCmdNames();      /* the union survives to the next session */
+        }
+
+        if (kVerb) {
+            long on = g_logEcho ? 0 : 1;
+            InterlockedExchange(&g_logEcho, on);
+            _snprintf(g_note, sizeof(g_note) - 1,
+                      "verbose logging %s", on ? "ON" : "off");
+            g_note[sizeof(g_note) - 1] = 0;
+            InterlockedExchange(&g_haveNote, 1);
+            logf_("[keys] F1 verbose echo %s", on ? "ON" : "off");
+        }
+        if (kOpen) {
+            InterlockedExchange(&g_ourPanel, 1);
+            InterlockedExchange(&g_consoleOpen, 1);
+            if (g_blockGame) SetGameInput(0);
+            logf_("[keys] F9 OPEN console");
+        }
+        if (kClose) {
+            InterlockedExchange(&g_ourPanel, 0);
+            InterlockedExchange(&g_consoleOpen, 0);
+            InterlockedExchange(&g_wantFree, 1);
+            /* The clear inside InKey's !g_consoleOpen guard is UNREACHABLE -
+               InKey's only caller already sits behind g_consoleOpen - so
+               closing used to leave the line's contents to accumulate. */
+            InterlockedExchange(&g_wantClearIn, 1);
+            SetGameInput(1);
+            logf_("[keys] F9 CLOSE console");   /* it is F9, not F10 */
+        }
+        if (kPanic) {
+            InterlockedExchange(&g_ourPanel, 0);
+            InterlockedExchange(&g_consoleOpen, 0);
+            /* AND THE PICKER. SetGameInput now also refuses to re-enable while
+               the picker is up, so PANIC has to clear that flag too or it stops
+               being a panic button in exactly the state most likely to need one
+               - the entity/spawn menu open with input misbehaving. */
+            InterlockedExchange(&g_pickerOpen, 0);
+            InterlockedExchange(&g_wantClearIn, 1);   /* same reason as kClose */
+            SetGameInput(1);                 /* never leave the game unresponsive */
+            /* PANIC: close the console AND free the cursor, no matter what state
+               things are in. This exists because an open console with no working
+               input left the game unusable and the mouse trapped in the window. */
+            InterlockedExchange(&g_wantClose, 1);
+            InterlockedExchange(&g_wantFree, 1);
+            ClipCursor(NULL);
+            while (ShowCursor(TRUE) < 0) { }
+            logf_("[keys] PAUSE = PANIC: close + release cursor");
+        }
+        if (InterlockedExchange(&g_wantFree, 0)) {
+            ClipCursor(NULL);                 /* safe from any thread - it is a Win32 call */
+            logf_("[keys] cursor released");
+        }
+        if (kQuit) {   /* ALWAYS works - it is the emergency exit. Gating this
+                          behind `editing` left no way out with the console open. */
+            if (g_shutdown) { Sleep(50); continue; }   /* already tearing down */
+            logf_("[keys] End: close console, release cursor, unload");
+            InterlockedExchange(&g_wantClose, 1);
+            ClipCursor(NULL);
+            while (ShowCursor(TRUE) < 0) { }
+            Sleep(250);                       /* let the detour run the close */
+            break;
+        }
+        Sleep(25);
+    }
+
+    /* THE UNLOAD CRASH, and why the log never showed it.
+       A crash after FreeLibrary happens with our crash reporter already removed
+       and this DLL unmapped - so the log ends with a clean "detached" and the
+       game dies a frame later with nothing recorded. Any function pointer still
+       aimed at us is instantly fatal and completely silent.
+
+       This is the last line of defence: walk every slot we ever wrote and check
+       none of them still points inside this module. Restores from the saved
+       original where we have one, and shouts into the log where we do not, so a
+       future unload crash is diagnosable instead of invisible. See
+       VerifyUnhooked(), called below once every hook has been removed. */
+
+    /* Order matters. The overlay thread executes code inside this DLL, so it MUST
+       be gone before FreeLibrary unmaps us - otherwise the unload itself crashes
+       the game, which is exactly what pressing End twice used to do. */
+    /* Clear the panel flag FIRST. SetGameInput now refuses to re-enable while
+       the console is open - that is what stops WASD both walking and typing -
+       and this is the one call where that refusal would be wrong: unloading with
+       the console up would hand back a dead keyboard and no console to fix it
+       with. The normal close path clears the flag before restoring input too. */
+    InterlockedExchange(&g_ourPanel, 0);
+    InterlockedExchange(&g_consoleOpen, 0);
+    /* The picker flag gates re-enable now as well, and unloading with the
+       entity/spawn menu open would otherwise hand back a dead keyboard with
+       neither a console nor a picker left to fix it - the same trap the panel
+       clear above exists to avoid. */
+    InterlockedExchange(&g_pickerOpen, 0);
+    SetGameInput(1);                 /* must never unload with the game disabled */
+    InterlockedExchange(&g_shutdown, 1);
+    /* THE PRESENT HOOK COMES OFF BEFORE THE OVERLAY THREAD IS JOINED.
+       The overlay thread's own teardown frees g_snap and then DeleteCriticalSection
+       on g_snapCs. The render thread reads both, from DrawOverlayD3D, through the
+       Present hook - which used to stay installed until RemoveHook() far below,
+       i.e. AFTER that free. Every frame in between could enter the hook, pass the
+       `if (!g_snapReady || !g_snap)` check-then-act, and go on to
+       EnterCriticalSection on a deleted CS and memcpy from freed memory.
+       The console path is closed by the g_ourPanel clear above, but the gate is
+       `(g_ourPanel || (g_drive && g_hudOn))` - so pressing End while DRIVING with
+       the HUD on walked straight into it.
+       g_shutdown is already set, so the detour's once-a-second auto-arm cannot
+       put the hook back; and RemoveHook's own call below becomes a no-op. */
+    RemovePresentHook();
+    if (g_inThread) {
+        if (WaitForSingleObject(g_inThread, 3000) == WAIT_TIMEOUT) {
+            logf_("[exit] input thread still running - ABORTING unload");
+            RemoveHook();
+            return 0;
+        }
+        CloseHandle(g_inThread);
+        g_inThread = 0;
+    }
+    if (g_ovlThread) {
+        if (WaitForSingleObject(g_ovlThread, 3000) == WAIT_TIMEOUT) {
+            logf_("[exit] overlay thread still running - ABORTING unload, hooks removed only");
+            RemoveHook();
+            return 0;
+        }
+        CloseHandle(g_ovlThread);
+        g_ovlThread = 0;
+    }
+    /* Same rule as the other two: this thread runs code inside this DLL, so it
+       must be gone before FreeLibrary unmaps us. It polls g_shutdown every 5 ms
+       and its longest blocking call is a 1-byte ReadFile on a pipe with data
+       already peeked, so 3 s is generous. */
+    if (g_lnkThread) {
+        if (WaitForSingleObject(g_lnkThread, 3000) == WAIT_TIMEOUT) {
+            logf_("[exit] editor-link thread still running - ABORTING unload");
+            RemoveHook();
+            return 0;
+        }
+        CloseHandle(g_lnkThread);
+        g_lnkThread = 0;
+        if (g_lnkOut) { free(g_lnkOut); g_lnkOut = 0; }
+    }
+    RemoveHook();
+    Sleep(300);                      /* let any in-flight frame finish the detour */
+    VerifyUnhooked();                /* nothing may still point into this DLL */
+    /* The picker snapshot, freed HERE rather than in the overlay thread: the
+       render thread reads it, and this is the first point at which the Present
+       hook is off, the overlay thread is joined, and no reader can exist. It was
+       never freed at all before - 1.25 MB leaked per injection. */
+    if (g_pkSnap) { free(g_pkSnap); g_pkSnap = 0; }
+    /* Log FIRST, then tear the lock down. Ordering it the other way is what
+       turned the echo ring into a crash on unload. */
+    logf_("---- detached ----");
+    InterlockedExchange(&g_csAlive, 0);
+    DeleteCriticalSection(&g_cs);
+    SelfUnload();
+    return 0;
+}
+
+/* ============================================================================
+ * AUTO-LOAD: THE dinput8.dll PROXY
+ *
+ * WHY A PROXY AT ALL
+ *   inject.py works, but it is a second program the user has to run, at the right
+ *   moment, from a terminal, after the game is already up.  Windows has exactly
+ *   one supported way to get your code into a process you did not write: be a DLL
+ *   the process already loads.  So we take a name the game imports, sit in front
+ *   of the real one, hand every call straight through, and start the mod from
+ *   DllMain.  Nothing to run, nothing to time.
+ *
+ * WHY dinput8.dll AND NOT SOMETHING ELSE
+ *   Measured, not guessed - `dumpbin /dependents` on both binaries:
+ *
+ *     Avatar.exe  imports  Dunia.dll, MSVCR80.dll, KERNEL32.dll, dvm.dll
+ *     Dunia.dll   imports  WS2_32, KERNEL32, USER32, GDI32, ole32, OLEAUT32,
+ *                          MSVCP80, gdiplus, MSVCR80, dbghelp, DINPUT8, d3d9,
+ *                          d3dx9_41, XINPUT1_3, PSAPI, binkw32, X3DAudio1_6,
+ *                          DSOUND, ADVAPI32, SHELL32, WINMM, IPHLPAPI, WININET,
+ *                          dvm.dll
+ *
+ *   Nothing the EXE imports is proxyable: Dunia.dll and dvm.dll are the game and
+ *   its DRM, MSVCR80 is a side-by-side assembly resolved through a manifest (a
+ *   loose copy is ignored), and KERNEL32 is a KnownDLL - the loader takes those
+ *   from the pre-mapped section object and never looks in the application
+ *   directory, so a file of that name next to the exe is dead weight.
+ *
+ *   Of Dunia's list, dinput8.dll is the best target:
+ *     - it is a plain Windows DLL, always present in SysWOW64, not a KnownDLL
+ *       (checked: HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\KnownDLLs
+ *       has no dinput8/d3d9/xinput/winmm/dbghelp entry), so the application
+ *       directory - the directory of Avatar.exe, i.e. bin\ - is searched first
+ *       and our copy wins;
+ *     - it has SIX exports, all by name, and Dunia imports exactly ONE of them:
+ *       DirectInput8Create.  Six trivial forwarders is the whole job;
+ *     - it carries no device or state we could get wrong.  d3d9.dll and
+ *       xinput1_3.dll were the alternatives; d3d9 has ordinal-only exports that
+ *       differ between Windows versions, and xinput1_3 ships with the DirectX
+ *       redistributable rather than with Windows, so on a machine that never
+ *       installed it there is no real DLL behind our proxy at all.
+ *
+ * WHY THE FORWARDING IS DONE AT RUN TIME AND NOT BY THE LINKER
+ *   The obvious spelling is a linker forwarder:
+ *       /export:DirectInput8Create=dinput8.DirectInput8Create
+ *   which emits a forwarder string the loader resolves by calling LdrLoadDll on
+ *   the named module.  That module name is "dinput8" - and by the time anyone
+ *   asks, a module called dinput8.dll is already loaded: US.  The forwarder
+ *   resolves to our own export and points at itself.  Forwarding only works when
+ *   the real DLL can be given a DIFFERENT name, and we cannot rename a file in
+ *   System32.
+ *
+ *   So instead: six __declspec(naked) stubs that jump through a function pointer,
+ *   and the pointers are filled in from the real DLL at load.  A naked jmp is not
+ *   a wrapper - it does not touch the stack, so it does not need to know the
+ *   argument count or the calling convention of what it forwards to; the callee
+ *   returns straight to the game.
+ *
+ *   The real DLL is opened by ABSOLUTE PATH out of GetSystemDirectoryA().  A bare
+ *   LoadLibraryA("dinput8.dll") would search the application directory first,
+ *   find us, and hand back our own module handle - the same self-reference as the
+ *   linker forwarder, one layer further down.  (GetSystemDirectoryA reports
+ *   C:\Windows\System32, and the WOW64 file-system redirector turns that into
+ *   SysWOW64 for this 32-bit process, which is where the 32-bit dinput8.dll is.)
+ *
+ * ORDINALS
+ *   The system dinput8.dll exports its six names at ordinals 1..6 in alphabetical
+ *   order.  MSVC would assign the same ordinals by itself - it numbers exports
+ *   alphabetically - but "would" is not "does", and an importer that binds by
+ *   ordinal instead of by name gets no error, it gets the wrong function.  Pin
+ *   them.
+ *
+ * THE EXPORTS EXIST IN THE INJECTED BUILD TOO
+ *   avatar_console.dll and dinput8.dll are the SAME FILE under two names; build.bat
+ *   copies one to the other.  Injected, these stubs are simply never called - no
+ *   import table in the process names us - and LoadRealDInput8 is never run,
+ *   because DllMain only runs it when our own file name is dinput8.dll.  One
+ *   binary means the two paths cannot drift apart.
+ * ========================================================================== */
+
+static HMODULE g_realDI = 0;
+static FARPROC g_di_DirectInput8Create   = 0;
+static FARPROC g_di_DllCanUnloadNow      = 0;
+static FARPROC g_di_DllGetClassObject    = 0;
+static FARPROC g_di_DllRegisterServer    = 0;
+static FARPROC g_di_DllUnregisterServer  = 0;
+static FARPROC g_di_GetdfDIJoystick      = 0;
+
+/* `mov eax, ptr` then `jmp eax`, NOT `jmp dword ptr [ptr]`.
+   MSVC's inline assembler is famously loose about whether a bare C symbol in an
+   operand means the variable's address or its contents, and the two spellings of
+   an indirect jump differ by exactly that - one lands on the target, the other
+   executes the pointer as code.  The two-instruction form is unambiguous in any
+   reading.  Clobbering EAX is free: all six of these are __stdcall, EAX is the
+   return-value register, so no caller can expect it to survive the call.  ECX,
+   EDX and the whole stack frame are untouched, which is what lets one stub shape
+   forward functions with different argument counts. */
+#define DI_STUB(name)                                                          \
+    extern "C" __declspec(naked) void __stdcall Proxy_##name(void)             \
+    {                                                                          \
+        __asm { mov eax, g_di_##name }                                         \
+        __asm { jmp eax }                                                      \
+    }
+
+DI_STUB(DirectInput8Create)
+DI_STUB(DllCanUnloadNow)
+DI_STUB(DllGetClassObject)
+DI_STUB(DllRegisterServer)
+DI_STUB(DllUnregisterServer)
+DI_STUB(GetdfDIJoystick)
+
+/* The export table.  In the source rather than a .def file to keep this a
+   one-file build - build.bat's cl line stays as it was.  `_Proxy_X@0` is the
+   __stdcall decoration MSVC gives a zero-argument function; the exported name is
+   the undecorated one on the left, which is what Dunia's import table asks for. */
+/* LNK4104, suppressed on purpose and understood before it was suppressed.
+   The linker recognises DllCanUnloadNow / DllGetClassObject / DllRegisterServer
+   / DllUnregisterServer by name and says each "should be PRIVATE", meaning: keep
+   them out of the IMPORT LIBRARY so nobody links against a COM entry point
+   statically.  Perfectly good advice for a real COM server and irrelevant here -
+   build.bat deletes avatar_console.lib the moment the link finishes, so the
+   import library it is worried about does not survive the build.
+   Marking them PRIVATE instead just trades LNK4104 for LNK4222 ("should not be
+   assigned an ordinal"), and the ordinals are the part that has to be right, so
+   the ordinals stay and the warning goes.  Four warnings that are always there
+   are four warnings nobody reads.
+   The suppression itself lives on build.bat's link line (/IGNORE:4104) and not
+   here: /IGNORE is not one of the options the linker accepts from an .obj
+   directive section, and writing it as a #pragma earns LNK4229 - a fifth
+   warning, about the attempt to silence the other four. */
+#pragma comment(linker, "/export:DirectInput8Create=_Proxy_DirectInput8Create@0,@1")
+#pragma comment(linker, "/export:DllCanUnloadNow=_Proxy_DllCanUnloadNow@0,@2")
+#pragma comment(linker, "/export:DllGetClassObject=_Proxy_DllGetClassObject@0,@3")
+#pragma comment(linker, "/export:DllRegisterServer=_Proxy_DllRegisterServer@0,@4")
+#pragma comment(linker, "/export:DllUnregisterServer=_Proxy_DllUnregisterServer@0,@5")
+#pragma comment(linker, "/export:GetdfDIJoystick=_Proxy_GetdfDIJoystick@0,@6")
+
+/* Called from DllMain, i.e. under the loader lock.
+   LoadLibrary from DllMain is the documented no-no, and it is what every proxy
+   DLL ever written does here, for the reason that there is nowhere else to put
+   it: the engine can call DirectInput8Create from any thread at any time after
+   this, so the pointers have to be valid before we return.  What makes the
+   documented deadlock impossible in this specific case is what we load: a leaf
+   system DLL whose own dependencies (kernel32, user32, advapi32, ole32, msvcrt)
+   are all already mapped and initialised by the time anything in Dunia's import
+   list is being processed.  Nothing here can wait on another thread's loader
+   work, so there is no cycle to deadlock on.
+
+   No fallback stub for the failure case: a naked jmp cannot invent the __stdcall
+   stack cleanup for a function whose argument count it does not know, so there is
+   nothing correct to return.  Say so loudly instead - this can only happen if
+   SysWOW64\dinput8.dll is missing, at which point the game would not have started
+   without us either. */
+static void LoadRealDInput8(void)
+{
+    char path[MAX_PATH];
+    UINT n = GetSystemDirectoryA(path, MAX_PATH);
+    if (!n || n >= MAX_PATH - 16) {
+        MessageBoxA(0, "avatar console: GetSystemDirectory failed - cannot find "
+                       "the real dinput8.dll.", "avatar_console", MB_ICONERROR | MB_OK);
+        return;
+    }
+    if (path[n - 1] != '\\') { path[n++] = '\\'; }
+    strcpy(path + n, "dinput8.dll");
+
+    g_realDI = LoadLibraryA(path);
+    if (!g_realDI) {
+        MessageBoxA(0, "avatar console: could not load the real dinput8.dll.\n\n"
+                       "Delete dinput8.dll from the game's bin folder to start "
+                       "the game without the mod.", "avatar_console",
+                    MB_ICONERROR | MB_OK);
+        return;
+    }
+    g_di_DirectInput8Create  = GetProcAddress(g_realDI, "DirectInput8Create");
+    g_di_DllCanUnloadNow     = GetProcAddress(g_realDI, "DllCanUnloadNow");
+    g_di_DllGetClassObject   = GetProcAddress(g_realDI, "DllGetClassObject");
+    g_di_DllRegisterServer   = GetProcAddress(g_realDI, "DllRegisterServer");
+    g_di_DllUnregisterServer = GetProcAddress(g_realDI, "DllUnregisterServer");
+    g_di_GetdfDIJoystick     = GetProcAddress(g_realDI, "GetdfDIJoystick");
+    /* Only the first one is actually imported by Dunia.dll - checked with
+       dumpbin /imports, DINPUT8.dll's thunk list is one entry long.  The other
+       five are forwarded so that anything else in the process that happens to use
+       DirectInput (an overlay, a controller utility) is not broken by our sitting
+       in the path.  A missing pointer among those five is survivable; a missing
+       DirectInput8Create is not. */
+    if (!g_di_DirectInput8Create)
+        MessageBoxA(0, "avatar console: the real dinput8.dll has no "
+                       "DirectInput8Create.", "avatar_console", MB_ICONERROR | MB_OK);
+}
+
+BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
+{
+    (void)reserved;
+    if (reason == DLL_PROCESS_ATTACH) {
+        char  self[MAX_PATH];
+        char* slash;
+        const char* base;
+        g_self = (HMODULE)inst;
+        g_t0    = GetTickCount();
+        DisableThreadLibraryCalls(inst);
+
+        /* Our own file name decides the mode, so keep it before g_dir chops the
+           path apart.  g_dir is still the directory this DLL sits in - which in
+           proxy mode is the game's bin\ folder, so the log and
+           console_cmds.txt all live next to Avatar.exe rather than next to the
+           build.  That is the right place for them: it is where the user put the
+           DLL. */
+        self[0] = 0;
+        GetModuleFileNameA(inst, self, sizeof(self) - 1);
+        self[sizeof(self) - 1] = 0;
+        _snprintf(g_dir, sizeof(g_dir) - 1, "%s", self);
+        g_dir[sizeof(g_dir) - 1] = 0;
+        slash = strrchr(g_dir, '\\');
+        if (slash) *slash = 0;
+
+        base = strrchr(self, '\\');
+        base = base ? base + 1 : self;
+        if (_stricmp(base, "dinput8.dll") == 0) {
+            InterlockedExchange(&g_proxy, 1);
+            /* BEFORE the worker thread and before anything else: the game is
+               mid-startup and may ask for DirectInput at any moment. */
+            LoadRealDInput8();
+        }
+
+        InitializeCriticalSection(&g_cs);
+        InterlockedExchange(&g_csAlive, 1);
+
+        /* MUST BE HERE, not in Worker. Dunia's single-instance check runs during
+           its own init - long before g_console exists - so the only place early
+           enough is this DllMain, while the loader is still resolving Dunia's
+           imports. Opt-in; see InstallMultiInstanceHook. It writes one dword and
+           logs nothing, so it does no "work" under the loader lock. */
+        InstallMultiInstanceHook();
+        /* Same timing constraint - the profile is read during startup - and it
+           must run AFTER the mutex hook so ClaimInstanceIndex's own OpenMutexA
+           probes are not confused with Dunia's. */
+        InstallProfileRedirect();
+        /* never work inside DllMain.  Creating the thread here is safe and is not
+           the same thing as working here: the loader holds its lock until we
+           return, so the new thread blocks at its own initialisation and does not
+           run a single instruction of Worker until process init has moved on. */
+        CreateThread(0, 0, Worker, 0, 0, 0);
+    }
+    return TRUE;
+}

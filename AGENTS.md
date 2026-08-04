@@ -5260,3 +5260,92 @@ prims/triggers/shape wireframes, the exact 11-19 ms/frame path the overlay cache
 exists to avoid. It now only clears when `_movie_overlay_stale` says a MOVING
 entity actually owns overlay geometry (the flag `set_preview_entities` already
 computes). Cutscene actors normally own none, so the cache now survives playback.
+
+---
+
+## The injected console DLL — `tools/console_dll/` and `tools/DevAccess/` (Aug 2026)
+
+A second, separate product lives beside the editor: a DLL injected into the
+**running** *Avatar: The Game* (PC retail 1.02) that gives you the developer
+console, ~75 mod commands, and a named-pipe link an external tool can drive.
+`tools/DevAccess/*.md` is its reverse-engineering record; `tools/console_dll/`
+is the source. Both are now version-controlled (see `.gitignore` — the built
+`dist/*.dll`, `archive/` logs and the 60 MB+ decompiles are deliberately not).
+
+### The one thing to understand before touching it
+
+**Retail didn't lock the console, it half-deleted it.** `toggle_console` is
+delivered and hash-matched, and the case body is empty — it jumps straight to
+the epilogue. `CConsole::SetUIActive` is called twice in 16 MB of `.text` and
+both pass `false`. So there is no flag to flip: the DLL hooks
+`CConsole::UpdateUI` (vtable slot 1, called every frame, `ECX` already holds
+`g_console`) and calls the still-live `ExecuteLine` from inside it.
+
+**Engine calls are main-thread-only.** Every worker/input/pipe thread publishes a
+request; the per-frame detour performs it. Calling the engine from a spawned
+thread crashed the game instantly, every time, early in the project.
+
+### Running two instances (Aug 2026)
+
+Dunia's single-instance gate is **one `OpenMutexA` result test**:
+
+```
+1000554C  push 0x11010C14        ; "AvatarInstance"
+1000557E  call [OpenMutexA]      ; the probe
+10005586  jnz  0x10006A01        ; exists => bail (pushes "ERROR_INSTANCE_MUTEX")
+```
+
+The DLL answers NOT FOUND for that one name via a one-dword IAT swap at
+`0x11000074`, installed from `DllMain` — Dunia's init runs the check long before
+`g_console` exists, so `Worker` is far too late. Safe because `KERNEL32` is
+descriptor 1 and `DINPUT8` is descriptor 10 in Dunia's import table, so the
+thunk is already snapped (measured, not assumed; the slot is read back at
+startup and the log says `INTACT` or `CLOBBERED`).
+
+Two instances alone still can't play together — both read the same
+`GamerProfile.xml`, sign in as the same account, and Rendez-Vous kicks the first
+with `E_SESSION_ERROR_ACCOUNT_KICKED_BY_DUPLICATE_LOGON`. So instance *N* gets a
+redirected `GamerProfile<N>.xml` (via the `CreateFileW`/`CreateFileA` IAT slots),
+seeded by copy, then **stripped of accounts and given ports `9000+(N-1)*100`**.
+Copying without stripping reproduces the collision, and identical ports made the
+*lobby* stutter while gameplay stayed smooth — instance 2 was scanning up to
+1000 ports while the lobby polled. Both confirmed fixed in game.
+
+Opt-in only: `bin\avatar_multi.txt` or `AVATAR_MULTI_INSTANCE`. Delete the marker
+for stock behaviour.
+
+### NO GAME FILE IS EVER MODIFIED
+
+Every "patch" is a pointer write in the process's own copy-on-write image,
+restored on unload. `Avatar.exe` and `Dunia.dll` keep their shipped bytes. There
+is a standing rule against patching `Dunia.dll` on disk — a byte patch at
+`0x10005586` would work and is explicitly rejected for this reason.
+
+### Build gotchas
+
+- `build.bat` needs **`vswhere -prerelease`**. Without it, a machine whose only
+  toolchain is VS Insiders/Preview finds nothing and the build dies with
+  "could not find vcvarsall.bat" while a working `cl.exe` sits on disk.
+- Use `vcvarsall.bat x86`, not `vcvars32.bat`; compile as C++ (`/TP`) —
+  `__thiscall` is a C++ convention.
+- The game must be CLOSED to build (a loaded DLL cannot be overwritten,
+  `LNK1104`). `check_cmds.py` gates the build: dispatch and `kOurCmds[]` must
+  agree.
+- Load it with `dist\install.bat` (drop-in) **or** `dist\inject.py` — never both,
+  that is two hook sets on one vtable slot.
+
+### Rule 8 exception — this is Avatar-only, by construction
+
+Every address is hardcoded for Avatar retail 1.02 and verified against the loaded
+`Dunia.dll`. Far Cry 2 is Dunia too but a different build with a different
+address set; parity would mean redoing the reverse engineering, not porting code.
+Recorded here as the explicit exception Rule 8 asks for.
+
+### Reading the DevAccess docs
+
+They are largely accurate but carry dated claims — check the correction banners
+at the top of `CONSOLE_AUDIT.md` and `CONSOLE_INPUT_BUG.md` before acting on
+anything in them. **The Ghidra decompile has large unanalysed gaps**: it showed 2
+`CreateMutexA` call sites where the binary has 5, which is how the
+single-instance check stayed hidden. For anything load-bearing, disassemble the
+shipped DLL rather than trusting the decompile.
