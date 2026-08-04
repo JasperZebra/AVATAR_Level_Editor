@@ -3552,6 +3552,7 @@ class SimplifiedMapEditor(QMainWindow):
             self._create_sector_win = mod.CreateSectorWindow(
                 worldsectors_dir=ws,
                 worlds_generated_dir=wg,
+                game_mode=getattr(self, 'game_mode', 'avatar'),
             )
             self._create_sector_win.sectors_created.connect(self._load_new_worldsectors)
             self._create_sector_win.show()
