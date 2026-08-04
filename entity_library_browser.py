@@ -583,7 +583,10 @@ class EntityLibraryBrowserDialog(QDialog):
         self._simple_tree.setColumnCount(2)
         self._simple_tree.setHeaderLabels(["Field / Component", "Value"])
         self._simple_tree.setUniformRowHeights(True)
-        self._simple_tree.setAlternatingRowColors(True)
+        # NO alternating row colors: the striping rendered as alternating
+        # dark/light bands that made the field/component text hard to read
+        # (user request Aug 2026) — every row keeps the single theme background.
+        self._simple_tree.setAlternatingRowColors(False)
         self._simple_tree.setRootIsDecorated(True)
         self._simple_tree.setWordWrap(False)
         self._simple_tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
