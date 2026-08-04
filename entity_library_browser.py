@@ -1,7 +1,24 @@
 """
-Entity Library Browser — viewer for entitylibrary.fcb.converted.xml files.
+Entity Library Browser / FCB editor — for entitylibrary.fcb.converted.xml files.
 Left panel  : Library → Prototype tree with search.
-Right panel : Simple tab (QTreeWidget, fast) + XML tab (raw XML with search/copy).
+Right panel : Simple tab (editable QTreeWidget) + XML tab (editable raw XML).
+
+Editing model (matches the entity editor's philosophy):
+- Simple tab: click a field's Value cell to edit it in place. The edit updates
+  BOTH the cosmetic `value-*` attribute AND the authoritative BinHex text —
+  the native FCB converter reads the BinHex, so without that sync an edit
+  would silently not make it into the regenerated .fcb.
+- XML tab: free-text editing + "Apply Changes". On apply the edited XML is
+  parsed and every simple field's BinHex is REGENERATED from its `value-*`
+  attribute (the friendly value wins; hand-edited hex on such fields is
+  overwritten). Structural fields (child elements / __rawhex) are untouched.
+- Save writes the whole tree back to the loaded file (first save keeps a .bak).
+  Reconverting to .fcb stays with the Tools-menu entitylibrary converter.
+
+Encodings ground-truthed against retail files (Aug 2026): value-ComputeHash32
+stores CRC-32 of the (case-sensitive) string; Hash32/UInt32/Enum are LE uint32
+of the shown integer; String is null-terminated ASCII; Float32/Vector2/3/4 are
+LE floats; Boolean is one byte 01/00; Id64 is LE uint64.
 
 Performance notes:
 - File parsing runs in a QThread to keep the UI responsive.
@@ -11,12 +28,15 @@ Performance notes:
 """
 
 import os
+import struct
+import zlib
 import xml.etree.ElementTree as ET
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSplitter, QTreeWidget, QTreeWidgetItem,
     QTabWidget, QWidget, QLabel, QLineEdit, QPushButton, QPlainTextEdit,
     QMessageBox, QFileDialog, QApplication, QProgressBar, QHeaderView,
+    QAbstractItemView,
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QSyntaxHighlighter
@@ -38,6 +58,39 @@ class _LoadWorker(QThread):
         try:
             root = ET.parse(self._path).getroot()
             self.done.emit(root)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+def _make_backup(path):
+    """Copy path → path.bak once (never overwrite an existing backup)."""
+    bak = path + '.bak'
+    if not os.path.exists(bak):
+        import shutil
+        shutil.copy2(path, bak)
+        return True
+    return False
+
+
+class _SaveWorker(QThread):
+    """Serialise + write the edited library off the GUI thread (these files can
+    be tens of MB). The tree is not mutated while saving — the dialog disables
+    Save until the worker reports back."""
+    done  = pyqtSignal(bool)     # backup_made
+    error = pyqtSignal(str)
+
+    def __init__(self, root, path, make_backup=True):
+        super().__init__()
+        self._root = root
+        self._path = path
+        self._make_backup = make_backup
+
+    def run(self):
+        try:
+            backed_up = _make_backup(self._path) if self._make_backup else False
+            ET.ElementTree(self._root).write(
+                self._path, encoding='utf-8', xml_declaration=True)
+            self.done.emit(backed_up)
         except Exception as exc:
             self.error.emit(str(exc))
 
@@ -70,6 +123,131 @@ class _XmlHighlighter(QSyntaxHighlighter):
 
 
 # ---------------------------------------------------------------------------
+# Value ↔ BinHex encoding (verified against retail converted XML)
+# ---------------------------------------------------------------------------
+
+def _enc_floats(value, n):
+    parts = [float(v) for v in str(value).replace(' ', '').split(',') if v != '']
+    if len(parts) != n:
+        raise ValueError(f"expected {n} comma-separated numbers")
+    return struct.pack('<' + 'f' * n, *parts).hex().upper()
+
+
+_BINHEX_ENCODERS = {
+    'String':         lambda v: (str(v) + '\x00').encode('ascii', 'replace').hex().upper(),
+    'ComputeHash32':  lambda v: struct.pack('<I', zlib.crc32(str(v).encode('utf-8'))).hex().upper(),
+    'Hash32':         lambda v: struct.pack('<I', int(v) & 0xFFFFFFFF).hex().upper(),
+    'UInt32':         lambda v: struct.pack('<I', int(v)).hex().upper(),
+    'Enum':           lambda v: struct.pack('<I', int(v)).hex().upper(),
+    'Int32':          lambda v: struct.pack('<i', int(v)).hex().upper(),
+    'Id64':           lambda v: struct.pack('<Q', int(v)).hex().upper(),
+    'Float32':        lambda v: struct.pack('<f', float(v)).hex().upper(),
+    'Boolean':        lambda v: '01' if str(v).strip().lower() in ('true', '1', 'yes') else '00',
+    'Vector2':        lambda v: _enc_floats(v, 2),
+    'Vector3':        lambda v: _enc_floats(v, 3),
+    'Vector4':        lambda v: _enc_floats(v, 4),
+}
+
+_BOOL_NORMALIZE = {'Boolean': lambda v: 'True' if str(v).strip().lower() in ('true', '1', 'yes') else 'False'}
+
+
+def _field_value_attr(field_elem):
+    """The field's single value-* attribute name, or None."""
+    attrs = [a for a in field_elem.attrib if a.startswith('value-')]
+    return attrs[0] if len(attrs) == 1 else None
+
+
+def _field_is_editable(field_elem):
+    """Simple scalar fields only: one supported value-* attr, no child elements,
+    no authoritative __rawhex (structural RML fields — editing their text would
+    be ignored or corrupt the re-encode)."""
+    if field_elem.get('__rawhex') is not None or len(field_elem) > 0:
+        return False
+    attr = _field_value_attr(field_elem)
+    return attr is not None and attr[6:] in _BINHEX_ENCODERS
+
+
+def _apply_field_edit(field_elem, new_value):
+    """Write `new_value` into the field: value-* attribute (cosmetic display)
+    AND regenerated BinHex text (what the FCB converter actually reads).
+    Returns the normalized display value. Raises ValueError on bad input."""
+    attr = _field_value_attr(field_elem)
+    if attr is None or not _field_is_editable(field_elem):
+        raise ValueError("field is not editable")
+    suffix = attr[6:]
+    try:
+        hexstr = _BINHEX_ENCODERS[suffix](new_value)
+    except (ValueError, OverflowError, struct.error) as exc:
+        raise ValueError(f"invalid {suffix} value: {exc}")
+    shown = _BOOL_NORMALIZE.get(suffix, lambda v: str(v))(new_value)
+    field_elem.set(attr, shown)
+    field_elem.text = hexstr
+    return shown
+
+
+def _resync_binhex(root_elem):
+    """Regenerate BinHex from the value-* attribute on every editable field
+    under root_elem (used after a raw-XML edit — the friendly value wins).
+    Returns the number of fields whose hex actually changed."""
+    changed = 0
+    for field in root_elem.iter('field'):
+        if not _field_is_editable(field):
+            continue
+        attr = _field_value_attr(field)
+        try:
+            hexstr = _BINHEX_ENCODERS[attr[6:]](field.get(attr))
+        except (ValueError, OverflowError, struct.error):
+            continue   # unparsable display value — leave the existing hex alone
+        if (field.text or '').strip().upper() != hexstr:
+            field.text = hexstr
+            changed += 1
+    return changed
+
+
+# ---------------------------------------------------------------------------
+# Dark theme — the dialog hardcodes light text colors (#d4d4d4, #9CDCFE, …),
+# so without an explicit dark stylesheet the system light palette rendered
+# white-on-white trees that only became readable when a row was selected.
+# ---------------------------------------------------------------------------
+
+_DARK_STYLE = """
+QDialog, QWidget { background: #1e1e1e; color: #d4d4d4; }
+QTreeWidget {
+    background: #252526; alternate-background-color: #2c2c2d;
+    color: #d4d4d4; border: 1px solid #3a3a3a;
+    selection-background-color: #094771;
+}
+QTreeWidget::item { min-height: 18px; }
+QTreeWidget::item:selected { background: #094771; color: #ffffff; }
+QHeaderView::section {
+    background: #2d2d30; color: #cccccc; border: none;
+    border-right: 1px solid #3a3a3a; border-bottom: 1px solid #3a3a3a;
+    padding: 3px 6px; font-size: 10px;
+}
+QLineEdit {
+    background: #2d2d30; color: #d4d4d4; border: 1px solid #3a4a5a;
+    border-radius: 3px; padding: 2px 4px; selection-background-color: #094771;
+}
+QPlainTextEdit { background: #1a1a1a; color: #d4d4d4; border: 1px solid #333; }
+QTabWidget::pane { border: 1px solid #3a3a3a; background: #1e1e1e; }
+QTabBar::tab {
+    background: #2d2d30; color: #aaaaaa; padding: 5px 14px;
+    border: 1px solid #3a3a3a; border-bottom: none;
+    border-top-left-radius: 3px; border-top-right-radius: 3px;
+}
+QTabBar::tab:selected { background: #1e2a38; color: #ffffff; }
+QTabBar::tab:hover { background: #3a4a5a; }
+QSplitter::handle { background: #2d2d30; }
+QProgressBar { background: #2d2d30; border: 1px solid #3a3a3a; border-radius: 3px; }
+QProgressBar::chunk { background: #094771; }
+QScrollBar:vertical { background: #1e1e1e; width: 12px; }
+QScrollBar::handle:vertical { background: #3a3a3a; border-radius: 4px; min-height: 24px; }
+QScrollBar:horizontal { background: #1e1e1e; height: 12px; }
+QScrollBar::handle:horizontal { background: #3a3a3a; border-radius: 4px; min-width: 24px; }
+"""
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -93,6 +271,30 @@ def _field_type(field_elem):
     return ""
 
 
+_FIELD_ROLE = Qt.UserRole + 1   # simple-tree items: the backing <field> element
+
+
+def _make_field_item(parent_item, field):
+    """One field row: shows name/value, carries the backing element, and is
+    flagged editable (value column) when the field is a simple scalar."""
+    name  = field.get('name') or field.get('hash', '?')
+    value = _field_value(field)
+    ftype = _field_type(field)
+    fi = QTreeWidgetItem(parent_item, [name, value])
+    fi.setForeground(0, QColor("#9CDCFE"))
+    if _field_is_editable(field):
+        fi.setData(0, _FIELD_ROLE, field)
+        fi.setFlags(fi.flags() | Qt.ItemIsEditable)
+        fi.setForeground(1, QColor("#d4d4d4"))
+        tip = f"Type: {ftype} — click to edit (BinHex updates automatically)"
+    else:
+        fi.setForeground(1, QColor("#8a8a8a"))
+        tip = (f"Type: {ftype} — read-only (structural field)" if ftype
+               else "read-only (structural field)")
+    fi.setToolTip(1, tip)
+    return fi
+
+
 def _add_elem_to_tree(elem, parent_item, depth=0):
     """Recursively add an FCB <object> and its children to a QTreeWidget item."""
     title = elem.get('name') or elem.get('hash', 'object')
@@ -101,14 +303,7 @@ def _add_elem_to_tree(elem, parent_item, depth=0):
     obj_item.setForeground(0, QColor("#4EC9B0") if depth == 0 else QColor("#B5CEA8"))
 
     for field in elem.findall("field"):
-        name  = field.get('name') or field.get('hash', '?')
-        value = _field_value(field)
-        ftype = _field_type(field)
-        fi = QTreeWidgetItem(obj_item, [name, value])
-        fi.setForeground(0, QColor("#9CDCFE"))
-        fi.setForeground(1, QColor("#d4d4d4"))
-        if ftype:
-            fi.setToolTip(1, f"Type: {ftype}")
+        _make_field_item(obj_item, field)
 
     if depth < 5:
         for child in elem.findall("object"):
@@ -134,12 +329,18 @@ class EntityLibraryBrowserDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Entity Library Browser")
         self.resize(1350, 860)
+        self.setStyleSheet(_DARK_STYLE)
 
         self._xml_root        = None
-        self._proto_items     = {}   # id(QTreeWidgetItem) → (proto_elem, entity_elem, proto_name, lib_name)
+        self._file_path       = None
+        self._dirty           = False
+        self._backed_up       = False
+        self._proto_items     = {}   # id(QTreeWidgetItem) → (proto_elem, entity_elem, proto_name, lib_name, lib_elem)
         self._load_worker     = None
+        self._save_worker     = None
         self._filter_matches  = []   # list of visible prototype QTreeWidgetItems
         self._filter_index    = -1   # current position in _filter_matches
+        self._suppress_item_changed = False
 
         self._setup_ui()
 
@@ -161,6 +362,14 @@ class EntityLibraryBrowserDialog(QDialog):
         open_btn.setFixedWidth(90)
         open_btn.clicked.connect(self._browse_file)
 
+        self._save_btn = QPushButton("Save")
+        self._save_btn.setFixedWidth(70)
+        self._save_btn.setEnabled(False)
+        self._save_btn.setToolTip(
+            "Write edits back to the loaded .converted.xml (keeps a .bak on the "
+            "first save). Reconvert to .fcb via Tools ▸ Convert Entity Library.")
+        self._save_btn.clicked.connect(self._save_file)
+
         self._file_label = QLabel("No file loaded")
         self._file_label.setStyleSheet("color: #888; font-size: 10px;")
 
@@ -174,6 +383,7 @@ class EntityLibraryBrowserDialog(QDialog):
         self._progress.setVisible(False)
 
         top.addWidget(open_btn)
+        top.addWidget(self._save_btn)
         top.addWidget(self._file_label, 1)
         top.addWidget(self._progress)
         top.addWidget(self._count_label)
@@ -348,7 +558,10 @@ class EntityLibraryBrowserDialog(QDialog):
         srow.addWidget(collapse_btn)
         layout.addLayout(srow)
 
-        # QTreeWidget — virtualised, handles thousands of rows without lag
+        # QTreeWidget — virtualised, handles thousands of rows without lag.
+        # Editing: NoEditTriggers + programmatic editItem from _on_simple_clicked
+        # so ONLY the Value column of editable field rows opens an editor (the
+        # default triggers would let the name column be edited too).
         self._simple_tree = QTreeWidget()
         self._simple_tree.setColumnCount(2)
         self._simple_tree.setHeaderLabels(["Field / Component", "Value"])
@@ -356,6 +569,9 @@ class EntityLibraryBrowserDialog(QDialog):
         self._simple_tree.setAlternatingRowColors(True)
         self._simple_tree.setRootIsDecorated(True)
         self._simple_tree.setWordWrap(False)
+        self._simple_tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._simple_tree.itemClicked.connect(self._on_simple_clicked)
+        self._simple_tree.itemChanged.connect(self._on_simple_item_changed)
         header = self._simple_tree.header()
         header.setSectionResizeMode(0, QHeaderView.Interactive)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -423,6 +639,16 @@ class EntityLibraryBrowserDialog(QDialog):
         copy_btn.setStyleSheet(_btn_style)
         copy_btn.clicked.connect(self._copy_xml)
 
+        self._xml_apply_btn = QPushButton("Apply Changes")
+        self._xml_apply_btn.setFixedWidth(95)
+        self._xml_apply_btn.setStyleSheet(_btn_style)
+        self._xml_apply_btn.setToolTip(
+            "Parse the edited XML and take it as this prototype's new content.\n"
+            "Every simple field's BinHex is regenerated from its value-* "
+            "attribute (the friendly value wins).")
+        self._xml_apply_btn.setEnabled(False)
+        self._xml_apply_btn.clicked.connect(self._apply_xml_changes)
+
         toolbar.addWidget(self._xml_status)
         toolbar.addStretch()
         toolbar.addWidget(find_lbl)
@@ -431,8 +657,12 @@ class EntityLibraryBrowserDialog(QDialog):
         toolbar.addWidget(self._xml_next)
         toolbar.addWidget(self._xml_match_label)
         toolbar.addWidget(copy_btn)
+        toolbar.addWidget(self._xml_apply_btn)
         layout.addLayout(toolbar)
 
+        # Editable like the entity editor's XML tab; Apply commits + resyncs
+        # BinHex. Truncated displays stay read-only (applying a cut-off dump
+        # would destroy the prototype).
         self._xml_view = QPlainTextEdit()
         self._xml_view.setFont(QFont("Consolas", 9))
         self._xml_view.setReadOnly(True)
@@ -442,6 +672,7 @@ class EntityLibraryBrowserDialog(QDialog):
         self._xml_view.setLineWrapMode(QPlainTextEdit.NoWrap)
         _XmlHighlighter(self._xml_view.document())
         layout.addWidget(self._xml_view, 1)
+        self._xml_truncated = False
 
         # Internal XML-find state
         self._xml_cursors = []   # list of QTextCursor for each match
@@ -480,7 +711,14 @@ class EntityLibraryBrowserDialog(QDialog):
         self._search.blockSignals(False)
         self._simple_tree.clear()
         self._xml_view.setPlainText("")
+        self._xml_view.setReadOnly(True)
+        self._xml_apply_btn.setEnabled(False)
         self._current_proto_elem = None
+        self._current_item_key = None
+        self._dirty = False
+        self._backed_up = False
+        self._save_btn.setEnabled(False)
+        self.setWindowTitle("Entity Library Browser")
         self._header.setText("Loading…")
 
         self._load_worker = _LoadWorker(file_path)
@@ -491,6 +729,7 @@ class EntityLibraryBrowserDialog(QDialog):
     def _on_loaded(self, root, file_path):
         self._progress.setVisible(False)
         self._xml_root = root
+        self._file_path = file_path
         self._file_label.setText(os.path.basename(file_path))
         self._header.setText("Select a prototype from the list")
         self._populate_entity_tree()
@@ -527,7 +766,8 @@ class EntityLibraryBrowserDialog(QDialog):
 
                 proto_item = QTreeWidgetItem(lib_item, [proto_name])
                 key = id(proto_item)
-                self._proto_items[key] = (proto_elem, entity_elem, proto_name, lib_name)
+                self._proto_items[key] = (proto_elem, entity_elem, proto_name,
+                                          lib_name, lib_elem)
                 proto_item.setData(0, Qt.UserRole, key)
                 total += 1
 
@@ -541,8 +781,9 @@ class EntityLibraryBrowserDialog(QDialog):
         key = item.data(0, Qt.UserRole)
         if key is None or key not in self._proto_items:
             return
-        proto_elem, entity_elem, proto_name, lib_name = self._proto_items[key]
+        proto_elem, entity_elem, proto_name, lib_name, _lib_elem = self._proto_items[key]
         self._current_proto_elem = proto_elem
+        self._current_item_key = key
         self._header.setText(f"{lib_name}  ›  {proto_name}")
         self._simple_search.blockSignals(True)
         self._simple_search.clear()
@@ -574,11 +815,13 @@ class EntityLibraryBrowserDialog(QDialog):
     # ------------------------------------------------------------------
 
     def _refresh_simple_tab(self, entity_elem):
+        self._suppress_item_changed = True
         self._simple_tree.setUpdatesEnabled(False)
         self._simple_tree.clear()
 
         if entity_elem is None:
             self._simple_tree.setUpdatesEnabled(True)
+            self._suppress_item_changed = False
             return
 
         # Properties group — direct <field> children of Entity
@@ -589,14 +832,7 @@ class EntityLibraryBrowserDialog(QDialog):
             f = props_item.font(0); f.setBold(True); props_item.setFont(0, f)
             props_item.setForeground(0, QColor("#aaaaaa"))
             for field in direct_fields:
-                name  = field.get('name') or field.get('hash', '?')
-                value = _field_value(field)
-                ftype = _field_type(field)
-                fi = QTreeWidgetItem(props_item, [name, value])
-                fi.setForeground(0, QColor("#9CDCFE"))
-                fi.setForeground(1, QColor("#d4d4d4"))
-                if ftype:
-                    fi.setToolTip(1, f"Type: {ftype}")
+                _make_field_item(props_item, field)
 
         # Components
         components_elem = entity_elem.find("object[@name='Components']")
@@ -611,6 +847,59 @@ class EntityLibraryBrowserDialog(QDialog):
                 _add_elem_to_tree(child, self._simple_tree)
 
         self._simple_tree.setUpdatesEnabled(True)
+        self._suppress_item_changed = False
+
+    # ------------------------------------------------------------------
+    # Simple tab — in-place editing (value column + auto-BinHex)
+    # ------------------------------------------------------------------
+
+    def _on_simple_clicked(self, item, col):
+        """Open the inline editor on the Value column of editable field rows."""
+        try:
+            if col == 1 and item.data(0, _FIELD_ROLE) is not None:
+                self._simple_tree.editItem(item, 1)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+    def _on_simple_item_changed(self, item, col):
+        """Commit an inline edit: value-* attribute + regenerated BinHex text.
+        Bad input reverts the cell (PyQt5 aborts on escaped slot exceptions,
+        so everything is guarded)."""
+        if self._suppress_item_changed or col != 1:
+            return
+        field = item.data(0, _FIELD_ROLE)
+        if field is None:
+            return
+        try:
+            shown = _apply_field_edit(field, item.text(1))
+            self._suppress_item_changed = True
+            item.setText(1, shown)     # normalized display (e.g. bool → True/False)
+            self._suppress_item_changed = False
+            self._mark_dirty()
+            self._xml_view.setPlainText("")   # stale — lazy-regenerated on tab switch
+            name = field.get('name') or field.get('hash', '?')
+            self._file_label.setText(
+                f"{os.path.basename(self._file_path or '')} — {name} = {shown} "
+                f"(BinHex {field.text})")
+        except ValueError as exc:
+            # Revert to the element's current (unchanged) value.
+            self._suppress_item_changed = True
+            item.setText(1, _field_value(field))
+            self._suppress_item_changed = False
+            QMessageBox.warning(self, "Edit Field", f"Value rejected:\n{exc}")
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            self._suppress_item_changed = False
+
+    def _mark_dirty(self):
+        self._dirty = True
+        self._save_btn.setEnabled(True)
+        title = "Entity Library Browser"
+        if self._file_path:
+            title += f" — {os.path.basename(self._file_path)}*"
+        self.setWindowTitle(title)
 
     def _filter_simple_tree(self, text):
         text = text.lower().strip()
@@ -686,21 +975,76 @@ class EntityLibraryBrowserDialog(QDialog):
         if proto_elem is None:
             self._xml_view.setPlainText("")
             self._xml_status.setText("")
+            self._xml_view.setReadOnly(True)
+            self._xml_apply_btn.setEnabled(False)
             return
         try:
             text = ET.tostring(proto_elem, encoding='unicode')
             if len(text) > _XML_DISPLAY_LIMIT:
+                self._xml_truncated = True
                 shown = text[:_XML_DISPLAY_LIMIT]
                 self._xml_view.setPlainText(
                     shown + f"\n\n… truncated — {len(text):,} chars total"
                     " (use Copy XML to get the full content)")
                 self._xml_status.setText(
-                    f"{len(text):,} chars (showing first {_XML_DISPLAY_LIMIT:,})")
+                    f"{len(text):,} chars (showing first {_XML_DISPLAY_LIMIT:,}) — read-only")
+                self._xml_view.setReadOnly(True)
+                self._xml_apply_btn.setEnabled(False)
             else:
+                self._xml_truncated = False
                 self._xml_view.setPlainText(text)
-                self._xml_status.setText(f"{len(text):,} chars")
+                self._xml_status.setText(f"{len(text):,} chars — editable")
+                self._xml_view.setReadOnly(False)
+                self._xml_apply_btn.setEnabled(True)
         except Exception as exc:
             self._xml_view.setPlainText(f"Error: {exc}")
+            self._xml_view.setReadOnly(True)
+            self._xml_apply_btn.setEnabled(False)
+
+    def _apply_xml_changes(self):
+        """Parse the edited XML, regenerate every simple field's BinHex from its
+        value-* attribute, and swap the result in as this prototype's content."""
+        try:
+            if self._current_proto_elem is None or self._xml_truncated:
+                return
+            key = getattr(self, '_current_item_key', None)
+            if key is None or key not in self._proto_items:
+                return
+            try:
+                new_elem = ET.fromstring(self._xml_view.toPlainText())
+            except ET.ParseError as exc:
+                QMessageBox.warning(self, "Apply Changes", f"XML does not parse:\n{exc}")
+                return
+
+            synced = _resync_binhex(new_elem)
+
+            old_elem, _entity, _name, lib_name, lib_elem = self._proto_items[key]
+            children = list(lib_elem)
+            if old_elem not in children:
+                QMessageBox.warning(self, "Apply Changes",
+                                    "Prototype no longer found in its library — reload the file.")
+                return
+            idx = children.index(old_elem)
+            lib_elem.remove(old_elem)
+            lib_elem.insert(idx, new_elem)
+
+            pf = new_elem.find("field[@name='Name']")
+            proto_name = pf.get('value-String', 'Unknown') if pf is not None else 'Unknown'
+            entity_elem = new_elem.find("object[@name='Entity']")
+            self._proto_items[key] = (new_elem, entity_elem, proto_name, lib_name, lib_elem)
+            self._current_proto_elem = new_elem
+
+            self._header.setText(f"{lib_name}  ›  {proto_name}")
+            self._refresh_simple_tab(entity_elem)
+            self._refresh_xml_tab(new_elem)   # shows the resynced BinHex
+            self._mark_dirty()
+            self._file_label.setText(
+                f"{os.path.basename(self._file_path or '')} — applied "
+                f"({synced} BinHex value(s) regenerated)")
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, "Apply Changes", f"Apply failed:\n{exc}")
 
     def _copy_xml(self):
         if self._current_proto_elem is None:
@@ -811,11 +1155,79 @@ class EntityLibraryBrowserDialog(QDialog):
         self._on_item_clicked(item, 0)
 
     # ------------------------------------------------------------------
+    # Saving
+    # ------------------------------------------------------------------
+
+    def _save_file(self):
+        """Write the edited tree back to the loaded .converted.xml. First save
+        keeps a .bak of the original. Runs in a worker thread — entitylibrary
+        files can be tens of MB and serialising on the GUI thread would hang
+        the app."""
+        try:
+            if not self._dirty or not self._file_path or self._xml_root is None:
+                return
+            if self._save_worker and self._save_worker.isRunning():
+                return   # a save is already running
+            self._save_btn.setEnabled(False)
+            self._progress.setVisible(True)
+            self._file_label.setText(f"Saving {os.path.basename(self._file_path)}…")
+            self._save_worker = _SaveWorker(self._xml_root, self._file_path,
+                                            make_backup=not self._backed_up)
+            self._save_worker.done.connect(self._on_saved)
+            self._save_worker.error.connect(self._on_save_error)
+            self._save_worker.start()
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            self._progress.setVisible(False)
+            QMessageBox.warning(self, "Save", f"Save failed to start:\n{exc}")
+
+    def _on_saved(self, backed_up):
+        self._progress.setVisible(False)
+        self._backed_up = self._backed_up or backed_up
+        self._dirty = False
+        self.setWindowTitle(f"Entity Library Browser — {os.path.basename(self._file_path)}")
+        self._file_label.setText(
+            f"{os.path.basename(self._file_path)} — saved"
+            + (" (.bak kept)" if backed_up else ""))
+
+    def _on_save_error(self, msg):
+        self._progress.setVisible(False)
+        self._save_btn.setEnabled(True)
+        QMessageBox.warning(self, "Save", f"Save failed:\n{msg}")
+
+    # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
 
     def closeEvent(self, event):
-        if self._load_worker and self._load_worker.isRunning():
-            self._load_worker.quit()
-            self._load_worker.wait()
+        try:
+            if self._dirty:
+                reply = QMessageBox.question(
+                    self, "Unsaved Changes",
+                    "This library has unsaved edits.\n\nSave before closing?",
+                    QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+                    QMessageBox.Save)
+                if reply == QMessageBox.Cancel:
+                    event.ignore()
+                    return
+                if reply == QMessageBox.Save:
+                    # Synchronous save on close — the dialog is going away, so
+                    # there is no event loop left for the worker to report to.
+                    try:
+                        if not self._backed_up:
+                            _make_backup(self._file_path)
+                        ET.ElementTree(self._xml_root).write(
+                            self._file_path, encoding='utf-8', xml_declaration=True)
+                    except Exception as exc:
+                        QMessageBox.warning(self, "Save", f"Save failed:\n{exc}")
+                        event.ignore()
+                        return
+        except Exception:
+            import traceback
+            traceback.print_exc()
+        for w in (self._load_worker, self._save_worker):
+            if w and w.isRunning():
+                w.quit()
+                w.wait()
         super().closeEvent(event)
