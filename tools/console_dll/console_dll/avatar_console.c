@@ -18720,6 +18720,101 @@ static void DrawOverlayD3D(IDirect3DDevice9* dev)
    a cosmetic bug here - the game's very next draw call inherits it, and the
    symptom (the world renders untextured, or z-testing stops) looks nothing like
    an overlay problem. */
+/* ---- locate the view-projection in the vertex shader constants -------------
+   See the block in AdmDrawD3D for why. Returns 1 and fills g_admVP.
+
+   The winning register is remembered and re-checked first each frame: the test
+   is four dot products, so a hit costs nothing, and re-checking rather than
+   trusting the cache means a register that gets reused for something else is
+   caught on the frame it changes instead of silently aiming every box.
+
+   Constants are whatever the LAST draw before Present left resident. If that is
+   a fullscreen post pass, the scene matrix may be gone - in which case the test
+   simply fails and the basis path runs. That is the honest bound on this:
+   it works when the scene constants survive to Present, and it says which
+   source it used (`admin_gui cam`) so there is no ambiguity about which. */
+#define ADM_VP_REGS 224
+
+static int g_admVpReg   = -1;      /* winning start register, -1 = unknown */
+static int g_admVpTrans = 0;       /* 1 = stored transposed                */
+
+/* (cam,1) * M, with M read either straight or transposed. */
+static void AdmVpApply(const float* m, int trans, const float* p, float* out4)
+{
+    int i;
+    for (i = 0; i < 4; ++i) {
+        out4[i] = trans
+            ? (p[0]*m[i*4+0] + p[1]*m[i*4+1] + p[2]*m[i*4+2] + m[i*4+3])
+            : (p[0]*m[0+i]   + p[1]*m[4+i]   + p[2]*m[8+i]   + m[12+i]);
+    }
+}
+
+static int AdmVpLooksRight(const float* m, int trans, const float* camPos)
+{
+    float c[4], mag = 0.0f;
+    int   i;
+    for (i = 0; i < 16; ++i) {
+        float a = m[i] < 0.0f ? -m[i] : m[i];
+        if (a > 1.0e8f) return 0;              /* garbage / uninitialised */
+        mag += a;
+    }
+    if (mag < 1.0f) return 0;                  /* all zeros is not a matrix */
+    AdmVpApply(m, trans, camPos, c);
+    /* The eye maps to the clip-space origin. Tolerance is generous because the
+       camera position we compare against is the entity's, sampled a frame ago. */
+    return (c[3] > -0.35f && c[3] < 0.35f) &&
+           (c[0] > -0.35f && c[0] < 0.35f) &&
+           (c[1] > -0.35f && c[1] < 0.35f);
+}
+
+static int AdmFindVP(IDirect3DDevice9* dev, const float* camPos)
+{
+    static float regs[ADM_VP_REGS * 4];
+    int r;
+
+    if (!camPos) return 0;
+
+    /* the remembered one first */
+    if (g_admVpReg >= 0 &&
+        SUCCEEDED(dev->GetVertexShaderConstantF(g_admVpReg, regs, 4)) &&
+        AdmVpLooksRight(regs, g_admVpTrans, camPos)) {
+        if (g_admVpTrans) {
+            int i, j;
+            for (i = 0; i < 4; ++i)
+                for (j = 0; j < 4; ++j) g_admVP[i*4+j] = regs[j*4+i];
+        } else {
+            memcpy(g_admVP, regs, sizeof(g_admVP));
+        }
+        return 1;
+    }
+
+    if (FAILED(dev->GetVertexShaderConstantF(0, regs, ADM_VP_REGS))) {
+        g_admVpReg = -1;
+        return 0;
+    }
+    for (r = 0; r + 4 <= ADM_VP_REGS; ++r) {
+        const float* m = regs + r * 4;
+        int t;
+        for (t = 0; t < 2; ++t) {
+            if (!AdmVpLooksRight(m, t, camPos)) continue;
+            g_admVpReg   = r;
+            g_admVpTrans = t;
+            if (t) {
+                int i, j;
+                for (i = 0; i < 4; ++i)
+                    for (j = 0; j < 4; ++j) g_admVP[i*4+j] = m[j*4+i];
+            } else {
+                memcpy(g_admVP, m, sizeof(g_admVP));
+            }
+            logf_("[admn] view-projection found in vs constant c%d%s",
+                  r, t ? " (transposed)" : "");
+            return 1;
+        }
+    }
+    g_admVpReg = -1;
+    return 0;
+}
+
 static void AdmDrawD3D(IDirect3DDevice9* dev)
 {
     struct LV { float x, y, z, rhw; DWORD c; } lv[8];
@@ -18774,9 +18869,33 @@ static void AdmDrawD3D(IDirect3DDevice9* dev)
     v.right = m + 0; v.fwd = m + 4; v.up = m + 8; v.cpos = m + 12;
     (void)rc;
 
-    /* Ask the device for the real transform, every frame - it changes every
-       frame, and a cached one would reintroduce exactly the staleness this
-       whole feature has already been bitten by twice. */
+    /* ---- THE TRANSFORM THE GPU IS ACTUALLY USING ------------------------
+       Four attempts at this bug have all been arithmetic on top of the same
+       assumption: that the camera ENTITY's matrix is the view. Draw-time
+       projection, viewport pixels, live FOV, and verifying the basis rotates
+       all left the boxes sliding with the camera - which is the signature of a
+       basis that is *related* to the view without being it. A player-attached
+       camera entity that yaws with the body but does not pitch with the look
+       reproduces exactly that, and `admin_gui cam` cannot tell the two apart
+       because both rotate and both stay orthonormal.
+
+       So stop deriving it. The engine is shader-based, so D3DTS_VIEW is never
+       set (measured: "D3D transform not set"), but the view-projection it feeds
+       the vertex shader is sitting in a constant register. Read it back.
+
+       FINDING IT NEEDS NO GUESSWORK. A view-projection maps the eye to the
+       origin of clip space: w_clip = z_view, which is 0 at the eye, and x and y
+       are 0 there too. We know the eye in world space. So transform the camera
+       position by each candidate 4-register block and keep the one that lands
+       on zero. A pure view matrix fails this (its w is always 1), an
+       orthographic UI matrix fails it, and a zero block is excluded explicitly
+       - so the test identifies the view-PROJECTION specifically.
+
+       Both storage conventions are tried, because a shader may hold it
+       transposed for mul(M, pos) instead of mul(pos, M).
+
+       If nothing matches, g_admVpOk stays 0 and the old basis path runs
+       unchanged - this can only improve on it, never regress it. */
     {
         D3DMATRIX view, proj;
         g_admVpOk = 0;
@@ -18787,6 +18906,9 @@ static void AdmDrawD3D(IDirect3DDevice9* dev)
             MatMul(g_admVP, (const float*)&view, (const float*)&proj);
             g_admVpOk  = 1;
             g_admVpSrc = "D3D view*projection";
+        } else if (AdmFindVP(dev, v.cpos)) {
+            g_admVpOk  = 1;                    /* g_admVP filled by the scan */
+            g_admVpSrc = "vertex shader constant (scanned)";
         }
     }
     v.ty = (float)tan((double)g_admFov * 3.14159265358979 / 360.0);
