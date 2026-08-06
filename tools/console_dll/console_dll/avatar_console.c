@@ -13922,6 +13922,10 @@ static volatile long    g_admSelf   = 1;
    explained. Declared here because `admin_gui wide` reads it 2,000 lines
    earlier than that, and the dispatcher sits above all of the sampling code. */
 static volatile long    g_admWide   = 0;
+/* Repaint request for the picker panel. Defined here rather than with the
+   rest of the picker state because AdmTick sets it to drive live coordinates
+   on the PLAYERS tab, and the sampler sits above the panel code. */
+static volatile long    g_pkcDirty  = 1;
 /* How many the SESSION said were connected, last sample - reported next to
    the entity counts so "found nobody" is never ambiguous about which
    source came up empty. */
@@ -14242,6 +14246,52 @@ static int CaptureRun(void* console, const char* line, char* out, int cap, int q
 static char          g_admNames[ADM_NAMES_MAX][ADM_NLEN];
 static volatile long g_admNameN = 0;
 
+/* The host's account name, so exactly one row can be labelled HOST. Empty when
+   unknown, and an unknown host must label NOBODY - a wrong HOST badge is worse
+   than no badge, because it is the one field an admin uses to decide who can
+   actually be actioned. */
+static char g_admHost[ADM_NLEN];
+
+/* First line of a captured reply that looks like a value rather than an echo or
+   a "key: value" status line. Shared by the one-line net_Get* commands. */
+static void AdmFirstLine(const char* buf, const char* cmd, char* out, int cap)
+{
+    const char* p = buf;
+    out[0] = 0;
+    while (*p) {
+        const char* e = p;
+        char line[128];
+        int  len;
+        while (*e && *e != '\n' && *e != '\r') ++e;
+        len = (int)(e - p);
+        if (len > (int)sizeof(line) - 1) len = (int)sizeof(line) - 1;
+        memcpy(line, p, (size_t)len);
+        line[len] = 0;
+        {
+            char* q = line;
+            while (*q == ' ' || *q == '\t') ++q;
+            len = (int)strlen(q);
+            while (len > 0 && (q[len-1] == ' ' || q[len-1] == '\t')) q[--len] = 0;
+            if (len > 0 && len < cap - 1 &&
+                _stricmp(q, cmd) != 0 && !strchr(q, ':') && !strchr(q, '=')) {
+                _snprintf(out, cap - 1, "%s", q);
+                out[cap - 1] = 0;
+                return;
+            }
+        }
+        p = e;
+        while (*p == '\n' || *p == '\r') ++p;
+    }
+}
+
+static void AdmRefreshHost(void* console, int quiet)
+{
+    char buf[512];
+    g_admHost[0] = 0;
+    if (!CaptureRun(console, "net_GetHostName", buf, sizeof(buf), quiet)) return;
+    AdmFirstLine(buf, "net_GetHostName", g_admHost, ADM_NLEN);
+}
+
 /* Pull names out of net_GetPlayerList's reply.
 
    MEASURED FORMAT: one bare name per line ("Zebra", "Jasper"). So the parse is
@@ -14295,6 +14345,11 @@ static void AdmRefreshNames(void* console, int quiet)
         p = e;
         while (*p == '\n' || *p == '\r') ++p;
     }
+    /* Who is hosting, on the same trip. net_GetHostName is a shipped command and
+       the reply is one line, so this costs one more quiet console line per
+       refresh and saves reverse-engineering a host flag on the player object. */
+    AdmRefreshHost(console, quiet);
+
     /* Log only when the roster CHANGES. The timer refresh runs every few seconds
        for as long as the tab is open, and an unconditional line here buried the
        log in identical entries - which is exactly when the log stops being worth
@@ -17278,6 +17333,25 @@ static void AdmTick(void)
     InterlockedExchange(&g_admRectN, n);
     LeaveCriticalSection(&g_admCs);
 
+    /* LIVE COORDINATES. The panel only repaints when something marks it dirty
+       (plus the caret's own 2 Hz flip), so without this the numbers on the
+       PLAYERS tab were whatever they had been when the tab was opened - which
+       looks like working coordinates and is the worst kind of wrong for a tool
+       whose job is watching people move.
+
+       10 Hz, not every sample: PkPaint redraws the whole GDI panel, and doing
+       that at frame rate would put a full repaint of a 1100x900 DIB on the
+       overlay thread sixty times a second to animate a number that a human
+       reads a few times a second. Only while the tab is actually visible. */
+    if (g_pickerOpen && g_pickMode == PK_MODE_PLAYERS) {
+        static DWORD lastDirty = 0;
+        DWORD now = GetTickCount();
+        if ((DWORD)(now - lastDirty) >= 100) {
+            lastDirty = now;
+            InterlockedExchange(&g_pkcDirty, 1);
+        }
+    }
+
     /* Telemetry logs WORLD positions, not the screen rectangle - the whole
        point is to analyse movement afterwards, and pixels are meaningless the
        moment the camera turns. */
@@ -17989,7 +18063,8 @@ static char  g_pkcQuery[128] = "";
 /* The painter was running ~70 times a second and costing ~100ms of every second
    redrawing a panel that had not changed. It only needs to redraw when state
    moves - or twice a second, for the caret blink. */
-static volatile long g_pkcDirty = 1;
+/* g_pkcDirty is defined up with the admin state - AdmTick marks the panel
+   dirty for live coordinates, and that runs long before this point. */
 /* THE REFILL IS A REQUEST, NOT A CALL, when it comes from the input thread.
    PickerRefill walks up to 4096 entities, and for each one that survives the
    name match it runs CategoryOf, which is up to thirty Stristr calls. On the
@@ -20542,7 +20617,38 @@ static void PkPaint(void)
                 if (row.bottom > lr.bottom) break;
                 if ((int)q == g_pkPlSel) PkFillRect(&row, PKV_EDGE);
                 SetTextColor(g_pkDc, PKV_GOLD);
-                _snprintf(line, sizeof(line) - 1, "%ld  %s", q, g_admNames[q]);
+                /* COORDS ON THE ACCOUNT ROW. The sampler's source 0 walks the
+                   engine's own player enumeration and names each row with the
+                   account name, so a row whose acct flag is set and whose name
+                   matches is that player's pawn - the join is by the name the
+                   engine itself supplied, not by position in two lists that can
+                   differ in length.
+
+                   Repainted on a timer while this tab is open (see AdmTick), so
+                   the numbers move as they move. */
+                {
+                    int  k2, hit = -1;
+                    for (k2 = 0; k2 < nr; ++k2)
+                        if (rows[k2].acct &&
+                            strcmp(rows[k2].name, g_admNames[q]) == 0) { hit = k2; break; }
+                    if (hit >= 0)
+                        _snprintf(line, sizeof(line) - 1,
+                                  "%-18s %7.0f %7.0f %6.0f %5.0fm%s%s",
+                                  g_admNames[q],
+                                  rows[hit].wpos[0], rows[hit].wpos[1],
+                                  rows[hit].wpos[2], rows[hit].dist,
+                                  rows[hit].local ? "  YOU" : "",
+                                  (g_admHost[0] &&
+                                   _stricmp(g_admNames[q], g_admHost) == 0)
+                                      ? "  HOST" : "");
+                    else
+                        _snprintf(line, sizeof(line) - 1,
+                                  "%-18s %-27s%s", g_admNames[q],
+                                  "(no pawn yet)",
+                                  (g_admHost[0] &&
+                                   _stricmp(g_admNames[q], g_admHost) == 0)
+                                      ? "  HOST" : "");
+                }
                 line[sizeof(line) - 1] = 0;
                 row.left += 8;
                 DrawTextA(g_pkDc, line, -1, &row,
@@ -21377,6 +21483,27 @@ static void PickerShow(void)
        by PkPaint from g_pickMode on every frame, which is why the mode bug that
        WM_SIZE resend existed to fix cannot recur: there is no per-window state
        left to be born wrong. */
+
+    /* ---- ARM THE ADMIN SIDE ON OPEN ------------------------------------
+       Opening the panel is the request. Nothing here should need a console
+       command first: the PLAYERS tab was showing "Sampling is off - press
+       TRACK" to someone who had just opened an admin tool, which is a to-do
+       list, not an answer.
+
+       Sampling is what produces coordinates, and the roster is what produces
+       names, so both are started here rather than on tab entry - by the time
+       the tab is clicked the first sample has already landed and the list is
+       populated instead of filling in under the cursor.
+
+       QueuePush for the roster because it runs a console line, which is
+       main-thread work, and this can be reached from the input thread. The
+       sampler flag is a plain interlocked store and is safe from either. */
+    AdmEnsureCs();
+    if (!g_admOn) {
+        InterlockedExchange(&g_admOn, 1);
+        logf_("[pick] panel opened - admin sampling armed");
+    }
+    QueuePush("admin_gui names quiet");
 
     /* Search text, category and selection are deliberately NOT reset - reopening
        should land you back where you left off, not at the top of a blank list. */
