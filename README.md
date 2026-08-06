@@ -17,7 +17,7 @@ A comprehensive level editor for modifying **Avatar: The Game** and **Far Cry 2*
 - **Interactive Canvas**: Color-coded entity visualization with adaptive grid system
 - **Sector Management**: Visual boundary display with violation detection; entities moved across sector (or FC2 cell) borders are re-homed to the correct sector file on save
 - **Terrain Editor**: In-app heightmap editing with brush tools and live preview — Avatar `.csdat` and Far Cry 2 `.sdat`
-- **Archive Support** *(both games)*: Point the editor at an archive — Avatar `.pak` or Far Cry 2 `.fat`/`.dat` — and it unpacks it and uses the resulting folder automatically, or pick a patch folder you have already unpacked. Repacking to `.pak` (Avatar) then builds either a full archive or a small mod archive containing only what you changed
+- **Archive Support** *(both games)*: Point the editor at an archive — Avatar `.pak` or Far Cry 2 `.fat`/`.dat` — and it unpacks it and uses the resulting folder automatically, or pick a patch folder you have already unpacked. Repacking to `.pak` (Avatar) is one click with no options — it writes the archive beside the folder, holding just your changes when the editor unpacked it and everything otherwise
 
 ## Quick Start
 
@@ -56,15 +56,24 @@ the editor resolves them against a bundled list of known paths — about 97.6% o
 it can't name are still extracted, into an `__Unknown/` folder. Repacking is
 Avatar-only for now.)*
 
-When you're finished editing, **File ▸ 📦 Repack Patch Folder to .pak...**
-builds an archive again, with two modes:
+When you're finished editing, **File ▸ 📦 Repack Patch Folder to .pak** builds an
+archive again. There is nothing to fill in — click it and it packs, writing
+`<your folder>.pak` right next to the folder it came from.
 
-- **Everything in the folder** — a complete archive, replacing the original.
-- **Only files changed since unpacking** — a small archive containing just your
-  edits. The game layers archives over one another, so dropping this in as the
-  next `patch.pakN` applies your changes without shipping a copy of the game.
+What it packs depends on what it knows about the folder:
+
+- **Unpacked by the editor** — just the files you changed since. The game layers
+  archives over one another, so dropping this in as the next `patch.pakN`
+  applies your changes without shipping a copy of the game. (If nothing changed,
+  it says so instead of writing an empty archive.)
+- **Any other folder** — everything in it, since there's no record of what it
+  started as to compare against.
+
+Either way the result tells you which one you got.
 
 Notes:
+- Your original archive is never written to. The new `.pak` lands beside the
+  folder, so a repack you don't like costs you only that file.
 - Editor scratch files (`*.fcb.converted.xml`, `*.bak`) are never packed.
 - An existing archive at the target is backed up to `.bak` before being replaced,
   and the new archive is only moved into place once it has been written in full.

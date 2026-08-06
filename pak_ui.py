@@ -6,8 +6,9 @@ Two user-facing flows:
 * **Load a .pak as the patch folder** — pick an archive, unpack it to a folder,
   then hand that folder to the ordinary patch-folder machinery.  Nothing
   downstream knows or cares that it came from an archive.
-* **Repack the patch folder back to a .pak** — either the whole folder, or only
-  the files that differ from what was extracted (a small, layerable mod pak).
+* **Repack the patch folder back to a .pak** — one click, no questions.  The
+  archive is written beside the folder it came from and the game's own archive
+  is never touched.
 
 Threading note
 --------------
@@ -27,15 +28,12 @@ import threading
 import time
 from typing import Callable, List, Optional, Tuple
 
-from PyQt5.QtCore import QThread, Qt
+from PyQt5.QtCore import QThread
 from PyQt5.QtWidgets import (
-    QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox,
-    QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
-    QRadioButton, QVBoxLayout, QWidget,
+    QApplication, QFileDialog, QMessageBox, QWidget,
 )
 
 import pak_archive as pak
-from theme_settings import apply_dialog_theme
 
 PAK_FILTER = "PAK archives (*.pak);;All files (*)"
 
@@ -495,101 +493,24 @@ def source_pak_for(main_window, folder: Optional[str] = None) -> Optional[str]:
 # Repack
 # --------------------------------------------------------------------------
 
-class RepackDialog(QDialog):
-    """Choose what to pack and where to write it."""
-
-    def __init__(self, parent, folder: str, default_target: str,
-                 has_manifest: bool):
-        super().__init__(parent)
-        self.setWindowTitle("Repack Patch Folder")
-        self.setMinimumWidth(560)
-        self._folder = folder
-
-        layout = QVBoxLayout(self)
-
-        head = QLabel(f"<b>Folder:</b><br>{folder}")
-        head.setWordWrap(True)
-        head.setTextFormat(Qt.RichText)
-        layout.addWidget(head)
-        layout.addSpacing(6)
-
-        self.full_radio = QRadioButton("Everything in the folder")
-        self.full_radio.setToolTip(
-            "Rebuild a complete archive from every file in the folder.")
-        self.changed_radio = QRadioButton("Only files changed since unpacking")
-        self.changed_radio.setToolTip(
-            "Build a small archive holding just your edits. The game layers it "
-            "over the original archives, so nothing else needs shipping.")
-
-        group = QButtonGroup(self)
-        group.addButton(self.full_radio)
-        group.addButton(self.changed_radio)
-
-        if has_manifest:
-            self.changed_radio.setChecked(True)
-        else:
-            self.full_radio.setChecked(True)
-            self.changed_radio.setEnabled(False)
-            self.changed_radio.setText(
-                "Only files changed since unpacking  (unavailable — "
-                "this folder was not unpacked by the editor)")
-
-        layout.addWidget(self.full_radio)
-        layout.addWidget(self.changed_radio)
-        layout.addSpacing(6)
-
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Save as:"))
-        self.target_edit = QLineEdit(default_target)
-        row.addWidget(self.target_edit, 1)
-        browse = QPushButton("Browse...")
-        browse.clicked.connect(self._browse)
-        row.addWidget(browse)
-        layout.addLayout(row)
-
-        self.compress_check = QCheckBox("Compress (LZO) — uncheck to write faster, larger")
-        self.compress_check.setChecked(True)
-        if not pak.have_lzo_compression():
-            self.compress_check.setChecked(False)
-            self.compress_check.setEnabled(False)
-            self.compress_check.setText(
-                "Compress (LZO) — unavailable, minilzo DLL not found; "
-                "chunks will be stored uncompressed")
-        layout.addWidget(self.compress_check)
-
-        note = QLabel(
-            "Editor scratch files (<code>*.fcb.converted.xml</code>, "
-            "<code>*.bak</code>) are never packed. An existing archive at the "
-            "target is backed up to <code>.bak</code> first.")
-        note.setWordWrap(True)
-        note.setTextFormat(Qt.RichText)
-        note.setStyleSheet("color: #999;")
-        layout.addWidget(note)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Ok).setText("Repack")
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-        # Follow the user's Light/Dark preference (the main window's theme
-        # toggle re-themes this live via retheme_open_windows).
-        apply_dialog_theme(self)
-
-    def _browse(self):
-        chosen, _ = QFileDialog.getSaveFileName(
-            self, "Save PAK Archive As", self.target_edit.text(), PAK_FILTER)
-        if chosen:
-            self.target_edit.setText(chosen)
-
-    def values(self):
-        return (self.target_edit.text().strip(),
-                self.changed_radio.isChecked(),
-                self.compress_check.isChecked())
-
-
 def repack_patch_folder(main_window) -> bool:
-    """Tools action: rebuild a ``.pak`` from the current patch folder."""
+    """File action: rebuild a ``.pak`` from the current patch folder.
+
+    Deliberately option-free — pick the menu item and it packs.  Every choice
+    the old dialog asked about has exactly one answer worth giving:
+
+    *Where* — beside the folder, as ``<folder>.pak``.  Never over the game's
+    own archive: the source pak stays where it is so a bad repack costs nothing
+    but the file we just wrote.
+
+    *What* — a folder the editor unpacked carries a manifest, so we pack the
+    files that differ from it.  That is the small layerable mod pak the game
+    actually wants, and it is what the dialog defaulted to anyway.  With no
+    manifest there is nothing to diff against, so everything goes in.
+
+    *Compression* — on whenever the minilzo DLL loaded.  Off was only ever a
+    speed knob, and :func:`pak_archive.pack` falls back on its own.
+    """
     parent = _as_parent(main_window)
     if _reject_fc2(parent, main_window):
         return False
@@ -605,27 +526,12 @@ def repack_patch_folder(main_window) -> bool:
         return False
 
     manifest = pak.read_manifest(folder)
-    source = source_pak_for(main_window, folder)
-    default_target = source or (folder.rstrip('\\/') + '.pak')
-
-    dialog = RepackDialog(parent, folder, default_target, manifest is not None)
-    if dialog.exec() != QDialog.Accepted:
-        return False
-    target, changed_only, compress = dialog.values()
-
-    if not target:
-        QMessageBox.warning(parent, "No Target", "Choose where to save the archive.")
-        return False
-    target_dir = os.path.dirname(os.path.abspath(target))
-    if target_dir and not os.path.isdir(target_dir):
-        QMessageBox.warning(parent, "Invalid Target",
-                            f"This folder does not exist:\n{target_dir}")
-        return False
-    if os.path.abspath(target).lower().startswith(os.path.abspath(folder).lower() + os.sep):
-        QMessageBox.warning(
-            parent, "Invalid Target",
-            "The archive cannot be written inside the folder being packed.")
-        return False
+    changed_only = manifest is not None
+    compress = pak.have_lzo_compression()
+    source = source_pak_for(main_window, folder)   # reported, never written to
+    # Beside the folder, not inside it -- packing an archive into the tree being
+    # walked would either eat itself or land in the next repack.
+    target = folder.rstrip('\\/') + '.pak'
 
     def _work(job: _Job):
         only = None
@@ -662,11 +568,20 @@ def repack_patch_folder(main_window) -> bool:
             "nothing to pack.")
         return False
 
+    # Say WHICH of the two packs ran -- the user was not asked, so the result is
+    # the only place they can find out whether they are holding a whole archive
+    # or a changes-only one.
     QMessageBox.information(
         parent, "Repack Complete",
         f"Wrote {os.path.basename(res.path)}\n\n"
-        f"{res.file_count:,} file(s), {res.bytes_written / 1e6:.1f} MB\n"
+        + ("Only the files you changed since unpacking.\n"
+           if changed_only else "Everything in the folder.\n")
+        + f"{res.file_count:,} file(s), {res.bytes_written / 1e6:.1f} MB"
+        + ("" if compress else "  (uncompressed - minilzo DLL not found)") + "\n"
         + (f"{res.skipped_artifacts:,} editor scratch file(s) excluded\n"
            if res.skipped_artifacts else "")
-        + f"\n{res.path}")
+        + f"\n{res.path}"
+        + (f"\n\nThe archive this folder came from is untouched:\n{source}"
+           if source and os.path.abspath(source) != os.path.abspath(res.path)
+           else ""))
     return True

@@ -1746,15 +1746,15 @@ class SimplifiedMapEditor(QMainWindow):
         # .fat/.dat (Dunia FAT v5), a different container.
         _is_fc2 = self.game_mode == "farcry2"
 
-        repack_pak_action = QAction("📦 Repack Patch Folder to .pak...", self)
+        repack_pak_action = QAction("📦 Repack Patch Folder to .pak", self)
         repack_pak_action.triggered.connect(self.open_repack_pak)
         repack_pak_action.setToolTip(
             "Far Cry 2 uses .fat/.dat archives, not .pak — not supported yet"
             if _is_fc2 else
-            "Build a .pak from the patch folder — everything, or only your changes")
+            "Pack the patch folder straight into a .pak beside it — no options")
         repack_pak_action.setEnabled(not _is_fc2)
         if _is_fc2:
-            repack_pak_action.setText("📦 Repack Patch Folder to .pak...  (Avatar only)")
+            repack_pak_action.setText("📦 Repack Patch Folder to .pak  (Avatar only)")
         file_menu.addAction(repack_pak_action)
 
         file_menu.addSeparator()
@@ -3713,7 +3713,7 @@ class SimplifiedMapEditor(QMainWindow):
                                 f"Could not open the World Editor:\n{e}")
 
     def open_repack_pak(self):
-        """Build a .pak from the current patch folder (all files, or just changes)."""
+        """Build a .pak from the current patch folder, beside it, no prompts."""
         try:
             from pak_ui import repack_patch_folder
         except Exception as exc:                       # noqa: BLE001

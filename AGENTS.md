@@ -4372,7 +4372,22 @@ two-button `QMessageBox` — and routes to either `_select_patch_folder_from_pak
 validation). Because the routing lives in that single method, **no call site
 changed and there is no second "load an archive" option anywhere** — the
 level-selector button is labelled "Change Game Data..." in BOTH games. The only
-genuinely new UI is `File ▸ 📦 Repack Patch Folder to .pak...`.
+genuinely new UI is `File ▸ 📦 Repack Patch Folder to .pak`.
+
+**Repack takes no options (Aug 2026).** `RepackDialog` is gone; the menu item
+packs immediately. Every question it asked had one defensible answer, and asking
+mostly invited a wrong one:
+- *Where* → `<folder>.pak`, beside the folder. Never the source archive. The old
+  default target WAS the source pak, so the path of least resistance was
+  overwriting the game's own data; now a bad repack costs one file.
+- *What* → manifest present ⇒ changed-only (what the dialog defaulted to
+  anyway); no manifest ⇒ everything, because there is nothing to diff against.
+- *Compress* → on when minilzo loaded. It was a speed knob, and `pack()` already
+  falls back to STORED chunks on its own.
+The completion box states which of the two packs ran — the user was not asked,
+so that message is the only place to learn whether they hold a full archive or a
+changes-only one. Don't reintroduce the prompt without a reason the defaults
+can't cover.
 
 **BOTH games get the chooser AND both archive formats work** (standing rule:
 every feature applies to Avatar and FC2). The archive half differs as *data*
