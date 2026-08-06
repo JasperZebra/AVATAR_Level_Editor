@@ -5272,6 +5272,17 @@ console, ~75 mod commands, and a named-pipe link an external tool can drive.
 is the source. Both are now version-controlled (see `.gitignore` — the built
 `dist/*.dll`, `archive/` logs and the 60 MB+ decompiles are deliberately not).
 
+**Read these two before editing `avatar_console.c`** (added 2026-08-05):
+
+- `tools/console_dll/console_dll/docs/MULTI_INSTANCE.md` — the whole
+  two-copies-at-once story: three separate gates, the disassembly for each, what
+  is and isn't modified on disk, and a troubleshooting table.
+- `tools/console_dll/console_dll/docs/CHANGES_MERGE_NOTES.md` — **the file has a
+  second author.** This lists exactly which regions our work touched and which
+  it did not, so a merge doesn't mean reading 20,000 lines. It also records what
+  was deliberately *not* done (three known picker bugs, the `LnkPut` sentinel
+  bug) so nobody assumes those are half-finished.
+
 ### The one thing to understand before touching it
 
 **Retail didn't lock the console, it half-deleted it.** `toggle_console` is

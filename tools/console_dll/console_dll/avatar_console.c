@@ -19641,8 +19641,8 @@ static DWORD WINAPI Worker(LPVOID unused)
            hooks back out and unload, so a retry is possible. */
         logf_("[init] g_console never appeared - unloading");
         RemoveDebugStringHook();
-    RemoveMultiInstanceHook();
-    RemoveProfileRedirect();
+        RemoveMultiInstanceHook();
+        RemoveProfileRedirect();
         RemoveCrashReporter();
         InterlockedExchange(&g_csAlive, 0);
         DeleteCriticalSection(&g_cs);
@@ -19658,8 +19658,8 @@ static DWORD WINAPI Worker(LPVOID unused)
         /* Both hooks installed above this point must come off before the unmap:
            the VEH handler and the IAT thunk both point inside this DLL. */
         RemoveDebugStringHook();
-    RemoveMultiInstanceHook();
-    RemoveProfileRedirect();
+        RemoveMultiInstanceHook();
+        RemoveProfileRedirect();
         RemoveCrashReporter();
         InterlockedExchange(&g_csAlive, 0);
         DeleteCriticalSection(&g_cs);

@@ -44,7 +44,8 @@ build.bat               builds into dist\
 dist\                   build outputs, and the two ways to load them
 tools\                  generators and probes; not needed to build
 data\                   command lists and dumps read at runtime, not compiled
-docs\                   this file, DISTRIBUTION.md, CRASH_ANALYSIS.md
+docs\                   this file, DISTRIBUTION.md, CRASH_ANALYSIS.md,
+                          MULTI_INSTANCE.md, CHANGES_MERGE_NOTES.md
 archive\                old logs and superseded copies
 design_refs\            UI mock-ups
 ```
@@ -61,6 +62,22 @@ The full reasoning, and why not `d3d9.dll`, is in **DISTRIBUTION.md**.
 Auto-loaded, the DLL starts before the main menu, waits (with no timeout) for a
 level to exist, and never unloads itself — `End` disarms it but the image has to
 stay resident, because Dunia's import thunk points into it.
+
+## Two copies of the game at once
+
+Dropped in as `dinput8.dll`, the DLL can also open the game's single-instance
+gate, so you can host on one copy and join on another for solo multiplayer
+testing. It is opt-in: create an empty `bin\avatar_multi.txt`, and delete it to
+go back to stock. No game file is modified either way.
+**MULTI_INSTANCE.md** has the whole thing — the three separate gates, the
+disassembly, and the troubleshooting table.
+
+## If someone else is editing avatar_console.c
+
+**CHANGES_MERGE_NOTES.md** lists exactly which regions of the file the
+multi-instance work touched and which it did not, so two people can merge
+without reading 20,000 lines. Short version: one new contiguous block, two lines
+in `DllMain`, and two lines at each of three unload paths.
 
 | Key | Action |
 |---|---|
