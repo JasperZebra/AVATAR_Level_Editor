@@ -14450,6 +14450,38 @@ static const char* AdmSideById(long id)
     return 0;
 }
 
+/* THE OTHER SIDE IS THE OTHER SIDE. Avatar's multiplayer is RDA against Na'vi,
+   two teams and no more, so once one id has been identified from a body, a
+   player carrying a DIFFERENT id is necessarily on the opposite side - which
+   labels somebody who has not spawned and has no pawn to read.
+
+   Gated on the roster carrying exactly two distinct ids, so a mode that does not
+   work this way (everyone on one id, or three of them) falls through to "-"
+   rather than inventing a team. Measured in a live match: Zebra 0250BB11 -> RDA
+   from the pawn, Jasper 9516534B -> the other one. */
+static const char* AdmOtherSide(const char* side)
+{
+    if (!side) return 0;
+    if (_stricmp(side, "RDA")   == 0) return "Na'vi";
+    if (_stricmp(side, "Na'vi") == 0) return "RDA";
+    return 0;
+}
+
+static const char* AdmSideByElimination(long id)
+{
+    long i, other = 0;
+    const char* known = 0;
+    if (!id) return 0;
+    for (i = 0; i < g_plRowN; ++i) {
+        long t = g_plRow[i].teamId;
+        if (!t || t == id) continue;
+        if (other && t != other) return 0;      /* three teams - not this game */
+        other = t;
+        if (!known) known = AdmSideById(t);
+    }
+    return known ? AdmOtherSide(known) : 0;
+}
+
 /* First line of a captured reply that looks like a value rather than an echo or
    a "key: value" status line. Shared by the one-line net_Get* commands. */
 static void AdmFirstLine(const char* buf, const char* cmd, char* out, int cap)
@@ -14518,6 +14550,7 @@ static void AdmBuildRows(void)
             r->teamId = *(long*)((char*)r->player + 8);
         if (!r->side[0]) {
             const char* s = AdmSideById(r->teamId);
+            if (!s) s = AdmSideByElimination(r->teamId);
             if (s) { _snprintf(r->side, sizeof(r->side) - 1, "%s", s);
                      r->side[sizeof(r->side) - 1] = 0; }
         }
@@ -15375,10 +15408,14 @@ static void AdminGui(void* console, const char* arg)
         for (q = 0; q < g_plRowN; ++q) {
             const PlayerRow* r = &g_plRow[q];
             if (r->ent)
+                /* hp AND its maximum: the scale is not 0-100 (a full-health
+                   player measured 16775), so the raw number alone cannot be
+                   read. The panel shows the percentage; this shows the pair it
+                   came from. */
                 P_(console, 0, AC "  [%ld] %-16s %-8s %7.0f %7.0f %6.0f  %4.0fm  "
-                                  "hp %.0f%s%s%s\n",
+                                  "hp %.0f/%.0f%s%s%s\n",
                    q, r->name, r->side[0] ? r->side : "-",
-                   r->wpos[0], r->wpos[1], r->wpos[2], r->dist, r->hp,
+                   r->wpos[0], r->wpos[1], r->wpos[2], r->dist, r->hp, r->hpMax,
                    r->local ? "  YOU" : "", r->host ? "  HOST" : "",
                    r->inferred ? "   ~body matched by elimination" : "");
             else
@@ -17761,7 +17798,40 @@ static void NetMatchOrphanPawns(void)
         if (i < g_plRowN) continue;
         cand[nc++] = k;
     }
-    if (!nc) return;
+    if (!nc) {
+        /* NOBODY'S BODY IS UNCLAIMED, and somebody is still missing one - so the
+           remote player's pawn is not in this client's entity tree under the
+           archetype we are looking for. Measured: 1249 entities, two players,
+           and exactly ONE PawnPlayerNetwork* - our own.
+
+           Guessing the next filter from here would be another round of "try a
+           substring and see", so instead say what IS there: every distinct
+           player- or pawn-shaped name in the snapshot. Whatever a replicated
+           remote body is called, it is in this list. */
+        static DWORD s_saidNoCand = 0;
+        if (!s_saidNoCand || (DWORD)(now - s_saidNoCand) > 30000) {
+            char seen[16][ENT_NLEN];
+            int  ns = 0, j;
+            s_saidNoCand = now ? now : 1;
+            logf_("[netp] %d player(s) with no body, and no unclaimed "
+                  "PawnPlayerNetwork* among %ld entities. Player-shaped names "
+                  "present:", no, (long)total);
+            for (k = 0; k < total && ns < 16; ++k) {
+                const char* nm = g_entRows[k].name;
+                if (!nm[0]) continue;
+                if (!Stristr(nm, "player") && !Stristr(nm, "pawn")) continue;
+                for (j = 0; j < ns; ++j) if (_stricmp(seen[j], nm) == 0) break;
+                if (j < ns) continue;
+                _snprintf(seen[ns], ENT_NLEN - 1, "%s", nm);
+                seen[ns][ENT_NLEN - 1] = 0;
+                logf_("[netp]     %s", nm);
+                ++ns;
+            }
+            if (!ns) logf_("[netp]     (none at all - the snapshot has no "
+                           "player-shaped entity in it)");
+        }
+        return;
+    }
 
     /* 1. the back-pointer - accepted only when it is unique BOTH WAYS.
           A body that appears to point at two different players proves nothing,
@@ -18121,10 +18191,6 @@ static int AdmCollect(AdmRect* out, int cap)
     {
         int np = (int)g_plRowN, j;
         InterlockedExchange(&g_netN, np);
-        /* BEFORE the loop, so a row matched from the pawn side is boxed in this
-           sample rather than the next one. It only does work while somebody is
-           actually unmatched. */
-        NetMatchOrphanPawns();
         for (j = 0; j < np && n < cap; ++j) {
             PlayerRow* pr   = &g_plRow[j];
             void*      pawn = pr->player ? NetPlayerPawn(pr->player) : 0;
@@ -18138,10 +18204,12 @@ static int AdmCollect(AdmRect* out, int cap)
             pr->ent = pawn;
             if (!pawn) {
                 pr->hp = pr->hpMax = -1.0f;
-                /* Still labellable: another player on the same side has
-                   probably already been seen with a body. */
+                /* Still labellable: from a team-mate who HAS been seen with a
+                   body, or failing that from the opponent - two teams, so a
+                   different id is the other one. */
                 if (!pr->side[0]) {
                     const char* s = AdmSideById(pr->teamId);
+                    if (!s) s = AdmSideByElimination(pr->teamId);
                     if (s) { _snprintf(pr->side, sizeof(pr->side) - 1, "%s", s);
                              pr->side[sizeof(pr->side) - 1] = 0; }
                 }
@@ -18175,6 +18243,14 @@ static int AdmCollect(AdmRect* out, int cap)
                 ++n;
             }
         }
+        /* AFTER the loop, not before it. Run first, it saw the local row's pawn
+           as unclaimed for one sample after every roster rebuild and reported
+           "2 players without a body and 1 unclaimed pawn - ambiguous", which is
+           a true statement about a picture that was one step out of date. Here
+           the forward route has already claimed what it can, so the arithmetic
+           the elimination step depends on is the real one. A row matched here is
+           boxed on the next sample, 33 ms later. */
+        NetMatchOrphanPawns();
         if (n) InterlockedExchange(&g_admSrc, 3);
     }
 
@@ -21769,7 +21845,17 @@ static void PkPaint(void)
                 _snprintf(pos, sizeof(pos) - 1, "%6.0f %6.0f %5.0f %5.0fm",
                           rows[k].wpos[0], rows[k].wpos[1], rows[k].wpos[2],
                           rows[k].dist);
-                if (rows[k].hp >= 0.0f)
+                /* PER CENT, not the raw float. The sheet's health is not on a
+                   0-100 scale - a live match measured a full-health player at
+                   16775 - so the number on its own says nothing about whether
+                   somebody is hurt, which is the only question this column is
+                   asked. The raw pair is still printed by `admin_gui names`.
+                   Falls back to the raw value when there is no maximum to
+                   divide by. */
+                if (rows[k].hp >= 0.0f && rows[k].hpMax > 0.0f)
+                    _snprintf(hp, sizeof(hp) - 1, "%3.0f%%",
+                              100.0f * rows[k].hp / rows[k].hpMax);
+                else if (rows[k].hp >= 0.0f)
                     _snprintf(hp, sizeof(hp) - 1, "%4.0f", rows[k].hp);
                 else
                     _snprintf(hp, sizeof(hp) - 1, "   -");

@@ -51,6 +51,59 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-06 (m) — the remote body is not in the entity tree; label and read what is
+
+**The reverse join (l) reported its own answer, and it is not the one I
+expected:**
+
+```
+[netp] 2 player(s) without a body and 1 unclaimed MP pawn(s) - ambiguous
+```
+
+**One** `PawnPlayerNetwork*` in a 1,249-entity snapshot, with two players in the
+match — and that one is ours. So the remote player's body is not in this
+client's entity tree under the archetype we spawn players into. Guessing the
+next substring would be another round of "try one and see", so the matcher now
+prints **every distinct player- or pawn-shaped name in the snapshot** when it
+comes up empty. Whatever a replicated remote body is called, the next run puts
+it in the log.
+
+Two supporting corrections in the same path:
+
+- **`NetMatchOrphanPawns` moved to AFTER the forward loop.** Run before it, it
+  saw the local row's pawn as unclaimed for one sample after every roster
+  rebuild — hence "2 without a body and 1 unclaimed", a true statement about a
+  picture one step out of date. The elimination step's arithmetic has to be
+  computed against what the forward route has already claimed.
+- **`hp 16775`.** The sheet's health is not on a 0-100 scale, so the raw number
+  says nothing about whether somebody is hurt — which is the only question that
+  column is asked. The panel shows **per cent** of the maximum; `admin_gui
+  names` prints the raw pair it came from. (Slots 32/35 are unchanged and still
+  the verified getters; nothing here claims the 16775 is wrong, only that it is
+  unreadable on its own.)
+
+**The team column now labels players who have not spawned.** Measured:
+`Zebra 0250BB11` with a `..._Corp` body, `Jasper 9516534B` with no body at all.
+Avatar's multiplayer is RDA against Na'vi and nothing else, so once one id is
+identified from a pawn, a player carrying a *different* id is on the opposite
+side. Gated on the roster holding exactly two distinct ids — three, and it
+declines and shows `-` rather than inventing a team.
+
+| Where | What | Risk | New symbols |
+|---|---|---|---|
+| After `AdmSideById` | **Added** the opposite-side rule | Low | `AdmOtherSide`, `AdmSideByElimination` |
+| `AdmBuildRows`, `AdmCollect` source 0 | **Modified** — fall through to it | Low | — |
+| `NetMatchOrphanPawns` | **Added** the no-candidate readout | Low | — |
+| `AdmCollect` source 0 | **Moved** the call below the loop | Low | — |
+| `PkPaint` HP column | **Modified** — per cent | Low | — |
+| `admin_gui names` | **Modified** — prints `hp/max` | Low | — |
+
+**Tested off-game**: the labelling was compiled standalone and run through the
+measured match — no label before anything is seen, `Corp` → RDA, the opponent
+labelled from that alone, a team-mate of a known id, a third id refusing to
+guess, an `Avatar` body proving Na'vi directly, and a vehicle archetype
+producing no side at all.
+
 ### 2026-08-06 (l) — match the remote player from his body, not from his record
 
 **Measured in a live two-player match, with (k) installed:**
