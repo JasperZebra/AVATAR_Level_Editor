@@ -16746,9 +16746,31 @@ static void NetPlayersCmd(void* console, const char* arg)
     }
 
     if (!n) {
-        P_(console, 0, AC "netplayers: 0 - no session, or the service is not up "
-                          "yet. This reads the SAME list net_kickClient resolves "
-                          "names against, so 0 here means 0 there.\n");
+        /* WHICH LINK BROKE. "0" on its own sent me back to the disassembler for
+           an hour; every dereference in the chain can fail for a different
+           reason and they need different fixes. Report the chain. */
+        unsigned char *svc = 0, *obj = 0, *b = 0, *e = 0;
+        P_(console, 0, AC "netplayers: 0. Walking the chain:\n");
+        if (!Readable((void*)NETPL_SVC_PTR, 4)) {
+            P_(console, 0, AC "  svc slot %08X is not readable\n",
+               (unsigned)NETPL_SVC_PTR);
+            return;
+        }
+        svc = *(unsigned char**)NETPL_SVC_PTR;
+        P_(console, 0, AC "  [%08X] = %p  %s\n", (unsigned)NETPL_SVC_PTR, svc,
+           svc ? "" : "<- NULL: this service is not constructed in this session");
+        if (!Readable(svc, 8)) return;
+        obj = *(unsigned char**)(svc + 4);
+        P_(console, 0, AC "  svc+4        = %p %s\n", obj,
+           Readable(obj, NETPL_END_OFF + 4) ? "" : "<- not readable");
+        if (!Readable(obj, NETPL_END_OFF + 4)) return;
+        b = *(unsigned char**)(obj + NETPL_VEC_OFF);
+        e = *(unsigned char**)(obj + NETPL_END_OFF);
+        P_(console, 0, AC "  begin(+%02X)   = %p\n", NETPL_VEC_OFF, b);
+        P_(console, 0, AC "  end  (+%02X)   = %p  -> %d entries\n", NETPL_END_OFF,
+           e, (b && e >= b) ? (int)((e - b) / 4) : -1);
+        P_(console, 0, AC "  net_GetPlayerList uses a DIFFERENT object (its own "
+                          "this+0x4C), so names can work while this reads 0.\n");
         return;
     }
 
