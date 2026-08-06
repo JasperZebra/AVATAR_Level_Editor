@@ -13845,6 +13845,10 @@ static volatile long    g_admSelf   = 1;
 /* The camera the DRAW side projects against, republished every sample. Read
    under __try on the render thread - see AdmDrawD3D. */
 static void* volatile   g_admCam    = 0;
+/* The camera's live vertical FOV, sampled on the main thread and consumed by
+   the draw. Float rather than long deliberately: a torn read is impossible for
+   an aligned 32-bit word on x86, and a one-frame-stale FOV is invisible. */
+static float            g_admFov    = 65.0f;
 
 /* ---- ARM AT STARTUP, WITHOUT ANYONE TYPING ANYTHING -----------------------
    Staff running this are not going to open a console and type `admin_gui`, so
@@ -16002,7 +16006,8 @@ static void RemoveCrashReporter(void)
 typedef struct {
     const float *right, *fwd, *up, *cpos;
     float tx, ty;
-    int   cw, ch;
+    int   cw, ch;      /* viewport extent, in RENDER-TARGET pixels */
+    int   ox, oy;      /* viewport origin - non-zero on letterboxed setups */
 } AdmView;
 
 /* World point -> screen pixel. 0 when the point is at or behind the near plane;
@@ -16020,8 +16025,8 @@ static int AdmProject(const AdmView* v, const float* wp, float* sx, float* sy,
     cy = d[0]*v->up[0]    + d[1]*v->up[1]    + d[2]*v->up[2];
     ndcx = (cx / cz) / v->tx;
     ndcy = (cy / cz) / v->ty;
-    *sx = (ndcx + 1.0f) * 0.5f * (float)v->cw;
-    *sy = (1.0f - ndcy) * 0.5f * (float)v->ch;
+    *sx = (float)v->ox + (ndcx + 1.0f) * 0.5f * (float)v->cw;
+    *sy = (float)v->oy + (1.0f - ndcy) * 0.5f * (float)v->ch;
     if (dist) *dist = cz;
     return 1;
 }
@@ -16149,6 +16154,33 @@ static int AdmCollect(AdmRect* out, int cap)
     if (!Readable(cam, OFF_ENT_XFORM + 0x40)) return 0;
     m = (const float*)((char*)cam + OFF_ENT_XFORM);
     camPos[0] = m[12]; camPos[1] = m[13]; camPos[2] = m[14];
+
+    /* THE REAL FOV, asked for rather than assumed. g_pickFov is a hand-tuned
+       constant (65) that only has to be right at the crosshair for picking to
+       feel correct - an FOV error leaves screen CENTRE exact and grows toward
+       the edges, so it passes the picker's own self-check while putting boxes
+       increasingly off-target the further a player is from the middle. That is
+       the other way a box can appear to swim with the camera.
+
+       +0x108 is the live FOV the camera is actually using (+0x10C is the
+       override, honoured only while positive - see the fpfov notes). This is an
+       engine call, so it belongs here on the main thread and not in the draw.
+       Anything implausible falls back to g_pickFov, which remains the manual
+       knob via `pickfov`. */
+    if (Readable((const void*)FN_GET_CAMCOMP, 8)) {
+        void* cc = 0;
+        __try { cc = ((fnGetCamComp)FN_GET_CAMCOMP)(); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { cc = 0; }
+        if (Readable(cc, 0x110)) {
+            float live = *(const float*)((const char*)cc + 0x108);
+            if (live > 10.0f && live < 170.0f) g_admFov = live;
+            else                               g_admFov = g_pickFov;
+        } else {
+            g_admFov = g_pickFov;
+        }
+    } else {
+        g_admFov = g_pickFov;
+    }
     /* Publish the camera the DRAW side must project against. It re-reads this
        entity's matrix every frame, so boxes track even between samples. */
     g_admCam = cam;
@@ -17307,13 +17339,36 @@ static void AdmDrawD3D(IDirect3DDevice9* dev)
        the two. */
     cam = g_admCam;
     if (!Readable(cam, OFF_ENT_XFORM + 0x40)) return;
-    if (!g_gameWnd || !GetClientRect(g_gameWnd, &rc)) return;
-    if (rc.right < 16 || rc.bottom < 16) return;
+
+    /* RENDER-TARGET PIXELS, NOT WINDOW PIXELS. This was the second half of the
+       drifting-box bug, and it is a trap this file has already documented once:
+       D3DFVF_XYZRHW positions are in the space of the surface being drawn into,
+       and GetClientRect answers a different question. They agree only while the
+       window happens to match the backbuffer - and `winsize` now lets the user
+       break that on purpose.
+
+       When they disagree, every box is scaled about the top-left corner by
+       backbuffer/client. The error is proportional to distance from the origin,
+       so a target crossing the screen has its box move at the WRONG RATE - which
+       looks exactly like a box sliding with the camera rather than sitting on
+       the model.
+
+       The viewport is the authority here: it is the sub-rectangle the engine
+       actually rendered into this frame, and it carries the offset too, which a
+       backbuffer size alone does not. */
+    {
+        D3DVIEWPORT9 vp;
+        if (FAILED(dev->GetViewport(&vp)) || vp.Width < 16 || vp.Height < 16)
+            return;
+        v.cw = (int)vp.Width;
+        v.ch = (int)vp.Height;
+        v.ox = (int)vp.X;
+        v.oy = (int)vp.Y;
+    }
     m = (const float*)((char*)cam + OFF_ENT_XFORM);
     v.right = m + 0; v.fwd = m + 4; v.up = m + 8; v.cpos = m + 12;
-    v.cw = (int)rc.right;
-    v.ch = (int)rc.bottom;
-    v.ty = (float)tan((double)g_pickFov * 3.14159265358979 / 360.0);
+    (void)rc;
+    v.ty = (float)tan((double)g_admFov * 3.14159265358979 / 360.0);
     v.tx = v.ty * ((float)v.cw / (float)v.ch);
 
     EnterCriticalSection(&g_admCs);
