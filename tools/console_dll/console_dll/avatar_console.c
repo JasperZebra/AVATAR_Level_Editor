@@ -13891,6 +13891,15 @@ typedef struct {
     /* 1 = name is an ACCOUNT name from the session list, so this row is
        kickable. 0 = an entity archetype, which kick cannot match. */
     int   acct;
+    /* The pawn itself, so an action can reach it without re-walking anything.
+       Re-validated with Readable before every use - a pointer sampled a frame
+       ago can belong to an entity that has since been destroyed. */
+    void* ent;
+    /* Live health off the character sheet, or -1 when it has none. Worth a
+       column of its own: an impossible number here is the cheat, visible
+       without having to watch anybody move. */
+    float hp;
+    float hpMax;
     char  name[ADM_NLEN];
 } AdmRect;
 
@@ -14616,6 +14625,137 @@ static void AdminGoto(void* console, const char* arg, int watch)
            arg, dst[0], dst[1], dst[2]);
         P_(console, 0, AC "  (this moves YOUR view - if the game pulls you back, "
                           "turn on freecam first)\n");
+    }
+}
+
+/* ---- BRING and KILL, on a named player ------------------------------------
+   I said these could not be done. That was wrong, and the correction came from
+   this file: `kill` on a picked entity has worked for a long time, and it does
+   NOT poke a health float - it calls the character sheet's own ApplyDamage
+   (vtable slot 69), the same entry a bullet reaches. A player pawn has a
+   character sheet exactly like an NPC, so the same call works on it.
+
+   That distinction is the whole reason this is worth shipping: writing a remote
+   pawn's health or transform is a local lie the owner corrects on its next
+   update, but ApplyDamage runs the engine's real damage pipeline, including
+   whatever the session does with a death. If the client running this is the
+   host - which is the case that matters, and which the panel now labels - that
+   pipeline is the authoritative one.
+
+   ApplyDamage RETURNS the damage actually applied, so this cannot pretend:
+   0.0f means the target refused it and the readout says so.
+
+   BRING is the weaker of the two and is honest about it. Moving a pawn is a
+   transform write, and if the session does not treat this client as
+   authoritative the owner snaps them back within a frame or two. It reports the
+   position it wrote so a snap-back is visible rather than mysterious. */
+static void AdminForce(void* console, const char* arg, int kill)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void* pawn = 0;
+    char  name[ADM_NLEN];
+    int   k;
+
+    while (*arg == ' ' || *arg == '\t') ++arg;
+    if (!*arg) {
+        P_(console, 0, AC "%s <player name>\n", kill ? "kill" : "bring");
+        return;
+    }
+    if (!g_admCsInit) {
+        P_(console, 0, AC "%s: no sample yet - open admin_gui first.\n",
+           kill ? "kill" : "bring");
+        return;
+    }
+
+    name[0] = 0;
+    EnterCriticalSection(&g_admCs);
+    for (k = 0; k < (int)g_admRectN; ++k) {
+        if (g_admRect[k].acct && _stricmp(g_admRect[k].name, arg) == 0) {
+            pawn = g_admRect[k].ent;
+            _snprintf(name, sizeof(name) - 1, "%s", g_admRect[k].name);
+            name[sizeof(name) - 1] = 0;
+            break;
+        }
+    }
+    LeaveCriticalSection(&g_admCs);
+
+    if (!pawn) {
+        P_(console, 0, AC "%s: no pawn matched to \"%s\" - the roster may know "
+                          "the name but the pawn is not sampled yet.\n",
+           kill ? "kill" : "bring", arg);
+        return;
+    }
+    if (!Readable(pawn, 0x100)) {
+        P_(console, 0, AC "%s: \"%s\" pawn %p went away.\n",
+           kill ? "kill" : "bring", name, pawn);
+        return;
+    }
+
+    if (!kill) {
+        void*  cam = GetCameraEntityDirect();
+        float* dm;
+        const float* cm;
+        if (!Readable(cam, OFF_ENT_XFORM + 0x40)) {
+            P_(console, 0, AC "bring: no camera entity to bring them to.\n");
+            return;
+        }
+        cm = (const float*)((char*)cam + OFF_ENT_XFORM);
+        dm = (float*)((char*)pawn + OFF_ENT_XFORM);
+        /* Two metres in front of the admin, not on top of them: dropping a pawn
+           inside your own capsule is how both of you end up under the map. */
+        dm[12] = cm[12] + cm[4] * 2.0f;
+        dm[13] = cm[13] + cm[5] * 2.0f;
+        dm[14] = cm[14] + cm[6] * 2.0f;
+        P_(console, 0, AC "bring: moved \"%s\" to %.0f %.0f %.0f\n",
+           name, dm[12], dm[13], dm[14]);
+        P_(console, 0, AC "  if they snap back, this client is not the session's "
+                          "authority for their pawn - host the match and retry.\n");
+        return;
+    }
+
+    /* ---- kill: the engine's own damage pipeline ---------------------------- */
+    {
+        void*  sheet = CharacterSheetOf(pawn);
+        void** vt;
+        int    state;
+        float  maxhp, applied;
+
+        if (!sheet) {
+            P_(console, 0, AC "kill: \"%s\" has no character sheet - nothing to "
+                              "damage.\n", name);
+            return;
+        }
+        vt = *(void***)sheet;
+        if (!Readable(vt, 81 * 4)) {
+            P_(console, 0, AC "kill: sheet vtable too short - not calling in.\n");
+            return;
+        }
+        __try {
+            state = ((fnSheetState)vt[80])(sheet);
+            if (state != 1) {
+                P_(console, 0, AC "kill: \"%s\" is already dead (state %d)\n",
+                   name, state);
+                return;
+            }
+            maxhp = ((fnSheetFloat)vt[35])(sheet);
+            if (maxhp <= 0.0f) maxhp = 100000.0f;
+            applied = ((fnApplyDamage)vt[69])(sheet, maxhp, ACS_SRC_NAMEID, sheet,
+                                              0u, 0xFFFFFFFFu, 0xFFFFFFFFu, 0x16u);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            P_(console, 0, AC "kill: faulted on \"%s\" - caught\n", name);
+            logf_("[kill] *** FAULTED on player %s", name);
+            return;
+        }
+        if (applied > 0.0f) {
+            P_(console, 0, AC "kill: \"%s\" - %.0f damage applied\n", name, applied);
+            logf_("[kill] player %s applied=%.1f", name, applied);
+        } else {
+            P_(console, 0, AC "kill: \"%s\" REFUSED the damage (0 applied).\n", name);
+            P_(console, 0, AC "  the sheet exists and is alive, so this is the "
+                              "session declining it - likely not the host.\n");
+            logf_("[kill] player %s refused", name);
+        }
     }
 }
 
@@ -15484,7 +15624,17 @@ static int TryModCommand(void* console, const char* line)
             g_pickOnClick ? "ON - click the game view with the console open" : "off");
         return 1;
     }
+    /* `kill` with no argument keeps its old meaning (the picked entity).
+       `kill <player>` routes to the roster - same damage path, different target. */
     if (_stricmp(p, "kill") == 0)      { KillSelected(console); return 1; }
+    if (_strnicmp(p, "kill", 4) == 0 && (p[4] == ' ' || p[4] == '\t')) {
+        AdminForce(console, p + 5, 1);
+        return 1;
+    }
+    if (_strnicmp(p, "bring", 5) == 0 && (p[5] == ' ' || p[5] == '\t' || !p[5])) {
+        AdminForce(console, p + 5, 0);
+        return 1;
+    }
     if (_stricmp(p, "entbox") == 0)    { EntBox(console);       return 1; }
     if (_stricmp(p, "ents") == 0)      { OpenEntPicker(console); return 1; }
 
@@ -16902,9 +17052,33 @@ static int AdmBoxFor(void* ent, const float* camPos, int local, const char* name
 
     memset(out, 0, sizeof(*out));
     out->local   = local;
+    out->ent     = ent;
+    out->hp      = -1.0f;
+    out->hpMax   = -1.0f;
     out->wpos[0] = p[0]; out->wpos[1] = p[1]; out->wpos[2] = p[2];
     _snprintf(out->name, ADM_NLEN - 1, "%s", name ? name : "?");
     out->name[ADM_NLEN - 1] = 0;
+
+    /* HEALTH, off the same character sheet `kill` damages - slot 32 is the
+       getter and slot 35 the max (see the resurrect notes). Main thread only,
+       which is where the sampler runs. Anything that faults or has no sheet
+       simply stays at -1 and the column prints blank; a missing number is
+       always better than an invented one. */
+    {
+        void* sheet = CharacterSheetOf(ent);
+        if (sheet) {
+            void** vt = *(void***)sheet;
+            if (Readable(vt, 36 * 4)) {
+                __try {
+                    out->hp    = ((fnSheetFloat)vt[32])(sheet);
+                    out->hpMax = ((fnSheetFloat)vt[35])(sheet);
+                }
+                __except (EXCEPTION_EXECUTE_HANDLER) {
+                    out->hp = out->hpMax = -1.0f;
+                }
+            }
+        }
+    }
 
     d[0] = p[0] - camPos[0]; d[1] = p[1] - camPos[1]; d[2] = p[2] - camPos[2];
     out->dist = (float)sqrt(d[0]*d[0] + d[1]*d[1] + d[2]*d[2]);
@@ -19075,7 +19249,7 @@ static const char* const kOurCmds[] = {
     "driveai", "rcprobe", "respawn", "resurrect",
     "revive", "mergelib", "drivelock", "driveturn",
     "mkpawn", "players", "netplayers", "admin_gui", "kick", "kickban", "winsize",
-    "goto", "watch",
+    "goto", "watch", "bring",
 };
 #define OURCMD_COUNT ((int)(sizeof(kOurCmds) / sizeof(kOurCmds[0])))
 
@@ -20796,16 +20970,23 @@ static void PkPaint(void)
                     for (k2 = 0; k2 < nr; ++k2)
                         if (rows[k2].acct &&
                             strcmp(rows[k2].name, g_admNames[q]) == 0) { hit = k2; break; }
-                    if (hit >= 0)
+                    if (hit >= 0) {
+                        char hp[24];
+                        if (rows[hit].hp >= 0.0f)
+                            _snprintf(hp, sizeof(hp) - 1, "%4.0f", rows[hit].hp);
+                        else
+                            _snprintf(hp, sizeof(hp) - 1, "   -");
+                        hp[sizeof(hp) - 1] = 0;
                         _snprintf(line, sizeof(line) - 1,
-                                  "%-18s %7.0f %7.0f %6.0f %5.0fm%s%s",
+                                  "%-16s %6.0f %6.0f %5.0f %4.0fm %s%s%s",
                                   g_admNames[q],
                                   rows[hit].wpos[0], rows[hit].wpos[1],
-                                  rows[hit].wpos[2], rows[hit].dist,
-                                  rows[hit].local ? "  YOU" : "",
+                                  rows[hit].wpos[2], rows[hit].dist, hp,
+                                  rows[hit].local ? " YOU" : "",
                                   (g_admHost[0] &&
                                    _stricmp(g_admNames[q], g_admHost) == 0)
-                                      ? "  HOST" : "");
+                                      ? " HOST" : "");
+                    }
                     else
                         _snprintf(line, sizeof(line) - 1,
                                   "%-18s %-27s%s", g_admNames[q],
@@ -20935,22 +21116,26 @@ static void PkPaint(void)
                tool's own state - grouped that way so a destructive button is
                never adjacent to a harmless toggle. */
             RECT b;
-            PkBotRect2(0, 4, &b);
+            PkBotRect2(0, 5, &b);
             PkButton(&b, "GOTO", 0, PKV_GOLD);
-            PkBotRect2(1, 4, &b);
-            PkButton(&b, "WATCH", g_admWatch >= 0, PKV_GOLD);
-            PkBotRect2(2, 4, &b);
+            PkBotRect2(1, 5, &b);
+            PkButton(&b, "BRING", 0, PKV_GOLD);
+            PkBotRect2(2, 5, &b);
+            PkButton(&b, "KILL", 0, PKV_DANGER);
+            PkBotRect2(3, 5, &b);
             PkButton(&b, "KICK", 0, PKV_DANGER);
-            PkBotRect2(3, 4, &b);
+            PkBotRect2(4, 5, &b);
             PkButton(&b, "BAN", 0, PKV_DANGER);
 
-            PkBotRect(0, 4, &b);
+            PkBotRect(0, 5, &b);
             PkButton(&b, "BOXES", g_admOn, PKV_ORCHID);
-            PkBotRect(1, 4, &b);
+            PkBotRect(1, 5, &b);
             PkButton(&b, "WIDE", g_admWide, PKV_ORCHID);
-            PkBotRect(2, 4, &b);
+            PkBotRect(2, 5, &b);
+            PkButton(&b, "WATCH", g_admWatch >= 0, PKV_ORCHID);
+            PkBotRect(3, 5, &b);
             PkButton(&b, "TRACK", g_admLog, PKV_ORCHID);
-            PkBotRect(3, 4, &b);
+            PkBotRect(4, 5, &b);
             PkButton(&b, "REFRESH", 0, PKV_ORCHID);
         }
     } else {
@@ -21266,19 +21451,32 @@ static int PkClick(int bx, int by)
            main-thread-only. QueuePush is the bridge the rest of the panel
            already uses for exactly this. */
         /* bottom row: the tool's own state, none of it needs a selection */
-        for (k = 0; k < 4; ++k) {
-            PkBotRect(k, 4, &b);
+        for (k = 0; k < 5; ++k) {
+            PkBotRect(k, 5, &b);
             if (x >= b.left && x < b.right && y >= b.top && y < b.bottom) {
                 if (k == 0) QueuePush("admin_gui boxes");
                 if (k == 1) QueuePush("admin_gui wide");
-                if (k == 2) QueuePush("admin_gui track");
-                if (k == 3) QueuePush("admin_gui names");
+                if (k == 2) {
+                    /* WATCH toggles. Pressing it again while latched has to let
+                       go, or the only way out of a lock-on is the console -
+                       which is the thing this panel exists to avoid. */
+                    if (g_admWatch >= 0) QueuePush("watch off");
+                    else if (g_pkPlSel >= 0 && g_pkPlSel < (int)g_admNameN) {
+                        char w[96];
+                        _snprintf(w, sizeof(w) - 1, "watch %s",
+                                  g_admNames[g_pkPlSel]);
+                        w[sizeof(w) - 1] = 0;
+                        QueuePush(w);
+                    } else QueuePush("admin_gui pick");
+                }
+                if (k == 3) QueuePush("admin_gui track");
+                if (k == 4) QueuePush("admin_gui names");
                 return 1;
             }
         }
         /* top row: acts on the selected player */
-        for (k = 0; k < 4; ++k) {
-            PkBotRect2(k, 4, &b);
+        for (k = 0; k < 5; ++k) {
+            PkBotRect2(k, 5, &b);
             if (x >= b.left && x < b.right && y >= b.top && y < b.bottom) {
                 char cmd[96];
                 /* Never fail silently here. A dead button is indistinguishable
@@ -21295,8 +21493,8 @@ static int PkClick(int bx, int by)
                 /* BY ACCOUNT NAME, from the captured net_GetPlayerList - the
                    entity rows carry archetypes and kick cannot match those. */
                 {
-                    static const char* const kAct[4] =
-                        { "goto", "watch", "kick", "kickban" };
+                    static const char* const kAct[5] =
+                        { "goto", "bring", "kill", "kick", "kickban" };
                     _snprintf(cmd, sizeof(cmd) - 1, "%s %s",
                               kAct[k], g_admNames[g_pkPlSel]);
                 }
