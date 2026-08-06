@@ -861,6 +861,36 @@ typedef void (__thiscall *fnEntSetPos)(void* ent, float x, float y, float z);
 #define NETPL_END_OFF    0x84    /* end ptr                */
 #define NETPL_NAME_OFF   0x0C    /* account name, C string, on the player       */
 #define NETPL_SANE_MAX   64
+
+/* ---- THE PLAYERS ENUMERATE THEMSELVES ------------------------------------
+   Better than any of the above, and it needs no data structure at all.
+
+   net_GetPlayerList's handler is 0x106F0C80 - the per-command function pointer
+   stored at the registration site, which this file's own notes had recorded as
+   not existing. It does:
+
+     mov ecx, [esi + 0x4c]     ; a service on the command's OWN this
+     mov eax, [ecx]            ; vtable
+     mov eax, [eax + 0x4c]
+     call eax                  ; -> vector<Player*>
+     mov ecx, [esi]            ; player = *it
+     call 0x10EEFF90           ; Player::GetName(&out)
+     call 0x100AC1F0           ; print it
+
+   The list lives on that command object's `this`, so there is no global to
+   read - which is exactly why NETPL_SVC_PTR above came back null while the
+   names printed perfectly.
+
+   So stop looking for the list. HOOK GetName: run net_GetPlayerList and every
+   connected player walks through our hook with ecx = the Player*. Authoritative
+   by construction (it is the engine's own enumeration), needs no layout guess,
+   and works for players who are not running this DLL because it is the SERVER's
+   list, not the local client's.
+
+   And the ordering is the join: the k-th GetName call is the k-th name printed
+   to the console sink, so names and player objects line up index for index. */
+#define FN_PLAYER_GETNAME (0x10EEFF90u + g_rebase)
+#define GN_PROLOGUE_LEN   5    /* 8B 49 0C  mov ecx,[ecx+0xC] | 33 C0  xor eax,eax */
 #define OFF_ENT_CHECK    0x34
 #define OFF_ENT_XFORM    0x40      /* row-major 4x4; row3 (+0x70) = position */
 #define OFF_ENT_POS      0x70
@@ -14063,6 +14093,100 @@ static int InstallPrintfHook(void)
     return 1;
 }
 
+/* ---- Player::GetName hook: the roster, straight from the engine -----------
+   Armed only around our own quiet net_GetPlayerList run, so in every other
+   frame this is one predictable-branch test on a function the game calls rarely.
+*/
+typedef void* (__fastcall *fnGetNameFwd)(void*, void*, void*);
+
+static unsigned char  g_gnSave[GN_PROLOGUE_LEN];
+static unsigned char* g_gnAt    = 0;
+static unsigned char* g_gnTramp = 0;
+
+static void*         g_netEnum[NETPL_SANE_MAX];
+static volatile long g_netEnumN  = 0;
+static volatile long g_netEnumOn = 0;
+
+static void* __fastcall hkGetName(void* player, void* edx, void* outStr)
+{
+    if (g_netEnumOn) {
+        long n = g_netEnumN;
+        if (n < NETPL_SANE_MAX && player) {
+            /* No lock: this runs inside our own RunConsoleLine, on the thread
+               that armed it, and the engine enumerates serially. */
+            g_netEnum[n] = player;
+            InterlockedExchange(&g_netEnumN, n + 1);
+        }
+    }
+    if (g_gnTramp) return ((fnGetNameFwd)g_gnTramp)(player, edx, outStr);
+    return 0;
+}
+
+static int InstallGetNameHook(void)
+{
+    /* mov ecx,[ecx+0xC] / xor eax,eax - five bytes landing exactly on an
+       instruction boundary, so a jmp rel32 needs no padding and neither
+       instruction is relative. Verified against the shipped 1.02 Dunia.dll. */
+    static const unsigned char kWant[GN_PROLOGUE_LEN] =
+        { 0x8B, 0x49, 0x0C, 0x33, 0xC0 };
+    unsigned char* p = (unsigned char*)FN_PLAYER_GETNAME;
+    unsigned char* t;
+    DWORD old;
+
+    if (g_gnTramp) return 1;
+    if (!Readable(p, GN_PROLOGUE_LEN)) return 0;
+    if (memcmp(p, kWant, GN_PROLOGUE_LEN) != 0) {
+        logf_("[netp] GetName prologue is %02X %02X %02X %02X %02X, not the "
+              "expected mov ecx,[ecx+0C]/xor eax,eax - NOT patching",
+              p[0], p[1], p[2], p[3], p[4]);
+        return 0;
+    }
+    t = (unsigned char*)VirtualAlloc(0, 32, MEM_COMMIT | MEM_RESERVE,
+                                     PAGE_EXECUTE_READWRITE);
+    if (!t) return 0;
+
+    memcpy(g_gnSave, p, GN_PROLOGUE_LEN);
+    memcpy(t, p, GN_PROLOGUE_LEN);
+    t[GN_PROLOGUE_LEN] = 0xE9;
+    *(long*)(t + GN_PROLOGUE_LEN + 1) =
+        (long)(p + GN_PROLOGUE_LEN) - (long)(t + GN_PROLOGUE_LEN + 5);
+
+    if (!VirtualProtect(p, GN_PROLOGUE_LEN, PAGE_EXECUTE_READWRITE, &old)) {
+        VirtualFree(t, 0, MEM_RELEASE);
+        return 0;
+    }
+    p[0] = 0xE9;
+    *(long*)(p + 1) = (long)(ULONG_PTR)hkGetName - (long)(p + 5);
+    VirtualProtect(p, GN_PROLOGUE_LEN, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), p, GN_PROLOGUE_LEN);
+
+    g_gnAt    = p;
+    g_gnTramp = t;
+    logf_("[netp] Player::GetName hooked at %p (trampoline %p)", p, t);
+    return 1;
+}
+
+static void RemoveGetNameHook(void)
+{
+    DWORD old;
+    if (!g_gnAt || !g_gnTramp) return;
+    InterlockedExchange(&g_netEnumOn, 0);
+    if (Readable(g_gnAt, GN_PROLOGUE_LEN) &&
+        VirtualProtect(g_gnAt, GN_PROLOGUE_LEN, PAGE_EXECUTE_READWRITE, &old)) {
+        memcpy(g_gnAt, g_gnSave, GN_PROLOGUE_LEN);
+        VirtualProtect(g_gnAt, GN_PROLOGUE_LEN, old, &old);
+        FlushInstructionCache(GetCurrentProcess(), g_gnAt, GN_PROLOGUE_LEN);
+        Sleep(60);                    /* drain anyone inside the detour */
+        logf_("[netp] GetName restored");
+    } else {
+        logf_("[netp] *** could not restore GetName - leaving the hook in place");
+        return;
+    }
+    g_gnAt = 0;
+    /* Trampoline deliberately not freed - same reasoning as the sink's. */
+    g_gnTramp = 0;
+}
+
 static void RemovePrintfHook(void)
 {
     DWORD old;
@@ -14132,9 +14256,21 @@ static void AdmRefreshNames(void* console, int quiet)
     char* p;
     long  n = 0;
 
-    if (!CaptureRun(console, "net_GetPlayerList", buf, sizeof(buf), quiet)) {
-        InterlockedExchange(&g_admNameN, 0);
-        return;
+    /* Arm the GetName hook across the run: the engine walks its own player list
+       to print the names, so every connected player passes through our detour
+       and we come out with the Player* objects AND the names, in the same
+       order. That ordering IS the join - the k-th GetName call is the k-th line
+       the sink captured. */
+    InstallGetNameHook();
+    InterlockedExchange(&g_netEnumN, 0);
+    InterlockedExchange(&g_netEnumOn, 1);
+    {
+        int got = CaptureRun(console, "net_GetPlayerList", buf, sizeof(buf), quiet);
+        InterlockedExchange(&g_netEnumOn, 0);
+        if (!got) {
+            InterlockedExchange(&g_admNameN, 0);
+            return;
+        }
     }
     p = buf;
     while (*p && n < ADM_NAMES_MAX) {
@@ -16737,20 +16873,25 @@ static void NetPlayersCmd(void* console, const char* arg)
 
     while (*arg == ' ' || *arg == '\t') ++arg;
 
-    n = 0;
-    __try { n = NetPlayerList(pl, NETPL_SANE_MAX); }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        P_(console, 0, AC "netplayers: faulted walking the session list - "
-                          "layout is wrong for this build.\n");
-        return;
-    }
+    /* Enumerate by RUNNING net_GetPlayerList with the GetName hook armed - the
+       engine hands us its own list. Quiet, because this readout prints its own. */
+    AdmRefreshNames(console, 1);
+    n = (int)g_netEnumN;
+    if (n > NETPL_SANE_MAX) n = NETPL_SANE_MAX;
+    for (i = 0; i < n; ++i) pl[i] = g_netEnum[i];
 
     if (!n) {
         /* WHICH LINK BROKE. "0" on its own sent me back to the disassembler for
            an hour; every dereference in the chain can fail for a different
            reason and they need different fixes. Report the chain. */
         unsigned char *svc = 0, *obj = 0, *b = 0, *e = 0;
-        P_(console, 0, AC "netplayers: 0. Walking the chain:\n");
+        P_(console, 0, AC "netplayers: 0 - net_GetPlayerList enumerated nobody.\n");
+        P_(console, 0, AC "  GetName hook: %s\n",
+           g_gnTramp ? "installed"
+                     : "NOT INSTALLED - prologue mismatch, see the log");
+        P_(console, 0, AC "  names captured: %ld   player objects: %ld\n",
+           (long)g_admNameN, (long)g_netEnumN);
+        P_(console, 0, AC "  (the CKickBanService global, kept for reference:)\n");
         if (!Readable((void*)NETPL_SVC_PTR, 4)) {
             P_(console, 0, AC "  svc slot %08X is not readable\n",
                (unsigned)NETPL_SVC_PTR);
@@ -16782,7 +16923,11 @@ static void NetPlayersCmd(void* console, const char* arg)
                       "the local list)\n", n);
     for (i = 0; i < n; ++i) {
         void* pawn = NetPlayerPawn(pl[i]);
-        const char* nm = NetPlayerName(pl[i]);
+        /* From the captured roster at the matching index, NOT read off the
+           object: these Player objects hold the name behind a refcounted
+           holder at +0x0C (GetName does `mov ecx,[ecx+0xC]`), not as a plain
+           char array the way the kick service's entries do. */
+        const char* nm = (i < (int)g_admNameN) ? g_admNames[i] : "(unnamed)";
         if (pawn) {
             const float* m = (const float*)((char*)pawn + OFF_ENT_XFORM);
             P_(console, 0, AC "  [%d] %-20s  pawn %p @ %.0f %.0f %.0f\n",
@@ -16991,18 +17136,22 @@ static int AdmCollect(AdmRect* out, int cap)
 
        Runs FIRST so the name-based sources only ever fill gaps. */
     {
-        void* pl[NETPL_SANE_MAX];
-        int   np = 0, j;
-        __try { np = NetPlayerList(pl, NETPL_SANE_MAX); }
-        __except (EXCEPTION_EXECUTE_HANDLER) { np = 0; }
+        int np = (int)g_netEnumN, j;
         InterlockedExchange(&g_netN, np);
         for (j = 0; j < np && n < cap; ++j) {
-            void* pawn = NetPlayerPawn(pl[j]);
+            void* pawn = NetPlayerPawn(g_netEnum[j]);
             if (!pawn) continue;
-            if (AdmBoxFor(pawn, camPos, 0, NetPlayerName(pl[j]), &out[n])) {
+            /* Names come from the captured roster at the SAME index - the k-th
+               GetName call is the k-th line the engine printed. Fall back to a
+               placeholder rather than a wrong name if the two ever disagree in
+               length; a mislabelled row here is a kick aimed at the wrong
+               person. */
+            if (AdmBoxFor(pawn, camPos, 0,
+                          (j < (int)g_admNameN) ? g_admNames[j] : "(player)",
+                          &out[n])) {
                 /* The account name IS the row name here - not an archetype -
                    so this row is directly kickable, unlike the entity ones. */
-                out[n].acct = 1;
+                out[n].acct = (j < (int)g_admNameN);
                 ++n;
             }
         }
@@ -17587,6 +17736,7 @@ static void RemoveHook(void)
     RemoveMultiInstanceHook();
     RemoveProfileRedirect();
     RemovePrintfHook();
+    RemoveGetNameHook();
     RemoveCrashReporter();
     if (g_msgHook) {
         UnhookWindowsHookEx(g_msgHook);
@@ -22063,6 +22213,7 @@ static DWORD WINAPI Worker(LPVOID unused)
         RemoveMultiInstanceHook();
         RemoveProfileRedirect();
         RemovePrintfHook();
+        RemoveGetNameHook();
         RemoveCrashReporter();
         InterlockedExchange(&g_csAlive, 0);
         DeleteCriticalSection(&g_cs);
@@ -22081,6 +22232,7 @@ static DWORD WINAPI Worker(LPVOID unused)
         RemoveMultiInstanceHook();
         RemoveProfileRedirect();
         RemovePrintfHook();
+        RemoveGetNameHook();
         RemoveCrashReporter();
         InterlockedExchange(&g_csAlive, 0);
         DeleteCriticalSection(&g_cs);
