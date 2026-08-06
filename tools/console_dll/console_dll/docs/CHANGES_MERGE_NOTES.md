@@ -51,6 +51,60 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-06 (l) — match the remote player from his body, not from his record
+
+**Measured in a live two-player match, with (k) installed:**
+
+```
+[netp] roster -> 2 name(s) from Player::GetName
+[netp] pawn route: player+0x194 -> +0xC -> entity 19754200 (…PawnPlayerNetwork_Corp)
+[netp] team id 0250BB11 is RDA
+[netp] no pawn route on the player object (1351F440) - 1247 entities, names present
+```
+
+So the forward route is right and it resolves **exactly one** of the two: the
+local player. A client owns its own pawn and merely replicates everyone else's,
+so there is no reason for a remote's session record to carry a pointer the
+client never follows — searching harder in that direction is looking for
+something that is not there. (Two hops, a full kilobyte, both players: nothing.)
+
+The pawns themselves are all present, because the game draws them. So the join
+now runs **from the entity side** for whoever the forward route missed:
+
+1. **Back-pointer.** Scan each unclaimed `PawnPlayerNetwork*` entity for a word
+   that *is* one of the unmatched session records, one hop deep as well.
+2. **Elimination**, only when it is arithmetic: one player left without a body,
+   one body left without a player. Two of each is a coin toss, so it declines
+   and the rows keep saying they do not know.
+
+**The uniqueness rule is load-bearing.** `Readable()` answers at page
+granularity, so a kilobyte walk from a smaller object reads its heap
+neighbours, and a stale pointer there reads exactly like proof. The offline
+harness hit this on its first run — a fixture entity was `0x200` bytes and the
+scan sailed past it into freed memory that still held a record pointer. A
+back-pointer is therefore only believed when it is unique **both ways**: a body
+that appears to claim two players is dropped, and two bodies claiming one player
+match neither.
+
+A body matched by elimination is flagged (`PlayerRow.inferred`): `~` on the
+panel row, spelled out in `admin_gui names`. A later proof clears it.
+
+| Where | What | Risk | New symbols |
+|---|---|---|---|
+| `PlayerRow` | **Added** one field | Low | `inferred` |
+| After `NetPlayerPawn` | **Added** the reverse join | Low — new code between functions | `NETPL_ORPH_MAX`, `NetIsMpPawn`, `NetPawnPointsAt`, `NetMatchOrphanPawns` |
+| `NetPlayerPawn` | **Modified** — the "no route" line now says what happens next | Low | — |
+| `AdmCollect` source 0 | **Added** the call, before the loop | Low | — |
+| `PkPaint` rows, `admin_gui names` | **Modified** — the `~` flag | Low | — |
+
+`NetIsMpPawn` is deliberately stricter than `NetLooksLikePawn`: eliminating
+against "player or pawn anywhere in the name" would count paper dolls and spawn
+points and get the arithmetic wrong.
+
+**Tested off-game**: back-pointer match two hops out, elimination with one of
+each, two-of-each refusing to guess, two bodies claiming one player matching
+neither, and an already-claimed body never being handed out twice.
+
 ### 2026-08-06 (k) — a pawn route worth the name, and the team column stops lying
 
 Two things the roster (entry (j)) exposed the moment it started returning names.

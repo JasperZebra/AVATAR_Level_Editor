@@ -14384,6 +14384,7 @@ typedef struct {
     float hp, hpMax;        /* -1 when there is no character sheet */
     int   local;            /* this is you */
     int   host;             /* labelled HOST */
+    int   inferred;         /* the body was matched by elimination, not proof */
 } PlayerRow;
 
 #define PL_ROW_MAX 16
@@ -15375,10 +15376,11 @@ static void AdminGui(void* console, const char* arg)
             const PlayerRow* r = &g_plRow[q];
             if (r->ent)
                 P_(console, 0, AC "  [%ld] %-16s %-8s %7.0f %7.0f %6.0f  %4.0fm  "
-                                  "hp %.0f%s%s\n",
+                                  "hp %.0f%s%s%s\n",
                    q, r->name, r->side[0] ? r->side : "-",
                    r->wpos[0], r->wpos[1], r->wpos[2], r->dist, r->hp,
-                   r->local ? "  YOU" : "", r->host ? "  HOST" : "");
+                   r->local ? "  YOU" : "", r->host ? "  HOST" : "",
+                   r->inferred ? "   ~body matched by elimination" : "");
             else
                 P_(console, 0, AC "  [%ld] %-16s %-8s  (not spawned - no pawn "
                                   "matched)%s\n",
@@ -17667,10 +17669,157 @@ static void* NetPlayerPawn(void* player)
     if (!s_saidNoRoute) {
         s_saidNoRoute = 1;
         logf_("[netp] no pawn route on the player object (%p) - %ld entities in "
-              "the snapshot, names %s. Rows will read (not spawned).",
+              "the snapshot, names %s. Trying the pawn side instead.",
               player, (long)g_entCount, g_entMetaValid ? "present" : "BLANK");
     }
     return 0;
+}
+
+/* ---- THE OTHER DIRECTION: start at the body ------------------------------
+   MEASURED, live, two players in a match: the forward route works for exactly
+   one of them - `player+0x194 -> +0x0C -> PawnPlayerNetwork_Corp` - and the
+   other session record has nothing pointing at a pawn anywhere in the first
+   kilobyte, at either depth. The one that resolves is the LOCAL player; a
+   client owns its own pawn and merely replicates everyone else's, so there is
+   no reason for the remote's session record to hold a pointer the client never
+   needs. Searching harder in that direction is looking for something that is
+   not there.
+
+   The pawns themselves are all present - they have to be, the game draws them -
+   so the join runs from the entity side:
+
+     1. EXACT. Scan each unclaimed MP pawn for a word that IS one of the
+        unmatched session records, one hop deep as well. A body that points back
+        at its player is proof, not a guess.
+
+     2. ELIMINATION, and only when it is arithmetic rather than a guess: one
+        unmatched player left, one unclaimed MP pawn left, therefore each other.
+        Two of each would be a coin toss, so it declines and the rows stay
+        honest about not knowing.
+
+   Only `PawnPlayerNetwork*` counts as a candidate here - the archetype Avatar
+   spawns players into. The looser "player or pawn anywhere in the name" test
+   the forward search uses is right for validating a proven route and far too
+   loose to eliminate against, since paper dolls and spawn points would join the
+   count and make the arithmetic wrong. */
+#define NETPL_ORPH_MAX 16
+
+static int NetIsMpPawn(const char* nm)
+{
+    return nm && nm[0] && Stristr(nm, "pawnplayernetwork") != 0;
+}
+
+/* Does this entity hold a pointer back to that session record?
+   -> the offset it was found at (+1, so 0 stays "no"), or 0.
+
+   THE SCAN CAN RUN OFF THE END OF THE ENTITY. Readable() answers at page
+   granularity, so a kilobyte walk from a smaller object reads whatever the heap
+   put next to it, and a stale pointer in the neighbouring block would read as
+   proof. That is not hypothetical - the offline harness for this code hit it on
+   the first run. It is why the caller demands the match be UNIQUE in both
+   directions before it believes any of it. */
+static int NetPawnPointsAt(void* ent, void* player)
+{
+    int off, o2;
+    for (off = 0; off + 4 <= NETPL_SCAN_MAX; off += 4) {
+        void* w;
+        if (!Readable((unsigned char*)ent + off, 4)) break;
+        w = *(void**)((unsigned char*)ent + off);
+        if (w == player) return off + 1;
+        if (Readable(w, NETPL_HOP2_MAX + 4))
+            for (o2 = 0; o2 <= NETPL_HOP2_MAX; o2 += 4)
+                if (*(void**)((unsigned char*)w + o2) == player) return off + 1;
+    }
+    return 0;
+}
+
+/* Give a body to the rows the forward search could not. Runs on the main
+   thread, from the sampler, and only while something is actually unmatched. */
+static void NetMatchOrphanPawns(void)
+{
+    static DWORD s_last = 0;
+    DWORD now;
+    long  i, k, total;
+    long  orph[NETPL_ORPH_MAX], cand[NETPL_ORPH_MAX];
+    int   no = 0, nc = 0, oi, ci;
+
+    for (i = 0; i < g_plRowN && no < NETPL_ORPH_MAX; ++i)
+        if (!g_plRow[i].ent && g_plRow[i].player) orph[no++] = i;
+    if (!no) return;
+
+    now = GetTickCount();
+    if (s_last && (DWORD)(now - s_last) < 500) return;
+    s_last = now;
+    if (!g_entMetaValid) return;
+
+    total = g_entCount;
+    if (total > ENT_MAX) total = ENT_MAX;
+    for (k = 0; k < total && nc < NETPL_ORPH_MAX; ++k) {
+        if (!g_entRows[k].ent || !NetIsMpPawn(g_entRows[k].name)) continue;
+        for (i = 0; i < g_plRowN; ++i)
+            if (g_plRow[i].ent == g_entRows[k].ent) break;   /* already someone's */
+        if (i < g_plRowN) continue;
+        cand[nc++] = k;
+    }
+    if (!nc) return;
+
+    /* 1. the back-pointer - accepted only when it is unique BOTH WAYS.
+          A body that appears to point at two different players proves nothing,
+          and two bodies pointing at one player proves less than nothing. Either
+          means the scan is reading past the object into its neighbours, so the
+          answer is to drop those pairs rather than pick one. */
+    {
+        int claimBy[NETPL_ORPH_MAX], claimAt[NETPL_ORPH_MAX];
+        for (oi = 0; oi < no; ++oi) { claimBy[oi] = -1; claimAt[oi] = 0; }
+        for (ci = 0; ci < nc; ++ci) {
+            int hits = 0, hitO = -1, at = 0;
+            for (oi = 0; oi < no; ++oi) {
+                int a = NetPawnPointsAt(g_entRows[cand[ci]].ent,
+                                        g_plRow[orph[oi]].player);
+                if (a) { ++hits; hitO = oi; at = a; }
+            }
+            if (hits != 1) continue;              /* claims everybody = claims nobody */
+            if (claimBy[hitO] == -1) { claimBy[hitO] = ci; claimAt[hitO] = at; }
+            else                       claimBy[hitO] = -2;
+        }
+        for (oi = 0; oi < no; ++oi) {
+            ci = claimBy[oi];
+            if (ci == -2) {
+                logf_("[netp] two bodies point at \"%s\" - matching neither",
+                      g_plRow[orph[oi]].name);
+                continue;
+            }
+            if (ci < 0) continue;
+            g_plRow[orph[oi]].ent = g_entRows[cand[ci]].ent;
+            logf_("[netp] matched \"%s\" to %s (%p) - the pawn points back at the "
+                  "player object from pawn+0x%X", g_plRow[orph[oi]].name,
+                  g_entRows[cand[ci]].name, g_entRows[cand[ci]].ent,
+                  claimAt[oi] - 1);
+            orph[oi] = -1; cand[ci] = -1;
+        }
+    }
+
+    /* 2. one left on each side */
+    {
+        int lastO = -1, lastC = -1, cntO = 0, cntC = 0;
+        for (oi = 0; oi < no; ++oi) if (orph[oi] >= 0) { lastO = oi; ++cntO; }
+        for (ci = 0; ci < nc; ++ci) if (cand[ci] >= 0) { lastC = ci; ++cntC; }
+        if (cntO == 1 && cntC == 1) {
+            g_plRow[orph[lastO]].ent = g_entRows[cand[lastC]].ent;
+            g_plRow[orph[lastO]].inferred = 1;
+            logf_("[netp] matched \"%s\" to %s (%p) by elimination - one player "
+                  "without a body, one body without a player",
+                  g_plRow[orph[lastO]].name, g_entRows[cand[lastC]].name,
+                  g_entRows[cand[lastC]].ent);
+        } else if (cntO && cntC) {
+            static DWORD s_saidAmbiguous = 0;
+            if (!s_saidAmbiguous || (DWORD)(now - s_saidAmbiguous) > 30000) {
+                s_saidAmbiguous = now ? now : 1;
+                logf_("[netp] %d player(s) without a body and %d unclaimed MP "
+                      "pawn(s) - ambiguous, so nothing is matched", cntO, cntC);
+            }
+        }
+    }
 }
 
 static void NetPlayersCmd(void* console, const char* arg)
@@ -17972,9 +18121,14 @@ static int AdmCollect(AdmRect* out, int cap)
     {
         int np = (int)g_plRowN, j;
         InterlockedExchange(&g_netN, np);
+        /* BEFORE the loop, so a row matched from the pawn side is boxed in this
+           sample rather than the next one. It only does work while somebody is
+           actually unmatched. */
+        NetMatchOrphanPawns();
         for (j = 0; j < np && n < cap; ++j) {
             PlayerRow* pr   = &g_plRow[j];
             void*      pawn = pr->player ? NetPlayerPawn(pr->player) : 0;
+            if (pawn) pr->inferred = 0;      /* proven beats inferred */
             /* Keep the LAST known pawn when the lookup misses this frame rather
                than dropping the row: a player whose pawn is momentarily
                unresolvable is still in the match, and a row that blinks in and
@@ -21628,7 +21782,7 @@ static void PkPaint(void)
             pos[sizeof(pos) - 1] = 0;
             hp[sizeof(hp) - 1] = 0;
 
-            _snprintf(line, sizeof(line) - 1, "%-17s %-9s %s %s%s%s",
+            _snprintf(line, sizeof(line) - 1, "%-17s %-9s %s %s%s%s%s",
                       rows[k].name,
                       /* side, NOT rows[k].team - that one carries Far Cry 2's
                          factions, which is what the engine actually prints.
@@ -21636,7 +21790,11 @@ static void PkPaint(void)
                       rows[k].side[0] ? rows[k].side : "-",
                       pos, hp,
                       rows[k].local ? "  YOU" : "",
-                      rows[k].host  ? "  HOST" : "");
+                      rows[k].host  ? "  HOST" : "",
+                      /* This body was matched by elimination rather than proved
+                         - see NetMatchOrphanPawns. `admin_gui names` spells it
+                         out; here there is only room to flag it. */
+                      rows[k].inferred ? "  ~" : "");
             line[sizeof(line) - 1] = 0;
             row.left += 8;
             SetTextColor(g_pkDc,
