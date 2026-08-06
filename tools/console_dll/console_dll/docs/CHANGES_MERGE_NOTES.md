@@ -51,6 +51,26 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-05 (b) — `players` command, MP admin work
+
+| Where | What | Risk | New symbols |
+|---|---|---|---|
+| `PlayersList()`, anchor `/* ---- players: enumerate the WHOLE player list` — 8985-9105 | **Added**, between `RayAabb`'s end and the `PickSelect` forward decls | **None** — new text between untouched neighbours | `PL_SANE_MAX`, `PlayersList()` |
+| `kOurCmds[]` last entry, ~16800 | **Modified** — `"mkpawn",` became `"mkpawn", "players",` | **Medium** — one-line table both authors append to | — |
+| Dispatch, after the `playerinfo` arm, ~14199 | **Added** 6 lines | Low | — |
+| `ModHelp`, ~1714 | **Added** 1 line | Low | — |
+
+`kOurCmds[]` is the one to watch: it is a single flat table and `check_cmds.py`
+**fails the build** if it disagrees with the dispatch chain. That is a feature —
+a bad merge here is caught at build time rather than shipping a command that
+tab-completes but does nothing. If the build fails on `check_cmds`, the fix is
+to make sure every dispatched command appears in the table exactly once.
+
+Counts after this change: **76 dispatched, 76 in `kOurCmds[]`** (as
+`check_cmds.py` counts — it discards `?` and adds `warp`).
+
+### 2026-08-05 (a) — multi-instance
+
 | Where | What we did | Collision risk |
 |---|---|---|
 | Lines 10066-10592, one contiguous block | **Added** two new self-contained sections | **None** -- it is new text between two untouched functions |

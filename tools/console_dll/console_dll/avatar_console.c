@@ -1711,6 +1711,7 @@ static void ModHelp(void* c)
     P_(c, 0, AC "               (no coords = wherever the free camera is)\n");
     P_(c, 0, AC "--- diagnostics (all read-only) ---\n");
     P_(c, 0, AC "playerinfo     is the pawn we control alive? + can respawn run?\n");
+    P_(c, 0, AC "players [raw]  EVERY entry in the player list, not just ours\n");
     P_(c, 0, AC "actmap         what action maps are pushed on the player?\n");
     P_(c, 0, AC "pick           select what the CROSSHAIR points at\n");
     P_(c, 0, AC "               (console open: just CLICK the thing instead)\n");
@@ -8980,6 +8981,130 @@ static int CandLive(const PickCand* c)
     return 1;
 }
 
+/* ---- players: enumerate the WHOLE player list -----------------------------
+   THE QUESTION THIS EXISTS TO ANSWER. Every other read of PLAYERLIST_PTR in
+   this file takes `arr[0]` and stops - GetPlayerElem, GetPlayerObject,
+   GetPlayerEntity, TraceSnapshot, RepairPlayerList. That is right for single
+   player, where the list holds exactly one entry, and it means nobody has ever
+   looked at what `count` does in a live multiplayer match.
+
+   Two outcomes, and they lead somewhere different:
+
+     count > 1   -> this IS the session list. Remote players are CPlayer objects
+                    sitting next to the local one, and an admin list, kick-by-
+                    index and position sampling are all just a walk over this
+                    array.
+
+     count == 1  -> it is the LOCAL player list (split-screen sized), and remote
+                    players live in the entity system instead - almost certainly
+                    as entities carrying PlazaPawnRemotePlayerComponent or
+                    PlazaShallowRemotePlayer, both registered engine classes
+                    (avatar_function_names.md lines 3864-3918). The fallback is
+                    then an entity walk filtered on that component.
+
+   So this is deliberately a MEASUREMENT, not a feature: it prints what is
+   actually there, raw count included, instead of assuming a shape. Run it in a
+   two-instance match and it answers itself. This project's documented failure
+   mode is settling questions like this by reading a decompile.
+
+   Read-only - it calls nothing and writes nothing. Every hop is guarded the way
+   GetPlayerObject guards its single one; being one dereference short is this
+   file's signature bug.
+
+   PL_SANE_MAX exists because `count` is read from memory that may not hold a
+   list at all right now. A garbage dword would otherwise be a several-billion-
+   iteration loop on the game's main thread. GetCameraEntity applies the same
+   kind of bound (`cnt > 64`) for the same reason. */
+#define PL_SANE_MAX 64
+
+static void PlayersList(void* console, int raw)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void*  lst;
+    void** arr;
+    unsigned long count, shown, i;
+
+    if (!Readable((void*)PLAYERLIST_PTR, 4)) {
+        P_(console, 0, AC "players: the player-list slot is unreadable - no "
+                          "level is loaded.\n");
+        return;
+    }
+    lst = *(void**)PLAYERLIST_PTR;
+    if (!Readable(lst, 0x10)) {
+        P_(console, 0, AC "players: player list %p is unreadable.\n", lst);
+        return;
+    }
+    count = *(unsigned long*)((char*)lst + 8);
+    arr   = *(void***)((char*)lst + 4);
+
+    P_(console, 0, AC "players: list=%p count=%lu arr=%p  world=\"%s\"\n",
+       lst, count, (void*)arr, WorldName());
+    if (!count) { P_(console, 0, AC "  the list is empty.\n"); return; }
+
+    shown = count;
+    if (shown > PL_SANE_MAX) {
+        P_(console, 0, AC "  count %lu exceeds the %d-entry sanity bound, so "
+                          "only %d are walked. A count this large almost always "
+                          "means the slot is not a live list right now.\n",
+           count, PL_SANE_MAX, PL_SANE_MAX);
+        shown = PL_SANE_MAX;
+    }
+    if (!Readable(arr, shown * sizeof(void*))) {
+        P_(console, 0, AC "  the %lu-entry array at %p is unreadable.\n",
+           shown, (void*)arr);
+        return;
+    }
+
+    for (i = 0; i < shown; ++i) {
+        void *elem, *inner, *node, *ent;
+
+        elem = arr[i];
+        if (!Readable(elem, 8)) {
+            P_(console, 0, AC "  [%lu] elem=%p UNREADABLE\n", i, elem);
+            continue;
+        }
+        inner = *(void**)((char*)elem + 4);           /* the CPlayer */
+        if (!Readable(inner, OFF_PL_SERVICE + 4)) {
+            P_(console, 0, AC "  [%lu] CPlayer=%p unreadable\n", i, inner);
+            continue;
+        }
+        node = *(void**)((char*)inner + 8);
+        ent  = Readable(node, 0x10) ? *(void**)((char*)node + 0x0C) : 0;
+
+        if (Readable(ent, OFF_ENT_POS + 12)) {
+            const float* p = (const float*)((char*)ent + OFF_ENT_POS);
+            P_(console, 0, AC "  [%lu] CPlayer=%p ent=%p \"%s\" "
+                              "pos=(%.1f %.1f %.1f)%s\n",
+               i, inner, ent, EntityName(ent), p[0], p[1], p[2],
+               (i == 0) ? "  <- local" : "");
+        } else {
+            /* A live CPlayer with no pawn is NORMAL - dead, mid-respawn, or
+               spectating. Say so rather than dropping the row, because a
+               missing row would read as "that player is not in the session". */
+            P_(console, 0, AC "  [%lu] CPlayer=%p ent=%p  (no pawn right now - "
+                              "dead, spawning or spectating)%s\n",
+               i, inner, ent, (i == 0) ? "  <- local" : "");
+        }
+
+        /* `players raw` - the discovery aid. Team, score, ping and the display
+           name have not been located inside CPlayer yet; this prints the head of
+           the object so they can be found by comparing two instances that differ
+           in exactly one of those. */
+        if (raw && Readable(inner, 0x40)) {
+            unsigned long* d = (unsigned long*)inner;
+            int k;
+            for (k = 0; k < 0x10; k += 4)
+                P_(console, 0, AC "        +%02X: %08lX %08lX %08lX %08lX\n",
+                   k * 4, d[k], d[k + 1], d[k + 2], d[k + 3]);
+        }
+    }
+
+    if (count == 1)
+        P_(console, 0, AC "  count is 1. In a live match that means remote "
+                          "players are NOT in this list - look for entities with "
+                          "a RemotePlayer component instead.\n");
+}
+
 static void PickSelect(void* console, int i);   /* PickWithDir ends by calling it */
 static void RepairPlayerList(void* console);    /* `fixplayer`, defined with the warp code */
 static int  g_fixForce = 0;   /* `fixplayer force` - actually write, see the note there */
@@ -14074,6 +14199,13 @@ static int TryModCommand(void* console, const char* line)
     }
     if (_stricmp(p, "playerinfo") == 0){ PlayerInfo(console);
                                          RespawnReadiness(console); return 1; }
+    /* `players` walks the WHOLE list; `playerinfo` above reports only arr[0]. */
+    if (_strnicmp(p, "players", 7) == 0 && (p[7] == ' ' || p[7] == '\t' || !p[7])) {
+        const char* q = p + 7;
+        while (*q == ' ' || *q == '\t') ++q;
+        PlayersList(console, _stricmp(q, "raw") == 0);
+        return 1;
+    }
     if (_stricmp(p, "actmap") == 0)    { ActMapInfo(console); return 1; }
     if (_stricmp(p, "pick") == 0)      { PickEntity(console);  return 1; }
     if (_strnicmp(p, "pickfov", 7) == 0 && (p[7] == ' ' || p[7] == '\t' || !p[7])) {
@@ -16665,7 +16797,7 @@ static const char* const kOurCmds[] = {
     "agentinfo", "vehinfo", "facing", "facinginfo",
     "driveai", "rcprobe", "respawn", "resurrect",
     "revive", "mergelib", "drivelock", "driveturn",
-    "mkpawn",
+    "mkpawn", "players",
 };
 #define OURCMD_COUNT ((int)(sizeof(kOurCmds) / sizeof(kOurCmds[0])))
 
