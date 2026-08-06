@@ -253,6 +253,7 @@ static int  PkChar(int ch);
 static int  PkClick(int bx, int by);
 static int  PkWheel(int bx, int by, int delta);
 static int  PkDrag(int bx, int by, int down);
+static void PkHover(int bx, int by);
 static void PkPollMouse(void);
 static void PkClientToBB(int cx, int cy, int* bx, int* by);
 
@@ -13926,6 +13927,11 @@ static volatile long    g_admWide   = 0;
    rest of the picker state because AdmTick sets it to drive live coordinates
    on the PLAYERS tab, and the sampler sits above the panel code. */
 static volatile long    g_pkcDirty  = 1;
+/* Row under the cursor, in panel rows, or -1. Written by PkHover on the input
+   thread and read by PkPaint on the overlay thread - a plain int because a
+   torn read here paints one frame's highlight on the wrong row, which the
+   next frame corrects. */
+static int              g_pkHoverRow = -1;
 /* How many the SESSION said were connected, last sample - reported next to
    the entity counts so "found nobody" is never ambiguous about which
    source came up empty. */
@@ -14518,6 +14524,101 @@ static void WinSize(void* console, const char* arg)
    outside a live session, or - on an emulated server - the backend does not
    implement KickPlayer. The command reports what it sent so that a silent
    failure is distinguishable from a rejected one. */
+/* ---- GOTO / WATCH ---------------------------------------------------------
+   Move YOURSELF to a player, or lock the camera onto them.
+
+   Both act on the LOCAL client only, and that is not a limitation to work
+   around - it is the whole reason they are safe to ship. Moving your own camera
+   or pawn is something the client already has authority over.
+
+   What is deliberately NOT here, having gone looking for it: "teleport player
+   to me" and "kill player". Both need authority over somebody else's pawn, and
+   a client does not have it. Writing a remote pawn's transform locally moves
+   your COPY of them - it looks like it worked for about a second, until the
+   next update from the owner snaps them back, and meanwhile the boxes and the
+   telemetry are reporting a position nobody is at. A button that lies to an
+   admin about where a suspect is standing is worse than no button. There is no
+   net_ command for either one (the full list is in CHANGES_MERGE_NOTES), so
+   they would need server-side support that this DLL cannot provide.
+
+   `watch <name>` latches onto the row and keeps re-aiming at it every sample,
+   because a suspect who is worth watching is a suspect who is moving. */
+static volatile long g_admWatch = -1;   /* index of the watched roster row, -1 off */
+
+static void AdminGoto(void* console, const char* arg, int watch)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    int   k, hit = -1;
+    float dst[3];
+
+    while (*arg == ' ' || *arg == '\t') ++arg;
+
+    if (watch && (!*arg || _stricmp(arg, "off") == 0)) {
+        InterlockedExchange(&g_admWatch, -1);
+        P_(console, 0, AC "watch: off\n");
+        return;
+    }
+    if (!*arg) {
+        P_(console, 0, AC "goto <player name>   - move yourself to them\n");
+        P_(console, 0, AC "watch <player name>  - keep the camera on them "
+                          "('watch off' to stop)\n");
+        return;
+    }
+
+    /* Resolve against the sampled rows: those carry both the account name and a
+       live world position, which is exactly what this needs. */
+    if (!g_admCsInit) {
+        P_(console, 0, AC "%s: no sample yet - open admin_gui first.\n",
+           watch ? "watch" : "goto");
+        return;
+    }
+    EnterCriticalSection(&g_admCs);
+    for (k = 0; k < (int)g_admRectN; ++k) {
+        if (g_admRect[k].acct && _stricmp(g_admRect[k].name, arg) == 0) {
+            hit = k;
+            dst[0] = g_admRect[k].wpos[0];
+            dst[1] = g_admRect[k].wpos[1];
+            dst[2] = g_admRect[k].wpos[2];
+            break;
+        }
+    }
+    LeaveCriticalSection(&g_admCs);
+
+    if (hit < 0) {
+        P_(console, 0, AC "%s: \"%s\" has no sampled position yet.\n",
+           watch ? "watch" : "goto", arg);
+        P_(console, 0, AC "  the roster knows the name but no pawn has been "
+                          "matched to it - they may not be spawned.\n");
+        return;
+    }
+
+    if (watch) {
+        InterlockedExchange(&g_admWatch, hit);
+        P_(console, 0, AC "watch: locked on \"%s\" - 'watch off' to stop.\n", arg);
+        return;
+    }
+
+    /* Land slightly ABOVE and short of them rather than inside them: a teleport
+       into somebody's collision capsule is a good way to get shoved through the
+       floor. */
+    {
+        void*  cam = GetCameraEntityDirect();
+        float* m;
+        if (!Readable(cam, OFF_ENT_XFORM + 0x40)) {
+            P_(console, 0, AC "goto: no camera entity.\n");
+            return;
+        }
+        m = (float*)((char*)cam + OFF_ENT_XFORM);
+        m[12] = dst[0];
+        m[13] = dst[1];
+        m[14] = dst[2] + 3.0f;
+        P_(console, 0, AC "goto: moved to \"%s\" at %.0f %.0f %.0f\n",
+           arg, dst[0], dst[1], dst[2]);
+        P_(console, 0, AC "  (this moves YOUR view - if the game pulls you back, "
+                          "turn on freecam first)\n");
+    }
+}
+
 static void AdminKick(void* console, const char* arg, int ban)
 {
     fnPrintf P_ = (fnPrintf)FN_PRINTF;
@@ -15349,6 +15450,14 @@ static int TryModCommand(void* console, const char* line)
     if (_strnicmp(p, "netplayers", 10) == 0 &&
         (p[10] == ' ' || p[10] == '\t' || !p[10])) {
         NetPlayersCmd(console, p + 10);
+        return 1;
+    }
+    if (_strnicmp(p, "goto", 4) == 0 && (p[4] == ' ' || p[4] == '\t')) {
+        AdminGoto(console, p + 5, 0);
+        return 1;
+    }
+    if (_strnicmp(p, "watch", 5) == 0 && (p[5] == ' ' || p[5] == '\t' || !p[5])) {
+        AdminGoto(console, p + 5, 1);
         return 1;
     }
     /* `players` walks the WHOLE list; `playerinfo` above reports only arr[0]. */
@@ -17333,6 +17442,35 @@ static void AdmTick(void)
     InterlockedExchange(&g_admRectN, n);
     LeaveCriticalSection(&g_admCs);
 
+    /* WATCH: keep the camera pointed at the latched row. Re-aimed every sample
+       because a suspect worth watching is a suspect who is moving - a one-shot
+       aim would be pointing at where they used to be within a second.
+
+       Aims the camera's FORWARD row rather than moving it, so this is a look-at
+       and not a teleport: you keep your own position and the suspect stays
+       centred, which is what makes it usable while they run. */
+    {
+        long w = g_admWatch;
+        if (w >= 0 && w < n) {
+            void* cam = GetCameraEntityDirect();
+            if (Readable(cam, OFF_ENT_XFORM + 0x40)) {
+                float* m = (float*)((char*)cam + OFF_ENT_XFORM);
+                float d[3], len;
+                d[0] = tmp[w].wpos[0] - m[12];
+                d[1] = tmp[w].wpos[1] - m[13];
+                d[2] = tmp[w].wpos[2] - m[14];
+                len  = (float)sqrt(d[0]*d[0] + d[1]*d[1] + d[2]*d[2]);
+                if (len > 0.1f) {
+                    d[0] /= len; d[1] /= len; d[2] /= len;
+                    m[4] = d[0]; m[5] = d[1]; m[6] = d[2];   /* row1 = forward */
+                }
+            }
+        } else if (w >= 0) {
+            /* the row went away - stop rather than aim at a stale index */
+            InterlockedExchange(&g_admWatch, -1);
+        }
+    }
+
     /* LIVE COORDINATES. The panel only repaints when something marks it dirty
        (plus the caret's own 2 Hz flip), so without this the numbers on the
        PLAYERS tab were whatever they had been when the tab was opened - which
@@ -18937,6 +19075,7 @@ static const char* const kOurCmds[] = {
     "driveai", "rcprobe", "respawn", "resurrect",
     "revive", "mergelib", "drivelock", "driveturn",
     "mkpawn", "players", "netplayers", "admin_gui", "kick", "kickban", "winsize",
+    "goto", "watch",
 };
 #define OURCMD_COUNT ((int)(sizeof(kOurCmds) / sizeof(kOurCmds[0])))
 
@@ -20335,6 +20474,9 @@ static void PickerRegister(void)
 #define PKV_ORCHID  RGB(0xC0, 0x8C, 0xD8)
 #define PKV_SLATE   RGB(0x7A, 0x88, 0x99)
 #define PKV_SEL     RGB(0x1E, 0x3A, 0x52)
+/* Deliberately BETWEEN the field and the selection: hover must be visible
+   without ever being mistaken for what is actually selected. */
+#define PKV_HOVER   RGB(0x19, 0x2E, 0x41)
 #define PKV_DANGER  RGB(0xE2, 0x4B, 0x4A)
 
 static HDC     g_pkDc   = 0;
@@ -20429,6 +20571,12 @@ static void PkListRect(RECT* r)
 {
     r->left = PK_PAD; r->top = PK_LBY;
     r->right = PK_W - PK_PAD - PK_SBW - 2; r->bottom = PK_LBY + PkListH();
+    /* PLAYERS carries a SECOND button row, so the list has to stop one row
+       higher or its last entry is drawn underneath GOTO/WATCH/KICK/BAN - and
+       because PkClick hit-tests the list before the buttons, that overlap would
+       make the top row of buttons unclickable along its upper edge. The rect is
+       shared by both paths precisely so they cannot disagree. */
+    if (g_pickMode == PK_MODE_PLAYERS) r->bottom -= (PK_SPH + 6);
 }
 
 /* ---- the scrollbar, in ONE place --------------------------------------------
@@ -20493,6 +20641,18 @@ static void PkBotRect(int i, int n, RECT* r)
     int bw   = (roww - (n - 1) * 6) / n;
     r->left = PK_PAD + i * (bw + 6); r->top = PK_H - PK_PAD - PK_SPH;
     r->right = r->left + bw;         r->bottom = r->top + PK_SPH;
+}
+
+/* A SECOND row, directly above the first. The PLAYERS tab has more actions than
+   fit across one row at the 380px minimum width - five buttons there are already
+   66px each, and "SPECTATE" does not fit in 66px. Only that tab uses it; the
+   list rect is shortened by PkListRect for the same tab so the rows cannot land
+   on top of the last entry. */
+static void PkBotRect2(int i, int n, RECT* r)
+{
+    PkBotRect(i, n, r);
+    r->top    -= (PK_SPH + 6);
+    r->bottom -= (PK_SPH + 6);
 }
 
 static void PkFillRect(const RECT* r, COLORREF c)
@@ -20615,7 +20775,12 @@ static void PkPaint(void)
                 row.top  = lr.top + (int)q * PK_ROWH;
                 row.bottom = row.top + PK_ROWH;
                 if (row.bottom > lr.bottom) break;
-                if ((int)q == g_pkPlSel) PkFillRect(&row, PKV_EDGE);
+                /* Selection wins over hover: while you drag the mouse away
+                   the row you PICKED has to stay the obvious one, or the
+                   highlight reads as "this is what KICK will act on" when it
+                   is only what the cursor happens to be over. */
+                if ((int)q == g_pkPlSel)          PkFillRect(&row, PKV_EDGE);
+                else if ((int)q == g_pkHoverRow)  PkFillRect(&row, PKV_HOVER);
                 SetTextColor(g_pkDc, PKV_GOLD);
                 /* COORDS ON THE ACCOUNT ROW. The sampler's source 0 walks the
                    engine's own player enumeration and names each row with the
@@ -20766,20 +20931,27 @@ static void PkPaint(void)
             }
         }
 
-        {   /* five actions along the bottom. BOXES is here because arming the
-               overlay from the panel is the difference between an admin tool and
-               a readout that needs a console command to start working. */
+        {   /* TWO rows. Top row acts on the SELECTED player, bottom row is the
+               tool's own state - grouped that way so a destructive button is
+               never adjacent to a harmless toggle. */
             RECT b;
-            PkBotRect(0, 5, &b);
+            PkBotRect2(0, 4, &b);
+            PkButton(&b, "GOTO", 0, PKV_GOLD);
+            PkBotRect2(1, 4, &b);
+            PkButton(&b, "WATCH", g_admWatch >= 0, PKV_GOLD);
+            PkBotRect2(2, 4, &b);
             PkButton(&b, "KICK", 0, PKV_DANGER);
-            PkBotRect(1, 5, &b);
+            PkBotRect2(3, 4, &b);
             PkButton(&b, "BAN", 0, PKV_DANGER);
-            PkBotRect(2, 5, &b);
-            PkButton(&b, "BOXES", g_admOn, PKV_GOLD);
-            PkBotRect(3, 5, &b);
+
+            PkBotRect(0, 4, &b);
+            PkButton(&b, "BOXES", g_admOn, PKV_ORCHID);
+            PkBotRect(1, 4, &b);
             PkButton(&b, "WIDE", g_admWide, PKV_ORCHID);
-            PkBotRect(4, 5, &b);
+            PkBotRect(2, 4, &b);
             PkButton(&b, "TRACK", g_admLog, PKV_ORCHID);
+            PkBotRect(3, 4, &b);
+            PkButton(&b, "REFRESH", 0, PKV_ORCHID);
         }
     } else {
 
@@ -20817,7 +20989,10 @@ static void PkPaint(void)
         int  idx = top + i;
         rw.left = r.left; rw.right = r.right;
         rw.top  = r.top + i * PK_ROWH; rw.bottom = rw.top + PK_ROWH;
-        if (idx == sel) PkFillRect(&rw, PKV_SEL);
+        /* Same rule as the PLAYERS list: selection outranks hover, so the row
+           you picked stays the obvious one when the cursor moves off it. */
+        if (idx == sel)             PkFillRect(&rw, PKV_SEL);
+        else if (i == g_pkHoverRow) PkFillRect(&rw, PKV_HOVER);
         strncpy(row, g_pkcRow[idx], sizeof(row) - 1);
         row[sizeof(row) - 1] = 0;
         rw.left += 6;
@@ -21090,13 +21265,22 @@ static int PkClick(int bx, int by)
            INPUT thread, and kick runs the engine's own ExecuteLine, which is
            main-thread-only. QueuePush is the bridge the rest of the panel
            already uses for exactly this. */
-        for (k = 0; k < 5; ++k) {
-            PkBotRect(k, 5, &b);
+        /* bottom row: the tool's own state, none of it needs a selection */
+        for (k = 0; k < 4; ++k) {
+            PkBotRect(k, 4, &b);
+            if (x >= b.left && x < b.right && y >= b.top && y < b.bottom) {
+                if (k == 0) QueuePush("admin_gui boxes");
+                if (k == 1) QueuePush("admin_gui wide");
+                if (k == 2) QueuePush("admin_gui track");
+                if (k == 3) QueuePush("admin_gui names");
+                return 1;
+            }
+        }
+        /* top row: acts on the selected player */
+        for (k = 0; k < 4; ++k) {
+            PkBotRect2(k, 4, &b);
             if (x >= b.left && x < b.right && y >= b.top && y < b.bottom) {
                 char cmd[96];
-                if (k == 2) { QueuePush("admin_gui boxes"); return 1; }
-                if (k == 3) { QueuePush("admin_gui wide");  return 1; }
-                if (k == 4) { QueuePush("admin_gui track"); return 1; }
                 /* Never fail silently here. A dead button is indistinguishable
                    from a kick the server refused, and that ambiguity cost a
                    whole test session - the roster was on screen, so "nothing
@@ -21110,9 +21294,12 @@ static int PkClick(int bx, int by)
                 }
                 /* BY ACCOUNT NAME, from the captured net_GetPlayerList - the
                    entity rows carry archetypes and kick cannot match those. */
-                _snprintf(cmd, sizeof(cmd) - 1, "%s %s",
-                          (k == 0) ? "kick" : "kickban",
-                          g_admNames[g_pkPlSel]);
+                {
+                    static const char* const kAct[4] =
+                        { "goto", "watch", "kick", "kickban" };
+                    _snprintf(cmd, sizeof(cmd) - 1, "%s %s",
+                              kAct[k], g_admNames[g_pkPlSel]);
+                }
                 cmd[sizeof(cmd) - 1] = 0;
                 QueuePush(cmd);
                 return 1;
@@ -21203,6 +21390,28 @@ static int PkClick(int bx, int by)
    the BACKBUFFER extent, not the client rect: g_pkX lives in backbuffer pixels,
    so clamping it against client pixels would have let the panel walk off the
    right-hand side of the frame on any upscaled setup. */
+/* ---- hover ----------------------------------------------------------------
+   Which list row the cursor is over, in PANEL rows, or -1 for none. Repaints
+   only when it CHANGES: this runs on every input poll, and marking the panel
+   dirty on each one would redraw the whole DIB continuously while the mouse
+   simply rests inside the list. */
+static void PkHover(int bx, int by)
+{
+    int x, y, row = -1;
+    RECT lr;
+
+    if (!g_pickerOpen) { row = -1; }
+    else if (PkHitLocal(bx, by, &x, &y)) {
+        PkListRect(&lr);
+        if (x >= lr.left && x < lr.right && y >= lr.top && y < lr.bottom)
+            row = (y - lr.top) / PK_ROWH;
+    }
+    if (row != g_pkHoverRow) {
+        g_pkHoverRow = row;
+        InterlockedExchange(&g_pkcDirty, 1);
+    }
+}
+
 static int PkDrag(int bx, int by, int down)
 {
     if (down < 0) { g_pkDragging = 0; g_pkBarDrag = 0; g_pkSizing = 0; return 0; }
@@ -21441,6 +21650,12 @@ static void PkPollMouse(void)
         if (!ScreenToClient(cw, &use)) return;
         PkClientToBB(use.x, use.y, &bx, &by);
     }
+
+    /* HOVER. The position is computed every poll regardless; it was simply
+       thrown away unless a button was held. Feeding it to the hover tracker
+       costs one rect test and is the difference between a list you can aim at
+       and one where you find out what you hit after you have clicked it. */
+    PkHover(bx, by);
 
     if (isDown && !wasDown)      PkClick(bx, by);
     else if (!isDown && wasDown) PkDrag(bx, by, -1);
