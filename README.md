@@ -80,6 +80,14 @@ Notes:
 - If the destination folder already holds edits, the editor tells you how many
   and asks before overwriting anything — it never silently discards work.
 
+Then **File ▸ 🎮 Launch Game** runs it. The first time it asks for your game's
+`.exe` (Avatar's is `bin\Avatar.exe`); after that it just launches, with no
+dialog to dismiss. The path is remembered per game, so Avatar and Far Cry 2 each
+keep their own, and if the game is later moved the editor simply asks again.
+
+Launching twice is allowed on purpose — two running copies is how multiplayer
+gets tested.
+
 | **AVATAR** | **FARCRY 2** |
 |---|---|
 | <img width="1329" height="1096" alt="Screenshot 2025-12-01 161837" src="https://github.com/user-attachments/assets/0cd89cef-c05c-4341-ad62-7aef36d47eb4" /> | <img width="1600" height="1300" alt="Screenshot 2025-12-01 161923" src="https://github.com/user-attachments/assets/8c837629-b9b9-4c09-a856-eefbde5e8a31" /> |

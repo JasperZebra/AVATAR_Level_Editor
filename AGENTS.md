@@ -4389,6 +4389,26 @@ so that message is the only place to learn whether they hold a full archive or a
 changes-only one. Don't reintroduce the prompt without a reason the defaults
 can't cover.
 
+**`File ▸ 🎮 Launch Game` (Aug 2026) — `launch_game.py`.** Picks the exe once,
+remembers it as `{game}_game_exe` in `patch_config.json`, launches every time
+after. Its own module, not `pak_ui`: launching has nothing to do with archives.
+Points worth not undoing:
+- **cwd is the exe's folder**, never the editor's. Dunia resolves data relative
+  to the working directory, and the `dinput8.dll` console mod is loaded by the
+  OS from the exe's folder — the wrong cwd yields a game that starts and then
+  cannot find itself.
+- **Detached, not waited on, no handle kept**, and nothing prevents launching
+  twice — two instances is how the MP work is tested (see
+  `tools/console_dll/docs/MULTI_INSTANCE.md`).
+- **A saved path that no longer exists reads as unset**, so a moved or
+  reinstalled game re-asks instead of erroring; a failed `Popen` offers the
+  picker again rather than leaving a bad path saved forever.
+- **Not gated by game mode** (Rule 8) — the key is per game, so FC2 works the
+  moment its exe is chosen. `_EXE_HINT` only aims the file dialog; whatever the
+  user picks is what runs.
+- **Success shows no dialog** — a popup to dismiss would undo the point of the
+  button. It reports via `status_bar`.
+
 **BOTH games get the chooser AND both archive formats work** (standing rule:
 every feature applies to Avatar and FC2). The archive half differs as *data*
 (`_ARCHIVE_LABEL` / `_ARCHIVE_BLURB`), not a control-flow branch: Avatar's

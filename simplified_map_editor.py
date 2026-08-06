@@ -1757,6 +1757,14 @@ class SimplifiedMapEditor(QMainWindow):
             repack_pak_action.setText("📦 Repack Patch Folder to .pak  (Avatar only)")
         file_menu.addAction(repack_pak_action)
 
+        # Run the game.  Not gated by game mode -- the exe is remembered per
+        # game, so this works for FC2 the moment its exe is picked.
+        launch_game_action = QAction("🎮 Launch Game", self)
+        launch_game_action.triggered.connect(self.open_launch_game)
+        launch_game_action.setToolTip(
+            "Start the game. You pick the .exe once and it is remembered.")
+        file_menu.addAction(launch_game_action)
+
         file_menu.addSeparator()
 
         # Add exit action
@@ -3722,6 +3730,17 @@ class SimplifiedMapEditor(QMainWindow):
                 f"Could not load the PAK archive support module:\n\n{exc}")
             return
         repack_patch_folder(self)
+
+    def open_launch_game(self):
+        """Run the game. Asks for the .exe the first time, then just launches."""
+        try:
+            from launch_game import launch_game
+        except Exception as exc:                       # noqa: BLE001
+            QMessageBox.critical(
+                self, "Launcher Unavailable",
+                f"Could not load the game launcher:\n\n{exc}")
+            return
+        launch_game(self)
 
     def open_object_library(self):
         """Focus the Object Library tab in the right panel (place new entities by
