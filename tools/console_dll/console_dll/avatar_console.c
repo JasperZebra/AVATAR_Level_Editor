@@ -14443,7 +14443,12 @@ static void AdmRefreshNames(void* console, int quiet)
         int got = CaptureRun(console, "net_GetPlayerList", buf, sizeof(buf), quiet);
         InterlockedExchange(&g_netEnumOn, 0);
         if (!got) {
+            /* Clear BOTH counts. Zeroing only the name count left g_plRowN
+               holding the previous refresh's rows, so the panel kept drawing
+               players the capture had just failed to confirm - stale data that
+               looks exactly like live data. */
             InterlockedExchange(&g_admNameN, 0);
+            InterlockedExchange(&g_plRowN, 0);
             return;
         }
     }
@@ -14470,24 +14475,32 @@ static void AdmRefreshNames(void* console, int quiet)
         p = e;
         while (*p == '\n' || *p == '\r') ++p;
     }
-    /* Who is hosting, on the same trip. net_GetHostName is a shipped command and
-       the reply is one line, so this costs one more quiet console line per
-       refresh and saves reverse-engineering a host flag on the player object. */
-    AdmRefreshHost(console, quiet);
+    /* PUBLISH THE COUNT BEFORE ANYTHING READS IT. This was the bug behind
+       "the names never show up": AdmBuildRows reads g_admNameN, and the store
+       used to sit at the very bottom of this function - so the row list was
+       always built from the PREVIOUS refresh's count, and on the first call
+       that count is zero. The panel therefore drew an empty list on open and
+       stayed a refresh behind forever after.
 
-    /* Rebuild the one true row list from what we just captured. */
-    AdmBuildRows();
-    AdmRefreshTeams(console, quiet);
-
-    /* Log only when the roster CHANGES. The timer refresh runs every few seconds
-       for as long as the tab is open, and an unconditional line here buried the
-       log in identical entries - which is exactly when the log stops being worth
-       reading. A join or a leave still shows up, which is the part worth having. */
+       Log only when the roster CHANGES: the timer refresh runs every few
+       seconds for as long as the tab is open, and an unconditional line here
+       buried the log in identical entries - which is exactly when a log stops
+       being worth reading. A join or a leave still shows up. */
     {
         long was = g_admNameN;
         InterlockedExchange(&g_admNameN, n);
         if (was != n) logf_("[cap ] net_GetPlayerList -> %ld name(s)", n);
     }
+
+    /* Who is hosting, on the same trip. net_GetHostName is a shipped command and
+       the reply is one line, so this costs one more quiet console line per
+       refresh and saves reverse-engineering a host flag on the player object. */
+    AdmRefreshHost(console, quiet);
+
+    /* Rebuild the one true row list from what we just captured - now that the
+       count it reads is this refresh's. */
+    AdmBuildRows();
+    AdmRefreshTeams(console, quiet);
 }
 
 /* ---- ARM AT STARTUP, WITHOUT ANYONE TYPING ANYTHING -----------------------
@@ -21549,7 +21562,7 @@ static int PkClick(int bx, int by)
                        have to press REFRESH to find out who is in the session,
                        and quiet because they asked to see a list, not to read
                        net_GetPlayerList's raw reply in the console. */
-                    else if (i == PK_MODE_PLAYERS) QueuePush("admin_gui names quiet");
+                    else if (i == PK_MODE_PLAYERS) QueuePush("admin_gui names");
                     InterlockedExchange(&g_pkcDirty, 1);
                 }
                 return 1;
@@ -22057,7 +22070,12 @@ static void PickerShow(void)
         InterlockedExchange(&g_admOn, 1);
         logf_("[pick] panel opened - admin sampling armed");
     }
-    QueuePush("admin_gui names quiet");
+    /* LOUD on open, so net_GetPlayerList's own reply is visible in the console
+       next to the list the panel builds from it. When the two disagree that is
+       the fastest way to see which one is wrong - and this is exactly the
+       comparison that found the ordering bug above. Only the 4 s timer stays
+       quiet; that is the one that would otherwise spam. */
+    QueuePush("admin_gui names");
 
     /* Search text, category and selection are deliberately NOT reset - reopening
        should land you back where you left off, not at the top of a blank list. */
