@@ -830,6 +830,37 @@ static void RunConsoleLine(void* console, const char* line)
 typedef void (__thiscall *fnEntSetPos)(void* ent, float x, float y, float z);
 
 #define PLAYERLIST_PTR   (0x111E61F8u + g_rebase)
+
+/* ---- THE SESSION'S OWN LIST OF CONNECTED PLAYERS --------------------------
+   PLAYERLIST_PTR above is the LOCAL player list - it reports count=1 in a live
+   two-player match, which is why everything built on it could only ever see
+   people the local client tracked. This is the other one: the list the kick
+   service resolves account names against, so by construction it contains
+   exactly the people who are connected, whether or not they run this DLL.
+
+   Derived from net_kickClient rather than guessed. Its handler does
+
+     0x106F34FE  call 0x106F2F20        ; lookup(name) -> player*, null -> "Player not found."
+
+   and that lookup opens with
+
+     mov ecx, [0x11259808]              ; the session service singleton
+     call 0x10E86210                    ; -> eax = [[svc+4]+0x80], edx = [[svc+4]+0x84]
+     call 0x10E861D0                    ; copies the range [eax,edx) into a vector
+     mov eax, [esp+0x2c]                ; begin
+     mov ecx, [esp+0x30]                ; count
+     lea edx, [eax + ecx*4]             ; end   -> ARRAY OF POINTERS
+     mov esi, [edi]                     ; player = *it
+     add esi, 0xc                       ; -> the account name, a plain C string
+
+   Both helpers are three-instruction accessors, so the begin/end pair is just
+   two dwords on the service object and the whole walk is a memory read. No
+   engine call, no main-thread requirement, and nothing to guess. */
+#define NETPL_SVC_PTR    (0x11259808u + g_rebase)
+#define NETPL_VEC_OFF    0x80    /* begin ptr, on *(svc+4) */
+#define NETPL_END_OFF    0x84    /* end ptr                */
+#define NETPL_NAME_OFF   0x0C    /* account name, C string, on the player       */
+#define NETPL_SANE_MAX   64
 #define OFF_ENT_CHECK    0x34
 #define OFF_ENT_XFORM    0x40      /* row-major 4x4; row3 (+0x70) = position */
 #define OFF_ENT_POS      0x70
@@ -9035,6 +9066,9 @@ static int CandLive(const PickCand* c)
    "look for entities instead" without looking is not an answer. */
 static int AdmLooksLikePlayer(const char* name, const char* cls);
 static int StrIStr_(const char* hay, const char* needle);
+/* Defined with the rest of the session-list code, which sits below the entity
+   snapshot it cross-references; the dispatcher is above both. */
+static void NetPlayersCmd(void* console, const char* arg);
 
 static void PlayersList(void* console, int raw)
 {
@@ -13823,6 +13857,9 @@ typedef struct {
     float dist;                 /* at sample time; for the list, not the box */
     int   local;
     int   valid;
+    /* 1 = name is an ACCOUNT name from the session list, so this row is
+       kickable. 0 = an entity archetype, which kick cannot match. */
+    int   acct;
     char  name[ADM_NLEN];
 } AdmRect;
 
@@ -13855,6 +13892,10 @@ static volatile long    g_admSelf   = 1;
    explained. Declared here because `admin_gui wide` reads it 2,000 lines
    earlier than that, and the dispatcher sits above all of the sampling code. */
 static volatile long    g_admWide   = 0;
+/* How many the SESSION said were connected, last sample - reported next to
+   the entity counts so "found nobody" is never ambiguous about which
+   source came up empty. */
+static volatile long    g_netN      = 0;
 /* The camera the DRAW side projects against, republished every sample. Read
    under __try on the render thread - see AdmDrawD3D. */
 static void* volatile   g_admCam    = 0;
@@ -15112,6 +15153,11 @@ static int TryModCommand(void* console, const char* line)
     if (_strnicmp(p, "kick", 4) == 0 &&
         (p[4] == ' ' || p[4] == '\t' || !p[4])) {
         AdminKick(console, p + 4, 0);
+        return 1;
+    }
+    if (_strnicmp(p, "netplayers", 10) == 0 &&
+        (p[10] == ' ' || p[10] == '\t' || !p[10])) {
+        NetPlayersCmd(console, p + 10);
         return 1;
     }
     /* `players` walks the WHOLE list; `playerinfo` above reports only arr[0]. */
@@ -16582,6 +16628,169 @@ static int AdmBoxFor(void* ent, const float* camPos, int local, const char* name
     return 1;
 }
 
+/* ---- connected players, read straight off the session service -------------
+   See NETPL_SVC_PTR for how the layout was derived. Every step is bounds- and
+   Readable-checked: this walks three pointers deep into engine state that is
+   torn down between matches, and the answer to "the session went away mid-walk"
+   has to be "zero players", never a fault.
+
+   -> number of players written to out[]. */
+static int NetPlayerList(void** out, int cap)
+{
+    unsigned char *svc, *obj, *begin, *end;
+    int n = 0, count, i;
+
+    if (!Readable((void*)NETPL_SVC_PTR, 4)) return 0;
+    svc = *(unsigned char**)NETPL_SVC_PTR;
+    if (!Readable(svc, 8)) return 0;
+    obj = *(unsigned char**)(svc + 4);
+    if (!Readable(obj, NETPL_END_OFF + 4)) return 0;
+
+    begin = *(unsigned char**)(obj + NETPL_VEC_OFF);
+    end   = *(unsigned char**)(obj + NETPL_END_OFF);
+    if (!begin || end < begin) return 0;
+
+    count = (int)((end - begin) / sizeof(void*));
+    /* A torn read mid-resize can produce a wild span, and trusting it would
+       walk arbitrary memory. Nobody is running a 64-player Avatar match. */
+    if (count <= 0 || count > NETPL_SANE_MAX) return 0;
+    if (!Readable(begin, count * (int)sizeof(void*))) return 0;
+
+    for (i = 0; i < count && n < cap; ++i) {
+        void* p = *(void**)(begin + i * sizeof(void*));
+        if (!Readable(p, NETPL_NAME_OFF + 4)) continue;
+        out[n++] = p;
+    }
+    return n;
+}
+
+static const char* NetPlayerName(void* player)
+{
+    const char* s;
+    if (!Readable(player, NETPL_NAME_OFF + 4)) return "";
+    s = (const char*)player + NETPL_NAME_OFF;
+    if (!Readable((void*)s, 2)) return "";
+    return s;
+}
+
+/* ---- find the PAWN hanging off a connected player -------------------------
+   The account name gets us the person; the pawn gets us where they are. Rather
+   than guess an offset, look for one: walk the player object a word at a time
+   and test each value against the entity pointers the snapshot already holds.
+   A hit is a field that literally points at a live entity, which is what a pawn
+   pointer is.
+
+   NETPL_PAWN_OFF caches the winner so the search runs once. It is a hint, not a
+   contract - it is re-validated on every use, and a wrong cache costs one failed
+   lookup rather than a wild read. */
+#define NETPL_SCAN_MAX 0x400
+static volatile long g_netPawnOff = -1;
+
+static void* NetPlayerPawnAt(void* player, int off)
+{
+    void* v;
+    if (off < 0 || !Readable((unsigned char*)player + off, 4)) return 0;
+    v = *(void**)((unsigned char*)player + off);
+    if (!Readable(v, OFF_ENT_XFORM + 0x40)) return 0;
+    return v;
+}
+
+/* Is `v` one of the entities the last snapshot saw? */
+static int NetIsKnownEntity(void* v)
+{
+    long k, total = g_entCount;
+    if (!v) return 0;
+    if (total > ENT_MAX) total = ENT_MAX;
+    for (k = 0; k < total; ++k)
+        if (g_entRows[k].ent == v) return 1;
+    return 0;
+}
+
+static void* NetPlayerPawn(void* player)
+{
+    int off;
+
+    /* the cached offset first, re-validated */
+    off = (int)g_netPawnOff;
+    if (off >= 0) {
+        void* v = NetPlayerPawnAt(player, off);
+        if (v && NetIsKnownEntity(v)) return v;
+    }
+    for (off = 0; off + 4 <= NETPL_SCAN_MAX; off += 4) {
+        void* v = NetPlayerPawnAt(player, off);
+        if (v && NetIsKnownEntity(v)) {
+            if (g_netPawnOff != off) {
+                InterlockedExchange(&g_netPawnOff, off);
+                logf_("[netp] pawn pointer found at player+0x%X", off);
+            }
+            return v;
+        }
+    }
+    return 0;
+}
+
+static void NetPlayersCmd(void* console, const char* arg)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    void*    pl[NETPL_SANE_MAX];
+    int      n, i;
+
+    while (*arg == ' ' || *arg == '\t') ++arg;
+
+    n = 0;
+    __try { n = NetPlayerList(pl, NETPL_SANE_MAX); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        P_(console, 0, AC "netplayers: faulted walking the session list - "
+                          "layout is wrong for this build.\n");
+        return;
+    }
+
+    if (!n) {
+        P_(console, 0, AC "netplayers: 0 - no session, or the service is not up "
+                          "yet. This reads the SAME list net_kickClient resolves "
+                          "names against, so 0 here means 0 there.\n");
+        return;
+    }
+
+    /* The entity snapshot is what the pawn search matches against, so it has to
+       be fresh or every player looks pawn-less. */
+    EntSnapshotEx(1);
+
+    P_(console, 0, AC "netplayers: %d connected (from the session service, not "
+                      "the local list)\n", n);
+    for (i = 0; i < n; ++i) {
+        void* pawn = NetPlayerPawn(pl[i]);
+        const char* nm = NetPlayerName(pl[i]);
+        if (pawn) {
+            const float* m = (const float*)((char*)pawn + OFF_ENT_XFORM);
+            P_(console, 0, AC "  [%d] %-20s  pawn %p @ %.0f %.0f %.0f\n",
+               i, nm, pawn, m[12], m[13], m[14]);
+        } else {
+            P_(console, 0, AC "  [%d] %-20s  (no pawn found)\n", i, nm);
+        }
+    }
+    if (g_netPawnOff >= 0)
+        P_(console, 0, AC "  pawn pointer lives at player+0x%X\n",
+           (int)g_netPawnOff);
+
+    if (_stricmp(arg, "dump") == 0) {
+        /* Raw words, for when the pawn search comes up empty and the field has
+           to be identified by eye against a known entity address. */
+        for (i = 0; i < n && i < 4; ++i) {
+            int off;
+            P_(console, 0, AC "  --- player %d (%p) ---\n", i, pl[i]);
+            for (off = 0; off < 0x80; off += 16) {
+                if (!Readable((unsigned char*)pl[i] + off, 16)) break;
+                P_(console, 0, AC "   +%03X  %08X %08X %08X %08X\n", off,
+                   *(unsigned long*)((char*)pl[i] + off + 0),
+                   *(unsigned long*)((char*)pl[i] + off + 4),
+                   *(unsigned long*)((char*)pl[i] + off + 8),
+                   *(unsigned long*)((char*)pl[i] + off + 12));
+            }
+        }
+    }
+}
+
 /* Case-insensitive substring. The CRT has no portable one and MSVC's _mbsstr is
    locale-dependent; both inputs here are short ASCII engine identifiers. */
 static int StrIStr_(const char* hay, const char* needle)
@@ -16620,9 +16829,18 @@ static int AdmLooksLikePlayer(const char* name, const char* cls)
     s[0] = name; s[1] = cls;
     for (i = 0; i < 2; ++i) {
         if (!s[i] || !s[i][0]) continue;
-        if (StrIStr_(s[i], "player")) return 1;
-        if (StrIStr_(s[i], "pawn"))   return 1;
+        /* BACK TO THE PRECISE THREE. Widening these to bare "player"/"pawn"
+           matched props and scenery, and an overlay that boxes furniture is
+           worse than one that misses somebody - the whole value of a box is
+           that it means something. Recall is NOT going to come from a looser
+           string match; it comes from asking the session who is connected,
+           which is what `netplayers` is for. */
+        if (StrIStr_(s[i], "remoteplayer")) return 1;
+        if (StrIStr_(s[i], "pawnplayer"))   return 1;
+        if (StrIStr_(s[i], "playerpawn"))   return 1;
         if (g_admWide) {
+            if (StrIStr_(s[i], "player"))    return 1;
+            if (StrIStr_(s[i], "pawn"))      return 1;
             if (StrIStr_(s[i], "character")) return 1;
             if (StrIStr_(s[i], "avatar"))    return 1;
             if (StrIStr_(s[i], "navi"))      return 1;
@@ -16740,6 +16958,34 @@ static int AdmCollect(AdmRect* out, int cap)
     /* Publish the camera the DRAW side must project against. It re-reads this
        entity's matrix every frame, so boxes track even between samples. */
     g_admCam = cam;
+
+    /* ---- source 0: THE SESSION'S CONNECTED PLAYERS ----------------------
+       This is the one that should answer everything. It is the list the kick
+       service resolves names against, so it contains exactly the people who are
+       connected - no more (props never appear in it) and no fewer (a player who
+       is not running this DLL is still connected). Name matching cannot make
+       both of those promises at once, which is why it kept trading one for the
+       other every time the filter was retuned.
+
+       Runs FIRST so the name-based sources only ever fill gaps. */
+    {
+        void* pl[NETPL_SANE_MAX];
+        int   np = 0, j;
+        __try { np = NetPlayerList(pl, NETPL_SANE_MAX); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { np = 0; }
+        InterlockedExchange(&g_netN, np);
+        for (j = 0; j < np && n < cap; ++j) {
+            void* pawn = NetPlayerPawn(pl[j]);
+            if (!pawn) continue;
+            if (AdmBoxFor(pawn, camPos, 0, NetPlayerName(pl[j]), &out[n])) {
+                /* The account name IS the row name here - not an archetype -
+                   so this row is directly kickable, unlike the entity ones. */
+                out[n].acct = 1;
+                ++n;
+            }
+        }
+        if (n) InterlockedExchange(&g_admSrc, 3);
+    }
 
     /* ---- source 1: the player list, walked in full ---------------------- */
     if (Readable((void*)PLAYERLIST_PTR, 4)) {
@@ -18443,7 +18689,7 @@ static const char* const kOurCmds[] = {
     "agentinfo", "vehinfo", "facing", "facinginfo",
     "driveai", "rcprobe", "respawn", "resurrect",
     "revive", "mergelib", "drivelock", "driveturn",
-    "mkpawn", "players", "admin_gui", "kick", "kickban", "winsize",
+    "mkpawn", "players", "netplayers", "admin_gui", "kick", "kickban", "winsize",
 };
 #define OURCMD_COUNT ((int)(sizeof(kOurCmds) / sizeof(kOurCmds[0])))
 
