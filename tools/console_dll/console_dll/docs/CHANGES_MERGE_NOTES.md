@@ -51,6 +51,57 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-06 (h) — capture the console SINK, not `Printf`; kick is case-sensitive
+
+**`CConsole::Printf` was the wrong hook.** It installed fine
+(`[cap ] CConsole::Printf hooked at 100AC0C0` in the log) and captured
+**nothing** — a whole session produced zero `net_GetPlayerList -> N name(s)`
+lines while the names printed to the console normally. Printf is only *one of
+five* call sites into the line writer, and the player list uses another.
+
+| Where | What | Risk | New symbols |
+|---|---|---|---|
+| Address block (~line 55) | **Added** the sink address | Low | `FN_CON_SINK` = `0x100AB660` |
+| `fnPrintfFwd` | **Replaced** by a thiscall-shaped typedef | Low | `fnSinkFwd` |
+| `hkPrintf` | **Replaced** by `hkSink` | **Medium** | `hkSink`, `StdStrRead`, `STDSTR_*_OFF` |
+| `InstallPrintfHook` | **Modified** — patches the sink, new prologue | Medium | — |
+| `AdminKick` | **Added** case correction against the roster | Low | — |
+
+**How the sink was found.** Disassemble `Printf` at `0x100AC0C0`; it makes five
+direct calls. Counting `E8 rel32` encodings across `.text` for each target:
+`0x10003590` 3369 callers, `0x10EE24B0` 8584 (CRT), `0x10004290` 62, and
+**`0x100AB660` just 5** — the shape of a private sink, reached with
+`mov ecx, esi` (the console) and one pushed argument.
+
+**The argument is a plain MSVC `std::string`,** read off `Printf`'s own call
+site: the object is built at `esp+0x28`, `mov [esp+0x40], 0xf` sets capacity and
+`mov [esp+0x3c], ebx` sets size, and `esp+0x2c` is what gets pushed — so from
+the received pointer, size is at `+0x10`, capacity at `+0x14`, characters inline
+until capacity reaches 16. `StdStrRead` bounds-checks all of it and returns NULL
+on anything implausible, in which case the line is forwarded untouched.
+
+Prologue `83 EC 24 53 56 57` (`sub esp,0x24` / `push ebx,esi,edi`) — six bytes,
+none relative, so the existing trampoline machinery relocates it unchanged.
+
+**The hook adds its own `\n`.** The sink is called once per *line* and the text
+carries no terminator, so without it the parser saw `JasperQuiet_JokerZebra` as
+one name.
+
+> Hooking the sink means **every** console line passes through our code, not
+> just `Printf`'s. That is the point — but it also means a mistake here is
+> visible everywhere, so `StdStrRead` fails safe and the suppression is ANDed
+> with `g_capOn`.
+
+**`net_kickClient` matches the account name CASE-SENSITIVELY.** Measured three
+times in a live match: `kick quiet_joker` → "Player not found.",
+`kick Quiet_Joker` → "Kicking player Quiet_Joker.", `kickban jasper` → "Player
+not found." Nothing in the shipped usage string says so, and the failure is a
+lookup miss that reads exactly like "that player is not here" — so the natural
+response to a lowercase attempt is to try a different *name*, not a different
+*case*. `AdminKick` now matches the roster case-insensitively and sends the
+exact spelling the session reported; an unknown name is passed through so the
+engine can answer for itself.
+
 ### 2026-08-06 (g) — PLAYERS tab: click a name, kick it
 
 The kick path itself was already right (proved in a live match by typing

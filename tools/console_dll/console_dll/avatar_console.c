@@ -53,6 +53,11 @@ static unsigned long g_rebase = 0;
 #define FN_EXEC_LINE    (0x100AE5F0u + g_rebase)   /* CConsole::ExecuteLine(DuniaString*)      */
 #define FN_SET_UIACTIVE (0x100A7790u + g_rebase)   /* CConsole::SetUIActive(bool)              */
 #define FN_PRINTF       (0x100AC0C0u + g_rebase)   /* CConsole::Printf - CDECL, writes buffer   */
+/* CConsole line sink - THISCALL(this, std::string*). Every console entry point
+   funnels here: Printf is only one of five call sites, and net_GetPlayerList
+   uses one of the others (measured - hooking Printf captured nothing while the
+   names printed normally). Hooking the sink catches all of them at once. */
+#define FN_CON_SINK     (0x100AB660u + g_rebase)
 #define VT_CCONSOLE     (0x110197FCu + g_rebase)   /* expected CConsole vtable                 */
 
 #define UI_OFFSET       0x78          /* g_console->m_pUI                         */
@@ -13901,50 +13906,85 @@ static volatile long    g_capQuiet  = 0;
 static char             g_capBuf[8192];
 static int              g_capLen    = 0;
 
-typedef void (__cdecl *fnPrintfFwd)(void*, int, const char*, ...);
+typedef void (__fastcall *fnSinkFwd)(void*, void*, const void*);
 
-static void __cdecl hkPrintf(void* console, int flags, const char* fmt, ...)
+/* The sink's argument is a plain MSVC std::string, proved off the call site in
+   Printf: the object is built at esp+0x28, `mov [esp+0x40], 0xf` sets capacity
+   and `mov [esp+0x3c], ebx` sets size, and esp+0x2c is what gets pushed. So
+   relative to the pointer the sink receives: size at +0x10, capacity at +0x14,
+   and the characters are inline until capacity reaches 16. */
+#define STDSTR_SIZE_OFF 0x10
+#define STDSTR_RES_OFF  0x14
+
+static const char* StdStrRead(const void* s, int* out_len)
 {
-    char    buf[1024];
-    va_list ap;
+    const unsigned char* p = (const unsigned char*)s;
+    unsigned int size, res;
 
-    va_start(ap, fmt);
-    _vsnprintf(buf, sizeof(buf) - 1, fmt, ap);
-    buf[sizeof(buf) - 1] = 0;
-    va_end(ap);
+    *out_len = 0;
+    if (!p || !Readable((void*)p, STDSTR_RES_OFF + 4)) return 0;
+    size = *(const unsigned int*)(p + STDSTR_SIZE_OFF);
+    res  = *(const unsigned int*)(p + STDSTR_RES_OFF);
+    /* A console line is never 64 KB. Anything bigger means the layout guess is
+       wrong for this object, and the right response is to pass it through
+       untouched rather than read a wild pointer. */
+    if (size > 0xFFFFu || res < size) return 0;
+    *out_len = (int)size;
+    if (res >= 16) {
+        const char* q = *(const char* const*)p;
+        if (!q || !Readable((void*)q, (int)size)) { *out_len = 0; return 0; }
+        return q;
+    }
+    return (const char*)p;
+}
+
+static void __fastcall hkSink(void* console, void* edx, const void* str)
+{
+    /* __fastcall to model __thiscall: `this` in ecx, and because the real
+       function takes no register second argument the stack argument lands in
+       `str` exactly as the caller pushed it. edx is never read. */
+    (void)edx;
 
     if (g_capOn && g_capCsInit) {
-        EnterCriticalSection(&g_capCs);
-        {
-            int n = (int)strlen(buf);
-            if (g_capLen + n < (int)sizeof(g_capBuf) - 1) {
-                memcpy(g_capBuf + g_capLen, buf, (size_t)n);
-                g_capLen += n;
+        int len = 0;
+        const char* txt = StdStrRead(str, &len);
+        if (txt && len > 0) {
+            EnterCriticalSection(&g_capCs);
+            if (g_capLen + len + 1 < (int)sizeof(g_capBuf) - 1) {
+                memcpy(g_capBuf + g_capLen, txt, (size_t)len);
+                g_capLen += len;
+                /* One line per call - the sink is called once per LINE and the
+                   text carries no newline of its own, so the parser would see
+                   "JasperQuiet_JokerZebra" as a single name without this. */
+                g_capBuf[g_capLen++] = '\n';
                 g_capBuf[g_capLen] = 0;
             }
+            LeaveCriticalSection(&g_capCs);
         }
-        LeaveCriticalSection(&g_capCs);
     }
     /* Suppressed ONLY while a quiet capture is in flight, so a crash or an early
        return that leaves g_capOn set cannot silence the console permanently -
        the flag it is ANDed with is cleared by the same function that set it. */
     if (g_capOn && g_capQuiet) return;
-    if (g_prfTramp) ((fnPrintfFwd)g_prfTramp)(console, flags, "%s", buf);
+    if (g_prfTramp) ((fnSinkFwd)g_prfTramp)(console, edx, str);
 }
 
 static int InstallPrintfHook(void)
 {
+    /* sub esp,0x24 / push ebx / push esi / push edi - exactly six bytes, and
+       none of them relative, so the saved prologue relocates to the trampoline
+       unchanged. Verified against the shipped 1.02 Dunia.dll. */
     static const unsigned char kWant[PRF_PROLOGUE_LEN] =
-        { 0x81, 0xEC, 0x40, 0x08, 0x00, 0x00 };      /* sub esp, 0x840 */
-    unsigned char* p = (unsigned char*)FN_PRINTF;
+        { 0x83, 0xEC, 0x24, 0x53, 0x56, 0x57 };
+    unsigned char* p = (unsigned char*)FN_CON_SINK;
     unsigned char* t;
     DWORD old;
 
     if (g_prfTramp) return 1;
     if (!Readable(p, PRF_PROLOGUE_LEN)) return 0;
     if (memcmp(p, kWant, PRF_PROLOGUE_LEN) != 0) {
-        logf_("[cap ] Printf prologue is %02X %02X %02X %02X %02X %02X, not the "
-              "expected sub esp,0x840 - NOT patching",
+        logf_("[cap ] console sink prologue is %02X %02X %02X %02X %02X %02X, not "
+              "the expected sub esp,0x24/push ebx,esi,edi - NOT patching",
               p[0], p[1], p[2], p[3], p[4], p[5]);
         return 0;
     }
@@ -13963,7 +14003,7 @@ static int InstallPrintfHook(void)
         return 0;
     }
     p[0] = 0xE9;
-    *(long*)(p + 1) = (long)(ULONG_PTR)hkPrintf - (long)(p + 5);
+    *(long*)(p + 1) = (long)(ULONG_PTR)hkSink - (long)(p + 5);
     p[5] = 0x90;                                     /* keep the 6th byte sane */
     VirtualProtect(p, PRF_PROLOGUE_LEN, old, &old);
     FlushInstructionCache(GetCurrentProcess(), p, PRF_PROLOGUE_LEN);
@@ -13974,7 +14014,7 @@ static int InstallPrintfHook(void)
         InitializeCriticalSection(&g_capCs);
         InterlockedExchange(&g_capCsInit, 1);
     }
-    logf_("[cap ] CConsole::Printf hooked at %p (trampoline %p)", p, t);
+    logf_("[cap ] console line sink hooked at %p (trampoline %p)", p, t);
     return 1;
 }
 
@@ -13989,9 +14029,9 @@ static void RemovePrintfHook(void)
         VirtualProtect(g_prfAt, PRF_PROLOGUE_LEN, old, &old);
         FlushInstructionCache(GetCurrentProcess(), g_prfAt, PRF_PROLOGUE_LEN);
         Sleep(60);                       /* drain anyone inside the detour */
-        logf_("[cap ] Printf restored");
+        logf_("[cap ] console sink restored");
     } else {
-        logf_("[cap ] *** could not restore Printf - leaving the hook in place");
+        logf_("[cap ] *** could not restore the console sink - leaving the hook in place");
         return;
     }
     g_prfAt = 0;
@@ -14301,6 +14341,40 @@ static void AdminKick(void* console, const char* arg, int ban)
     } else {
         _snprintf(name, sizeof(name) - 1, "%s", arg);
         name[sizeof(name) - 1] = 0;
+    }
+
+    /* THE ENGINE MATCHES THE ACCOUNT NAME CASE-SENSITIVELY. Measured, three
+       times, in a live match:
+
+         kick quiet_joker  -> "Player not found."
+         kick Quiet_Joker  -> "Kicking player Quiet_Joker."
+         kickban jasper    -> "Player not found."
+
+       Nothing in the shipped usage string says so, and the failure is a lookup
+       miss that looks exactly like "that player is not here" - so the natural
+       reading of a lowercase attempt is that the roster is wrong, and the next
+       thing tried is a different name rather than a different case.
+
+       So correct it against the captured roster instead of making a human do
+       it: match case-insensitively, then send the EXACT case the session
+       reported. An unknown name is passed through untouched - the roster may
+       simply be stale, and refusing to send would be worse than letting the
+       engine answer for itself. */
+    if (g_admNameN) {
+        long q;
+        for (q = 0; q < g_admNameN && q < ADM_NAMES_MAX; ++q) {
+            if (_stricmp(name, g_admNames[q]) == 0) {
+                if (strcmp(name, g_admNames[q]) != 0) {
+                    P_(console, 0, AC "%s: matching the session's spelling - "
+                                      "\"%s\" -> \"%s\" (the engine is "
+                                      "case-sensitive)\n",
+                       ban ? "kickban" : "kick", name, g_admNames[q]);
+                    _snprintf(name, sizeof(name) - 1, "%s", g_admNames[q]);
+                    name[sizeof(name) - 1] = 0;
+                }
+                break;
+            }
+        }
     }
 
     if (!name[0]) {
