@@ -51,6 +51,39 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-05 (d) — kick / kickban
+
+| Where | What | Risk | New symbols |
+|---|---|---|---|
+| `AdminKick()`, anchor `/* ---- kick / kickban`, just above `AdminGui` | **Added** | **None** | `AdminKick()` |
+| Dispatch, after the `admin_gui` arm | **Added** 10 lines | Low | — |
+| `kOurCmds[]`, `ModHelp` | **Modified** / **Added** | Medium / Low | — |
+
+**`kickban` must be tested before `kick`** in the dispatch chain — `kick` is a
+prefix of it, and testing the shorter name first makes `kickban` unreachable.
+If you reorder those arms, that is the bug you just introduced.
+
+**The argument is a player NAME.** Established from strings shipped in
+`Dunia.dll`, not from disassembly:
+
+```
+"Kick the specified player. Usage: \"net_kickClient <player name>\"."
+"Kick/Ban the specified player. Usage: \"net_kickBanClient <player name>\"."
+"Kicking player %s."   "Cannot kick player."   CKickBanService
+```
+
+Two routes failed before that one worked, and both are worth knowing: the
+addresses in `DevAccess/COMMANDS.md` are the **name-string literals**, not
+descriptors, and the registration site at `0x106F1897` only hands the console a
+`std::string` — there is no per-command function pointer to follow.
+
+We do **not** reimplement the kick — `AdminKick` builds the line and runs it
+through `RunConsoleLine` (the engine's own `ExecuteLine` idiom), so all of the
+session layer's authority checks still apply. `kick <n>` resolves an index from
+the last `admin_gui` sample and always prints the resolved name before sending.
+
+Counts after this change: **79 dispatched, 79 in `kOurCmds[]`**.
+
 ### 2026-08-05 (c) — admin overlay: player boxes + movement tracking
 
 | Where | What | Risk | New symbols |

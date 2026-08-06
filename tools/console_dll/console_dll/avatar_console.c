@@ -1713,6 +1713,8 @@ static void ModHelp(void* c)
     P_(c, 0, AC "playerinfo     is the pawn we control alive? + can respawn run?\n");
     P_(c, 0, AC "players [raw]  EVERY entry in the player list, not just ours\n");
     P_(c, 0, AC "admin_gui      admin panel + player boxes (boxes|track|rate|list|off)\n");
+    P_(c, 0, AC "kick <name|#>  kick a player by name, or by admin_gui row\n");
+    P_(c, 0, AC "kickban <name|#>  same, but banned\n");
     P_(c, 0, AC "actmap         what action maps are pushed on the player?\n");
     P_(c, 0, AC "pick           select what the CROSSHAIR points at\n");
     P_(c, 0, AC "               (console open: just CLICK the thing instead)\n");
@@ -13764,6 +13766,102 @@ static void AdmEnsureCs(void)
     InterlockedExchange(&g_admCsInit, 1);
 }
 
+/* ---- kick / kickban -------------------------------------------------------
+   THE ARGUMENT IS A PLAYER NAME. Not an index, not a session id. That was the
+   one unknown and the engine answers it itself - these strings ship in
+   Dunia.dll:
+
+     "Kick the specified player. Usage: \"net_kickClient <player name>\"."
+     "Kick/Ban the specified player. Usage: \"net_kickBanClient <player name>\"."
+     "Kicking player %s."          "Cannot kick player."
+     "Kicking/Banning player %s."  "Cannot kick/ban player."
+
+   alongside `CKickBanService` and `PlazaClient::PlazaPlayGroupService::
+   KickPlayer`. Worth recording how that was found, because the first two routes
+   both failed: the addresses in COMMANDS.md are the NAME STRING literals, not
+   descriptors, and the registration site at 0x106F1897 only hands the console a
+   std::string - there is no per-command function pointer to follow. A plain
+   string search answered in seconds what disassembly was not going to.
+
+   WE DO NOT REIMPLEMENT THE KICK. This runs the engine's own console command
+   through ExecuteLine, exactly as typing it would - so whatever authority and
+   validation the session layer applies still applies. We only resolve the name
+   and echo what was sent.
+
+   INDEX SHORTHAND. `kick 2` means "the name in row 2 of the last admin_gui
+   sample", because reading a name off the overlay and retyping it is how you
+   kick the wrong person. The resolved name is always printed before it is used.
+
+   THIS CAN LEGITIMATELY FAIL. "Cannot kick player." is a shipped string, and
+   the likely causes are not bugs: you are not the host, the service is absent
+   outside a live session, or - on an emulated server - the backend does not
+   implement KickPlayer. The command reports what it sent so that a silent
+   failure is distinguishable from a rejected one. */
+static void AdminKick(void* console, const char* arg, int ban)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    char  name[ADM_NLEN];
+    char  line[160];
+    int   idx = -1;
+
+    while (*arg == ' ' || *arg == '\t') ++arg;
+    if (!*arg) {
+        P_(console, 0, AC "%s <player name>   (or an index from admin_gui)\n",
+           ban ? "kickban" : "kick");
+        P_(console, 0, AC "  the engine's own usage is \"net_%sClient "
+                          "<player name>\" - it matches on NAME.\n",
+           ban ? "kickBan" : "kick");
+        return;
+    }
+
+    /* a bare number is an index into the last sample */
+    if (arg[0] >= '0' && arg[0] <= '9' && !strchr(arg, ' ')) {
+        idx = (int)strtol(arg, 0, 10);
+        if (!g_admCsInit) {
+            P_(console, 0, AC "%s: no sample yet - run admin_gui first, or pass "
+                              "a name.\n", ban ? "kickban" : "kick");
+            return;
+        }
+        EnterCriticalSection(&g_admCs);
+        if (idx >= 0 && idx < (int)g_admRectN) {
+            _snprintf(name, sizeof(name) - 1, "%s", g_admRect[idx].name);
+            name[sizeof(name) - 1] = 0;
+        } else {
+            idx = -2;
+        }
+        LeaveCriticalSection(&g_admCs);
+        if (idx == -2) {
+            P_(console, 0, AC "%s: index out of range - the last sample had %ld "
+                              "row(s).\n", ban ? "kickban" : "kick",
+               (long)g_admRectN);
+            return;
+        }
+        P_(console, 0, AC "%s: index %d resolves to \"%s\"\n",
+           ban ? "kickban" : "kick", (int)strtol(arg, 0, 10), name);
+    } else {
+        _snprintf(name, sizeof(name) - 1, "%s", arg);
+        name[sizeof(name) - 1] = 0;
+    }
+
+    if (!name[0]) {
+        P_(console, 0, AC "%s: that row has no name to send.\n",
+           ban ? "kickban" : "kick");
+        return;
+    }
+
+    _snprintf(line, sizeof(line) - 1, "net_%sClient %s",
+              ban ? "kickBan" : "kick", name);
+    line[sizeof(line) - 1] = 0;
+
+    P_(console, 0, AC "%s: sending  %s\n", ban ? "kickban" : "kick", line);
+    logf_("[admn] %s", line);
+    RunConsoleLine(console, line);
+    P_(console, 0, AC "  sent. The engine answers with \"Kicking%s player %s.\" "
+                      "on success or \"Cannot kick%s player.\" if it refused "
+                      "(not host / no session / server does not implement it).\n",
+       ban ? "/Banning" : "", name, ban ? "/ban" : "");
+}
+
 /* ---- admin_gui: the one command that turns the whole thing on -------------
    Sub-commands rather than a wall of separate command names, so there is one
    thing to remember and one place the state is reported.
@@ -14302,6 +14400,18 @@ static int TryModCommand(void* console, const char* line)
     if (_strnicmp(p, "admin_gui", 9) == 0 &&
         (p[9] == ' ' || p[9] == '\t' || !p[9])) {
         AdminGui(console, p + 9);
+        return 1;
+    }
+    /* kickban BEFORE kick - "kick" is a prefix of it, and testing the shorter
+       name first would make kickban unreachable. */
+    if (_strnicmp(p, "kickban", 7) == 0 &&
+        (p[7] == ' ' || p[7] == '\t' || !p[7])) {
+        AdminKick(console, p + 7, 1);
+        return 1;
+    }
+    if (_strnicmp(p, "kick", 4) == 0 &&
+        (p[4] == ' ' || p[4] == '\t' || !p[4])) {
+        AdminKick(console, p + 4, 0);
         return 1;
     }
     /* `players` walks the WHOLE list; `playerinfo` above reports only arr[0]. */
@@ -17292,7 +17402,7 @@ static const char* const kOurCmds[] = {
     "agentinfo", "vehinfo", "facing", "facinginfo",
     "driveai", "rcprobe", "respawn", "resurrect",
     "revive", "mergelib", "drivelock", "driveturn",
-    "mkpawn", "players", "admin_gui",
+    "mkpawn", "players", "admin_gui", "kick", "kickban",
 };
 #define OURCMD_COUNT ((int)(sizeof(kOurCmds) / sizeof(kOurCmds[0])))
 
