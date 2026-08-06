@@ -1945,6 +1945,10 @@ static volatile long g_entRefillWait = 0;   /* overlay thread: refill when it la
    the list source and the bottom row of buttons differ. */
 #define PK_MODE_SPAWN 0
 #define PK_MODE_ENTS  1
+/* Lives up here with its siblings rather than down in the tab-layout block:
+   hkUpdateUI tests it to decide whether to refresh the roster, and that is
+   17,000 lines ABOVE where the tab constants are defined. */
+#define PK_MODE_PLAYERS 2
 #define PK_NACT       6
 /* REMOVED with the picker window: ID_PICK_A0 (and, further down, ID_PICK_ED,
    ID_PICK_LB, ID_PICK_B0, ID_PICK_SP, ID_PICK_GR, PICK_CLASS and the nine CLR_*
@@ -13888,6 +13892,12 @@ static void*            g_prfTramp = 0;
 static CRITICAL_SECTION g_capCs;
 static volatile long    g_capCsInit = 0;
 static volatile long    g_capOn     = 0;
+/* Swallow the captured output instead of forwarding it. The panel refreshes the
+   name list on a timer, and net_GetPlayerList prints every name every time -
+   without this the console fills with a list nobody asked to see, several times
+   a minute, and the scrollback becomes useless for anything else. Only ever set
+   around an automatic refresh; a list the user ASKED for still prints. */
+static volatile long    g_capQuiet  = 0;
 static char             g_capBuf[8192];
 static int              g_capLen    = 0;
 
@@ -13915,6 +13925,10 @@ static void __cdecl hkPrintf(void* console, int flags, const char* fmt, ...)
         }
         LeaveCriticalSection(&g_capCs);
     }
+    /* Suppressed ONLY while a quiet capture is in flight, so a crash or an early
+       return that leaves g_capOn set cannot silence the console permanently -
+       the flag it is ANDed with is cleared by the same function that set it. */
+    if (g_capOn && g_capQuiet) return;
     if (g_prfTramp) ((fnPrintfFwd)g_prfTramp)(console, flags, "%s", buf);
 }
 
@@ -13987,8 +14001,9 @@ static void RemovePrintfHook(void)
     g_prfTramp = 0;
 }
 
-/* Run a console line with the output captured. -> bytes captured. */
-static int CaptureRun(void* console, const char* line, char* out, int cap)
+/* Run a console line with the output captured. -> bytes captured.
+   `quiet` also keeps the output OFF the console - see g_capQuiet. */
+static int CaptureRun(void* console, const char* line, char* out, int cap, int quiet)
 {
     int n;
     if (!g_prfTramp && !InstallPrintfHook()) { if (cap) out[0] = 0; return 0; }
@@ -13996,9 +14011,13 @@ static int CaptureRun(void* console, const char* line, char* out, int cap)
     g_capLen = 0; g_capBuf[0] = 0;
     LeaveCriticalSection(&g_capCs);
 
+    /* Quiet BEFORE on, clear AFTER off: at no point is g_capOn set while
+       g_capQuiet still holds a previous caller's value. */
+    InterlockedExchange(&g_capQuiet, quiet ? 1 : 0);
     InterlockedExchange(&g_capOn, 1);
     RunConsoleLine(console, line);
     InterlockedExchange(&g_capOn, 0);
+    InterlockedExchange(&g_capQuiet, 0);
 
     EnterCriticalSection(&g_capCs);
     n = g_capLen;
@@ -14022,13 +14041,13 @@ static volatile long g_admNameN = 0;
    deliberately loose: an over-inclusive list shows a stray row that a human can
    ignore, while an over-strict one silently drops the person you are trying to
    kick. */
-static void AdmRefreshNames(void* console)
+static void AdmRefreshNames(void* console, int quiet)
 {
     char buf[4096];
     char* p;
     long  n = 0;
 
-    if (!CaptureRun(console, "net_GetPlayerList", buf, sizeof(buf))) {
+    if (!CaptureRun(console, "net_GetPlayerList", buf, sizeof(buf), quiet)) {
         InterlockedExchange(&g_admNameN, 0);
         return;
     }
@@ -14055,8 +14074,15 @@ static void AdmRefreshNames(void* console)
         p = e;
         while (*p == '\n' || *p == '\r') ++p;
     }
-    InterlockedExchange(&g_admNameN, n);
-    logf_("[cap ] net_GetPlayerList -> %ld name(s)", n);
+    /* Log only when the roster CHANGES. The timer refresh runs every few seconds
+       for as long as the tab is open, and an unconditional line here buried the
+       log in identical entries - which is exactly when the log stops being worth
+       reading. A join or a leave still shows up, which is the part worth having. */
+    {
+        long was = g_admNameN;
+        InterlockedExchange(&g_admNameN, n);
+        if (was != n) logf_("[cap ] net_GetPlayerList -> %ld name(s)", n);
+    }
 }
 
 /* ---- ARM AT STARTUP, WITHOUT ANYONE TYPING ANYTHING -----------------------
@@ -14446,9 +14472,24 @@ static void AdminGui(void* console, const char* arg)
         }
         return;
     }
-    if (_stricmp(arg, "names") == 0) {
+    /* Queued by the KICK/BAN buttons when the roster is on screen but no row is
+       chosen. Its whole job is to make a dead-looking button explain itself. */
+    if (_stricmp(arg, "pick") == 0) {
+        P_(console, 0, AC "admin_gui: pick a name first - click one of the %ld "
+                          "gold rows at the top of the PLAYERS list, then KICK.\n",
+           (long)g_admNameN);
+        P_(console, 0, AC "  (the rows below the names are positions, not "
+                          "accounts - kick cannot use them)\n");
+        return;
+    }
+    /* "names" is the human asking, so the raw reply prints too - it is the only
+       way to see what the parser was handed when a name comes out wrong.
+       "names quiet" is what the panel queues on a timer. */
+    if (_strnicmp(arg, "names", 5) == 0) {
         long q;
-        AdmRefreshNames(console);
+        int  quiet = (StrIStr_(arg, "quiet") != 0);
+        AdmRefreshNames(console, quiet);
+        if (quiet) return;                    /* the panel is the output */
         P_(console, 0, AC "admin_gui: %ld account name(s) from the session:\n",
            (long)g_admNameN);
         for (q = 0; q < g_admNameN; ++q)
@@ -16926,6 +16967,25 @@ static void __fastcall hkUpdateUI(void* thisptr, void* edx, float dt)
                 g_leDropped = 0;
             }
         }
+        /* KEEP THE ROSTER LIVE WHILE THE TAB IS OPEN.
+           Opening the tab fetches it once, but a session is not static - people
+           join and leave while staff are looking at the list, and a name that is
+           four minutes stale is worse than no name because it will be clicked.
+           Main thread, because net_GetPlayerList goes through ExecuteLine.
+
+           Only while the tab is actually on screen: this is a console command
+           every few seconds, and running it when nobody is looking would be a
+           permanent background cost for nothing. Quiet, so the console stays
+           readable - see g_capQuiet. */
+        if (g_pickerOpen && g_pickMode == PK_MODE_PLAYERS) {
+            static DWORD s_lastNames = 0;
+            DWORD now = GetTickCount();
+            if (now - s_lastNames > 4000) {       /* wraps safely: unsigned */
+                s_lastNames = now;
+                AdmRefreshNames(thisptr, 1);
+            }
+        }
+
         while (QueuePop(line)) {
             logf_("[exec] %s", line);
             /* echo into the panel: dim chevron, then the command in orchid */
@@ -19247,7 +19307,8 @@ static void OverlayPaint(void* console, void* pUI, int panelH)
 #define PK_NTABS   3
 #define PK_TABW    96
 #define PK_TABY    4
-#define PK_MODE_PLAYERS 2
+/* PK_MODE_PLAYERS is defined up with PK_MODE_SPAWN/PK_MODE_ENTS - hkUpdateUI
+   needs it long before this point in the file. */
 
 static const char* const kTabNames[PK_NTABS] = { "SPAWN", "ENTITIES", "PLAYERS" };
 
@@ -19873,17 +19934,14 @@ static void PkPaint(void)
         PkFillRect(&lr, PKV_FIELD);
         SelectObject(g_pkDc, g_fontUI ? g_fontUI : GetStockObject(DEFAULT_GUI_FONT));
 
-        if (!g_admOn && !g_admLog) {
-            RECT t = lr; t.left += 10; t.top += 10;
-            SetTextColor(g_pkDc, PKV_SLATE);
-            DrawTextA(g_pkDc, "Sampling is off - press BOXES or TRACK below.",
-                      -1, &t, DT_LEFT | DT_TOP | DT_SINGLELINE);
-        } else if (!nr) {
-            RECT t = lr; t.left += 10; t.top += 10;
-            SetTextColor(g_pkDc, PKV_SLATE);
-            DrawTextA(g_pkDc, "Nobody sampled yet - give it a frame.", -1, &t,
-                      DT_LEFT | DT_TOP | DT_SINGLELINE);
-        }
+        /* THE ROSTER DOES NOT DEPEND ON THE SAMPLER. Names come from
+           net_GetPlayerList; the position rows come from AdmTick. These two
+           messages used to be drawn at the top-left of the list - the same place
+           the first name row lands - so with the overlay off the roster was
+           printed straight through "Sampling is off" and both were unreadable.
+           Whatever they have to say now belongs to the POSITION block, which is
+           the only part that is actually empty, so it is said down there. */
+
         /* ACCOUNT NAMES FIRST - these are what kick matches on, so they are the
            actionable rows. The entity rows below are positions, and their names
            are archetypes that kick cannot use. Keeping both, clearly separated,
@@ -19907,21 +19965,53 @@ static void PkPaint(void)
                           DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
             }
             if (!nn) {
-                RECT t = lr; t.left += 10; t.top += 10;
+                RECT t = lr; t.left += 10; t.top += 6;
                 SetTextColor(g_pkDc, PKV_SLATE);
-                DrawTextA(g_pkDc, "No names yet - press REFRESH.", -1, &t,
+                /* Not "press REFRESH" any more - opening this tab already asked
+                   for the roster and a timer keeps asking. If it is still empty
+                   the honest reading is "no session", not "you missed a step". */
+                DrawTextA(g_pkDc,
+                          "No players in the session yet.", -1, &t,
                           DT_LEFT | DT_TOP | DT_SINGLELINE);
             }
             /* entity rows start below the name block */
             lr.top += ((int)(nn ? nn : 1) + 1) * PK_ROWH;
         }
+
+        {   /* Divider + heading, so it is never ambiguous which rows KICK acts
+               on. Without it the two lists ran together as one, and the position
+               rows look enough like names to be clicked at. */
+            RECT h = lr;
+            h.bottom = h.top + PK_ROWH;
+            h.left  += 8;
+            SetTextColor(g_pkDc, PKV_SLATE);
+            DrawTextA(g_pkDc, "-- positions (not kickable) ----------------",
+                      -1, &h, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            lr.top += PK_ROWH;
+        }
+
+        if (!g_admOn && !g_admLog) {
+            RECT t = lr; t.left += 10;
+            SetTextColor(g_pkDc, PKV_SLATE);
+            DrawTextA(g_pkDc, "Sampling is off - press TRACK, or 'admin_gui boxes'.",
+                      -1, &t, DT_LEFT | DT_TOP | DT_SINGLELINE);
+        } else if (!nr) {
+            RECT t = lr; t.left += 10;
+            SetTextColor(g_pkDc, PKV_SLATE);
+            DrawTextA(g_pkDc, "Nobody sampled yet - give it a frame.", -1, &t,
+                      DT_LEFT | DT_TOP | DT_SINGLELINE);
+        }
+
         for (k = 0; k < nr && lr.top + (k + 1) * PK_ROWH <= lr.bottom; ++k) {
             RECT row;
             char line[160];
             row.left = lr.left; row.right = lr.right;
             row.top  = lr.top + k * PK_ROWH;
             row.bottom = row.top + PK_ROWH;
-            if (k == g_pkPlSel) PkFillRect(&row, PKV_EDGE);
+            /* NOT highlighted by g_pkPlSel. That index belongs to the name list
+               above, and painting it here too meant selecting a player lit up an
+               unrelated entity row at the same ordinal - two highlights, one
+               selection, and no way to tell which one KICK would act on. */
             SetTextColor(g_pkDc, rows[k].local ? PKV_ORCHID : PKV_GOLD);
             _snprintf(line, sizeof(line) - 1, "%d  %-24s %6.0fm  %s",
                       k, rows[k].name[0] ? rows[k].name : "(unnamed)",
@@ -20209,6 +20299,11 @@ static int PkClick(int bx, int by)
                        such cache; it reads the sampler every paint. */
                     if (i == PK_MODE_ENTS)       QueuePush("ents");
                     else if (i == PK_MODE_SPAWN) QueuePush("spawn_list");
+                    /* Opening the tab IS the request for a roster. Nobody should
+                       have to press REFRESH to find out who is in the session,
+                       and quiet because they asked to see a list, not to read
+                       net_GetPlayerList's raw reply in the console. */
+                    else if (i == PK_MODE_PLAYERS) QueuePush("admin_gui names quiet");
                     InterlockedExchange(&g_pkcDirty, 1);
                 }
                 return 1;
@@ -20220,8 +20315,26 @@ static int PkClick(int bx, int by)
         int  k;
         PkListRect(&lr);
         if (x >= lr.left && x < lr.right && y >= lr.top && y < lr.bottom) {
+            /* THE NAME ROWS ARE THE ONLY SELECTABLE ONES, and this used to be
+               bounded by g_admRectN - the ESP box count, a different list with a
+               different length. Two ways to lose:
+
+                 names 2, rects 0  ->  nothing was ever selectable, so KICK did
+                                       nothing and said nothing. This is what was
+                                       being reported: the roster listed both
+                                       players and the buttons were dead.
+                 names 1, rects 4  ->  rows 1..3 selected an index with no name
+                                       behind it, and KICK bailed out silently.
+
+               The entity rows below stay display-only on purpose: they carry
+               archetypes like PawnPlayerNetwork_Avatar, and kick matches ACCOUNT
+               names, so selecting one could only ever produce a refusal. */
             k = (y - lr.top) / PK_ROWH;
-            if (k >= 0 && k < (int)g_admRectN) g_pkPlSel = k;
+            if (k >= 0 && k < (int)g_admNameN) {
+                g_pkPlSel = k;
+            } else {
+                g_pkPlSel = -1;                 /* clicked past the roster */
+            }
             InterlockedExchange(&g_pkcDirty, 1);
             return 1;
         }
@@ -20235,7 +20348,17 @@ static int PkClick(int bx, int by)
                 char cmd[96];
                 if (k == 2) { QueuePush("admin_gui names"); return 1; }
                 if (k == 3) { QueuePush("admin_gui track"); return 1; }
-                if (g_pkPlSel < 0 || g_pkPlSel >= (int)g_admNameN) return 1;
+                /* Never fail silently here. A dead button is indistinguishable
+                   from a kick the server refused, and that ambiguity cost a
+                   whole test session - the roster was on screen, so "nothing
+                   happened" read as "kick is broken" rather than "nothing is
+                   selected". QueuePush because printing is main-thread work. */
+                if (g_pkPlSel < 0 || g_pkPlSel >= (int)g_admNameN) {
+                    QueuePush(g_admNameN
+                        ? "admin_gui pick"      /* roster is there, no row chosen */
+                        : "admin_gui names");   /* no roster yet - go get one */
+                    return 1;
+                }
                 /* BY ACCOUNT NAME, from the captured net_GetPlayerList - the
                    entity rows carry archetypes and kick cannot match those. */
                 _snprintf(cmd, sizeof(cmd) - 1, "%s %s",

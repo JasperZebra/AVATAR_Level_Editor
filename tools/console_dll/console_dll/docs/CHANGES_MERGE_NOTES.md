@@ -51,6 +51,55 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-06 (g) — PLAYERS tab: click a name, kick it
+
+The kick path itself was already right (proved in a live match by typing
+`net_GetPlayerList` then `kick <name>`). **Everything broken here was in the
+panel between the roster and the button.**
+
+| Where | What | Risk | New symbols |
+|---|---|---|---|
+| `PK_MODE_SPAWN`/`_ENTS` define site | **Moved** `PK_MODE_PLAYERS` up to join them | Low — same value | — |
+| Capture state | **Added** quiet flag | Low | `g_capQuiet` |
+| `hkPrintf` | **Modified** — returns early on a quiet capture | Low | — |
+| `CaptureRun` | **Signature changed** — gained `int quiet` | **Medium** — one call site | — |
+| `AdmRefreshNames` | **Signature changed** — gained `int quiet`; logs only on change | Medium | — |
+| `AdminGui` dispatch | **Added** `pick`; `names` now prefix-matched with `quiet` | Low | — |
+| `hkUpdateUI` (before the `QueuePop` loop) | **Added** 4 s roster refresh while the tab is open | Low | — |
+| `PkClick` PLAYERS block | **Fixed** — bounds by `g_admNameN`; buttons explain themselves | **Medium** | — |
+| `PkClick` tab switch | **Added** — entering PLAYERS queues a quiet refresh | Low | — |
+| `PkPaint` PLAYERS block | **Modified** — one highlight, divider, messages moved | Medium | — |
+
+**The bug that made KICK look dead.** Row selection was bounded by
+`g_admRectN` — the *ESP box* count — while the button indexed `g_admNames[]`,
+bounded by `g_admNameN`. Two lists, two lengths, one index. With the roster
+showing two players and the entity sampler finding none, `g_admRectN` was 0, so
+**no row was ever selectable** and KICK returned without a word. The mirror case
+(more rects than names) let you select a row with no name behind it, and KICK
+bailed out just as silently. Selection is now bounded by the array the buttons
+actually read.
+
+**The position rows are deliberately not selectable.** They carry archetypes
+like `PawnPlayerNetwork_Avatar`; kick matches account names, so selecting one
+could only ever produce a refusal. They are now under a `-- positions (not
+kickable) --` divider, and the paint no longer highlights them at
+`g_pkPlSel` — that index belongs to the name list, and drawing it in both
+places meant one selection lit up two rows.
+
+**No silent failures on the buttons.** A dead button is indistinguishable from a
+kick the server refused. KICK/BAN with nothing chosen now queue `admin_gui pick`
+(roster present) or `admin_gui names` (no roster yet).
+
+**The roster refreshes itself**: on tab entry, and every 4 s while the tab is
+open, because people join and leave while staff are reading the list and a stale
+name is worse than no name — it will be clicked. Both are *quiet*
+(`g_capQuiet`): `net_GetPlayerList` prints every name every call, and forwarding
+that several times a minute would bury the console. A list the user *asked* for
+still prints in full.
+
+> **If you touch `CaptureRun` or `AdmRefreshNames`, both gained a trailing
+> `quiet` parameter.** That is the whole conflict surface for this change.
+
 ### 2026-08-05 (e) — resizable panel, entity-scan fix, self-box
 
 | Where | What | Risk | New symbols |
