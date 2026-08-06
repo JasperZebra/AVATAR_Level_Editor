@@ -14140,13 +14140,57 @@ static void AdminGui(void* console, const char* arg)
                        "offset, tune 'pickfov'" : "off");
         return;
     }
+    /* ---- the measurement, after two wrong guesses -------------------------
+       Boxes track the camera instead of the model. I have now "fixed" that
+       twice - once by moving the projection to draw time, once by correcting
+       the pixel space and the FOV - and it survived both, so the assumption
+       underneath is the thing that is wrong, not the arithmetic on top of it.
+
+       The symptom is that the projected position barely responds to where the
+       camera is LOOKING. That happens when the basis vectors fed into the
+       projection do not rotate - i.e. the rotation part of the camera entity's
+       matrix at +0x40 is not live, even though the position at +0x70 clearly
+       is (every other feature in this file reads positions from there and they
+       are correct).
+
+       So print the matrix instead of theorising about it. Turn the camera 90
+       degrees, run this twice, and compare:
+
+         rows CHANGE  -> the basis is live and the bug is elsewhere
+         rows FIXED   -> confirmed; the orientation lives somewhere else and the
+                         projection needs a different source
+
+       An identity-looking rotation (1,0,0 / 0,1,0 / 0,0,1) is the second case
+       announcing itself. */
+    if (_stricmp(arg, "cam") == 0) {
+        void* cam = GetCameraEntityDirect();
+        const float* m;
+        if (!Readable(cam, OFF_ENT_XFORM + 0x40)) {
+            P_(console, 0, AC "admin_gui cam: no camera entity.\n");
+            return;
+        }
+        m = (const float*)((char*)cam + OFF_ENT_XFORM);
+        P_(console, 0, AC "camera entity %p   fov in use %.1f\n", cam, g_admFov);
+        P_(console, 0, AC "  row0 right = %8.3f %8.3f %8.3f\n", m[0], m[1], m[2]);
+        P_(console, 0, AC "  row1 fwd   = %8.3f %8.3f %8.3f\n", m[4], m[5], m[6]);
+        P_(console, 0, AC "  row2 up    = %8.3f %8.3f %8.3f\n", m[8], m[9], m[10]);
+        P_(console, 0, AC "  row3 pos   = %8.1f %8.1f %8.1f\n", m[12], m[13], m[14]);
+        P_(console, 0, AC "  entity pos at +0x70 = %8.1f %8.1f %8.1f\n",
+           ((const float*)((char*)cam + OFF_ENT_POS))[0],
+           ((const float*)((char*)cam + OFF_ENT_POS))[1],
+           ((const float*)((char*)cam + OFF_ENT_POS))[2]);
+        P_(console, 0, AC "  TURN 90 DEGREES AND RUN THIS AGAIN. If row0/1/2 do "
+                          "not change, the orientation is not here and that is "
+                          "the whole bug.\n");
+        return;
+    }
     if (_stricmp(arg, "list") == 0) { PlayersList(console, 0); return; }
 
     /* bare `admin_gui` - arm everything the panel needs and open it */
     InterlockedExchange(&g_admOn, 1);
     OpenEntPicker(console);
     P_(console, 0, AC "admin_gui: panel open, player boxes ON.\n");
-    P_(console, 0, AC "  admin_gui boxes | track | self | rate <n> | list | off\n");
+    P_(console, 0, AC "  admin_gui boxes | track | self | cam | rate <n> | list | off\n");
     P_(console, 0, AC "  boxes drawn last frame: %ld (green = you)\n",
        (long)g_admDrawn);
     P_(console, 0, AC "  last sample: %ld player(s) from %s\n",
