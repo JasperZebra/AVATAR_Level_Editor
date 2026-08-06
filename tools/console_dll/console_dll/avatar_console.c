@@ -13851,6 +13851,10 @@ static volatile long    g_admDrawn  = 0;   /* boxes the last frame actually drew
    (and for `pickfov`, which feeds it). Drawn in a different colour so it is
    never mistaken for somebody else. */
 static volatile long    g_admSelf   = 1;
+/* Widen the pawn filter - see AdmLooksLikePlayer, which is where it is used and
+   explained. Declared here because `admin_gui wide` reads it 2,000 lines
+   earlier than that, and the dispatcher sits above all of the sampling code. */
+static volatile long    g_admWide   = 0;
 /* The camera the DRAW side projects against, republished every sample. Read
    under __try on the render thread - see AdmDrawD3D. */
 static void* volatile   g_admCam    = 0;
@@ -14440,6 +14444,18 @@ static void AdminGui(void* console, const char* arg)
         if (v >= 1 && v <= 60) InterlockedExchange(&g_admEvery, v);
         P_(console, 0, AC "admin_gui: sampling every %ld frame(s)\n",
            (long)g_admEvery);
+        return;
+    }
+    /* The net, widened. Kept as a toggle rather than made the default because a
+       wider filter boxes props, and an overlay that marks scenery as people is
+       one an admin stops believing - which costs more than a miss. Start narrow,
+       widen when the unmatched list below the pawns shows something suspicious. */
+    if (_stricmp(arg, "wide") == 0) {
+        InterlockedExchange(&g_admWide, g_admWide ? 0 : 1);
+        P_(console, 0, AC "admin_gui: wide detection %s%s\n",
+           g_admWide ? "ON" : "off",
+           g_admWide ? " - also matching character/avatar/navi/soldier/human. "
+                       "Expect false positives; that is the trade." : "");
         return;
     }
     if (_stricmp(arg, "self") == 0) {
@@ -16578,10 +16594,25 @@ static int StrIStr_(const char* hay, const char* needle)
     return 0;
 }
 
-/* The count == 1 fallback's filter. Deliberately broad and deliberately
-   REPORTED rather than silent: if this over-matches, the readout shows props
-   labelled as players and the filter gets tightened against real names. Guessing
-   quietly is how you end up with an overlay nobody trusts. */
+/* The entity-scan filter. Deliberately broad and deliberately REPORTED rather
+   than silent: if this over-matches, the readout shows props labelled as players
+   and the filter gets tightened against real names. Guessing quietly is how you
+   end up with an overlay nobody trusts.
+
+   THE THREE ORIGINAL SUBSTRINGS WERE TOO SPECIFIC. They were written from the
+   two archetypes a modded client happened to report
+   (`player.MainCharacter.PawnPlayerNetwork_Corp` / `_Avatar`), and a filter
+   derived from two samples is a filter that finds those two samples. An admin
+   tool has to find people who are not cooperating, so the default net is now
+   "player" or "pawn" anywhere, and `admin_gui wide` widens it further to
+   anything character-shaped for when even that misses.
+
+   Every rejected candidate is still RECORDED (AdmNoteCandidate) so the panel can
+   show what was thrown away. That is the part that makes the next widening a
+   measurement instead of another guess.
+
+   g_admWide is declared with the rest of the admin state, above TryModCommand -
+   the `admin_gui wide` handler needs it 2,000 lines before this point. */
 static int AdmLooksLikePlayer(const char* name, const char* cls)
 {
     const char* s[2];
@@ -16589,11 +16620,48 @@ static int AdmLooksLikePlayer(const char* name, const char* cls)
     s[0] = name; s[1] = cls;
     for (i = 0; i < 2; ++i) {
         if (!s[i] || !s[i][0]) continue;
-        if (StrIStr_(s[i], "remoteplayer")) return 1;
-        if (StrIStr_(s[i], "pawnplayer"))   return 1;
-        if (StrIStr_(s[i], "playerpawn"))   return 1;
+        if (StrIStr_(s[i], "player")) return 1;
+        if (StrIStr_(s[i], "pawn"))   return 1;
+        if (g_admWide) {
+            if (StrIStr_(s[i], "character")) return 1;
+            if (StrIStr_(s[i], "avatar"))    return 1;
+            if (StrIStr_(s[i], "navi"))      return 1;
+            if (StrIStr_(s[i], "soldier"))   return 1;
+            if (StrIStr_(s[i], "human"))     return 1;
+        }
     }
     return 0;
+}
+
+/* ---- what the filter THREW AWAY ------------------------------------------
+   A near-camera entity that is not matching is the only evidence available for
+   what a non-modded player looks like on this client, and it is worthless in a
+   log nobody opens mid-match. It goes to the panel.
+
+   Bounded by distance, not by count: the interesting rejects are the ones
+   standing near you, and an unbounded list is one more thing to scroll past. */
+#define ADM_CAND_MAX  24
+#define ADM_CAND_DIST 120.0f
+
+typedef struct {
+    char  name[ADM_NLEN];
+    char  cls[ADM_NLEN];
+    float dist;
+} AdmCand;
+
+static AdmCand       g_admCand[ADM_CAND_MAX];
+static volatile long g_admCandN = 0;
+
+static void AdmNoteCandidate(const char* name, const char* cls, float dist)
+{
+    long n = g_admCandN;
+    if (n >= ADM_CAND_MAX || dist > ADM_CAND_DIST) return;
+    _snprintf(g_admCand[n].name, ADM_NLEN - 1, "%s", name ? name : "");
+    _snprintf(g_admCand[n].cls,  ADM_NLEN - 1, "%s", cls  ? cls  : "");
+    g_admCand[n].name[ADM_NLEN - 1] = 0;
+    g_admCand[n].cls [ADM_NLEN - 1] = 0;
+    g_admCand[n].dist = dist;
+    InterlockedExchange(&g_admCandN, n + 1);
 }
 
 static int AdmAlreadyHave(const AdmRect* out, int n, const float* wp)
@@ -16705,7 +16773,19 @@ static int AdmCollect(AdmRect* out, int cap)
        thread, so reading it here needs no lock. It may be stale by a few
        frames; for "who is in the match" that is irrelevant, and `ents` or the
        editor link refresh it. */
-    if (n <= 1) {
+    /* ALWAYS, not just when the player list came back with only ourselves.
+       That gate was backwards. PLAYERLIST is the LOCAL player list - it measured
+       count=1 in a live two-player match - so `n <= 1` skipped the broad scan in
+       exactly the sessions where the list was working, and the overlay could
+       only ever box people the local list already knew about.
+
+       Admins are here to watch players who are NOT cooperating, and nothing
+       about a cheater guarantees they show up in a list the local client keeps.
+       The entity tree is the client's own view of the world; anything drawn on
+       screen is in it. Scan it every time and merge - AdmAlreadyHave dedupes by
+       world position, so a player found twice costs one comparison, while a
+       player found zero times is the whole failure this tool exists to prevent. */
+    {
         long k, total;
         int  added = 0;
         static DWORD lastSnap = 0;
@@ -16734,9 +16814,21 @@ static int AdmCollect(AdmRect* out, int cap)
         total = g_entCount;
         if (total > ENT_MAX) total = ENT_MAX;
         InterlockedExchange(&g_admEnts, total);
+        InterlockedExchange(&g_admCandN, 0);   /* rebuilt every scan */
         for (k = 0; k < total && n < cap; ++k) {
             const EntRow* r = &g_entRows[k];
-            if (!r->ent || !AdmLooksLikePlayer(r->name, r->cls)) continue;
+            if (!r->ent) continue;
+            if (!AdmLooksLikePlayer(r->name, r->cls)) {
+                /* Rejected - but if it is standing next to you it is worth
+                   seeing, because that is what an unrecognised player looks
+                   like. Distance from the camera, same basis as the rows. */
+                float d0 = r->pos[0] - camPos[0];
+                float d1 = r->pos[1] - camPos[1];
+                float d2 = r->pos[2] - camPos[2];
+                AdmNoteCandidate(r->name, r->cls,
+                                 (float)sqrt(d0*d0 + d1*d1 + d2*d2));
+                continue;
+            }
             if (AdmAlreadyHave(out, n, r->pos)) continue;
             if (AdmBoxFor(r->ent, camPos, 0, r->name, &out[n])) { ++n; ++added; }
         }
@@ -20056,11 +20148,15 @@ static void PkPaint(void)
                on. Without it the two lists ran together as one, and the position
                rows look enough like names to be clicked at. */
             RECT h = lr;
+            char hd[120];
             h.bottom = h.top + PK_ROWH;
             h.left  += 8;
             SetTextColor(g_pkDc, PKV_SLATE);
-            DrawTextA(g_pkDc, "-- positions (not kickable) ----------------",
-                      -1, &h, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            _snprintf(hd, sizeof(hd) - 1,
+                      "-- pawns: %d found of %ld scanned%s --------",
+                      nr, (long)g_admEnts, g_admWide ? "  [WIDE]" : "");
+            hd[sizeof(hd) - 1] = 0;
+            DrawTextA(g_pkDc, hd, -1, &h, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
             lr.top += PK_ROWH;
         }
 
@@ -20087,24 +20183,78 @@ static void PkPaint(void)
                unrelated entity row at the same ordinal - two highlights, one
                selection, and no way to tell which one KICK would act on. */
             SetTextColor(g_pkDc, rows[k].local ? PKV_ORCHID : PKV_GOLD);
-            _snprintf(line, sizeof(line) - 1, "%d  %-24s %6.0fm  %s",
-                      k, rows[k].name[0] ? rows[k].name : "(unnamed)",
-                      rows[k].dist, rows[k].local ? "you" : "");
+            /* WORLD COORDINATES, not just a distance. A distance says how far
+               away somebody is and nothing about where - useless for "is he
+               inside the rock" or "did he cross the map in one second", which
+               is what this list exists to answer. The pawn name is trimmed to
+               its last segment: the archetypes are long, identical for the
+               first thirty characters, and differ only at the end. */
+            {
+                const char* nm = rows[k].name[0] ? rows[k].name : "(unnamed)";
+                const char* dot = strrchr(nm, '.');
+                if (dot && dot[1]) nm = dot + 1;
+                _snprintf(line, sizeof(line) - 1,
+                          "%-22s %7.0f %7.0f %6.0f  %5.0fm %s",
+                          nm, rows[k].wpos[0], rows[k].wpos[1], rows[k].wpos[2],
+                          rows[k].dist, rows[k].local ? "YOU" : "");
+            }
             line[sizeof(line) - 1] = 0;
             row.left += 8;
             DrawTextA(g_pkDc, line, -1, &row,
                       DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
         }
+        lr.top += nr * PK_ROWH;
 
-        {   /* four actions along the bottom */
+        /* ---- WHAT THE FILTER REJECTED, near the camera ---------------------
+           The reason this is on screen and not in the log: the question it
+           answers - "what does a player without our DLL look like in the entity
+           list?" - can only be answered while standing next to one. Nobody is
+           going to alt-tab to a log file mid-match to find out. */
+        if (g_admCandN > 0 && lr.top + 2 * PK_ROWH <= lr.bottom) {
+            RECT h = lr;
+            char hd[120];
+            long c, shown = 0;
+            h.bottom = h.top + PK_ROWH;
+            h.left  += 8;
+            SetTextColor(g_pkDc, PKV_SLATE);
+            _snprintf(hd, sizeof(hd) - 1,
+                      "-- unmatched within %.0fm (%ld) - is one of these a player? --",
+                      ADM_CAND_DIST, (long)g_admCandN);
+            hd[sizeof(hd) - 1] = 0;
+            DrawTextA(g_pkDc, hd, -1, &h, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            lr.top += PK_ROWH;
+
+            for (c = 0; c < g_admCandN && c < ADM_CAND_MAX; ++c) {
+                RECT row;
+                char line[160];
+                if (lr.top + (shown + 1) * PK_ROWH > lr.bottom) break;
+                row.left = lr.left + 8; row.right = lr.right;
+                row.top  = lr.top + (int)shown * PK_ROWH;
+                row.bottom = row.top + PK_ROWH;
+                SetTextColor(g_pkDc, PKV_SLATE);
+                _snprintf(line, sizeof(line) - 1, "%-26s %-18s %5.0fm",
+                          g_admCand[c].name[0] ? g_admCand[c].name : "(unnamed)",
+                          g_admCand[c].cls, g_admCand[c].dist);
+                line[sizeof(line) - 1] = 0;
+                DrawTextA(g_pkDc, line, -1, &row,
+                          DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                ++shown;
+            }
+        }
+
+        {   /* five actions along the bottom. BOXES is here because arming the
+               overlay from the panel is the difference between an admin tool and
+               a readout that needs a console command to start working. */
             RECT b;
-            PkBotRect(0, 4, &b);
+            PkBotRect(0, 5, &b);
             PkButton(&b, "KICK", 0, PKV_DANGER);
-            PkBotRect(1, 4, &b);
+            PkBotRect(1, 5, &b);
             PkButton(&b, "BAN", 0, PKV_DANGER);
-            PkBotRect(2, 4, &b);
-            PkButton(&b, "REFRESH", 0, PKV_GOLD);
-            PkBotRect(3, 4, &b);
+            PkBotRect(2, 5, &b);
+            PkButton(&b, "BOXES", g_admOn, PKV_GOLD);
+            PkBotRect(3, 5, &b);
+            PkButton(&b, "WIDE", g_admWide, PKV_ORCHID);
+            PkBotRect(4, 5, &b);
             PkButton(&b, "TRACK", g_admLog, PKV_ORCHID);
         }
     } else {
@@ -20416,12 +20566,13 @@ static int PkClick(int bx, int by)
            INPUT thread, and kick runs the engine's own ExecuteLine, which is
            main-thread-only. QueuePush is the bridge the rest of the panel
            already uses for exactly this. */
-        for (k = 0; k < 4; ++k) {
-            PkBotRect(k, 4, &b);
+        for (k = 0; k < 5; ++k) {
+            PkBotRect(k, 5, &b);
             if (x >= b.left && x < b.right && y >= b.top && y < b.bottom) {
                 char cmd[96];
-                if (k == 2) { QueuePush("admin_gui names"); return 1; }
-                if (k == 3) { QueuePush("admin_gui track"); return 1; }
+                if (k == 2) { QueuePush("admin_gui boxes"); return 1; }
+                if (k == 3) { QueuePush("admin_gui wide");  return 1; }
+                if (k == 4) { QueuePush("admin_gui track"); return 1; }
                 /* Never fail silently here. A dead button is indistinguishable
                    from a kick the server refused, and that ambiguity cost a
                    whole test session - the roster was on screen, so "nothing

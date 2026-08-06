@@ -51,6 +51,51 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-06 (i) — the panel is the tool; detection stops depending on the local list
+
+| Where | What | Risk | New symbols |
+|---|---|---|---|
+| Admin state block | **Added** the wide flag | Low | `g_admWide` |
+| `AdmLooksLikePlayer` | **Widened** — `player`/`pawn`, plus a wide mode | **Medium** | — |
+| After it | **Added** the reject recorder | Low | `AdmCand`, `g_admCand`, `g_admCandN`, `AdmNoteCandidate`, `ADM_CAND_MAX/DIST` |
+| `AdmCollect` entity scan | **Un-gated** — no longer `if (n <= 1)` | **Medium** | — |
+| `AdminGui` dispatch | **Added** `wide` | Low | — |
+| `PkPaint` PLAYERS block | **Rewritten** — coords, counts, reject block | **Medium** | — |
+| `PkClick` PLAYERS buttons | **4 → 5 buttons** | Medium | — |
+
+**The entity scan was gated behind `if (n <= 1)` and that was backwards.**
+`PLAYERLIST` is the *local* player list — it measured `count=1` in a live
+two-player match — so the gate skipped the broad scan in exactly the sessions
+where the list was working, and the overlay could only box people the local
+client already tracked. It now always runs and merges; `AdmAlreadyHave` dedupes
+by world position, so a player found twice costs one comparison while a player
+found zero times is the entire failure this tool exists to prevent.
+
+**The three original substrings were a filter derived from two samples.**
+`remoteplayer` / `pawnplayer` / `playerpawn` came from the two archetypes a
+*modded* client reported, so of course they found those two. The default net is
+now `player` **or** `pawn` anywhere in the name or class, and `admin_gui wide`
+(the WIDE button) adds `character/avatar/navi/soldier/human`.
+
+Wide is a toggle, not the default: a wider filter boxes props, and an overlay
+that marks scenery as people is one an admin stops believing — which costs more
+than a miss.
+
+**Rejected candidates within 120 m are shown in the panel.** The question
+"what does a player *without* our DLL look like in the entity list?" can only be
+answered while standing next to one, and nobody alt-tabs to a log file
+mid-match. The unmatched block is the measurement, on screen, where the work is.
+
+**The pawn rows carry world X/Y/Z now, not just a distance.** Distance says how
+far, never where — useless for "is he inside the rock" or "did he cross the map
+in one second", which is what the list is for. Names are trimmed to the last
+dotted segment because the archetypes are identical for their first thirty
+characters.
+
+> BOXES moved onto the panel (button 3). Arming the overlay from the GUI is the
+> difference between an admin tool and a readout that needs a console command
+> before it does anything.
+
 ### 2026-08-06 (h) — capture the console SINK, not `Printf`; kick is case-sensitive
 
 **`CConsole::Printf` was the wrong hook.** It installed fine
