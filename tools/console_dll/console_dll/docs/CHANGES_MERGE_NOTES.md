@@ -51,6 +51,75 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-06 (k) — a pawn route worth the name, and the team column stops lying
+
+Two things the roster (entry (j)) exposed the moment it started returning names.
+
+**"(not spawned)" for everybody who was standing right there.** With the list
+populated, the log still had **no** `pawn pointer found at player+0x…` line, so
+`NetPlayerPawn` was failing on every row. It only ever looked one hop deep — a
+field on the player object that *is* the entity — and the object the session
+enumerates is not the `CPlayer` the local list holds: `GetName` reaches its name
+through a refcounted holder at `+0x0C`, and `net_GetPlayerListByTeam` reads a
+team id at `+0x08`. That is a session record, so its pawn link is behind another
+object.
+
+The search now follows **two** hops, and the second covers the engine's own
+idiom — a ref node whose `+0x0C` is the `CEntity*`, which is exactly how
+`GetPlayerEntity` already reaches the local pawn. A candidate is only accepted
+when the entity it lands on carries a **player-shaped archetype name**: a blind
+pointer sweep will otherwise settle on a vehicle or a trigger, and since the
+route is cached and applied to every row, one false hit would put the same wrong
+pawn on the whole list.
+
+That widened search is only affordable because membership stopped being a linear
+walk: ~5,000 probes against a 1,250-row snapshot was 6M comparisons *per player
+per sample*. The rows are now sorted once per snapshot (`g_entGen`) and probed
+with a binary search.
+
+**`APR` and `UFLL` are Far Cry 2's factions.** `net_GetPlayerListByTeam` walks a
+three-entry table at `0x1122A0F8` and prints each team's name above its members;
+the middle entry is the inline literal `"APR"`, and the `.rdata` beside the
+handler holds `"TEAM UFLL:"` / `"TEAM APR:"` next to `"Prosper Kouassi"`,
+`"UFLL SwampBoat"` and `"APR_FinalWarlordName"`. Dunia shipped in Far Cry 2
+first and the team table never got replaced, so those labels mean nothing in a
+match between the RDA and the Na'vi. The panel stops showing them.
+
+What *is* real is the team id the same handler buckets on — `*(int*)(player+8)`
+— it just has no trustworthy name attached. So the name comes from the **pawn**:
+Avatar's networked player archetypes are
+`player.MainCharacter.PawnPlayerNetwork_Corp` and `..._Avatar` (plus `.Female`
+and the `Plaza_` lobby pair), measured in the shipped `gamemodesconfig.xml` and
+the world entity libraries. Corp is the RDA, Avatar is the Na'vi. Once one
+player on a side has been seen with a body, the id → side pair is learned and
+everyone carrying that id is labelled — **including players who have not
+spawned**.
+
+| Where | What | Risk | New symbols |
+|---|---|---|---|
+| `EntRow` block (~1994) | **Added** the snapshot generation counter | Low | `g_entGen` |
+| `EntSnapshotEx` end (~8578) | **Added** one line, bumps it | Low | — |
+| `PlayerRow` (~14375) | **Added** two fields | Low | `teamId`, `side` |
+| After it | **Added** the id → side table | Low | `g_admSide`, `g_admSideN`, `AdmSideOfArchetype`, `AdmLearnSide`, `AdmSideById`, `ADM_SIDE_MAX` |
+| `AdmBuildRows` | **Added** the team-id read and the side fallback | Low | — |
+| `NetPlayerPawnAt` / `NetIsKnownEntity` | **Replaced** | **Medium** | `EntKey`, `g_entKey*`, `EntKeyCmp`, `NetEntIndexBuild`, `NetEntRow`, `NetLooksLikePawn`, `NetWordAt`, `NetPawnRoute`, `NETPL_HOP2_MAX`, `g_netPawnOff2` |
+| `NetPlayerPawn` | **Rewrote** — two hops, validated, rate-limited, logged | **Medium** | — |
+| `NetPlayersCmd` | **Modified** — reports the route; `dump` follows pointers | Low | — |
+| `AdmTick` source 0 | **Added** the side derivation | Low | — |
+| `PkPaint` PLAYERS rows, `admin_gui names` | **Modified** — print `side`, not `team` | Low | — |
+
+**A failed search now says so, once**, with the entity count and whether the
+snapshot had names: `[netp] no pawn route on the player object …`. If that line
+is in the log, the link is further than two hops and the next step is the
+session service, not another sweep.
+
+**Tested off-game**: the search, the index and the acceptance rule were compiled
+standalone against a fake world — a two-hop route with a decoy vehicle pointer
+planted in front of it, a one-hop route, a cached route reused for a second
+player with no re-search, a player with no pawn, a vehicle-only field, and the
+blank-name case in both directions (a proven route survives, a new search
+refuses to run). All pass.
+
 ### 2026-08-06 (j) — the captured string is WIDE; the PLAYERS list fills
 
 **The PLAYERS tab has never been able to show a player, and nothing downstream

@@ -1993,6 +1993,10 @@ typedef struct {
 
 static EntRow        g_entRows[ENT_MAX];
 static volatile long g_entCount    = 0;
+/* Bumped every time the rows are republished. Anything that indexes them - the
+   pawn search's sorted pointer table - compares against this instead of trying
+   to guess whether the snapshot moved under it. */
+static volatile long g_entGen      = 0;
 static volatile long g_wantEntSnap = 0;
 /* DO THE ROWS CURRENTLY CARRY NAMES AND CLASS IDS?
    `poslist` - the editor's auto-refresh hot path, polled several times a second -
@@ -8577,6 +8581,9 @@ static void EntSnapshotEx(int wantMeta)
     ProbeLeave();
     InterlockedExchange(&g_entCount, n);
     InterlockedExchange(&g_entMetaValid, wantMeta ? 1 : 0);
+    /* Every republish invalidates anything indexed off these rows - see
+       g_entGen and NetEntIndexBuild, which sorts them for the pawn search. */
+    InterlockedIncrement(&g_entGen);
     logf_("[ents] snapshot: %ld live entities%s", n, wantMeta ? "" : " (positions only)");
 }
 
@@ -14367,7 +14374,9 @@ static char g_admHost[ADM_NLEN];
    print this array, so the three cannot disagree by construction. */
 typedef struct {
     char  name[ADM_NLEN];   /* account name - what kick matches on */
-    char  team[20];         /* from net_GetPlayerListByTeam, "" if unknown */
+    char  team[20];         /* from net_GetPlayerListByTeam - see AdmSideOf */
+    long  teamId;           /* the engine's own team id, off the player at +8 */
+    char  side[8];          /* "RDA" / "Na'vi" - what the column actually shows */
     void* player;           /* the engine's Player*, from the GetName hook */
     void* ent;              /* their pawn, or 0 when not matched yet */
     float wpos[3];
@@ -14380,6 +14389,65 @@ typedef struct {
 #define PL_ROW_MAX 16
 static PlayerRow     g_plRow[PL_ROW_MAX];
 static volatile long g_plRowN = 0;
+
+/* ---- WHICH SIDE, IN AVATAR'S TERMS ----------------------------------------
+   THE TEAM NAMES THE ENGINE PRINTS ARE FAR CRY 2's. net_GetPlayerListByTeam
+   walks a three-entry table at 0x1122A0F8 and prints each team's name above its
+   members; the middle entry is the inline literal "APR", and the .rdata beside
+   the handler holds "TEAM UFLL:" / "TEAM APR:" next to "Prosper Kouassi",
+   "UFLL SwampBoat" and "APR_FinalWarlordName". APR and UFLL are the two
+   factions of Far Cry 2 - the game Dunia shipped in first - and they mean
+   exactly nothing in a match between the RDA and the Na'vi. So the panel stops
+   showing them.
+
+   WHAT IS REAL is the team id the same handler compares against that table:
+   `*(int*)(player + 8) == <team id>`. It is a genuine per-player field, it just
+   has no name we can trust attached to it.
+
+   So the name comes from the PAWN instead. Avatar's networked player
+   archetypes are `player.MainCharacter.PawnPlayerNetwork_Corp` and
+   `..._Avatar` (plus `.Female` variants and the `Plaza_` lobby pair) - measured
+   in the shipped gamemodesconfig.xml and the world entity libraries. Corp is
+   the RDA; Avatar is the Na'vi.
+
+   And once one player on a side has been seen with a body, the id -> side pair
+   is learned, so everyone else carrying that id is labelled too - including
+   players who have not spawned and have no pawn to read. */
+#define ADM_SIDE_MAX 4
+static struct { long id; char name[8]; } g_admSide[ADM_SIDE_MAX];
+static long g_admSideN = 0;
+
+/* -> "RDA" / "Na'vi" for a player-pawn archetype, else 0. */
+static const char* AdmSideOfArchetype(const char* nm)
+{
+    if (!nm || !nm[0]) return 0;
+    if (Stristr(nm, "corp"))   return "RDA";
+    if (Stristr(nm, "avatar")) return "Na'vi";
+    return 0;
+}
+
+static void AdmLearnSide(long id, const char* side)
+{
+    long k;
+    if (!id || !side) return;
+    for (k = 0; k < g_admSideN; ++k)
+        if (g_admSide[k].id == id) return;
+    if (g_admSideN >= ADM_SIDE_MAX) return;
+    g_admSide[g_admSideN].id = id;
+    _snprintf(g_admSide[g_admSideN].name, sizeof(g_admSide[0].name) - 1, "%s", side);
+    g_admSide[g_admSideN].name[sizeof(g_admSide[0].name) - 1] = 0;
+    logf_("[netp] team id %08lX is %s", (unsigned long)id, side);
+    ++g_admSideN;
+}
+
+static const char* AdmSideById(long id)
+{
+    long k;
+    if (!id) return 0;
+    for (k = 0; k < g_admSideN; ++k)
+        if (g_admSide[k].id == id) return g_admSide[k].name;
+    return 0;
+}
 
 /* First line of a captured reply that looks like a value rather than an echo or
    a "key: value" status line. Shared by the one-line net_Get* commands. */
@@ -14442,6 +14510,16 @@ static void AdmBuildRows(void)
         }
         r->player = g_admPlayer[i];
         r->host   = (g_admHost[0] && _stricmp(r->name, g_admHost) == 0);
+        /* The engine's own team id, straight off the object - the same field
+           net_GetPlayerListByTeam buckets on. It names nothing by itself; see
+           AdmSideOfArchetype for what turns it into RDA / Na'vi. */
+        if (r->player && Readable((char*)r->player + 8, 4))
+            r->teamId = *(long*)((char*)r->player + 8);
+        if (!r->side[0]) {
+            const char* s = AdmSideById(r->teamId);
+            if (s) { _snprintf(r->side, sizeof(r->side) - 1, "%s", s);
+                     r->side[sizeof(r->side) - 1] = 0; }
+        }
     }
     InterlockedExchange(&g_plRowN, n);
 }
@@ -15298,13 +15376,19 @@ static void AdminGui(void* console, const char* arg)
             if (r->ent)
                 P_(console, 0, AC "  [%ld] %-16s %-8s %7.0f %7.0f %6.0f  %4.0fm  "
                                   "hp %.0f%s%s\n",
-                   q, r->name, r->team[0] ? r->team : "-",
+                   q, r->name, r->side[0] ? r->side : "-",
                    r->wpos[0], r->wpos[1], r->wpos[2], r->dist, r->hp,
                    r->local ? "  YOU" : "", r->host ? "  HOST" : "");
             else
-                P_(console, 0, AC "  [%ld] %-16s %-8s  (not spawned)%s\n",
-                   q, r->name, r->team[0] ? r->team : "-",
+                P_(console, 0, AC "  [%ld] %-16s %-8s  (not spawned - no pawn "
+                                  "matched)%s\n",
+                   q, r->name, r->side[0] ? r->side : "-",
                    r->host ? "  HOST" : "");
+            /* The raw side of it, for when the label looks wrong: the engine's
+               own team id, and the Far Cry 2 bucket net_GetPlayerListByTeam
+               dropped them in. */
+            P_(console, 0, PC "       team id %08lX   engine bucket \"%s\"\n",
+               (unsigned long)r->teamId, r->team[0] ? r->team : "?");
         }
         if (!g_plRowN)
             P_(console, 0, AC "  nothing captured - are you in a match?\n");
@@ -17400,54 +17484,191 @@ static const char* NetPlayerName(void* player)
    The account name gets us the person; the pawn gets us where they are. Rather
    than guess an offset, look for one: walk the player object a word at a time
    and test each value against the entity pointers the snapshot already holds.
-   A hit is a field that literally points at a live entity, which is what a pawn
-   pointer is.
+   A hit is a field that literally points at a live entity.
 
-   NETPL_PAWN_OFF caches the winner so the search runs once. It is a hint, not a
-   contract - it is re-validated on every use, and a wrong cache costs one failed
-   lookup rather than a wild read. */
-#define NETPL_SCAN_MAX 0x400
-static volatile long g_netPawnOff = -1;
+   ONE HOP WAS NOT ENOUGH, and a whole session's log proves it: with the roster
+   finally populated, `[netp] pawn pointer found at player+0x...` never appeared
+   once, so every row printed "(not spawned)" for players who were standing in
+   the world. The object the session enumerates is not the CPlayer the local
+   list holds - GetName reaches its name through a refcounted holder at +0x0C
+   and net_GetPlayerListByTeam reads a team id at +0x08, which is the shape of a
+   session record, not of a pawn owner. Whatever pawn link it has is therefore
+   behind another object.
 
-static void* NetPlayerPawnAt(void* player, int off)
+   So the search follows TWO hops, and the second one covers the engine's own
+   idiom: a ref node whose +0x0C is the CEntity*, which is how GetPlayerEntity
+   already reaches the local pawn (`inner -> node(inner+8) -> ent(+0x0C)`). The
+   route that works is cached and re-validated on every use.
+
+   THE CANDIDATE MUST LOOK LIKE A PERSON. A blind pointer search will happily
+   settle on any field that happens to point at some entity - a vehicle, a
+   trigger, the thing you last shot - and because the route is cached and
+   applied to EVERY row, one false hit would put the same wrong pawn on the
+   whole list. So a route is only accepted when the entity it lands on carries a
+   player-shaped archetype name. When the snapshot is carrying no names at all
+   (the editor's position-only poll blanks them - see g_entMetaValid) the test
+   cannot be applied, and an unnamed row is accepted rather than blocking the
+   search entirely. */
+#define NETPL_SCAN_MAX 0x400   /* how far into the player object to look   */
+#define NETPL_HOP2_MAX 0x80    /* ...and into whatever it points at        */
+
+static volatile long g_netPawnOff  = -1;
+static volatile long g_netPawnOff2 = -1;  /* -1 = the field IS the entity   */
+
+/* ---- the snapshot's entity pointers, sorted, so the search is not O(n*m) --
+   The search probes ~5000 candidates and the old membership test was a linear
+   walk of up to 4096 rows, which is 20 million comparisons per player per
+   sample - affordable exactly once, which is why the one-hop version could not
+   afford to grow. Sorted once per snapshot, a probe costs 12 comparisons. */
+typedef struct { void* ent; long row; } EntKey;
+static EntKey g_entKey[ENT_MAX];
+static long   g_entKeyN   = 0;
+static long   g_entKeyGen = -1;
+
+static int __cdecl EntKeyCmp(const void* a, const void* b)
+{
+    void* x = ((const EntKey*)a)->ent;
+    void* y = ((const EntKey*)b)->ent;
+    return (x < y) ? -1 : (x > y) ? 1 : 0;
+}
+
+static void NetEntIndexBuild(void)
+{
+    long gen = g_entGen, n, k;
+    if (gen == g_entKeyGen) return;
+    n = g_entCount;
+    if (n > ENT_MAX) n = ENT_MAX;
+    for (k = 0; k < n; ++k) { g_entKey[k].ent = g_entRows[k].ent; g_entKey[k].row = k; }
+    qsort(g_entKey, (size_t)n, sizeof(EntKey), EntKeyCmp);
+    g_entKeyN   = n;
+    g_entKeyGen = gen;
+}
+
+/* -> the snapshot row `v` is, or -1. */
+static long NetEntRow(void* v)
+{
+    long lo = 0, hi;
+    if (!v) return -1;
+    NetEntIndexBuild();
+    hi = g_entKeyN - 1;
+    while (lo <= hi) {
+        long mid = (lo + hi) >> 1;
+        if (g_entKey[mid].ent == v) return g_entKey[mid].row;
+        if (g_entKey[mid].ent <  v) lo = mid + 1; else hi = mid - 1;
+    }
+    return -1;
+}
+
+static int NetIsKnownEntity(void* v) { return NetEntRow(v) >= 0; }
+
+/* Does the snapshot row for this entity read like somebody's body?
+
+   `strict` is the difference between FINDING a route and USING one. A search
+   that accepts a nameless row would cache the first pointer that happens to
+   reach any entity at all, and that route is then applied to every player - so
+   the search insists on a name it can read. Re-validating an already-proven
+   route does not: the editor's position-only poll blanks every name for a few
+   frames (g_entMetaValid), and a working route must not evaporate because
+   something else was reading the entity tree at the time. */
+static int NetLooksLikePawn(long row, int strict)
+{
+    const char* nm;
+    if (row < 0) return 0;
+    nm = g_entRows[row].name;
+    if (!nm[0]) return !strict;      /* no names in this snapshot - cannot judge */
+    return Stristr(nm, "player") != 0 || Stristr(nm, "pawn") != 0;
+}
+
+/* One dereference, bounds-checked: *(base + off), which must itself be readable
+   for `need` bytes. */
+static void* NetWordAt(void* base, int off, int need)
 {
     void* v;
-    if (off < 0 || !Readable((unsigned char*)player + off, 4)) return 0;
-    v = *(void**)((unsigned char*)player + off);
-    if (!Readable(v, OFF_ENT_XFORM + 0x40)) return 0;
+    if (off < 0 || !Readable((unsigned char*)base + off, 4)) return 0;
+    v = *(void**)((unsigned char*)base + off);
+    if (!Readable(v, need)) return 0;
     return v;
 }
 
-/* Is `v` one of the entities the last snapshot saw? */
-static int NetIsKnownEntity(void* v)
+/* Walk one cached route. -> the pawn, or 0 if the route no longer holds. */
+static void* NetPawnRoute(void* player, int off, int off2)
 {
-    long k, total = g_entCount;
+    void* v = NetWordAt(player, off, (off2 < 0) ? OFF_ENT_XFORM + 0x40 : 4);
+    long  row;
     if (!v) return 0;
-    if (total > ENT_MAX) total = ENT_MAX;
-    for (k = 0; k < total; ++k)
-        if (g_entRows[k].ent == v) return 1;
-    return 0;
+    if (off2 >= 0) v = NetWordAt(v, off2, OFF_ENT_XFORM + 0x40);
+    if (!v) return 0;
+    row = NetEntRow(v);
+    return NetLooksLikePawn(row, 0) ? v : 0;
 }
 
 static void* NetPlayerPawn(void* player)
 {
-    int off;
+    static DWORD s_lastSearch = 0;
+    static int   s_saidNoRoute = 0;
+    DWORD now;
+    int   off, off2;
+    void* v;
 
-    /* the cached offset first, re-validated */
-    off = (int)g_netPawnOff;
+    if (!player) return 0;
+
+    /* the cached route first, re-validated */
+    off = (int)g_netPawnOff; off2 = (int)g_netPawnOff2;
     if (off >= 0) {
-        void* v = NetPlayerPawnAt(player, off);
-        if (v && NetIsKnownEntity(v)) return v;
+        v = NetPawnRoute(player, off, off2);
+        if (v) return v;
     }
+
+    /* A FULL SEARCH IS NOT FREE - a few thousand VirtualQuery calls - and a
+       player who has genuinely not spawned has no route to find, so an
+       unresolved list must not run it once per row per sample. Once every 400ms
+       converges within a second of somebody spawning and costs nothing the rest
+       of the time. */
+    now = GetTickCount();
+    if (s_lastSearch && (DWORD)(now - s_lastSearch) < 400) return 0;
+    s_lastSearch = now;
+
+    /* Nothing to match against, or nothing NAMED to match against: searching now
+       would either find nothing or cache a route proven by a nameless row. The
+       sampler refreshes the snapshot with names every 3 s, so this resolves
+       itself. */
+    if (!g_entCount || !g_entMetaValid) return 0;
+
     for (off = 0; off + 4 <= NETPL_SCAN_MAX; off += 4) {
-        void* v = NetPlayerPawnAt(player, off);
-        if (v && NetIsKnownEntity(v)) {
-            if (g_netPawnOff != off) {
-                InterlockedExchange(&g_netPawnOff, off);
-                logf_("[netp] pawn pointer found at player+0x%X", off);
-            }
+        void* w = NetWordAt(player, off, 4);
+        long  row;
+        if (!w) continue;
+        /* 1. the field IS the entity */
+        row = NetEntRow(w);
+        if (NetLooksLikePawn(row, 1) && Readable(w, OFF_ENT_XFORM + 0x40)) {
+            InterlockedExchange(&g_netPawnOff,  off);
+            InterlockedExchange(&g_netPawnOff2, -1);
+            logf_("[netp] pawn route: player+0x%X -> entity %p (%s)", off, w,
+                  g_entRows[row].name);
+            s_saidNoRoute = 0;
+            return w;
+        }
+        /* 2. the field points at something that HOLDS the entity - off2 0x0C is
+              the engine's ref node, and sweeping the rest of the window costs
+              little now that membership is a binary search. */
+        for (off2 = 0; off2 <= NETPL_HOP2_MAX; off2 += 4) {
+            v = NetWordAt(w, off2, OFF_ENT_XFORM + 0x40);
+            if (!v) continue;
+            row = NetEntRow(v);
+            if (!NetLooksLikePawn(row, 1)) continue;
+            InterlockedExchange(&g_netPawnOff,  off);
+            InterlockedExchange(&g_netPawnOff2, off2);
+            logf_("[netp] pawn route: player+0x%X -> +0x%X -> entity %p (%s)",
+                  off, off2, v, g_entRows[row].name);
+            s_saidNoRoute = 0;
             return v;
         }
+    }
+    if (!s_saidNoRoute) {
+        s_saidNoRoute = 1;
+        logf_("[netp] no pawn route on the player object (%p) - %ld entities in "
+              "the snapshot, names %s. Rows will read (not spawned).",
+              player, (long)g_entCount, g_entMetaValid ? "present" : "BLANK");
     }
     return 0;
 }
@@ -17523,23 +17744,49 @@ static void NetPlayersCmd(void* console, const char* arg)
             P_(console, 0, AC "  [%d] %-20s  (no pawn found)\n", i, nm);
         }
     }
-    if (g_netPawnOff >= 0)
-        P_(console, 0, AC "  pawn pointer lives at player+0x%X\n",
+    if (g_netPawnOff >= 0 && g_netPawnOff2 < 0)
+        P_(console, 0, AC "  pawn route: player+0x%X -> the entity\n",
            (int)g_netPawnOff);
+    else if (g_netPawnOff >= 0)
+        P_(console, 0, AC "  pawn route: player+0x%X -> +0x%X -> the entity\n",
+           (int)g_netPawnOff, (int)g_netPawnOff2);
+    else
+        P_(console, 0, AC "  no pawn route found - the search covers player+0..%X "
+                          "and one more hop of 0..%X, against %ld snapshot "
+                          "entities (names %s).\n",
+           NETPL_SCAN_MAX, NETPL_HOP2_MAX, (long)g_entCount,
+           g_entMetaValid ? "present" : "BLANK - run `ents` and try again");
 
     if (_stricmp(arg, "dump") == 0) {
         /* Raw words, for when the pawn search comes up empty and the field has
-           to be identified by eye against a known entity address. */
+           to be identified by eye. Every word that points at readable memory is
+           followed through one hop, because that is exactly what the search
+           does and this is how you check its work by hand. */
         for (i = 0; i < n && i < 4; ++i) {
             int off;
             P_(console, 0, AC "  --- player %d (%p) ---\n", i, pl[i]);
-            for (off = 0; off < 0x80; off += 16) {
-                if (!Readable((unsigned char*)pl[i] + off, 16)) break;
-                P_(console, 0, AC "   +%03X  %08X %08X %08X %08X\n", off,
-                   *(unsigned long*)((char*)pl[i] + off + 0),
-                   *(unsigned long*)((char*)pl[i] + off + 4),
-                   *(unsigned long*)((char*)pl[i] + off + 8),
-                   *(unsigned long*)((char*)pl[i] + off + 12));
+            for (off = 0; off < 0x100; off += 4) {
+                unsigned long w;
+                void*         t;
+                long          row;
+                if (!Readable((unsigned char*)pl[i] + off, 4)) break;
+                w = *(unsigned long*)((char*)pl[i] + off);
+                t = (void*)w;
+                row = NetEntRow(t);
+                if (row >= 0) {
+                    P_(console, 0, AC "   +%03X  %08X  <- ENTITY %s\n", off, w,
+                       g_entRows[row].name);
+                } else if (Readable(t, 0x10)) {
+                    /* what it points at, first four words - the second hop */
+                    P_(console, 0, AC "   +%03X  %08X  -> %08X %08X %08X %08X%s\n",
+                       off, w,
+                       *(unsigned long*)((char*)t + 0), *(unsigned long*)((char*)t + 4),
+                       *(unsigned long*)((char*)t + 8), *(unsigned long*)((char*)t + 12),
+                       NetEntRow(*(void**)((char*)t + 0x0C)) >= 0
+                           ? "  <- +0C IS AN ENTITY" : "");
+                } else if (w) {
+                    P_(console, 0, AC "   +%03X  %08X\n", off, w);
+                }
             }
         }
     }
@@ -17737,7 +17984,26 @@ static int AdmCollect(AdmRect* out, int cap)
             pr->ent = pawn;
             if (!pawn) {
                 pr->hp = pr->hpMax = -1.0f;
+                /* Still labellable: another player on the same side has
+                   probably already been seen with a body. */
+                if (!pr->side[0]) {
+                    const char* s = AdmSideById(pr->teamId);
+                    if (s) { _snprintf(pr->side, sizeof(pr->side) - 1, "%s", s);
+                             pr->side[sizeof(pr->side) - 1] = 0; }
+                }
                 continue;
+            }
+            {   /* WHICH SIDE, from the body they are wearing - and teach the
+                   id -> side table, so their team-mates get labelled before
+                   they have spawned. */
+                long erow = NetEntRow(pawn);
+                const char* s = (erow >= 0)
+                    ? AdmSideOfArchetype(g_entRows[erow].name) : 0;
+                if (s) {
+                    _snprintf(pr->side, sizeof(pr->side) - 1, "%s", s);
+                    pr->side[sizeof(pr->side) - 1] = 0;
+                    AdmLearnSide(pr->teamId, s);
+                }
             }
             if (AdmBoxFor(pawn, camPos, 0, pr->name, &out[n])) {
                 /* The account name IS the row name here - not an archetype -
@@ -21364,7 +21630,10 @@ static void PkPaint(void)
 
             _snprintf(line, sizeof(line) - 1, "%-17s %-9s %s %s%s%s",
                       rows[k].name,
-                      rows[k].team[0] ? rows[k].team : "-",
+                      /* side, NOT rows[k].team - that one carries Far Cry 2's
+                         factions, which is what the engine actually prints.
+                         See AdmSideOfArchetype. */
+                      rows[k].side[0] ? rows[k].side : "-",
                       pos, hp,
                       rows[k].local ? "  YOU" : "",
                       rows[k].host  ? "  HOST" : "");
