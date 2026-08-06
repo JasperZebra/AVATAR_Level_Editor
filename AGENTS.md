@@ -124,6 +124,29 @@ Worked example (Aug 2026 fixes): square water planes, world-anchored reflections
 - Mode-specific code still exists (QPainter overlays, 2D picking/labels, the ortho camera link) — when fixing one side, grep for the sibling path and apply the same fix there.
 - Test/verify in both modes before calling the task done; the 2D↔3D camera-link tests (`test_camera_link_2d_3d.py`, `test_topdown_ortho.py`, `test_topdown_view_vector.py`) show the established patterns.
 
+### 10. Every Change to the Console DLL Updates Its Change Log — Same Task, No Exceptions
+
+**`tools/console_dll/console_dll/avatar_console.c` has a second author.** The user's collaborator edits the same 20,000-line single translation unit from their own copy. `tools/console_dll/console_dll/docs/CHANGES_MERGE_NOTES.md` is the only record of which regions each side touched, so **it is the thing that makes a merge possible at all** — it is not a courtesy changelog, and a stale entry there is worse than no entry, because it is trusted.
+
+If you touch `avatar_console.c`, you update `CHANGES_MERGE_NOTES.md` **in the same task, before committing.** A change is not complete without it.
+
+What every entry must carry:
+
+- **Where** — the function or section name, *and* the line range as of that commit. Line numbers go stale by design; name the anchor comment or symbol so it is still findable after the other author's edits shift everything.
+- **Added / modified / rewrote** — an insertion between two untouched functions is a non-event to merge; a rewrite of existing lines is the thing that actually collides. Say which.
+- **Collision risk, honestly** — None / Low / Medium, and *why*. Do not mark everything Medium to be safe; that destroys the signal the table exists to carry.
+- **New `static` symbols**, listed. This is how the other author checks for name clashes without reading the diff.
+
+Also update, when the change reaches them:
+
+- **Adding, removing or renaming a console command or an editor-link verb** → fix the counts in `tools/DevAccess/CONSOLE_AUDIT.md` (§1.1 commands, §1.2 verbs) and the entry in `tools/DevAccess/COMMANDS.md`. These counts have already drifted once (68→76 commands, 8→11 verbs) and the audit needed a dated freshness banner to stay usable — do not let it happen again.
+- **Changing the `hello` reply, or any pipe/protocol shape** → say so explicitly and state whether `LNK_PROTO` was bumped. *Adding* a JSON field is backward compatible and does not need a bump; removing or repurposing one does.
+- **Changing the multi-instance or per-instance-profile behaviour** → `docs/MULTI_INSTANCE.md` too, not just the merge notes.
+
+`check_cmds.py` is a build gate that fails the build when the dispatch chain and `kOurCmds[]` disagree — it catches *code* drift automatically. **Nothing catches doc drift.** That is what this rule is for.
+
+This rule sits alongside Rule 3, not inside it: Rule 3 keeps AGENTS.md current for future agents, this one keeps a human collaborator unblocked.
+
 ---
 
 ## Testing
@@ -5282,6 +5305,8 @@ is the source. Both are now version-controlled (see `.gitignore` — the built
   it did not, so a merge doesn't mean reading 20,000 lines. It also records what
   was deliberately *not* done (three known picker bugs, the `LnkPut` sentinel
   bug) so nobody assumes those are half-finished.
+  **Rule 10 makes keeping it current mandatory** — every edit to
+  `avatar_console.c` updates it in the same task, before committing.
 
 ### The one thing to understand before touching it
 

@@ -10,6 +10,43 @@ we did not, and where the two genuinely overlapping edits are.
 
 Read the "Merge cheat-sheet" first. Everything after it is detail.
 
+> ## THIS FILE IS MANDATORY TO UPDATE
+>
+> **AGENTS.md Rule 10.** Any change to `avatar_console.c` updates this file **in
+> the same task, before committing.** A change is not complete without it.
+>
+> This is not a courtesy changelog. It is the only record of who touched what,
+> so it is the thing that makes a merge possible at all -- and a stale entry
+> here is *worse* than a missing one, because it is trusted.
+>
+> Every entry carries four things:
+>
+> 1. **Where** -- function or section name, **and** the line range at that
+>    commit. Line numbers go stale by design, so always name the anchor comment
+>    or symbol as well; that survives the other author's edits shifting
+>    everything.
+> 2. **Added / modified / rewrote** -- an insertion between two untouched
+>    functions is a non-event to merge; a rewrite of existing lines is what
+>    actually collides.
+> 3. **Collision risk, honestly** -- None / Low / Medium, *and why*. Do not mark
+>    everything Medium to be safe; that destroys the signal this table exists to
+>    carry.
+> 4. **New `static` symbols**, listed -- so the other author can check for name
+>    clashes without reading the diff.
+>
+> And when a change reaches them, update these too:
+>
+> - **A command or link verb added/removed/renamed** -> the counts in
+>   `DevAccess/CONSOLE_AUDIT.md` (sections 1.1 and 1.2) and the entry in
+>   `DevAccess/COMMANDS.md`. They have drifted once already (68->76 commands,
+>   8->11 verbs) and needed a dated freshness banner to stay usable.
+> - **`hello` / pipe / protocol shape** -> say whether `LNK_PROTO` was bumped.
+> - **Multi-instance or profile behaviour** -> `MULTI_INSTANCE.md` as well.
+>
+> `check_cmds.py` fails the build when the dispatch chain and `kOurCmds[]`
+> disagree, so *code* drift is caught automatically. **Nothing catches doc
+> drift.** That is what this rule is for.
+
 ---
 
 ## Merge cheat-sheet
