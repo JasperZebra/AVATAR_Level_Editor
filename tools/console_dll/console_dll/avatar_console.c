@@ -9100,6 +9100,9 @@ static int StrIStr_(const char* hay, const char* needle);
 /* Defined with the rest of the session-list code, which sits below the entity
    snapshot it cross-references; the dispatcher is above both. */
 static void NetPlayersCmd(void* console, const char* arg);
+/* Defined below AdmRefreshNames, which calls them to rebuild the row list. */
+static void AdmBuildRows(void);
+static void AdmRefreshTeams(void* console, int quiet);
 
 static void PlayersList(void* console, int raw)
 {
@@ -14267,6 +14270,34 @@ static volatile long g_admNameN = 0;
    actually be actioned. */
 static char g_admHost[ADM_NLEN];
 
+/* ---- ONE ROW PER PLAYER, AND ONLY PLAYERS ---------------------------------
+   The PLAYERS tab used to paint two unrelated lists - the captured roster and
+   whatever the entity scan had matched - while the click handler indexed a
+   third thing (g_admNameN). Three sources for one list is why nothing could be
+   selected when the roster came up empty, and why spawn points and flags could
+   appear among people.
+
+   This is the single source of truth now. It is built from the SESSION's own
+   enumeration, so a row exists for every connected player and for nothing else
+   - a flag has no account name and can never end up here. The painter draws
+   this array, the click handler indexes this array, and the console commands
+   print this array, so the three cannot disagree by construction. */
+typedef struct {
+    char  name[ADM_NLEN];   /* account name - what kick matches on */
+    char  team[20];         /* from net_GetPlayerListByTeam, "" if unknown */
+    void* player;           /* the engine's Player*, from the GetName hook */
+    void* ent;              /* their pawn, or 0 when not matched yet */
+    float wpos[3];
+    float dist;
+    float hp, hpMax;        /* -1 when there is no character sheet */
+    int   local;            /* this is you */
+    int   host;             /* labelled HOST */
+} PlayerRow;
+
+#define PL_ROW_MAX 16
+static PlayerRow     g_plRow[PL_ROW_MAX];
+static volatile long g_plRowN = 0;
+
 /* First line of a captured reply that looks like a value rather than an echo or
    a "key: value" status line. Shared by the one-line net_Get* commands. */
 static void AdmFirstLine(const char* buf, const char* cmd, char* out, int cap)
@@ -14305,6 +14336,85 @@ static void AdmRefreshHost(void* console, int quiet)
     g_admHost[0] = 0;
     if (!CaptureRun(console, "net_GetHostName", buf, sizeof(buf), quiet)) return;
     AdmFirstLine(buf, "net_GetHostName", g_admHost, ADM_NLEN);
+}
+
+/* Seed one row per captured name, carrying over the Player* the GetName hook
+   recorded at the same index (the k-th call is the k-th name). Positions and
+   health are filled every sample by AdmTick, not here - this runs on the roster
+   timer and would otherwise freeze the coordinates between refreshes. */
+static void AdmBuildRows(void)
+{
+    long i, n = g_admNameN;
+    if (n > PL_ROW_MAX) n = PL_ROW_MAX;
+    for (i = 0; i < n; ++i) {
+        PlayerRow* r = &g_plRow[i];
+        /* Keep the pawn and position across a refresh: the roster reruns every
+           few seconds and blanking them would make the whole list flicker
+           between populated and empty. */
+        if (strcmp(r->name, g_admNames[i]) != 0) {
+            memset(r, 0, sizeof(*r));
+            r->hp = r->hpMax = -1.0f;
+            _snprintf(r->name, ADM_NLEN - 1, "%s", g_admNames[i]);
+            r->name[ADM_NLEN - 1] = 0;
+        }
+        r->player = (i < g_netEnumN) ? g_netEnum[i] : 0;
+        r->host   = (g_admHost[0] && _stricmp(r->name, g_admHost) == 0);
+    }
+    InterlockedExchange(&g_plRowN, n);
+}
+
+/* Teams, from the shipped net_GetPlayerListByTeam.
+
+   Its exact output format is not documented and I am not going to guess at it.
+   Instead: we already hold the authoritative name list, so any captured line
+   that MATCHES a known player is a player, and any line that does not is the
+   team header it was printed under. That parse survives whatever the headers
+   actually say, in any language, and cannot mistake a header for a person. */
+static void AdmRefreshTeams(void* console, int quiet)
+{
+    char  buf[4096];
+    char* p;
+    char  team[20];
+
+    if (!g_plRowN) return;
+    if (!CaptureRun(console, "net_GetPlayerListByTeam", buf, sizeof(buf), quiet))
+        return;
+
+    team[0] = 0;
+    p = buf;
+    while (*p) {
+        char* e = p;
+        char  save;
+        int   len, matched = 0;
+        long  i;
+        while (*e && *e != '\n' && *e != '\r') ++e;
+        save = *e; *e = 0;
+        while (*p == ' ' || *p == '\t') ++p;
+        len = (int)strlen(p);
+        while (len > 0 && (p[len-1] == ' ' || p[len-1] == '\t')) p[--len] = 0;
+
+        if (len > 0 && _stricmp(p, "net_GetPlayerListByTeam") != 0) {
+            for (i = 0; i < g_plRowN; ++i) {
+                if (_stricmp(p, g_plRow[i].name) == 0) {
+                    _snprintf(g_plRow[i].team, sizeof(g_plRow[i].team) - 1,
+                              "%s", team);
+                    g_plRow[i].team[sizeof(g_plRow[i].team) - 1] = 0;
+                    matched = 1;
+                    break;
+                }
+            }
+            if (!matched) {           /* not a player -> it is the header */
+                char* c;
+                _snprintf(team, sizeof(team) - 1, "%s", p);
+                team[sizeof(team) - 1] = 0;
+                c = strchr(team, ':');
+                if (c) *c = 0;        /* "Corp:" -> "Corp" */
+            }
+        }
+        *e = save;
+        p = e;
+        while (*p == '\n' || *p == '\r') ++p;
+    }
 }
 
 /* Pull names out of net_GetPlayerList's reply.
@@ -14364,6 +14474,10 @@ static void AdmRefreshNames(void* console, int quiet)
        the reply is one line, so this costs one more quiet console line per
        refresh and saves reverse-engineering a host flag on the player object. */
     AdmRefreshHost(console, quiet);
+
+    /* Rebuild the one true row list from what we just captured. */
+    AdmBuildRows();
+    AdmRefreshTeams(console, quiet);
 
     /* Log only when the roster CHANGES. The timer refresh runs every few seconds
        for as long as the tab is open, and an unconditional line here buried the
@@ -15053,11 +15167,26 @@ static void AdminGui(void* console, const char* arg)
         int  quiet = (StrIStr_(arg, "quiet") != 0);
         AdmRefreshNames(console, quiet);
         if (quiet) return;                    /* the panel is the output */
-        P_(console, 0, AC "admin_gui: %ld account name(s) from the session:\n",
-           (long)g_admNameN);
-        for (q = 0; q < g_admNameN; ++q)
-            P_(console, 0, AC "  [%ld] %s\n", q, g_admNames[q]);
-        if (!g_admNameN)
+        /* THE SAME ARRAY THE PANEL DRAWS. The console used to print
+           g_admNames while the panel drew something else, so the two could
+           disagree about who was in the match - and when they did, there was no
+           way to tell which one was lying. One array, both readers. */
+        P_(console, 0, AC "admin_gui: %ld player(s) in the session\n",
+           (long)g_plRowN);
+        for (q = 0; q < g_plRowN; ++q) {
+            const PlayerRow* r = &g_plRow[q];
+            if (r->ent)
+                P_(console, 0, AC "  [%ld] %-16s %-8s %7.0f %7.0f %6.0f  %4.0fm  "
+                                  "hp %.0f%s%s\n",
+                   q, r->name, r->team[0] ? r->team : "-",
+                   r->wpos[0], r->wpos[1], r->wpos[2], r->dist, r->hp,
+                   r->local ? "  YOU" : "", r->host ? "  HOST" : "");
+            else
+                P_(console, 0, AC "  [%ld] %-16s %-8s  (not spawned)%s\n",
+                   q, r->name, r->team[0] ? r->team : "-",
+                   r->host ? "  HOST" : "");
+        }
+        if (!g_plRowN)
             P_(console, 0, AC "  nothing captured - are you in a match?\n");
         return;
     }
@@ -17474,22 +17603,35 @@ static int AdmCollect(AdmRect* out, int cap)
 
        Runs FIRST so the name-based sources only ever fill gaps. */
     {
-        int np = (int)g_netEnumN, j;
+        int np = (int)g_plRowN, j;
         InterlockedExchange(&g_netN, np);
         for (j = 0; j < np && n < cap; ++j) {
-            void* pawn = NetPlayerPawn(g_netEnum[j]);
-            if (!pawn) continue;
-            /* Names come from the captured roster at the SAME index - the k-th
-               GetName call is the k-th line the engine printed. Fall back to a
-               placeholder rather than a wrong name if the two ever disagree in
-               length; a mislabelled row here is a kick aimed at the wrong
-               person. */
-            if (AdmBoxFor(pawn, camPos, 0,
-                          (j < (int)g_admNameN) ? g_admNames[j] : "(player)",
-                          &out[n])) {
+            PlayerRow* pr   = &g_plRow[j];
+            void*      pawn = pr->player ? NetPlayerPawn(pr->player) : 0;
+            /* Keep the LAST known pawn when the lookup misses this frame rather
+               than dropping the row: a player whose pawn is momentarily
+               unresolvable is still in the match, and a row that blinks in and
+               out is unusable to click at. */
+            if (!pawn && pr->ent && Readable(pr->ent, OFF_ENT_POS + 12))
+                pawn = pr->ent;
+            pr->ent = pawn;
+            if (!pawn) {
+                pr->hp = pr->hpMax = -1.0f;
+                continue;
+            }
+            if (AdmBoxFor(pawn, camPos, 0, pr->name, &out[n])) {
                 /* The account name IS the row name here - not an archetype -
                    so this row is directly kickable, unlike the entity ones. */
-                out[n].acct = (j < (int)g_admNameN);
+                out[n].acct = 1;
+                /* Publish back onto the row: this is what the panel and the
+                   console commands read, so they see exactly what was boxed. */
+                pr->wpos[0] = out[n].wpos[0];
+                pr->wpos[1] = out[n].wpos[1];
+                pr->wpos[2] = out[n].wpos[2];
+                pr->dist    = out[n].dist;
+                pr->hp      = out[n].hp;
+                pr->hpMax   = out[n].hpMax;
+                pr->local   = out[n].local;
                 ++n;
             }
         }
@@ -21025,215 +21167,89 @@ static void PkPaint(void)
 
     if (g_pickMode == PK_MODE_PLAYERS) {
         /* ---- PLAYERS TAB ---------------------------------------------------
-           Drawn from the admin sampler's published rows, not from the entity
-           list machinery above - it is a different data source with a different
-           lifetime, and reusing the row cache would have meant one of them
-           clobbering the other every refresh.
+           ONE list, drawn from g_plRow - the same array the click handler
+           indexes and the console commands print.
 
-           The list is whatever AdmTick last published, so it is live only while
-           the overlay or tracking is armed. It says so rather than showing an
-           empty box that looks like an empty server. */
-        AdmRect rows[ADM_MAX];
-        int     nr = 0, k;
-        RECT    lr;
+           It used to paint the captured roster and the entity-scan rows as two
+           blocks while the click handler bounded selection by a THIRD thing
+           (g_admNameN). Three sources for one list is why nothing could be
+           selected when the roster came up empty, and why spawn points and
+           flags could appear among people. A row exists here only if the
+           session enumerated a connected player, so scenery cannot reach it. */
+        PlayerRow rows[PL_ROW_MAX];
+        int       nr = 0, k;
+        RECT      lr;
 
-        if (g_admCsInit) {
-            EnterCriticalSection(&g_admCs);
-            nr = (int)g_admRectN;
-            if (nr > ADM_MAX) nr = ADM_MAX;
-            for (k = 0; k < nr; ++k) rows[k] = g_admRect[k];
-            LeaveCriticalSection(&g_admCs);
-        }
+        nr = (int)g_plRowN;
+        if (nr > PL_ROW_MAX) nr = PL_ROW_MAX;
+        for (k = 0; k < nr; ++k) rows[k] = g_plRow[k];
 
         PkListRect(&lr);
         PkFillRect(&lr, PKV_FIELD);
         SelectObject(g_pkDc, g_fontUI ? g_fontUI : GetStockObject(DEFAULT_GUI_FONT));
 
-        /* THE ROSTER DOES NOT DEPEND ON THE SAMPLER. Names come from
-           net_GetPlayerList; the position rows come from AdmTick. These two
-           messages used to be drawn at the top-left of the list - the same place
-           the first name row lands - so with the overlay off the roster was
-           printed straight through "Sampling is off" and both were unreadable.
-           Whatever they have to say now belongs to the POSITION block, which is
-           the only part that is actually empty, so it is said down there. */
-
-        /* ACCOUNT NAMES FIRST - these are what kick matches on, so they are the
-           actionable rows. The entity rows below are positions, and their names
-           are archetypes that kick cannot use. Keeping both, clearly separated,
-           because they answer different questions: who is in the session, and
-           where the bodies are. */
-        {
-            long nn = g_admNameN, q;
-            for (q = 0; q < nn && q < ADM_NAMES_MAX; ++q) {
-                RECT row;
-                char line[160];
-                row.left = lr.left; row.right = lr.right;
-                row.top  = lr.top + (int)q * PK_ROWH;
-                row.bottom = row.top + PK_ROWH;
-                if (row.bottom > lr.bottom) break;
-                /* Selection wins over hover: while you drag the mouse away
-                   the row you PICKED has to stay the obvious one, or the
-                   highlight reads as "this is what KICK will act on" when it
-                   is only what the cursor happens to be over. */
-                if ((int)q == g_pkPlSel)          PkFillRect(&row, PKV_EDGE);
-                else if ((int)q == g_pkHoverRow)  PkFillRect(&row, PKV_HOVER);
-                SetTextColor(g_pkDc, PKV_GOLD);
-                /* COORDS ON THE ACCOUNT ROW. The sampler's source 0 walks the
-                   engine's own player enumeration and names each row with the
-                   account name, so a row whose acct flag is set and whose name
-                   matches is that player's pawn - the join is by the name the
-                   engine itself supplied, not by position in two lists that can
-                   differ in length.
-
-                   Repainted on a timer while this tab is open (see AdmTick), so
-                   the numbers move as they move. */
-                {
-                    int  k2, hit = -1;
-                    for (k2 = 0; k2 < nr; ++k2)
-                        if (rows[k2].acct &&
-                            strcmp(rows[k2].name, g_admNames[q]) == 0) { hit = k2; break; }
-                    if (hit >= 0) {
-                        char hp[24];
-                        if (rows[hit].hp >= 0.0f)
-                            _snprintf(hp, sizeof(hp) - 1, "%4.0f", rows[hit].hp);
-                        else
-                            _snprintf(hp, sizeof(hp) - 1, "   -");
-                        hp[sizeof(hp) - 1] = 0;
-                        _snprintf(line, sizeof(line) - 1,
-                                  "%-16s %6.0f %6.0f %5.0f %4.0fm %s%s%s",
-                                  g_admNames[q],
-                                  rows[hit].wpos[0], rows[hit].wpos[1],
-                                  rows[hit].wpos[2], rows[hit].dist, hp,
-                                  rows[hit].local ? " YOU" : "",
-                                  (g_admHost[0] &&
-                                   _stricmp(g_admNames[q], g_admHost) == 0)
-                                      ? " HOST" : "");
-                    }
-                    else
-                        _snprintf(line, sizeof(line) - 1,
-                                  "%-18s %-27s%s", g_admNames[q],
-                                  "(no pawn yet)",
-                                  (g_admHost[0] &&
-                                   _stricmp(g_admNames[q], g_admHost) == 0)
-                                      ? "  HOST" : "");
-                }
-                line[sizeof(line) - 1] = 0;
-                row.left += 8;
-                DrawTextA(g_pkDc, line, -1, &row,
-                          DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-            }
-            if (!nn) {
-                RECT t = lr; t.left += 10; t.top += 6;
-                SetTextColor(g_pkDc, PKV_SLATE);
-                /* Not "press REFRESH" any more - opening this tab already asked
-                   for the roster and a timer keeps asking. If it is still empty
-                   the honest reading is "no session", not "you missed a step". */
-                DrawTextA(g_pkDc,
-                          "No players in the session yet.", -1, &t,
-                          DT_LEFT | DT_TOP | DT_SINGLELINE);
-            }
-            /* entity rows start below the name block */
-            lr.top += ((int)(nn ? nn : 1) + 1) * PK_ROWH;
-        }
-
-        {   /* Divider + heading, so it is never ambiguous which rows KICK acts
-               on. Without it the two lists ran together as one, and the position
-               rows look enough like names to be clicked at. */
+        {   /* column header, so the numbers are readable without counting */
             RECT h = lr;
-            char hd[120];
             h.bottom = h.top + PK_ROWH;
             h.left  += 8;
             SetTextColor(g_pkDc, PKV_SLATE);
-            _snprintf(hd, sizeof(hd) - 1,
-                      "-- pawns: %d found of %ld scanned%s --------",
-                      nr, (long)g_admEnts, g_admWide ? "  [WIDE]" : "");
-            hd[sizeof(hd) - 1] = 0;
-            DrawTextA(g_pkDc, hd, -1, &h, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            DrawTextA(g_pkDc, "NAME              TEAM        X      Y     Z   DIST   HP",
+                      -1, &h, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
             lr.top += PK_ROWH;
         }
 
-        if (!g_admOn && !g_admLog) {
-            RECT t = lr; t.left += 10;
+        if (!nr) {
+            RECT t = lr; t.left += 10; t.top += 6;
             SetTextColor(g_pkDc, PKV_SLATE);
-            DrawTextA(g_pkDc, "Sampling is off - press TRACK, or 'admin_gui boxes'.",
-                      -1, &t, DT_LEFT | DT_TOP | DT_SINGLELINE);
-        } else if (!nr) {
-            RECT t = lr; t.left += 10;
-            SetTextColor(g_pkDc, PKV_SLATE);
-            DrawTextA(g_pkDc, "Nobody sampled yet - give it a frame.", -1, &t,
-                      DT_LEFT | DT_TOP | DT_SINGLELINE);
+            DrawTextA(g_pkDc,
+                      "No players. The roster comes from the session itself, so "
+                      "this is empty only when nobody is connected.",
+                      -1, &t, DT_LEFT | DT_TOP | DT_WORDBREAK);
         }
 
         for (k = 0; k < nr && lr.top + (k + 1) * PK_ROWH <= lr.bottom; ++k) {
             RECT row;
-            char line[160];
+            char line[200], hp[16], pos[48];
             row.left = lr.left; row.right = lr.right;
             row.top  = lr.top + k * PK_ROWH;
             row.bottom = row.top + PK_ROWH;
-            /* NOT highlighted by g_pkPlSel. That index belongs to the name list
-               above, and painting it here too meant selecting a player lit up an
-               unrelated entity row at the same ordinal - two highlights, one
-               selection, and no way to tell which one KICK would act on. */
-            SetTextColor(g_pkDc, rows[k].local ? PKV_ORCHID : PKV_GOLD);
-            /* WORLD COORDINATES, not just a distance. A distance says how far
-               away somebody is and nothing about where - useless for "is he
-               inside the rock" or "did he cross the map in one second", which
-               is what this list exists to answer. The pawn name is trimmed to
-               its last segment: the archetypes are long, identical for the
-               first thirty characters, and differ only at the end. */
-            {
-                const char* nm = rows[k].name[0] ? rows[k].name : "(unnamed)";
-                const char* dot = strrchr(nm, '.');
-                if (dot && dot[1]) nm = dot + 1;
-                _snprintf(line, sizeof(line) - 1,
-                          "%-22s %7.0f %7.0f %6.0f  %5.0fm %s",
-                          nm, rows[k].wpos[0], rows[k].wpos[1], rows[k].wpos[2],
-                          rows[k].dist, rows[k].local ? "YOU" : "");
+
+            /* Selection outranks hover so the row KICK will act on stays the
+               obvious one while the cursor moves. */
+            if (k == g_pkPlSel)                   PkFillRect(&row, PKV_SEL);
+            else if (k == g_pkHoverRow - 1)       PkFillRect(&row, PKV_HOVER);
+
+            if (rows[k].ent) {
+                _snprintf(pos, sizeof(pos) - 1, "%6.0f %6.0f %5.0f %5.0fm",
+                          rows[k].wpos[0], rows[k].wpos[1], rows[k].wpos[2],
+                          rows[k].dist);
+                if (rows[k].hp >= 0.0f)
+                    _snprintf(hp, sizeof(hp) - 1, "%4.0f", rows[k].hp);
+                else
+                    _snprintf(hp, sizeof(hp) - 1, "   -");
+            } else {
+                /* Connected but no pawn matched: say so rather than print a
+                   stale or zeroed position, which would read as a real place. */
+                _snprintf(pos, sizeof(pos) - 1, "%-25s", "  (not spawned)");
+                _snprintf(hp, sizeof(hp) - 1, "   -");
             }
+            pos[sizeof(pos) - 1] = 0;
+            hp[sizeof(hp) - 1] = 0;
+
+            _snprintf(line, sizeof(line) - 1, "%-17s %-9s %s %s%s%s",
+                      rows[k].name,
+                      rows[k].team[0] ? rows[k].team : "-",
+                      pos, hp,
+                      rows[k].local ? "  YOU" : "",
+                      rows[k].host  ? "  HOST" : "");
             line[sizeof(line) - 1] = 0;
             row.left += 8;
+            SetTextColor(g_pkDc,
+                         rows[k].local ? PKV_ORCHID :
+                         (k == g_pkPlSel ? PKV_GOLD : PKV_TEXT));
             DrawTextA(g_pkDc, line, -1, &row,
                       DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
         }
-        lr.top += nr * PK_ROWH;
-
-        /* ---- WHAT THE FILTER REJECTED, near the camera ---------------------
-           The reason this is on screen and not in the log: the question it
-           answers - "what does a player without our DLL look like in the entity
-           list?" - can only be answered while standing next to one. Nobody is
-           going to alt-tab to a log file mid-match to find out. */
-        if (g_admCandN > 0 && lr.top + 2 * PK_ROWH <= lr.bottom) {
-            RECT h = lr;
-            char hd[120];
-            long c, shown = 0;
-            h.bottom = h.top + PK_ROWH;
-            h.left  += 8;
-            SetTextColor(g_pkDc, PKV_SLATE);
-            _snprintf(hd, sizeof(hd) - 1,
-                      "-- unmatched within %.0fm (%ld) - is one of these a player? --",
-                      ADM_CAND_DIST, (long)g_admCandN);
-            hd[sizeof(hd) - 1] = 0;
-            DrawTextA(g_pkDc, hd, -1, &h, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-            lr.top += PK_ROWH;
-
-            for (c = 0; c < g_admCandN && c < ADM_CAND_MAX; ++c) {
-                RECT row;
-                char line[160];
-                if (lr.top + (shown + 1) * PK_ROWH > lr.bottom) break;
-                row.left = lr.left + 8; row.right = lr.right;
-                row.top  = lr.top + (int)shown * PK_ROWH;
-                row.bottom = row.top + PK_ROWH;
-                SetTextColor(g_pkDc, PKV_SLATE);
-                _snprintf(line, sizeof(line) - 1, "%-26s %-18s %5.0fm",
-                          g_admCand[c].name[0] ? g_admCand[c].name : "(unnamed)",
-                          g_admCand[c].cls, g_admCand[c].dist);
-                line[sizeof(line) - 1] = 0;
-                DrawTextA(g_pkDc, line, -1, &row,
-                          DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-                ++shown;
-            }
-        }
-
         {   /* TWO rows. Top row acts on the SELECTED player, bottom row is the
                tool's own state - grouped that way so a destructive button is
                never adjacent to a harmless toggle. */
@@ -21559,12 +21575,15 @@ static int PkClick(int bx, int by)
                The entity rows below stay display-only on purpose: they carry
                archetypes like PawnPlayerNetwork_Avatar, and kick matches ACCOUNT
                names, so selecting one could only ever produce a refusal. */
-            k = (y - lr.top) / PK_ROWH;
-            if (k >= 0 && k < (int)g_admNameN) {
-                g_pkPlSel = k;
-            } else {
-                g_pkPlSel = -1;                 /* clicked past the roster */
-            }
+            /* MINUS ONE FOR THE COLUMN HEADER, which occupies the first row of
+               the list rect but is not a player. Without it every click landed
+               one row above what it looked like it hit.
+
+               Bounded by g_plRowN - the array the painter draws. It used to be
+               g_admNameN, a different count, so when the roster capture came up
+               empty NOTHING was selectable even though rows were on screen. */
+            k = (y - lr.top) / PK_ROWH - 1;
+            g_pkPlSel = (k >= 0 && k < (int)g_plRowN) ? k : -1;
             InterlockedExchange(&g_pkcDirty, 1);
             return 1;
         }
@@ -21583,10 +21602,10 @@ static int PkClick(int bx, int by)
                        go, or the only way out of a lock-on is the console -
                        which is the thing this panel exists to avoid. */
                     if (g_admWatch >= 0) QueuePush("watch off");
-                    else if (g_pkPlSel >= 0 && g_pkPlSel < (int)g_admNameN) {
+                    else if (g_pkPlSel >= 0 && g_pkPlSel < (int)g_plRowN) {
                         char w[96];
                         _snprintf(w, sizeof(w) - 1, "watch %s",
-                                  g_admNames[g_pkPlSel]);
+                                  g_plRow[g_pkPlSel].name);
                         w[sizeof(w) - 1] = 0;
                         QueuePush(w);
                     } else QueuePush("admin_gui pick");
@@ -21606,8 +21625,8 @@ static int PkClick(int bx, int by)
                    whole test session - the roster was on screen, so "nothing
                    happened" read as "kick is broken" rather than "nothing is
                    selected". QueuePush because printing is main-thread work. */
-                if (g_pkPlSel < 0 || g_pkPlSel >= (int)g_admNameN) {
-                    QueuePush(g_admNameN
+                if (g_pkPlSel < 0 || g_pkPlSel >= (int)g_plRowN) {
+                    QueuePush(g_plRowN
                         ? "admin_gui pick"      /* roster is there, no row chosen */
                         : "admin_gui names");   /* no roster yet - go get one */
                     return 1;
@@ -21618,7 +21637,7 @@ static int PkClick(int bx, int by)
                     static const char* const kAct[5] =
                         { "goto", "bring", "kill", "kick", "kickban" };
                     _snprintf(cmd, sizeof(cmd) - 1, "%s %s",
-                              kAct[k], g_admNames[g_pkPlSel]);
+                              kAct[k], g_plRow[g_pkPlSel].name);
                 }
                 cmd[sizeof(cmd) - 1] = 0;
                 QueuePush(cmd);
