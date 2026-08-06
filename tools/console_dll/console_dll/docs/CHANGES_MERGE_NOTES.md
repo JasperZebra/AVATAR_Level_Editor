@@ -51,6 +51,51 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-05 (e) — resizable panel, entity-scan fix, self-box
+
+| Where | What | Risk | New symbols |
+|---|---|---|---|
+| `PK_W`/`PK_H` definition site | **Rewrote** — constants became macros over `g_pkW`/`g_pkH` | **Medium** — every layout expression follows it | `PK_W_DEF/MIN/MAX`, `PK_H_*`, `PK_GRIP`, `g_pkW`, `g_pkH` |
+| Picker snapshot globals | **Added** | Low | `g_pkSnapW`, `g_pkSnapH`, `g_pkSizing` |
+| `PkEnsureGdi` | **Modified** — DIB and snapshot allocate at MAX | **Medium** | — |
+| `PkPaint` tail | **Modified** — row-strided alpha + publish; grip drawn | **Medium** | — |
+| `DrawOverlayD3D` picker block | **Modified** — sizes from the snapshot, not `PK_W/PK_H` | **Medium** | — |
+| `PkClick` / `PkDrag` | **Added** grip hit-test and resize drag | Medium | — |
+| `AdmCollect` fallback | **Modified** — takes its own `EntSnapshotEx(1)` | Low | — |
+| Admin state / `AdmDrawD3D` / `AdminGui` | **Added** | Low | `g_admListN`, `g_admEnts`, `g_admDrawn`, `g_admSelf` |
+
+**THE SURFACE IS ALLOCATED ONCE AT MAX AND NEVER REALLOCATED.** This is the
+safety argument for the whole resize feature, not an optimisation. Three threads
+touch the picker surface with **no lock**: `PkPaint` writes it on the overlay
+thread, `PkClick`/`PkDrag` resize on the input thread, `DrawOverlayD3D` reads it
+on the render thread. That is survivable only because a torn read of a
+fixed-size buffer is a torn *frame*. Reallocating or freeing it from the input
+thread would turn the same benign race into a use-after-free. Resizing therefore
+changes only how much of the surface is *used*; rows are copied with an explicit
+`PK_W_MAX` stride.
+
+The snapshot publishes its own `g_pkSnapW/H`, and the render thread sizes its
+texture and quad from **those**, never from the live `PK_W/PK_H` the input
+thread can change mid-frame. Dimensions are stored *before* the ready/dirty
+flags, so a new frame is never described by stale dimensions. Same pattern
+`DrawOverlayD3D` already used for the console panel.
+
+**The grip is hit-tested first and painted last**, and those two orders have to
+agree — otherwise it is a target you can see but not press.
+
+**Two real bugs fixed here, both of which produced convincing silence:**
+
+1. `AdmCollect`'s entity fallback scanned `g_entRows`, which is only filled by
+   `EntSnapshot` on demand. In a fresh session `g_entCount` was 0, so it examined
+   nothing and reported "1 player" — indistinguishable from an empty lobby. It
+   now takes its own snapshot, throttled to 3 s because a full metadata snapshot
+   is ~95 ms.
+2. `AdmDrawD3D` skipped `r->local`, so with one player in the session it drew
+   **nothing** and looked broken. The local player is now boxed in green by
+   default (`admin_gui self`) — it is also the only target whose projection you
+   can independently verify, which makes it the calibration check for
+   world→screen and `pickfov`.
+
 ### 2026-08-05 (d) — kick / kickban
 
 | Where | What | Risk | New symbols |

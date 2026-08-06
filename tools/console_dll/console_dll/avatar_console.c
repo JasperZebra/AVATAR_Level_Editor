@@ -13755,6 +13755,18 @@ static volatile long    g_admLog    = 0;   /* append positions to the telemetry 
 static volatile long    g_admEvery  = 2;   /* sample every N frames             */
 static volatile long    g_admSrc    = 0;   /* 1 = player list, 2 = entity scan  */
 static volatile long    g_admSeen   = 0;   /* how many the last sample found    */
+static volatile long    g_admListN  = 0;   /* what the player list itself said  */
+static volatile long    g_admEnts   = 0;   /* entities the fallback examined    */
+static volatile long    g_admDrawn  = 0;   /* boxes the last frame actually drew */
+/* BOX THE LOCAL PLAYER TOO, and default it ON. The first build skipped the
+   local player - reasonable on its face, since you do not need a box on
+   yourself - but with one player in the session that meant the overlay drew
+   NOTHING and looked broken. It also threw away the one target whose position
+   you can independently verify: in third person your own box should sit on your
+   own body, which is the calibration check for the whole world->screen chain
+   (and for `pickfov`, which feeds it). Drawn in a different colour so it is
+   never mistaken for somebody else. */
+static volatile long    g_admSelf   = 1;
 
 /* Lazily, on the main thread, the first time anything arms. Not in DllMain:
    this is state only the admin feature needs, and DllMain already does the
@@ -13908,18 +13920,40 @@ static void AdminGui(void* console, const char* arg)
            (long)g_admEvery);
         return;
     }
+    if (_stricmp(arg, "self") == 0) {
+        InterlockedExchange(&g_admSelf, g_admSelf ? 0 : 1);
+        P_(console, 0, AC "admin_gui: box on the local player %s\n",
+           g_admSelf ? "ON (green) - it should sit on your own body; if it is "
+                       "offset, tune 'pickfov'" : "off");
+        return;
+    }
     if (_stricmp(arg, "list") == 0) { PlayersList(console, 0); return; }
 
     /* bare `admin_gui` - arm everything the panel needs and open it */
     InterlockedExchange(&g_admOn, 1);
     OpenEntPicker(console);
     P_(console, 0, AC "admin_gui: panel open, player boxes ON.\n");
-    P_(console, 0, AC "  admin_gui boxes | track | rate <n> | list | off\n");
+    P_(console, 0, AC "  admin_gui boxes | track | self | rate <n> | list | off\n");
+    P_(console, 0, AC "  boxes drawn last frame: %ld (green = you)\n",
+       (long)g_admDrawn);
     P_(console, 0, AC "  last sample: %ld player(s) from %s\n",
        (long)g_admSeen,
        g_admSrc == 1 ? "the player list" :
        g_admSrc == 2 ? "the entity scan (remote players are NOT in the list)" :
-                       "nothing yet - get into a match");
+                       "nothing yet - wait a frame or two");
+    /* The diagnostic that matters when it reports nobody. Without these two
+       numbers "1 player" is ambiguous between an empty lobby, a player list that
+       does not carry remotes, and a fallback that examined zero entities. */
+    P_(console, 0, AC "  player list said %ld; the entity fallback examined %ld "
+                      "entities.\n", (long)g_admListN, (long)g_admEnts);
+    if (g_admSeen <= 1 && g_admEnts == 0)
+        P_(console, 0, AC "  the entity scan has not run yet - it refreshes every "
+                          "3s while the list is short. Try again in a moment.\n");
+    else if (g_admSeen <= 1)
+        P_(console, 0, AC "  scanned but matched nothing: remote players do not "
+                          "carry a name our filter knows. Run 'ents' and look for "
+                          "the other player's row - that name is what the filter "
+                          "needs.\n");
 }
 
 static int TryModCommand(void* console, const char* line)
@@ -15922,6 +15956,7 @@ static int AdmCollect(AdmRect* out, int cap)
             count = *(unsigned long*)((char*)lst + 8);
             arr   = *(void***)((char*)lst + 4);
             if (count > PL_SANE_MAX) count = PL_SANE_MAX;
+            InterlockedExchange(&g_admListN, (long)count);
             if (count && Readable(arr, count * sizeof(void*))) {
                 for (i = 0; i < count && n < cap; ++i) {
                     void *elem, *inner, *node, *ent;
@@ -15947,9 +15982,34 @@ static int AdmCollect(AdmRect* out, int cap)
        frames; for "who is in the match" that is irrelevant, and `ents` or the
        editor link refresh it. */
     if (n <= 1) {
-        long k, total = g_entCount;
+        long k, total;
         int  added = 0;
+        static DWORD lastSnap = 0;
+        DWORD now = GetTickCount();
+
+        /* REFRESH THE SNAPSHOT OURSELVES. This was the bug in the first build:
+           g_entRows is only filled by EntSnapshot, which runs on demand from
+           `ents` / `list` / the editor link. In a fresh session nothing had
+           called it, so g_entCount was 0, the scan below examined nothing, and
+           the readout said "1 player" - indistinguishable from a genuinely empty
+           lobby. Silence that looks like an answer is the worst failure mode
+           here, so the fallback now takes its own snapshot.
+
+           EVERY 3 SECONDS, NOT EVERY SAMPLE. This file's own profile puts a
+           full metadata snapshot near 95 ms on a 1,251-entity level - it walks
+           the whole entity tree and reads a DuniaString per entity. At the
+           default 2-frame sampling rate that would be a permanent stutter. 3 s
+           is slow for a position readout but this is only the fallback path:
+           positions still come from the entity pointers every sample, and only
+           the MEMBERSHIP list refreshes at this rate. */
+        if (g_entCount == 0 || (DWORD)(now - lastSnap) >= 3000) {
+            lastSnap = now;
+            EntSnapshotEx(1);          /* wantMeta: we need names and class ids */
+        }
+
+        total = g_entCount;
         if (total > ENT_MAX) total = ENT_MAX;
+        InterlockedExchange(&g_admEnts, total);
         for (k = 0; k < total && n < cap; ++k) {
             const EntRow* r = &g_entRows[k];
             if (!r->ent || !AdmLooksLikePlayer(r->name, r->cls)) continue;
@@ -16585,11 +16645,47 @@ static void SnapPublish(int w, int h)
    enlarging that surface to full-screen: the console's geometry, scaling and
    snapshot logic all work, and widening it would have put every one of those at
    risk to gain nothing the second quad does not. */
-#define PK_W 540
-#define PK_H 580
+/* ---- PANEL SIZE: a variable now, not a constant ---------------------------
+   The panel is resizable by its bottom-right grip. PK_W/PK_H keep their names
+   and become macros over the live variables, so the ~20 existing uses - layout
+   maths, the DIB, the texture, the quad - all follow the new size with no edit.
+
+   THE SURFACE IS ALLOCATED ONCE, AT MAX, AND NEVER REALLOCATED. That is the
+   whole safety argument, and it is not a micro-optimisation. Three threads touch
+   this: PkPaint writes the DIB and the snapshot on the OVERLAY thread,
+   PkClick/PkDrag resize on the INPUT thread, DrawOverlayD3D reads the snapshot
+   on the RENDER thread - and there is no lock anywhere, by original design. That
+   is survivable only because a torn read of a fixed-size buffer is a torn frame.
+   Freeing or reallocating that buffer from the input thread while the render
+   thread memcpy'd out of it would turn the same race into a use-after-free.
+
+   So resizing changes only how MUCH of the surface is used. The DIB is
+   PK_W_MAX x PK_H_MAX from the start, rows are copied with an explicit stride,
+   and nothing is ever freed until the DLL unloads.
+
+   The snapshot carries its own dimensions (g_pkSnapW/H) so the render thread
+   sizes its texture and its quad from what was actually published, never from a
+   PK_W the input thread may have changed mid-frame. DrawOverlayD3D already uses
+   exactly this pattern for the console panel (g_snapW/g_snapH). */
+#define PK_W_DEF 540
+#define PK_H_DEF 580
+#define PK_W_MIN 380
+#define PK_H_MIN 300
+#define PK_W_MAX 1100
+#define PK_H_MAX 900
+#define PK_GRIP  20            /* the corner hit zone, in panel pixels */
+
+static int g_pkW = PK_W_DEF, g_pkH = PK_H_DEF;
+#define PK_W g_pkW
+#define PK_H g_pkH
 static unsigned char* g_pkSnap;          /* defined with the picker, below */
 static int            g_pkSnapReady;
 static volatile long  g_pkSnapDirty;
+/* The size the SNAPSHOT was published at. The render thread must size its
+   texture and quad from these, not from PK_W/PK_H, which the input thread can
+   change between the publish and the blit. */
+static volatile long  g_pkSnapW = PK_W_DEF, g_pkSnapH = PK_H_DEF;
+static int            g_pkSizing = 0;   /* the grip has the mouse */
 static int            g_pkX, g_pkY;      /* panel origin, in BACKBUFFER pixels */
 /* Placed over the frame once, then left alone - dragging it somewhere must
    survive closing and reopening the panel. Only latches once a frame size is
@@ -16888,33 +16984,38 @@ static void DrawOverlayD3D(IDirect3DDevice9* dev)
            is the whole reason the picker is now capturable: it is written into
            the game's own back buffer, not into a window of its own. */
         if (g_pickerOpen && g_pkSnapReady && g_pkSnap) {
-            if (!g_pkTex || g_pkTexW != PK_W || g_pkTexH != PK_H) {
+            /* SNAPSHOT dimensions, not PK_W/PK_H - the input thread can resize
+               between the publish and this blit, and sizing the texture from the
+               live value would copy rows the snapshot does not have. */
+            int sw = (int)g_pkSnapW, sh = (int)g_pkSnapH;
+            if (sw < 1 || sw > PK_W_MAX || sh < 1 || sh > PK_H_MAX) { sw = 0; sh = 0; }
+            if (sw && (!g_pkTex || g_pkTexW != sw || g_pkTexH != sh)) {
                 ReleasePickerTexture();
-                if (SUCCEEDED(dev->CreateTexture((UINT)PK_W, (UINT)PK_H, 1, 0,
+                if (SUCCEEDED(dev->CreateTexture((UINT)sw, (UINT)sh, 1, 0,
                                                  D3DFMT_A8R8G8B8,
                                                  D3DPOOL_MANAGED, &g_pkTex, 0))
                     && g_pkTex) {
-                    g_pkTexW = PK_W; g_pkTexH = PK_H;
+                    g_pkTexW = sw; g_pkTexH = sh;
                     InterlockedExchange(&g_pkSnapDirty, 1);
-                    logf_("[pkv ] picker texture %dx%d", PK_W, PK_H);
+                    logf_("[pkv ] picker texture %dx%d", sw, sh);
                 }
             }
-            if (g_pkTex) {
+            if (g_pkTex && sw) {
                 if (InterlockedExchange(&g_pkSnapDirty, 0)) {
                     D3DLOCKED_RECT pr;
                     if (SUCCEEDED(g_pkTex->LockRect(0, &pr, 0, 0))) {
                         int yy;
-                        for (yy = 0; yy < PK_H; ++yy)
+                        for (yy = 0; yy < sh; ++yy)
                             memcpy((char*)pr.pBits + (size_t)yy * pr.Pitch,
-                                   g_pkSnap + (size_t)yy * PK_W * 4,
-                                   (size_t)PK_W * 4);
+                                   g_pkSnap + (size_t)yy * sw * 4,
+                                   (size_t)sw * 4);
                         g_pkTex->UnlockRect(0);
                     }
                 }
                 {
                     struct V pq[4];
                     float x0 = (float)g_pkX - 0.5f, y0 = (float)g_pkY - 0.5f;
-                    float x1 = x0 + (float)PK_W,    y1 = y0 + (float)PK_H;
+                    float x1 = x0 + (float)sw,      y1 = y0 + (float)sh;
                     pq[0].x=x0; pq[0].y=y0; pq[0].z=0; pq[0].rhw=1; pq[0].u=0; pq[0].v=0;
                     pq[1].x=x1; pq[1].y=y0; pq[1].z=0; pq[1].rhw=1; pq[1].u=1; pq[1].v=0;
                     pq[2].x=x0; pq[2].y=y1; pq[2].z=0; pq[2].rhw=1; pq[2].u=0; pq[2].v=1;
@@ -16969,7 +17070,7 @@ static void AdmDrawD3D(IDirect3DDevice9* dev)
 {
     struct LV { float x, y, z, rhw; DWORD c; } v[8];
     AdmRect local[ADM_MAX];
-    int     n, i;
+    int     n, i, drawn = 0;
     DWORD   oldFVF = 0, rsZ, rsZW, rsLight, rsAB, rsCull, rsFog, rsAT, rsSten, rsScis;
     IDirect3DBaseTexture9* oldTex = 0;
     IDirect3DVertexShader9* oldVS = 0;
@@ -17018,8 +17119,11 @@ static void AdmDrawD3D(IDirect3DDevice9* dev)
         float x0, y0, x1, y1;
         int   k;
 
-        if (!r->onScreen || r->local) continue;   /* never box ourselves */
-        col = 0xFF32C8FFu;                        /* warm blue, distinct from HUD */
+        if (!r->onScreen) continue;
+        if (r->local && !g_admSelf) continue;
+        /* green for you, blue for everyone else - see g_admSelf */
+        col = r->local ? 0xFF50E08Cu : 0xFF32C8FFu;
+        ++drawn;
 
         x0 = (float)r->x0; y0 = (float)r->y0;
         x1 = (float)r->x1; y1 = (float)r->y1;
@@ -17032,6 +17136,8 @@ static void AdmDrawD3D(IDirect3DDevice9* dev)
 
         dev->DrawPrimitiveUP(D3DPT_LINELIST, 4, v, sizeof(v[0]));
     }
+
+    InterlockedExchange(&g_admDrawn, drawn);
 
     dev->SetRenderState(D3DRS_SCISSORTESTENABLE, rsScis);
     dev->SetRenderState(D3DRS_STENCILENABLE,     rsSten);
@@ -18796,8 +18902,11 @@ static int PkEnsureGdi(void)
     if (!g_pkDc) { ReleaseDC(0, sdc); return 0; }
     memset(&bi, 0, sizeof(bi));
     bi.bmiHeader.biSize        = sizeof(bi.bmiHeader);
-    bi.bmiHeader.biWidth       = PK_W;
-    bi.bmiHeader.biHeight      = -PK_H;          /* top-down */
+    /* MAX, not the current size - see the PK_W/PK_H header. The panel resizes by
+       using less of this, never by reallocating it, because the buffer is read
+       without a lock from the render thread. */
+    bi.bmiHeader.biWidth       = PK_W_MAX;
+    bi.bmiHeader.biHeight      = -PK_H_MAX;      /* top-down */
     bi.bmiHeader.biPlanes      = 1;
     bi.bmiHeader.biBitCount    = 32;
     bi.bmiHeader.biCompression = BI_RGB;
@@ -18806,8 +18915,10 @@ static int PkEnsureGdi(void)
     if (!g_pkDib) { DeleteDC(g_pkDc); g_pkDc = 0; return 0; }
     g_pkOldB = (HBITMAP)SelectObject(g_pkDc, g_pkDib);
     SetBkMode(g_pkDc, TRANSPARENT);
-    if (!g_pkSnap) g_pkSnap = (unsigned char*)malloc((size_t)PK_W * PK_H * 4);
-    logf_("[pkv ] in-frame picker surface %dx%d", PK_W, PK_H);
+    if (!g_pkSnap)
+        g_pkSnap = (unsigned char*)malloc((size_t)PK_W_MAX * PK_H_MAX * 4);
+    logf_("[pkv ] in-frame picker surface %dx%d (backing %dx%d, resizable)",
+          PK_W, PK_H, PK_W_MAX, PK_H_MAX);
     return g_pkSnap != 0;
 }
 
@@ -19063,14 +19174,52 @@ static void PkPaint(void)
                  g_spawnGround, PKV_ORCHID);
     }
 
-    /* GDI leaves alpha at 0; force the panel opaque so the blit shows it. */
+    /* The resize grip: three stacked diagonal pips in the bottom-right corner,
+       the convention every OS uses, so it needs no label. Drawn LAST so it sits
+       above whatever the active mode put there - it is also hit-tested first, in
+       PkClick, and those two orders have to agree or the grip becomes a target
+       you can see but not press. */
+    {
+        HBRUSH gb = CreateSolidBrush(RGB(0x8A, 0x93, 0x9E));
+        int    i, j;
+        for (i = 0; i < 3; ++i)
+            for (j = 0; j <= i; ++j) {
+                RECT p;
+                p.right  = PK_W - 5 - j * 5;
+                p.bottom = PK_H - 5 - (i - j) * 5;
+                p.left   = p.right - 3;
+                p.top    = p.bottom - 3;
+                FillRect(g_pkDc, &p, gb);
+            }
+        DeleteObject(gb);
+    }
+
+    /* GDI leaves alpha at 0; force the panel opaque so the blit shows it.
+       ROW BY ROW, with the backing stride: the DIB is PK_W_MAX wide regardless
+       of the current panel width, so a flat 0..w*h walk would stripe diagonally
+       across it once the panel is any narrower than the backing. */
     {
         unsigned char* px = (unsigned char*)g_pkBits;
-        int n = PK_W * PK_H, k;
-        for (k = 0; k < n; ++k) px[k * 4 + 3] = 240;
+        int w = PK_W, h = PK_H, xx, yy;
+        for (yy = 0; yy < h; ++yy) {
+            unsigned char* row = px + (size_t)yy * PK_W_MAX * 4;
+            for (xx = 0; xx < w; ++xx) row[xx * 4 + 3] = 240;
+        }
     }
     if (g_pkSnap) {
-        memcpy(g_pkSnap, g_pkBits, (size_t)PK_W * PK_H * 4);
+        int w = PK_W, h = PK_H, yy;
+        /* Pack into the snapshot at the PANEL's stride, so the render thread can
+           upload it with a single per-row copy and no knowledge of the backing
+           surface. */
+        for (yy = 0; yy < h; ++yy)
+            memcpy(g_pkSnap + (size_t)yy * w * 4,
+                   (unsigned char*)g_pkBits + (size_t)yy * PK_W_MAX * 4,
+                   (size_t)w * 4);
+        /* Publish the dimensions BEFORE the ready/dirty flags: the render thread
+           gates on those flags, so setting them last means it can never see a
+           new frame described by stale dimensions. */
+        InterlockedExchange(&g_pkSnapW, w);
+        InterlockedExchange(&g_pkSnapH, h);
         g_pkSnapReady = 1;
         InterlockedExchange(&g_pkSnapDirty, 1);
     }
@@ -19201,6 +19350,13 @@ static int PkClick(int bx, int by)
             return 1;
         }
     }
+    /* THE RESIZE GRIP, before every content test below it. It sits in the
+       bottom-right corner, on top of whatever the current mode drew there, so
+       anything tested first would swallow it. */
+    if (x >= PK_W - PK_GRIP && y >= PK_H - PK_GRIP) {
+        g_pkSizing = 1;
+        return 1;
+    }
     if (y < PK_BTNY) {                       /* the rest of the header drags */
         g_pkDragging = 1; g_pkDragDX = x; g_pkDragDY = y;
         return 1;
@@ -19283,8 +19439,24 @@ static int PkClick(int bx, int by)
    right-hand side of the frame on any upscaled setup. */
 static int PkDrag(int bx, int by, int down)
 {
-    if (down < 0) { g_pkDragging = 0; g_pkBarDrag = 0; return 0; }
+    if (down < 0) { g_pkDragging = 0; g_pkBarDrag = 0; g_pkSizing = 0; return 0; }
     if (!g_pickerOpen) return 0;
+    if (g_pkSizing) {
+        /* The grip tracks the cursor directly: the new size is simply where the
+           mouse is, relative to the panel origin. Clamped to the backing surface
+           because nothing may ever be larger than the buffer allocated once at
+           PK_W_MAX/PK_H_MAX - that clamp is a safety bound, not a preference. */
+        int w = bx - g_pkX, h = by - g_pkY;
+        if (w < PK_W_MIN) w = PK_W_MIN;
+        if (h < PK_H_MIN) h = PK_H_MIN;
+        if (w > PK_W_MAX) w = PK_W_MAX;
+        if (h > PK_H_MAX) h = PK_H_MAX;
+        if (w != g_pkW || h != g_pkH) {
+            g_pkW = w; g_pkH = h;
+            InterlockedExchange(&g_pkcDirty, 1);   /* relayout + repaint */
+        }
+        return 1;
+    }
     if (g_pkBarDrag) {                 /* scrollbar thumb has the mouse */
         int x, y;
         PkHitLocal(bx, by, &x, &y);    /* deliberately unchecked: dragging past
