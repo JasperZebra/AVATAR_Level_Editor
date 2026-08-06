@@ -13856,6 +13856,209 @@ static float            g_admVP[16];
 static int              g_admVpOk   = 0;
 static const char*      g_admVpSrc  = "not sampled yet";
 
+/* ---- capture what the console PRINTS ---------------------------------------
+   net_GetPlayerList answers with the account names kick matches on - measured:
+   it prints "Zebra" and "Jasper", one per line, nothing else. Those are exactly
+   what the panel needs, and the only way to get them is to read the console's
+   own output.
+
+   Everything the console prints funnels through CConsole::Printf, so that is
+   where the tap goes. It is a plain function rather than a vtable slot or an
+   import, so this is the one place in this DLL that needs a real inline detour
+   instead of a pointer swap.
+
+   STILL NOTHING ON DISK. This writes 6 bytes into Dunia's .text in OUR process,
+   copy-on-write, and puts them back on unload - the same technique
+   FirstPersonAimPatch already uses here. Dunia.dll on disk is untouched.
+
+   THE PROLOGUE IS VERIFIED BEFORE ANYTHING IS WRITTEN. 0x100AC0C0 opens with
+   `sub esp, 0x840` = 81 EC 40 08 00 00, six bytes, which a five-byte jmp fits
+   inside. If those bytes are not exactly that, this is not the function we
+   think it is - a different build, a different patch level - and the install
+   refuses rather than corrupting whatever is actually there.
+
+   FORWARDING WITHOUT VARARGS. Printf is cdecl and variadic, and passing a
+   va_list back through to a variadic callee is not portable. We do not have to:
+   the message is already formatted by the time we want it, so the trampoline is
+   called as ("%s", buf). Same output, no vararg gymnastics. */
+#define PRF_PROLOGUE_LEN 6
+static unsigned char    g_prfSave[PRF_PROLOGUE_LEN];
+static unsigned char*   g_prfAt    = 0;
+static void*            g_prfTramp = 0;
+static CRITICAL_SECTION g_capCs;
+static volatile long    g_capCsInit = 0;
+static volatile long    g_capOn     = 0;
+static char             g_capBuf[8192];
+static int              g_capLen    = 0;
+
+typedef void (__cdecl *fnPrintfFwd)(void*, int, const char*, ...);
+
+static void __cdecl hkPrintf(void* console, int flags, const char* fmt, ...)
+{
+    char    buf[1024];
+    va_list ap;
+
+    va_start(ap, fmt);
+    _vsnprintf(buf, sizeof(buf) - 1, fmt, ap);
+    buf[sizeof(buf) - 1] = 0;
+    va_end(ap);
+
+    if (g_capOn && g_capCsInit) {
+        EnterCriticalSection(&g_capCs);
+        {
+            int n = (int)strlen(buf);
+            if (g_capLen + n < (int)sizeof(g_capBuf) - 1) {
+                memcpy(g_capBuf + g_capLen, buf, (size_t)n);
+                g_capLen += n;
+                g_capBuf[g_capLen] = 0;
+            }
+        }
+        LeaveCriticalSection(&g_capCs);
+    }
+    if (g_prfTramp) ((fnPrintfFwd)g_prfTramp)(console, flags, "%s", buf);
+}
+
+static int InstallPrintfHook(void)
+{
+    static const unsigned char kWant[PRF_PROLOGUE_LEN] =
+        { 0x81, 0xEC, 0x40, 0x08, 0x00, 0x00 };      /* sub esp, 0x840 */
+    unsigned char* p = (unsigned char*)FN_PRINTF;
+    unsigned char* t;
+    DWORD old;
+
+    if (g_prfTramp) return 1;
+    if (!Readable(p, PRF_PROLOGUE_LEN)) return 0;
+    if (memcmp(p, kWant, PRF_PROLOGUE_LEN) != 0) {
+        logf_("[cap ] Printf prologue is %02X %02X %02X %02X %02X %02X, not the "
+              "expected sub esp,0x840 - NOT patching",
+              p[0], p[1], p[2], p[3], p[4], p[5]);
+        return 0;
+    }
+    t = (unsigned char*)VirtualAlloc(0, 32, MEM_COMMIT | MEM_RESERVE,
+                                     PAGE_EXECUTE_READWRITE);
+    if (!t) return 0;
+
+    memcpy(g_prfSave, p, PRF_PROLOGUE_LEN);
+    memcpy(t, p, PRF_PROLOGUE_LEN);                  /* trampoline: orig bytes */
+    t[PRF_PROLOGUE_LEN] = 0xE9;                      /* ...then jmp back       */
+    *(long*)(t + PRF_PROLOGUE_LEN + 1) =
+        (long)(p + PRF_PROLOGUE_LEN) - (long)(t + PRF_PROLOGUE_LEN + 5);
+
+    if (!VirtualProtect(p, PRF_PROLOGUE_LEN, PAGE_EXECUTE_READWRITE, &old)) {
+        VirtualFree(t, 0, MEM_RELEASE);
+        return 0;
+    }
+    p[0] = 0xE9;
+    *(long*)(p + 1) = (long)(ULONG_PTR)hkPrintf - (long)(p + 5);
+    p[5] = 0x90;                                     /* keep the 6th byte sane */
+    VirtualProtect(p, PRF_PROLOGUE_LEN, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), p, PRF_PROLOGUE_LEN);
+
+    g_prfAt    = p;
+    g_prfTramp = t;
+    if (!g_capCsInit) {
+        InitializeCriticalSection(&g_capCs);
+        InterlockedExchange(&g_capCsInit, 1);
+    }
+    logf_("[cap ] CConsole::Printf hooked at %p (trampoline %p)", p, t);
+    return 1;
+}
+
+static void RemovePrintfHook(void)
+{
+    DWORD old;
+    if (!g_prfAt || !g_prfTramp) return;
+    InterlockedExchange(&g_capOn, 0);
+    if (Readable(g_prfAt, PRF_PROLOGUE_LEN) &&
+        VirtualProtect(g_prfAt, PRF_PROLOGUE_LEN, PAGE_EXECUTE_READWRITE, &old)) {
+        memcpy(g_prfAt, g_prfSave, PRF_PROLOGUE_LEN);
+        VirtualProtect(g_prfAt, PRF_PROLOGUE_LEN, old, &old);
+        FlushInstructionCache(GetCurrentProcess(), g_prfAt, PRF_PROLOGUE_LEN);
+        Sleep(60);                       /* drain anyone inside the detour */
+        logf_("[cap ] Printf restored");
+    } else {
+        logf_("[cap ] *** could not restore Printf - leaving the hook in place");
+        return;
+    }
+    g_prfAt = 0;
+    /* The trampoline is deliberately NOT freed: a thread can still be executing
+       inside it, and this is 32 bytes for the life of the process. Freeing it to
+       win back nothing is how the Present hook's unload bug happened. */
+    g_prfTramp = 0;
+}
+
+/* Run a console line with the output captured. -> bytes captured. */
+static int CaptureRun(void* console, const char* line, char* out, int cap)
+{
+    int n;
+    if (!g_prfTramp && !InstallPrintfHook()) { if (cap) out[0] = 0; return 0; }
+    EnterCriticalSection(&g_capCs);
+    g_capLen = 0; g_capBuf[0] = 0;
+    LeaveCriticalSection(&g_capCs);
+
+    InterlockedExchange(&g_capOn, 1);
+    RunConsoleLine(console, line);
+    InterlockedExchange(&g_capOn, 0);
+
+    EnterCriticalSection(&g_capCs);
+    n = g_capLen;
+    if (n > cap - 1) n = cap - 1;
+    memcpy(out, g_capBuf, (size_t)n);
+    out[n] = 0;
+    LeaveCriticalSection(&g_capCs);
+    return n;
+}
+
+/* The account names, as the session knows them. */
+#define ADM_NAMES_MAX 16
+static char          g_admNames[ADM_NAMES_MAX][ADM_NLEN];
+static volatile long g_admNameN = 0;
+
+/* Pull names out of net_GetPlayerList's reply.
+
+   MEASURED FORMAT: one bare name per line ("Zebra", "Jasper"). So the parse is
+   "every non-empty line", with the obvious junk rejected - the echoed command
+   itself, and anything carrying punctuation a player name would not. Kept
+   deliberately loose: an over-inclusive list shows a stray row that a human can
+   ignore, while an over-strict one silently drops the person you are trying to
+   kick. */
+static void AdmRefreshNames(void* console)
+{
+    char buf[4096];
+    char* p;
+    long  n = 0;
+
+    if (!CaptureRun(console, "net_GetPlayerList", buf, sizeof(buf))) {
+        InterlockedExchange(&g_admNameN, 0);
+        return;
+    }
+    p = buf;
+    while (*p && n < ADM_NAMES_MAX) {
+        char* e = p;
+        while (*e && *e != '\n' && *e != '\r') ++e;
+        {
+            char save = *e;
+            int  len;
+            *e = 0;
+            while (*p == ' ' || *p == '\t') ++p;
+            len = (int)strlen(p);
+            while (len > 0 && (p[len-1] == ' ' || p[len-1] == '\t')) p[--len] = 0;
+            if (len > 0 && len < ADM_NLEN - 1 &&
+                _stricmp(p, "net_GetPlayerList") != 0 &&
+                !strchr(p, ':') && !strchr(p, '=')) {
+                _snprintf(g_admNames[n], ADM_NLEN - 1, "%s", p);
+                g_admNames[n][ADM_NLEN - 1] = 0;
+                ++n;
+            }
+            *e = save;
+        }
+        p = e;
+        while (*p == '\n' || *p == '\r') ++p;
+    }
+    InterlockedExchange(&g_admNameN, n);
+    logf_("[cap ] net_GetPlayerList -> %ld name(s)", n);
+}
+
 /* ---- ARM AT STARTUP, WITHOUT ANYONE TYPING ANYTHING -----------------------
    Staff running this are not going to open a console and type `admin_gui`, so
    the overlay has to be on when the game reaches the menu.
@@ -14197,6 +14400,61 @@ static void AdminGui(void* console, const char* arg)
             P_(console, 0, AC "  D3D's fixed-function transform is not set by "
                               "this engine, so the entity basis above IS the "
                               "projection - and its rows matter a great deal.\n");
+        return;
+    }
+    /* ---- probe: print the box, not a theory about it ----------------------
+       The camera basis is now MEASURED good - the rows rotate and they are
+       orthonormal - and the projection is the algebraic inverse of CursorRay,
+       which picking validates. If both of those are right and boxes are still
+       wrong, then the thing being projected is wrong: the AABB.
+
+       The specific suspicion is that GetWorldAABB hands back LOCAL-space bounds
+       rather than world ones. Local bounds sit around the origin, and a box
+       drawn around the world origin sweeps across the screen as you turn, which
+       is indistinguishable by eye from "stuck to the camera".
+
+       This prints, per player: the entity position, the AABB it returned, and
+       the pixels that came out. Compare the AABB against the position - if the
+       numbers straddle the position, it is world space and the fault is
+       elsewhere; if they hover around zero, it is local space and that is the
+       bug. */
+    if (_stricmp(arg, "probe") == 0) {
+        AdmRect rows[ADM_MAX];
+        int     nr = 0, k;
+        if (!g_admCsInit) { P_(console, 0, AC "probe: nothing sampled yet.\n"); return; }
+        EnterCriticalSection(&g_admCs);
+        nr = (int)g_admRectN;
+        if (nr > ADM_MAX) nr = ADM_MAX;
+        for (k = 0; k < nr; ++k) rows[k] = g_admRect[k];
+        LeaveCriticalSection(&g_admCs);
+
+        P_(console, 0, AC "probe: %d row(s), projection = %s\n", nr, g_admVpSrc);
+        for (k = 0; k < nr; ++k) {
+            P_(console, 0, AC " [%d] %s%s\n", k, rows[k].name,
+               rows[k].local ? "  <- you" : "");
+            P_(console, 0, AC "     pos  %8.1f %8.1f %8.1f\n",
+               rows[k].wpos[0], rows[k].wpos[1], rows[k].wpos[2]);
+            P_(console, 0, AC "     mn   %8.1f %8.1f %8.1f\n",
+               rows[k].mn[0], rows[k].mn[1], rows[k].mn[2]);
+            P_(console, 0, AC "     mx   %8.1f %8.1f %8.1f\n",
+               rows[k].mx[0], rows[k].mx[1], rows[k].mx[2]);
+            P_(console, 0, AC "     %s\n",
+               (rows[k].mn[0] > rows[k].wpos[0] - 50.0f &&
+                rows[k].mx[0] < rows[k].wpos[0] + 50.0f)
+                 ? "AABB straddles the position -> WORLD space, box input is fine"
+                 : "AABB is NOWHERE NEAR the position -> LOCAL space, THIS is the bug");
+        }
+        return;
+    }
+    if (_stricmp(arg, "names") == 0) {
+        long q;
+        AdmRefreshNames(console);
+        P_(console, 0, AC "admin_gui: %ld account name(s) from the session:\n",
+           (long)g_admNameN);
+        for (q = 0; q < g_admNameN; ++q)
+            P_(console, 0, AC "  [%ld] %s\n", q, g_admNames[q]);
+        if (!g_admNameN)
+            P_(console, 0, AC "  nothing captured - are you in a match?\n");
         return;
     }
     if (_stricmp(arg, "list") == 0) { PlayersList(console, 0); return; }
@@ -16834,6 +17092,7 @@ static void RemoveHook(void)
     RemoveDebugStringHook();
     RemoveMultiInstanceHook();
     RemoveProfileRedirect();
+    RemovePrintfHook();
     RemoveCrashReporter();
     if (g_msgHook) {
         UnhookWindowsHookEx(g_msgHook);
@@ -19625,6 +19884,37 @@ static void PkPaint(void)
             DrawTextA(g_pkDc, "Nobody sampled yet - give it a frame.", -1, &t,
                       DT_LEFT | DT_TOP | DT_SINGLELINE);
         }
+        /* ACCOUNT NAMES FIRST - these are what kick matches on, so they are the
+           actionable rows. The entity rows below are positions, and their names
+           are archetypes that kick cannot use. Keeping both, clearly separated,
+           because they answer different questions: who is in the session, and
+           where the bodies are. */
+        {
+            long nn = g_admNameN, q;
+            for (q = 0; q < nn && q < ADM_NAMES_MAX; ++q) {
+                RECT row;
+                char line[160];
+                row.left = lr.left; row.right = lr.right;
+                row.top  = lr.top + (int)q * PK_ROWH;
+                row.bottom = row.top + PK_ROWH;
+                if (row.bottom > lr.bottom) break;
+                if ((int)q == g_pkPlSel) PkFillRect(&row, PKV_EDGE);
+                SetTextColor(g_pkDc, PKV_GOLD);
+                _snprintf(line, sizeof(line) - 1, "%ld  %s", q, g_admNames[q]);
+                line[sizeof(line) - 1] = 0;
+                row.left += 8;
+                DrawTextA(g_pkDc, line, -1, &row,
+                          DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+            }
+            if (!nn) {
+                RECT t = lr; t.left += 10; t.top += 10;
+                SetTextColor(g_pkDc, PKV_SLATE);
+                DrawTextA(g_pkDc, "No names yet - press REFRESH.", -1, &t,
+                          DT_LEFT | DT_TOP | DT_SINGLELINE);
+            }
+            /* entity rows start below the name block */
+            lr.top += ((int)(nn ? nn : 1) + 1) * PK_ROWH;
+        }
         for (k = 0; k < nr && lr.top + (k + 1) * PK_ROWH <= lr.bottom; ++k) {
             RECT row;
             char line[160];
@@ -19649,7 +19939,7 @@ static void PkPaint(void)
             PkBotRect(1, 4, &b);
             PkButton(&b, "BAN", 0, PKV_DANGER);
             PkBotRect(2, 4, &b);
-            PkButton(&b, "BOXES", g_admOn, PKV_GOLD);
+            PkButton(&b, "REFRESH", 0, PKV_GOLD);
             PkBotRect(3, 4, &b);
             PkButton(&b, "TRACK", g_admLog, PKV_ORCHID);
         }
@@ -19942,12 +20232,15 @@ static int PkClick(int bx, int by)
         for (k = 0; k < 4; ++k) {
             PkBotRect(k, 4, &b);
             if (x >= b.left && x < b.right && y >= b.top && y < b.bottom) {
-                char cmd[64];
-                if (k == 2) { QueuePush("admin_gui boxes"); return 1; }
+                char cmd[96];
+                if (k == 2) { QueuePush("admin_gui names"); return 1; }
                 if (k == 3) { QueuePush("admin_gui track"); return 1; }
-                if (g_pkPlSel < 0) return 1;        /* nothing selected: no-op */
-                _snprintf(cmd, sizeof(cmd) - 1, "%s %d",
-                          (k == 0) ? "kick" : "kickban", g_pkPlSel);
+                if (g_pkPlSel < 0 || g_pkPlSel >= (int)g_admNameN) return 1;
+                /* BY ACCOUNT NAME, from the captured net_GetPlayerList - the
+                   entity rows carry archetypes and kick cannot match those. */
+                _snprintf(cmd, sizeof(cmd) - 1, "%s %s",
+                          (k == 0) ? "kick" : "kickban",
+                          g_admNames[g_pkPlSel]);
                 cmd[sizeof(cmd) - 1] = 0;
                 QueuePush(cmd);
                 return 1;
@@ -21153,6 +21446,7 @@ static DWORD WINAPI Worker(LPVOID unused)
         RemoveDebugStringHook();
         RemoveMultiInstanceHook();
         RemoveProfileRedirect();
+        RemovePrintfHook();
         RemoveCrashReporter();
         InterlockedExchange(&g_csAlive, 0);
         DeleteCriticalSection(&g_cs);
@@ -21170,6 +21464,7 @@ static DWORD WINAPI Worker(LPVOID unused)
         RemoveDebugStringHook();
         RemoveMultiInstanceHook();
         RemoveProfileRedirect();
+        RemovePrintfHook();
         RemoveCrashReporter();
         InterlockedExchange(&g_csAlive, 0);
         DeleteCriticalSection(&g_cs);
