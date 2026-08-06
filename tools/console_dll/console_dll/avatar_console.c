@@ -9020,6 +9020,12 @@ static int CandLive(const PickCand* c)
    kind of bound (`cnt > 64`) for the same reason. */
 #define PL_SANE_MAX 64
 
+/* Defined with the admin overlay, ~6,000 lines down. Declared here because the
+   count == 1 branch below is the whole reason it exists, and telling the user
+   "look for entities instead" without looking is not an answer. */
+static int AdmLooksLikePlayer(const char* name, const char* cls);
+static int StrIStr_(const char* hay, const char* needle);
+
 static void PlayersList(void* console, int raw)
 {
     fnPrintf P_ = (fnPrintf)FN_PRINTF;
@@ -9102,10 +9108,50 @@ static void PlayersList(void* console, int raw)
         }
     }
 
-    if (count == 1)
-        P_(console, 0, AC "  count is 1. In a live match that means remote "
-                          "players are NOT in this list - look for entities with "
-                          "a RemotePlayer component instead.\n");
+    /* MEASURED 2026-08-05 in mp_jeannormand_of_01 with two instances joined:
+       count is 1, and the local pawn is
+           player.MainCharacter.PawnPlayerNetwork_Corp
+       So the list is LOCAL players only and everyone else is an entity. Rather
+       than print that conclusion and stop - which the first version did - go and
+       walk the entity list here, because "look somewhere else" is not a
+       readout. */
+    if (count <= 1) {
+        long k, total;
+        int  hits = 0;
+
+        P_(console, 0, AC "  count is %lu, so remote players are NOT in this "
+                          "list. Scanning entities instead:\n", count);
+        if (g_entCount == 0) EntSnapshotEx(1);
+        total = g_entCount;
+        if (total > ENT_MAX) total = ENT_MAX;
+
+        /* TWO PASSES, and the second is the one that matters when this comes up
+           empty. The narrow filter can only find pawns named the way we expect;
+           if a remote player's pawn is called something else, a filtered list
+           shows nothing and looks exactly like an empty server. So anything
+           containing "player" AT ALL is printed too, marked as unmatched - that
+           is how we learn the real name instead of guessing at it. */
+        for (k = 0; k < total; ++k) {
+            const EntRow* r = &g_entRows[k];
+            int narrow;
+            if (!r->ent) continue;
+            narrow = AdmLooksLikePlayer(r->name, r->cls);
+            if (!narrow && !StrIStr_(r->name, "player") &&
+                           !StrIStr_(r->cls,  "player")) continue;
+            if (narrow) ++hits;
+            P_(console, 0, AC "   e[%ld] %-44s %s (%.0f %.0f %.0f)\n",
+               k, r->name[0] ? r->name : "(unnamed)",
+               narrow ? "MATCH " : "unmatched",
+               r->pos[0], r->pos[1], r->pos[2]);
+        }
+        P_(console, 0, AC "  %d matched the filter, out of %ld entities.\n",
+           hits, total);
+        if (hits <= 1)
+            P_(console, 0, AC "  If another player IS in the match and no row "
+                              "above is theirs, their pawn is not in this "
+                              "client's entity list at all - run 'ents' and "
+                              "search for their account name.\n");
+    }
 }
 
 static void PickSelect(void* console, int i);   /* PickWithDir ends by calling it */
@@ -16686,6 +16732,7 @@ static volatile long  g_pkSnapDirty;
    change between the publish and the blit. */
 static volatile long  g_pkSnapW = PK_W_DEF, g_pkSnapH = PK_H_DEF;
 static int            g_pkSizing = 0;   /* the grip has the mouse */
+static int            g_pkPlSel  = -1;  /* selected row on the PLAYERS tab */
 static int            g_pkX, g_pkY;      /* panel origin, in BACKBUFFER pixels */
 /* Placed over the frame once, then left alone - dragging it somewhere must
    survive closing and reopening the panel. Only latches once a frame size is
@@ -18523,6 +18570,33 @@ static void OverlayPaint(void* console, void* pUI, int panelH)
 /* Height available to the list, given the panel height. */
 #define PK_LBH(ch) ((ch) - PK_LBY - PK_PAD - PK_SPH - 8)
 
+/* ---- TABS -----------------------------------------------------------------
+   The panel is an admin panel now, not just a spawn picker, so the header band
+   carries a tab strip instead of a static title. The tab IS the title, which is
+   why the old "SPAWN"/"ENTITIES" text is gone rather than kept alongside.
+
+   They live inside the existing PK_HEAD band, so nothing below the header moved
+   and every layout constant under it is untouched - the cheapest place to put
+   them and the smallest diff.
+
+   PK_MODE_SPAWN and PK_MODE_ENTS keep their original values, so every existing
+   `g_pickMode == PK_MODE_ENTS` test in the paint and click paths keeps working
+   unchanged. PLAYERS is added on the end. */
+#define PK_NTABS   3
+#define PK_TABW    96
+#define PK_TABY    4
+#define PK_MODE_PLAYERS 2
+
+static const char* const kTabNames[PK_NTABS] = { "SPAWN", "ENTITIES", "PLAYERS" };
+
+static void PkTabRect(int i, RECT* r)
+{
+    r->left   = PK_PAD + i * (PK_TABW + 4);
+    r->right  = r->left + PK_TABW;
+    r->top    = PK_TABY;
+    r->bottom = PK_HEAD - 2;
+}
+
 static const char* const kCatNames[PICK_NBTN] = {
     "All", "Creatures", "NPCs", "Vehicles", "Flora", "Weapons"
 };
@@ -19078,18 +19152,21 @@ static void PkPaint(void)
     {   HBRUSH e = CreateSolidBrush(PKV_EDGE);
         if (e) { FrameRect(g_pkDc, &full, e); DeleteObject(e); } }
 
-    /* header */
-    SelectObject(g_pkDc, g_fontHd ? g_fontHd : GetStockObject(DEFAULT_GUI_FONT));
-    SetTextColor(g_pkDc, PKV_GOLD);
-    r.left = PK_PAD; r.top = 8; r.right = PK_W - PK_PAD; r.bottom = PK_HEAD;
-    DrawTextA(g_pkDc, (g_pickMode == PK_MODE_ENTS) ? "ENTITIES" : "SPAWN", -1, &r,
-              DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    /* header: the tab strip IS the title */
     SelectObject(g_pkDc, g_fontUI ? g_fontUI : GetStockObject(DEFAULT_GUI_FONT));
+    for (i = 0; i < PK_NTABS; ++i) {
+        PkTabRect(i, &r);
+        PkButton(&r, kTabNames[i], i == g_pickMode, PKV_GOLD);
+    }
     SetTextColor(g_pkDc, PKV_SLATE);
-    _snprintf(buf, sizeof(buf) - 1, "%ld of %ld %s", g_pickShown, g_pickTotal,
-              (g_pickMode == PK_MODE_ENTS) ? "in the world" : "spawnable");
+    r.left = PK_PAD; r.top = PK_TABY; r.bottom = PK_HEAD - 2;
+    r.right = PK_W - PK_PAD - PK_XBTN - 8;   /* leave room for the close box */
+    if (g_pickMode == PK_MODE_PLAYERS)
+        _snprintf(buf, sizeof(buf) - 1, "%ld in session", (long)g_admRectN);
+    else
+        _snprintf(buf, sizeof(buf) - 1, "%ld of %ld %s", g_pickShown, g_pickTotal,
+                  (g_pickMode == PK_MODE_ENTS) ? "in the world" : "spawnable");
     buf[sizeof(buf) - 1] = 0;
-    r.right -= PK_XBTN + 8;              /* leave room for the close box */
     DrawTextA(g_pkDc, buf, -1, &r, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
     {   /* the X itself: two strokes, so it needs no font or glyph */
         RECT xb;
@@ -19107,6 +19184,75 @@ static void PkPaint(void)
             DeleteObject(pen);
         }
     }
+
+    if (g_pickMode == PK_MODE_PLAYERS) {
+        /* ---- PLAYERS TAB ---------------------------------------------------
+           Drawn from the admin sampler's published rows, not from the entity
+           list machinery above - it is a different data source with a different
+           lifetime, and reusing the row cache would have meant one of them
+           clobbering the other every refresh.
+
+           The list is whatever AdmTick last published, so it is live only while
+           the overlay or tracking is armed. It says so rather than showing an
+           empty box that looks like an empty server. */
+        AdmRect rows[ADM_MAX];
+        int     nr = 0, k;
+        RECT    lr;
+
+        if (g_admCsInit) {
+            EnterCriticalSection(&g_admCs);
+            nr = (int)g_admRectN;
+            if (nr > ADM_MAX) nr = ADM_MAX;
+            for (k = 0; k < nr; ++k) rows[k] = g_admRect[k];
+            LeaveCriticalSection(&g_admCs);
+        }
+
+        PkListRect(&lr);
+        PkFillRect(&lr, PKV_FIELD);
+        SelectObject(g_pkDc, g_fontUI ? g_fontUI : GetStockObject(DEFAULT_GUI_FONT));
+
+        if (!g_admOn && !g_admLog) {
+            RECT t = lr; t.left += 10; t.top += 10;
+            SetTextColor(g_pkDc, PKV_SLATE);
+            DrawTextA(g_pkDc, "Sampling is off - press BOXES or TRACK below.",
+                      -1, &t, DT_LEFT | DT_TOP | DT_SINGLELINE);
+        } else if (!nr) {
+            RECT t = lr; t.left += 10; t.top += 10;
+            SetTextColor(g_pkDc, PKV_SLATE);
+            DrawTextA(g_pkDc, "Nobody sampled yet - give it a frame.", -1, &t,
+                      DT_LEFT | DT_TOP | DT_SINGLELINE);
+        }
+        for (k = 0; k < nr && lr.top + (k + 1) * PK_ROWH <= lr.bottom; ++k) {
+            RECT row;
+            char line[160];
+            row.left = lr.left; row.right = lr.right;
+            row.top  = lr.top + k * PK_ROWH;
+            row.bottom = row.top + PK_ROWH;
+            if (k == g_pkPlSel) PkFillRect(&row, PKV_EDGE);
+            SetTextColor(g_pkDc, rows[k].local ? PKV_ORCHID : PKV_GOLD);
+            _snprintf(line, sizeof(line) - 1, "%d  %-22s %6.0fm  %s",
+                      k, rows[k].name[0] ? rows[k].name : "(unnamed)",
+                      rows[k].dist,
+                      rows[k].local ? "you" :
+                      (rows[k].onScreen ? "on screen" : "off screen"));
+            line[sizeof(line) - 1] = 0;
+            row.left += 8;
+            DrawTextA(g_pkDc, line, -1, &row,
+                      DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        }
+
+        {   /* four actions along the bottom */
+            RECT b;
+            PkBotRect(0, 4, &b);
+            PkButton(&b, "KICK", 0, PKV_DANGER);
+            PkBotRect(1, 4, &b);
+            PkButton(&b, "BAN", 0, PKV_DANGER);
+            PkBotRect(2, 4, &b);
+            PkButton(&b, "BOXES", g_admOn, PKV_GOLD);
+            PkBotRect(3, 4, &b);
+            PkButton(&b, "TRACK", g_admLog, PKV_ORCHID);
+        }
+    } else {
 
     for (i = 0; i < PICK_NBTN; ++i) {
         PkCatRect(i, &r);
@@ -19173,6 +19319,8 @@ static void PkPaint(void)
         PkButton(&r, g_spawnGround ? "ON THE FLOOR" : "AT THE CAMERA",
                  g_spawnGround, PKV_ORCHID);
     }
+
+    }   /* end of the non-PLAYERS body */
 
     /* The resize grip: three stacked diagonal pips in the bottom-right corner,
        the convention every OS uses, so it needs no label. Drawn LAST so it sits
@@ -19356,6 +19504,58 @@ static int PkClick(int bx, int by)
     if (x >= PK_W - PK_GRIP && y >= PK_H - PK_GRIP) {
         g_pkSizing = 1;
         return 1;
+    }
+    {   /* the tab strip, before the header's drag region - it lives inside it */
+        for (i = 0; i < PK_NTABS; ++i) {
+            PkTabRect(i, &r);
+            if (x >= r.left && x < r.right && y >= r.top && y < r.bottom) {
+                if (g_pickMode != i) {
+                    g_pickMode = i;
+                    g_pkPlSel  = -1;
+                    /* The two original tabs own real state - the row cache and
+                       the category - so switching INTO them has to go back
+                       through the functions that populate it. PLAYERS has no
+                       such cache; it reads the sampler every paint. */
+                    if (i == PK_MODE_ENTS)       QueuePush("ents");
+                    else if (i == PK_MODE_SPAWN) QueuePush("spawn_list");
+                    InterlockedExchange(&g_pkcDirty, 1);
+                }
+                return 1;
+            }
+        }
+    }
+    if (g_pickMode == PK_MODE_PLAYERS) {
+        RECT lr, b;
+        int  k;
+        PkListRect(&lr);
+        if (x >= lr.left && x < lr.right && y >= lr.top && y < lr.bottom) {
+            k = (y - lr.top) / PK_ROWH;
+            if (k >= 0 && k < (int)g_admRectN) g_pkPlSel = k;
+            InterlockedExchange(&g_pkcDirty, 1);
+            return 1;
+        }
+        /* The buttons queue a console line rather than acting here: this is the
+           INPUT thread, and kick runs the engine's own ExecuteLine, which is
+           main-thread-only. QueuePush is the bridge the rest of the panel
+           already uses for exactly this. */
+        for (k = 0; k < 4; ++k) {
+            PkBotRect(k, 4, &b);
+            if (x >= b.left && x < b.right && y >= b.top && y < b.bottom) {
+                char cmd[64];
+                if (k == 2) { QueuePush("admin_gui boxes"); return 1; }
+                if (k == 3) { QueuePush("admin_gui track"); return 1; }
+                if (g_pkPlSel < 0) return 1;        /* nothing selected: no-op */
+                _snprintf(cmd, sizeof(cmd) - 1, "%s %d",
+                          (k == 0) ? "kick" : "kickban", g_pkPlSel);
+                cmd[sizeof(cmd) - 1] = 0;
+                QueuePush(cmd);
+                return 1;
+            }
+        }
+        if (y < PK_BTNY) {                   /* header still drags */
+            g_pkDragging = 1; g_pkDragDX = x; g_pkDragDY = y;
+        }
+        return 1;                            /* swallow the rest of this tab */
     }
     if (y < PK_BTNY) {                       /* the rest of the header drags */
         g_pkDragging = 1; g_pkDragDX = x; g_pkDragDY = y;
