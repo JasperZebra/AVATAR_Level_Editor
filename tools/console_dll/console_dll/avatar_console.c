@@ -9150,9 +9150,20 @@ static void PlayersList(void* console, int raw)
         if (hits <= 1)
             P_(console, 0, AC "  If another player IS in the match and no row "
                               "above is theirs, their pawn is not in this "
-                              "client's entity list at all - run 'ents' and "
-                              "search for their account name.\n");
+                              "client's entity list at all.\n");
     }
+
+    /* THE ENGINE'S OWN ANSWER, printed straight into the console.
+       Entity names are archetypes (player.MainCharacter.PawnPlayerNetwork_*) and
+       the kick service matches on ACCOUNT names, so the two lists are not
+       interchangeable - sending an archetype got "Player not found." from
+       CKickBanService, which is the service working and failing a lookup.
+       net_GetPlayerList prints the names kick actually wants. We cannot read its
+       output back (nothing captures CConsole::Printf), but it lands on screen,
+       which is all anyone needs to type the next command. */
+    P_(console, 0, AC "  -- net_GetPlayerList (the engine's own list; THESE are "
+                      "the names 'kick' wants) --\n");
+    RunConsoleLine(console, "net_GetPlayerList");
 }
 
 static void PickSelect(void* console, int i);   /* PickWithDir ends by calling it */
@@ -14005,6 +14016,21 @@ static void AdminKick(void* console, const char* arg, int ban)
         }
         P_(console, 0, AC "%s: index %d resolves to \"%s\"\n",
            ban ? "kickban" : "kick", (int)strtol(arg, 0, 10), name);
+        /* AN ENTITY ARCHETYPE IS NOT A PLAYER NAME, and sending one produced
+           "Player not found." from CKickBanService - which is the service
+           WORKING and failing a lookup, not the command failing to arrive.
+           The overlay rows come from the entity system, so their names look
+           like `player.MainCharacter.PawnPlayerNetwork_Avatar`; the kick
+           service matches on the ACCOUNT name, the one the kill feed prints.
+           Refuse rather than send a request we know cannot match. */
+        if (strchr(name, '.') || StrIStr_(name, "pawnplayer")) {
+            P_(console, 0, AC "  that is an ENTITY name, not an account name - "
+                              "the kick service matches on the account (the name "
+                              "the kill feed shows).\n");
+            P_(console, 0, AC "  run 'net_GetPlayerList' for the real names, then "
+                              "'%s <name>'.\n", ban ? "kickban" : "kick");
+            return;
+        }
     } else {
         _snprintf(name, sizeof(name) - 1, "%s", arg);
         name[sizeof(name) - 1] = 0;
