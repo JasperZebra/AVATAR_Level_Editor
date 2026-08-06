@@ -15,7 +15,7 @@ rather than evidence, it says so.
 >
 > | Claim as written | State on 2026-08-04 | Where |
 > |---|---|---|
-> | "68 top-level console commands" | **77 dispatch arms** (76 completable — `check_cmds.py` discards `?` and adds `warp`). `players` added 2026-08-05. | §1.1 |
+> | "68 top-level console commands" | **78 dispatch arms** (77 completable — `check_cmds.py` discards `?` and adds `warp`). `players` and `admin_gui` added 2026-08-05. | §1.1 |
 > | "8 editor-link verbs" | **11** — `bones`, `addr` and `cvar` were added after this was written | §1.2 |
 > | "16,263 lines" (in `CONSOLE_INPUT_BUG.md`) | **19,615 lines** | — |
 > | **"the shipped `avatar_console.dll` is STALE"** | **FALSE now.** The DLL links at 2026-08-04 14:43 UTC against a source last touched 07:42 local — the binary is current. `check_cmds.py` passes (75/75), `dist\avatar_console.dll` and `dist\dinput8.dll` are byte-identical (md5 `a44d4d35e81c01937a6e27c8b030c442`), machine `0x014C` (x86), image base `0x2A000000`. | §9.3 |
@@ -35,7 +35,7 @@ rather than evidence, it says so.
 
 ## 1. Command inventory
 
-### 1.1 Top-level console commands (77 dispatch arms — was 68 when written)
+### 1.1 Top-level console commands (78 dispatch arms — was 68 when written)
 
 Order is dispatch order in `TryModCommand`. `E` = consumed by the editor,
 `D` = described in `DevAccess/*.md`, `K` = also reachable from a hotkey.

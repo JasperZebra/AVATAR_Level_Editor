@@ -51,6 +51,36 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-05 (c) — admin overlay: player boxes + movement tracking
+
+| Where | What | Risk | New symbols |
+|---|---|---|---|
+| Admin state block, anchor `/* ---- ADMIN OVERLAY state`, just above `TryModCommand` | **Added** | **None** — new block between untouched functions | `ADM_MAX`, `ADM_NLEN`, `ADM_NEAR`, `ADM_LOG_NAME`, `AdmRect`, `g_admRect`, `g_admRectN`, `g_admCs`, `g_admCsInit`, `g_admOn`, `g_admLog`, `g_admEvery`, `g_admSrc`, `g_admSeen`, `AdmEnsureCs()`, `AdminGui()` |
+| Sampling block, anchor `/* ---- ADMIN OVERLAY: who is in the session`, just above `hkUpdateUI` | **Added** | **None** | `AdmView`, `AdmProject()`, `AdmBoxFor()`, `StrIStr_()`, `AdmLooksLikePlayer()`, `AdmAlreadyHave()`, `AdmLogRow()`, `AdmCollect()`, `AdmTick()` |
+| Draw block, anchor `/* ---- ADMIN OVERLAY: the drawing half`, just above `hkRDPresent` | **Added** | **None** | `AdmDrawD3D()` |
+| `hkUpdateUI`, after `InterlockedIncrement(&g_frames)` | **Added** 1 call (`AdmTick()`) | **Medium** — hot path both authors edit | — |
+| `hkRDPresent` | **Added** a second `__try` block after the existing one | **Medium** — same reason | — |
+| `kOurCmds[]`, dispatch, `ModHelp` | **Modified** / **Added** | Medium / Low | — |
+
+**Why the state is split from the code that uses it:** `TryModCommand` is at
+~13727 and the sampling code is ~2,000 lines later, so the dispatcher cannot see
+state declared next to its own functions. The alternative was a forward
+declaration per symbol. If you move either block, keep the state above
+`TryModCommand`.
+
+**The threading split is not optional.** `AdmTick` runs on the **main thread**
+from the per-frame detour because it calls `GetWorldAABB` — an engine call, and
+this file's oldest rule is that those are main-thread-only. It publishes
+finished *screen rectangles* under `g_admCs`; `AdmDrawD3D` runs on the **render
+thread** and reads only those. No engine pointer crosses the boundary. Same
+split `DrawOverlayD3D` already uses.
+
+**`AdmDrawD3D` is deliberately NOT behind the `g_ourPanel` test** in
+`hkRDPresent` — the boxes must show while the console panel is closed, so it
+needs its own condition and its own `__try`.
+
+Counts after this change: **77 dispatched, 77 in `kOurCmds[]`**.
+
 ### 2026-08-05 (b) — `players` command, MP admin work
 
 | Where | What | Risk | New symbols |

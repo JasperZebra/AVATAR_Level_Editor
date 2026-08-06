@@ -1712,6 +1712,7 @@ static void ModHelp(void* c)
     P_(c, 0, AC "--- diagnostics (all read-only) ---\n");
     P_(c, 0, AC "playerinfo     is the pawn we control alive? + can respawn run?\n");
     P_(c, 0, AC "players [raw]  EVERY entry in the player list, not just ours\n");
+    P_(c, 0, AC "admin_gui      admin panel + player boxes (boxes|track|rate|list|off)\n");
     P_(c, 0, AC "actmap         what action maps are pushed on the player?\n");
     P_(c, 0, AC "pick           select what the CROSSHAIR points at\n");
     P_(c, 0, AC "               (console open: just CLICK the thing instead)\n");
@@ -13724,6 +13725,105 @@ static void SpeedInfo(void* console)
 }
 
 
+/* ---- ADMIN OVERLAY state --------------------------------------------------
+   Declared HERE, well above the sampling and drawing code that uses it, because
+   the command dispatcher below is earlier in the file than either. Keeping the
+   state and the functions together would have meant a forward declaration for
+   every one of them; this is one block instead. */
+#define ADM_MAX   32
+#define ADM_NLEN  48
+#define ADM_NEAR  0.15f
+#define ADM_LOG_NAME "avatar_admin_track.csv"
+
+typedef struct {
+    int   x0, y0, x1, y1;
+    float dist;
+    float wpos[3];              /* kept so telemetry logs WORLD space, not pixels */
+    int   local;
+    int   onScreen;
+    char  name[ADM_NLEN];
+} AdmRect;
+
+static AdmRect          g_admRect[ADM_MAX];
+static volatile long    g_admRectN  = 0;
+static CRITICAL_SECTION g_admCs;
+static volatile long    g_admCsInit = 0;
+static volatile long    g_admOn     = 0;   /* draw boxes                        */
+static volatile long    g_admLog    = 0;   /* append positions to the telemetry */
+static volatile long    g_admEvery  = 2;   /* sample every N frames             */
+static volatile long    g_admSrc    = 0;   /* 1 = player list, 2 = entity scan  */
+static volatile long    g_admSeen   = 0;   /* how many the last sample found    */
+
+/* Lazily, on the main thread, the first time anything arms. Not in DllMain:
+   this is state only the admin feature needs, and DllMain already does the
+   minimum it can get away with under the loader lock. */
+static void AdmEnsureCs(void)
+{
+    if (g_admCsInit) return;
+    InitializeCriticalSection(&g_admCs);
+    InterlockedExchange(&g_admCsInit, 1);
+}
+
+/* ---- admin_gui: the one command that turns the whole thing on -------------
+   Sub-commands rather than a wall of separate command names, so there is one
+   thing to remember and one place the state is reported.
+
+   `admin_gui` on its own arms the overlay AND opens the picker panel, because
+   that is what "bring up the admin UI" should mean. Everything else is a
+   modifier on that. */
+static void AdminGui(void* console, const char* arg)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+
+    while (*arg == ' ' || *arg == '\t') ++arg;
+    AdmEnsureCs();
+
+    if (_stricmp(arg, "off") == 0) {
+        InterlockedExchange(&g_admOn, 0);
+        InterlockedExchange(&g_admLog, 0);
+        P_(console, 0, AC "admin_gui: overlay and tracking OFF.\n");
+        return;
+    }
+    if (_stricmp(arg, "boxes") == 0) {
+        InterlockedExchange(&g_admOn, g_admOn ? 0 : 1);
+        P_(console, 0, AC "admin_gui: player boxes %s\n",
+           g_admOn ? "ON" : "off");
+        return;
+    }
+    if (_stricmp(arg, "track") == 0) {
+        InterlockedExchange(&g_admLog, g_admLog ? 0 : 1);
+        P_(console, 0, AC "admin_gui: movement tracking %s%s%s\n",
+           g_admLog ? "ON - writing " : "off",
+           g_admLog ? ADM_LOG_NAME : "",
+           g_admLog ? " next to the DLL" : "");
+        if (g_admLog)
+            P_(console, 0, AC "  one CSV row per player per sample: tick, frame, "
+                              "name, x, y, z. Analyse it AFTER the match - "
+                              "impossible speed, teleports, positions inside "
+                              "geometry.\n");
+        return;
+    }
+    if (_strnicmp(arg, "rate", 4) == 0) {
+        long v = strtol(arg + 4, 0, 10);
+        if (v >= 1 && v <= 60) InterlockedExchange(&g_admEvery, v);
+        P_(console, 0, AC "admin_gui: sampling every %ld frame(s)\n",
+           (long)g_admEvery);
+        return;
+    }
+    if (_stricmp(arg, "list") == 0) { PlayersList(console, 0); return; }
+
+    /* bare `admin_gui` - arm everything the panel needs and open it */
+    InterlockedExchange(&g_admOn, 1);
+    OpenEntPicker(console);
+    P_(console, 0, AC "admin_gui: panel open, player boxes ON.\n");
+    P_(console, 0, AC "  admin_gui boxes | track | rate <n> | list | off\n");
+    P_(console, 0, AC "  last sample: %ld player(s) from %s\n",
+       (long)g_admSeen,
+       g_admSrc == 1 ? "the player list" :
+       g_admSrc == 2 ? "the entity scan (remote players are NOT in the list)" :
+                       "nothing yet - get into a match");
+}
+
 static int TryModCommand(void* console, const char* line)
 {
     /* Trim before dispatching. Half these commands match EXACTLY and half match
@@ -14199,6 +14299,11 @@ static int TryModCommand(void* console, const char* line)
     }
     if (_stricmp(p, "playerinfo") == 0){ PlayerInfo(console);
                                          RespawnReadiness(console); return 1; }
+    if (_strnicmp(p, "admin_gui", 9) == 0 &&
+        (p[9] == ' ' || p[9] == '\t' || !p[9])) {
+        AdminGui(console, p + 9);
+        return 1;
+    }
     /* `players` walks the WHOLE list; `playerinfo` above reports only arr[0]. */
     if (_strnicmp(p, "players", 7) == 0 && (p[7] == ' ' || p[7] == '\t' || !p[7])) {
         const char* q = p + 7;
@@ -15504,6 +15609,280 @@ static void RemoveCrashReporter(void)
 /* ======================================================== */
 
 /* ---- the detour: main thread, once per frame, ECX = g_console --------------- */
+/* ---- ADMIN OVERLAY: who is in the session, and where ----------------------
+   Sampling half. Runs on the MAIN THREAD from the per-frame detour, because it
+   calls GetWorldAABB - an engine call, and this file's oldest rule is that those
+   are main-thread-only. It publishes a small array of finished SCREEN rectangles
+   under a lock; the render thread draws those and touches no engine state at
+   all. That is the same split DrawOverlayD3D already uses for the console panel,
+   and it is the only shape that is safe here.
+
+   WHERE THE PLAYERS COME FROM. Two sources, tried in order, because which one is
+   correct is a live question `players` exists to answer:
+
+     1. the player list at PLAYERLIST_PTR, walked in full
+     2. if that yields at most the local player, the entity snapshot, filtered on
+        class/name - remote players are then entities carrying a RemotePlayer
+        component (PlazaPawnRemotePlayerComponent / PlazaShallowRemotePlayer)
+
+   Writing both up front means nothing is blocked on the measurement, and the
+   readout says which source answered so the run itself settles it.
+
+   THE PROJECTION IS NOT GUESSED. CursorRay already builds a ray from the camera
+   basis and its convention is validated in the field (a click at screen centre
+   must match the crosshair, see `pickfov`). This is literally its inverse, on the
+   same matrix rows and the same FOV, so the two cannot drift apart:
+
+     CursorRay:  dir = fwd + right*(ndcx*tx) + up*(ndcy*ty)
+     here:       ndcx = dot(v,right)/dot(v,fwd)/tx,  ndcy = dot(v,up)/dot(v,fwd)/ty
+
+   A point with dot(v,fwd) <= near is behind the camera and is dropped - without
+   that test it would project mirrored onto the screen, which is the classic
+   "boxes appear behind you" bug. */
+/* The camera basis for one sample, resolved once and passed down rather than
+   re-read per player. */
+typedef struct {
+    const float *right, *fwd, *up, *cpos;
+    float tx, ty;
+    int   cw, ch;
+} AdmView;
+
+/* World point -> screen pixel. 0 when the point is at or behind the near plane;
+   see the header for why that test is not optional. */
+static int AdmProject(const AdmView* v, const float* wp, float* sx, float* sy,
+                      float* dist)
+{
+    float d[3], cx, cy, cz, ndcx, ndcy;
+    d[0] = wp[0] - v->cpos[0];
+    d[1] = wp[1] - v->cpos[1];
+    d[2] = wp[2] - v->cpos[2];
+    cz = d[0]*v->fwd[0]   + d[1]*v->fwd[1]   + d[2]*v->fwd[2];
+    if (cz <= ADM_NEAR) return 0;
+    cx = d[0]*v->right[0] + d[1]*v->right[1] + d[2]*v->right[2];
+    cy = d[0]*v->up[0]    + d[1]*v->up[1]    + d[2]*v->up[2];
+    ndcx = (cx / cz) / v->tx;
+    ndcy = (cy / cz) / v->ty;
+    *sx = (ndcx + 1.0f) * 0.5f * (float)v->cw;
+    *sy = (1.0f - ndcy) * 0.5f * (float)v->ch;
+    if (dist) *dist = cz;
+    return 1;
+}
+
+/* Screen-space bounds of an entity's world AABB.
+
+   All EIGHT corners are projected and the 2D extents taken. Projecting only the
+   min and max corners is the tempting shortcut and it is wrong - perspective is
+   not affine, so the screen extent of a box is not the projection of its extent,
+   and a box seen from an angle would be clipped short.
+
+   A corner behind the camera makes the whole box unreliable, so the box is kept
+   (the player is still tracked, and telemetry still wants the position) but
+   flagged off-screen rather than drawn at a mirrored position. */
+static int AdmBoxFor(void* ent, const AdmView* v, int local, const char* name,
+                     AdmRect* out)
+{
+    float mn[3], mx[3];
+    float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f, best = 1e9f;
+    const float* p;
+    int   i, ok = 1;
+
+    if (!Readable(ent, OFF_ENT_POS + 12)) return 0;
+    p = (const float*)((char*)ent + OFF_ENT_POS);
+
+    memset(out, 0, sizeof(*out));
+    out->local   = local;
+    out->wpos[0] = p[0]; out->wpos[1] = p[1]; out->wpos[2] = p[2];
+    _snprintf(out->name, ADM_NLEN - 1, "%s", name ? name : "?");
+    out->name[ADM_NLEN - 1] = 0;
+
+    if (!Readable((const void*)FN_WORLD_AABB, 8)) return 0;
+    __try { ((fnWorldAABB)FN_WORLD_AABB)(ent, mn, mx); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+
+    for (i = 0; i < 8; ++i) {
+        float c[3], sx, sy, dz;
+        c[0] = (i & 1) ? mx[0] : mn[0];
+        c[1] = (i & 2) ? mx[1] : mn[1];
+        c[2] = (i & 4) ? mx[2] : mn[2];
+        if (!AdmProject(v, c, &sx, &sy, &dz)) { ok = 0; break; }
+        if (sx < x0) x0 = sx;
+        if (sy < y0) y0 = sy;
+        if (sx > x1) x1 = sx;
+        if (sy > y1) y1 = sy;
+        if (dz < best) best = dz;
+    }
+
+    out->dist     = ok ? best : 0.0f;
+    out->onScreen = ok && x1 > 0 && y1 > 0 &&
+                    x0 < (float)v->cw && y0 < (float)v->ch;
+    out->x0 = (int)x0; out->y0 = (int)y0;
+    out->x1 = (int)x1; out->y1 = (int)y1;
+    return 1;
+}
+
+/* Case-insensitive substring. The CRT has no portable one and MSVC's _mbsstr is
+   locale-dependent; both inputs here are short ASCII engine identifiers. */
+static int StrIStr_(const char* hay, const char* needle)
+{
+    size_t nl;
+    if (!hay || !needle || !*needle) return 0;
+    nl = strlen(needle);
+    for (; *hay; ++hay)
+        if (_strnicmp(hay, needle, nl) == 0) return 1;
+    return 0;
+}
+
+/* The count == 1 fallback's filter. Deliberately broad and deliberately
+   REPORTED rather than silent: if this over-matches, the readout shows props
+   labelled as players and the filter gets tightened against real names. Guessing
+   quietly is how you end up with an overlay nobody trusts. */
+static int AdmLooksLikePlayer(const char* name, const char* cls)
+{
+    const char* s[2];
+    int i;
+    s[0] = name; s[1] = cls;
+    for (i = 0; i < 2; ++i) {
+        if (!s[i] || !s[i][0]) continue;
+        if (StrIStr_(s[i], "remoteplayer")) return 1;
+        if (StrIStr_(s[i], "pawnplayer"))   return 1;
+        if (StrIStr_(s[i], "playerpawn"))   return 1;
+    }
+    return 0;
+}
+
+static int AdmAlreadyHave(const AdmRect* out, int n, const float* wp)
+{
+    int i;
+    for (i = 0; i < n; ++i)
+        if (out[i].wpos[0] == wp[0] && out[i].wpos[1] == wp[1] &&
+            out[i].wpos[2] == wp[2]) return 1;
+    return 0;
+}
+
+/* One telemetry row per player per sample. CSV because the whole point is to
+   look at it AFTERWARDS - impossible speed, teleports, positions inside
+   geometry - and that is a spreadsheet or a script, not a live readout.
+   Opened and closed per write: this is a few rows every other frame, not a hot
+   path, and a handle held across a crash loses the tail that matters most. */
+static void AdmLogRow(long frame, const char* name, const float* p)
+{
+    char  path[MAX_PATH];
+    FILE* f;
+    _snprintf(path, sizeof(path) - 1, "%s\\%s", g_dir, ADM_LOG_NAME);
+    path[sizeof(path) - 1] = 0;
+    f = fopen(path, "a");
+    if (!f) return;
+    fprintf(f, "%lu,%ld,\"%s\",%.3f,%.3f,%.3f\n",
+            (unsigned long)GetTickCount(), frame, name ? name : "?",
+            p[0], p[1], p[2]);
+    fclose(f);
+}
+
+/* -> number of players written. Which source answered is reported through
+   g_admSrc, so a run settles the count question rather than hiding it. */
+static int AdmCollect(AdmRect* out, int cap)
+{
+    AdmView v;
+    void*   cam;
+    const float* m;
+    RECT    rc;
+    int     n = 0;
+    void*   lst;
+    void**  arr;
+    unsigned long count = 0, i;
+
+    InterlockedExchange(&g_admSrc, 0);
+
+    cam = GetCameraEntityDirect();
+    if (!Readable(cam, OFF_ENT_XFORM + 0x40)) return 0;
+    if (!g_gameWnd || !IsWindow(g_gameWnd)) return 0;
+    if (!GetClientRect(g_gameWnd, &rc) || rc.right < 16 || rc.bottom < 16) return 0;
+
+    m = (const float*)((char*)cam + OFF_ENT_XFORM);
+    v.right = m + 0; v.fwd = m + 4; v.up = m + 8; v.cpos = m + 12;
+    v.cw = (int)rc.right;
+    v.ch = (int)rc.bottom;
+    v.ty = (float)tan((double)g_pickFov * 3.14159265358979 / 360.0);
+    v.tx = v.ty * ((float)v.cw / (float)v.ch);
+
+    /* ---- source 1: the player list, walked in full ---------------------- */
+    if (Readable((void*)PLAYERLIST_PTR, 4)) {
+        lst = *(void**)PLAYERLIST_PTR;
+        if (Readable(lst, 0x10)) {
+            count = *(unsigned long*)((char*)lst + 8);
+            arr   = *(void***)((char*)lst + 4);
+            if (count > PL_SANE_MAX) count = PL_SANE_MAX;
+            if (count && Readable(arr, count * sizeof(void*))) {
+                for (i = 0; i < count && n < cap; ++i) {
+                    void *elem, *inner, *node, *ent;
+                    elem = arr[i];
+                    if (!Readable(elem, 8)) continue;
+                    inner = *(void**)((char*)elem + 4);
+                    if (!Readable(inner, 0x10)) continue;
+                    node = *(void**)((char*)inner + 8);
+                    if (!Readable(node, 0x10)) continue;
+                    ent = *(void**)((char*)node + 0x0C);
+                    if (AdmBoxFor(ent, &v, (i == 0), EntityName(ent), &out[n]))
+                        ++n;
+                }
+                if (n) InterlockedExchange(&g_admSrc, 1);
+            }
+        }
+    }
+
+    /* ---- source 2: the entity scan, only when the list gave us nothing but
+       ourselves. This is the count == 1 branch described in the header.
+       g_entRows is filled by EntSnapshot on the main thread - we are on that
+       thread, so reading it here needs no lock. It may be stale by a few
+       frames; for "who is in the match" that is irrelevant, and `ents` or the
+       editor link refresh it. */
+    if (n <= 1) {
+        long k, total = g_entCount;
+        int  added = 0;
+        if (total > ENT_MAX) total = ENT_MAX;
+        for (k = 0; k < total && n < cap; ++k) {
+            const EntRow* r = &g_entRows[k];
+            if (!r->ent || !AdmLooksLikePlayer(r->name, r->cls)) continue;
+            if (AdmAlreadyHave(out, n, r->pos)) continue;
+            if (AdmBoxFor(r->ent, &v, 0, r->name, &out[n])) { ++n; ++added; }
+        }
+        if (added) InterlockedExchange(&g_admSrc, 2);
+    }
+    return n;
+}
+
+/* Called every frame from the detour. Cheap when disarmed - two volatile reads
+   and a return. */
+static void AdmTick(void)
+{
+    AdmRect tmp[ADM_MAX];
+    int     n = 0, i;
+
+    if ((!g_admOn && !g_admLog) || !g_admCsInit) return;
+    if (g_admEvery > 1 && (g_frames % g_admEvery)) return;
+
+    __try { n = AdmCollect(tmp, ADM_MAX); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        InterlockedExchange(&g_admOn, 0);
+        InterlockedExchange(&g_admLog, 0);
+        logf_("[admn] sampling faulted - overlay and tracking disarmed");
+        return;
+    }
+    InterlockedExchange(&g_admSeen, n);
+
+    EnterCriticalSection(&g_admCs);
+    for (i = 0; i < n; ++i) g_admRect[i] = tmp[i];
+    InterlockedExchange(&g_admRectN, n);
+    LeaveCriticalSection(&g_admCs);
+
+    /* Telemetry logs WORLD positions, not the screen rectangle - the whole
+       point is to analyse movement afterwards, and pixels are meaningless the
+       moment the camera turns. */
+    if (g_admLog)
+        for (i = 0; i < n; ++i)
+            AdmLogRow((long)g_frames, tmp[i].name, tmp[i].wpos);
+}
+
 static void __fastcall hkUpdateUI(void* thisptr, void* edx, float dt)
 {
     char line[QLEN];
@@ -15522,6 +15901,10 @@ static void __fastcall hkUpdateUI(void* thisptr, void* edx, float dt)
     }
 
     InterlockedIncrement(&g_frames);
+
+    /* Main thread, so the GetWorldAABB calls inside are legal here and nowhere
+       else. Returns immediately unless the overlay or tracking is armed. */
+    AdmTick();
 
     if (thisptr) {
         if (InterlockedExchange(&g_wantRestoreAll, 0)) {
@@ -16459,6 +16842,105 @@ static void DrawOverlayD3D(IDirect3DDevice9* dev)
     if (oldPS) oldPS->Release();
 }
 
+/* ---- ADMIN OVERLAY: the drawing half --------------------------------------
+   Render thread. Reads ONLY the published rectangles - no engine state, no
+   entity pointers, no engine calls. Everything expensive happened on the main
+   thread in AdmTick.
+
+   Pre-transformed vertices (D3DFVF_XYZRHW), which is why this needs no matrices
+   of its own: the projection was already done on the CPU. Same trick the console
+   panel's quad uses, minus the texture.
+
+   State is saved and restored around the draw. Leaving the device altered is not
+   a cosmetic bug here - the game's very next draw call inherits it, and the
+   symptom (the world renders untextured, or z-testing stops) looks nothing like
+   an overlay problem. */
+static void AdmDrawD3D(IDirect3DDevice9* dev)
+{
+    struct LV { float x, y, z, rhw; DWORD c; } v[8];
+    AdmRect local[ADM_MAX];
+    int     n, i;
+    DWORD   oldFVF = 0, rsZ, rsZW, rsLight, rsAB, rsCull, rsFog, rsAT, rsSten, rsScis;
+    IDirect3DBaseTexture9* oldTex = 0;
+    IDirect3DVertexShader9* oldVS = 0;
+    IDirect3DPixelShader9*  oldPS = 0;
+
+    if (!g_admOn || !g_admCsInit) return;
+
+    EnterCriticalSection(&g_admCs);
+    n = (int)g_admRectN;
+    if (n > ADM_MAX) n = ADM_MAX;
+    for (i = 0; i < n; ++i) local[i] = g_admRect[i];
+    LeaveCriticalSection(&g_admCs);
+    if (n <= 0) return;
+
+    dev->GetFVF(&oldFVF);
+    dev->GetTexture(0, &oldTex);
+    dev->GetVertexShader(&oldVS);
+    dev->GetPixelShader(&oldPS);
+    dev->GetRenderState(D3DRS_ZENABLE,          &rsZ);
+    dev->GetRenderState(D3DRS_ZWRITEENABLE,     &rsZW);
+    dev->GetRenderState(D3DRS_LIGHTING,         &rsLight);
+    dev->GetRenderState(D3DRS_ALPHABLENDENABLE, &rsAB);
+    dev->GetRenderState(D3DRS_CULLMODE,         &rsCull);
+    dev->GetRenderState(D3DRS_FOGENABLE,        &rsFog);
+    dev->GetRenderState(D3DRS_ALPHATESTENABLE,  &rsAT);
+    dev->GetRenderState(D3DRS_STENCILENABLE,    &rsSten);
+    dev->GetRenderState(D3DRS_SCISSORTESTENABLE,&rsScis);
+
+    dev->SetVertexShader(0);
+    dev->SetPixelShader(0);
+    dev->SetTexture(0, 0);
+    dev->SetFVF(D3DFVF_XYZRHW | D3DFVF_DIFFUSE);
+    dev->SetRenderState(D3DRS_ZENABLE,           D3DZB_FALSE);
+    dev->SetRenderState(D3DRS_ZWRITEENABLE,      FALSE);
+    dev->SetRenderState(D3DRS_LIGHTING,          FALSE);
+    dev->SetRenderState(D3DRS_ALPHABLENDENABLE,  FALSE);
+    dev->SetRenderState(D3DRS_CULLMODE,          D3DCULL_NONE);
+    dev->SetRenderState(D3DRS_FOGENABLE,         FALSE);
+    dev->SetRenderState(D3DRS_ALPHATESTENABLE,   FALSE);
+    dev->SetRenderState(D3DRS_STENCILENABLE,     FALSE);
+    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+
+    for (i = 0; i < n; ++i) {
+        const AdmRect* r = &local[i];
+        DWORD col;
+        float x0, y0, x1, y1;
+        int   k;
+
+        if (!r->onScreen || r->local) continue;   /* never box ourselves */
+        col = 0xFF32C8FFu;                        /* warm blue, distinct from HUD */
+
+        x0 = (float)r->x0; y0 = (float)r->y0;
+        x1 = (float)r->x1; y1 = (float)r->y1;
+
+        v[0].x = x0; v[0].y = y0;  v[1].x = x1; v[1].y = y0;
+        v[2].x = x1; v[2].y = y0;  v[3].x = x1; v[3].y = y1;
+        v[4].x = x1; v[4].y = y1;  v[5].x = x0; v[5].y = y1;
+        v[6].x = x0; v[6].y = y1;  v[7].x = x0; v[7].y = y0;
+        for (k = 0; k < 8; ++k) { v[k].z = 0.0f; v[k].rhw = 1.0f; v[k].c = col; }
+
+        dev->DrawPrimitiveUP(D3DPT_LINELIST, 4, v, sizeof(v[0]));
+    }
+
+    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, rsScis);
+    dev->SetRenderState(D3DRS_STENCILENABLE,     rsSten);
+    dev->SetRenderState(D3DRS_ALPHATESTENABLE,   rsAT);
+    dev->SetRenderState(D3DRS_FOGENABLE,         rsFog);
+    dev->SetRenderState(D3DRS_CULLMODE,          rsCull);
+    dev->SetRenderState(D3DRS_ALPHABLENDENABLE,  rsAB);
+    dev->SetRenderState(D3DRS_LIGHTING,          rsLight);
+    dev->SetRenderState(D3DRS_ZWRITEENABLE,      rsZW);
+    dev->SetRenderState(D3DRS_ZENABLE,           rsZ);
+    dev->SetFVF(oldFVF);
+    dev->SetTexture(0, oldTex);
+    if (oldTex) oldTex->Release();
+    dev->SetVertexShader(oldVS);
+    if (oldVS) oldVS->Release();
+    dev->SetPixelShader(oldPS);
+    if (oldPS) oldPS->Release();
+}
+
 /* Runs on the ENGINE'S RENDER THREAD. Everything here must be safe there:
    no engine calls, no locks the main thread holds, no logging in the hot path. */
 static void __fastcall hkRDPresent(void* self, void* edx, HWND hwnd)
@@ -16471,6 +16953,19 @@ static void __fastcall hkRDPresent(void* self, void* edx, HWND hwnd)
             __except (EXCEPTION_EXECUTE_HANDLER) {
                 InterlockedExchange(&g_ingame, 0);
                 logf_("[d3d ] overlay draw faulted - in-game rendering disabled");
+            }
+        }
+    }
+    /* Separate from the console panel deliberately: the boxes must show while
+       the panel is CLOSED, so this cannot sit behind the g_ourPanel test above.
+       It carries its own __try for the same reason that one does. */
+    if (g_ingame && g_admOn && !g_shutdown) {
+        IDirect3DDevice9* dev = GetD3DDevice();
+        if (dev) {
+            __try { AdmDrawD3D(dev); }
+            __except (EXCEPTION_EXECUTE_HANDLER) {
+                InterlockedExchange(&g_admOn, 0);
+                logf_("[admn] box draw faulted - overlay disarmed");
             }
         }
     }
@@ -16797,7 +17292,7 @@ static const char* const kOurCmds[] = {
     "agentinfo", "vehinfo", "facing", "facinginfo",
     "driveai", "rcprobe", "respawn", "resurrect",
     "revive", "mergelib", "drivelock", "driveturn",
-    "mkpawn", "players",
+    "mkpawn", "players", "admin_gui",
 };
 #define OURCMD_COUNT ((int)(sizeof(kOurCmds) / sizeof(kOurCmds[0])))
 
