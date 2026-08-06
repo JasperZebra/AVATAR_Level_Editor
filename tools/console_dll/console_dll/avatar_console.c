@@ -1713,6 +1713,7 @@ static void ModHelp(void* c)
     P_(c, 0, AC "playerinfo     is the pawn we control alive? + can respawn run?\n");
     P_(c, 0, AC "players [raw]  EVERY entry in the player list, not just ours\n");
     P_(c, 0, AC "admin_gui      admin panel + player boxes (boxes|track|rate|list|off)\n");
+    P_(c, 0, AC "winsize [w h]  make the GAME window resizable ('off' undoes it)\n");
     P_(c, 0, AC "kick <name|#>  kick a player by name, or by admin_gui row\n");
     P_(c, 0, AC "kickban <name|#>  same, but banned\n");
     P_(c, 0, AC "actmap         what action maps are pushed on the player?\n");
@@ -13824,6 +13825,94 @@ static void AdmEnsureCs(void)
     InterlockedExchange(&g_admCsInit, 1);
 }
 
+/* THE TRUE RENDER-TARGET EXTENT, moved up here from DrawOverlayD3D so winsize
+   can report it - this is compiled as C++, so there is no tentative definition
+   to forward-declare a `static` with. Written by the render thread from the
+   swap chain description, read by the picker's client->backbuffer conversion.
+   (It used to be filled from GetViewport, which is NOT the same question.) */
+static volatile long g_pkBBW = 0, g_pkBBH = 0;
+
+/* ---- winsize: make the GAME's own window resizable ------------------------
+   For running two instances side by side. Avatar's windowed mode creates a
+   fixed-size frame - no sizing border, no maximise box - so the window can be
+   moved but not resized. This adds WS_THICKFRAME and WS_MAXIMIZEBOX to the
+   style it already has, which is all Windows needs to let you drag any edge or
+   corner.
+
+   THE RENDER RESOLUTION DOES NOT CHANGE, and that is worth being straight
+   about. The D3D9 swap chain keeps the backbuffer it was created with; in
+   windowed mode Present stretches that to the client area. So a resized window
+   scales the same image rather than rendering more of the scene, and stretching
+   to a different aspect ratio will distort it. Matching the aspect of your
+   original resolution keeps it clean.
+
+   THE OVERLAY SURVIVES THIS ALREADY. The picker works in BACKBUFFER pixels and
+   converts incoming mouse positions through PkClientToBB, with g_pkBBW/g_pkBBH
+   read from the actual swap-chain description rather than the viewport. That
+   separation was built for exactly this mismatch, so clicks keep landing where
+   the panel is drawn at any window size. The DLL also already watches
+   WM_ENTERSIZEMOVE/WM_EXITSIZEMOVE (g_gameMoving), so the overlay steps aside
+   while you drag rather than smearing.
+
+   EXCLUSIVE FULLSCREEN IGNORES ALL OF THIS - there is no frame to grab. The
+   command says so rather than appearing to work. */
+static void WinSize(void* console, const char* arg)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    LONG  st;
+    RECT  rc;
+    int   w = 0, h = 0;
+
+    while (*arg == ' ' || *arg == '\t') ++arg;
+    if (!g_gameWnd || !IsWindow(g_gameWnd)) {
+        P_(console, 0, AC "winsize: no game window yet.\n");
+        return;
+    }
+    st = GetWindowLong(g_gameWnd, GWL_STYLE);
+
+    if (_stricmp(arg, "off") == 0) {
+        SetWindowLong(g_gameWnd, GWL_STYLE, st & ~(WS_THICKFRAME | WS_MAXIMIZEBOX));
+        SetWindowPos(g_gameWnd, 0, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+        P_(console, 0, AC "winsize: sizing border removed.\n");
+        return;
+    }
+
+    /* Add the border first, whatever else was asked for - an explicit size with
+       no way to adjust it afterwards is the worse half of the feature. */
+    if (!(st & WS_THICKFRAME)) {
+        SetWindowLong(g_gameWnd, GWL_STYLE, st | WS_THICKFRAME | WS_MAXIMIZEBOX);
+        SetWindowPos(g_gameWnd, 0, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+        st = GetWindowLong(g_gameWnd, GWL_STYLE);
+    }
+
+    if (sscanf(arg, "%d %d", &w, &h) == 2 && w >= 320 && h >= 240 &&
+        w <= 7680 && h <= 4320) {
+        RECT want;
+        want.left = 0; want.top = 0; want.right = w; want.bottom = h;
+        /* Ask for a CLIENT size - the caller means the picture, not the frame.
+           AdjustWindowRect converts that into the outer size Windows wants. */
+        AdjustWindowRect(&want, (DWORD)st, FALSE);
+        SetWindowPos(g_gameWnd, 0, 0, 0,
+                     want.right - want.left, want.bottom - want.top,
+                     SWP_NOMOVE | SWP_NOZORDER);
+        P_(console, 0, AC "winsize: client area set to %dx%d.\n", w, h);
+    }
+
+    if (GetClientRect(g_gameWnd, &rc))
+        P_(console, 0, AC "winsize: window is now resizable - drag any edge or "
+                          "corner. client=%ldx%ld backbuffer=%ldx%ld\n",
+           rc.right, rc.bottom, (long)g_pkBBW, (long)g_pkBBH);
+    if (g_pkBBW && rc.right && (long)rc.right != g_pkBBW)
+        P_(console, 0, AC "  the picture is being STRETCHED from %ldx%ld - the "
+                          "render resolution does not follow the window. Match "
+                          "that aspect ratio to avoid distortion.\n",
+           (long)g_pkBBW, (long)g_pkBBH);
+    P_(console, 0, AC "  winsize <w> <h> sets a size; winsize off removes the "
+                      "border.\n");
+}
+
 /* ---- kick / kickban -------------------------------------------------------
    THE ARGUMENT IS A PLAYER NAME. Not an index, not a session id. That was the
    one unknown and the engine answers it itself - these strings ship in
@@ -14480,6 +14569,11 @@ static int TryModCommand(void* console, const char* line)
     if (_strnicmp(p, "admin_gui", 9) == 0 &&
         (p[9] == ' ' || p[9] == '\t' || !p[9])) {
         AdminGui(console, p + 9);
+        return 1;
+    }
+    if (_strnicmp(p, "winsize", 7) == 0 &&
+        (p[7] == ' ' || p[7] == '\t' || !p[7])) {
+        WinSize(console, p + 7);
         return 1;
     }
     /* kickban BEFORE kick - "kick" is a prefix of it, and testing the shorter
@@ -16818,7 +16912,8 @@ static int            g_pkBarDrag  = 0;   /* dragging the scrollbar thumb */
    against a layout constant. Plain longs: torn reads are impossible on x86 for
    an aligned 32-bit word, and a one-frame-stale resolution costs at worst one
    mis-scaled mouse sample during a mode change. */
-static volatile long g_pkBBW = 0, g_pkBBH = 0;   /* TRUE render-target extent */
+/* g_pkBBW / g_pkBBH are defined ABOVE, with winsize, which reports them to
+   explain why a resized window stretches rather than renders more. */
 /* The viewport as it stood at Present time, and the window D3D actually presents
    into. All three are diagnostics first and inputs second, and they exist
    because the first version of this got the space wrong in a way that could not
@@ -17555,7 +17650,7 @@ static const char* const kOurCmds[] = {
     "agentinfo", "vehinfo", "facing", "facinginfo",
     "driveai", "rcprobe", "respawn", "resurrect",
     "revive", "mergelib", "drivelock", "driveturn",
-    "mkpawn", "players", "admin_gui", "kick", "kickban",
+    "mkpawn", "players", "admin_gui", "kick", "kickban", "winsize",
 };
 #define OURCMD_COUNT ((int)(sizeof(kOurCmds) / sizeof(kOurCmds[0])))
 
