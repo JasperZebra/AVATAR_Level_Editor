@@ -51,6 +51,75 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-06 (j) — the captured string is WIDE; the PLAYERS list fills
+
+**The PLAYERS tab has never been able to show a player, and nothing downstream
+of the capture was at fault.** `net_GetPlayerList` printed the names to the
+console (the detour forwards everything it does not swallow) and
+`hkSink` decoded **zero bytes** out of every line it was handed, so
+`g_admNameN` was 0, so `g_plRowN` was 0, so the panel drew "No players" while
+the console right behind it listed them. The whole 2.9 MB log has **not one**
+`net_GetPlayerList -> N name(s)` line in it — the count went 0 → 0 every
+refresh, so the "log only when it changes" guard never fired. That absence is
+the fingerprint.
+
+**Entry (h) below got the argument type wrong.** It is not a narrow MSVC
+`std::string`. It is a **wide** Dunia string, and the offsets are different:
+
+| | (h) assumed | actually |
+|---|---|---|
+| characters | inline at `+0x00`, `char` | `+0x04`, `wchar_t` (or a `wchar_t*` in that slot) |
+| length | `+0x10` | `+0x14` |
+| capacity | `+0x14` | `+0x18` |
+| heap when | capacity ≥ 16 | capacity ≥ 8 |
+
+`+0x10` is the **tail of the inline buffer**, so the "length" it read was two
+packed UTF-16 characters — `"ra"` is `0x00610072`, which fails the 64 KB sanity
+test — and the reader bailed on every line the console has ever printed.
+
+Three independent readers in the retail 1.02 image agree, and the disassembly
+is not ambiguous:
+
+- `100AC1F0` (the console's print) formats with the **wide** `vsnprintf` —
+  `0x7FF` chars into a `0x1000`-**byte** buffer — then
+  `lea ecx,[esp+0xc]` / `push ecx` / `mov ecx,esi` / `call 100AB660`, which also
+  confirms the sink is `thiscall(console, string*)` as we hook it. Its cleanup
+  is `cmp [obj+0x18], 8` / `free([obj+4])`.
+- `100A78F0` (the string's own `find`) does `cmp dword [ecx+0x18], 8` to choose
+  heap vs inline, `add ecx, 4` to reach the characters, and indexes them
+  `[ecx + eax*2]` — **scale 2**.
+- `106F0DD0` (`net_GetPlayerListByTeam`) reads the same three fields the same
+  way before printing.
+
+| Where | What | Risk | New symbols |
+|---|---|---|---|
+| `StdStrRead` (~14016) | **Replaced** by a wide reader that writes into the caller's buffer | **Medium** | `DuniaStrRead`, `DSTR_BUF_OFF`, `DSTR_SIZE_OFF`, `DSTR_RES_OFF`, `DSTR_INLINE` |
+| `hkSink` | **Modified** — decodes into a local, appends that | Low | — |
+| `hkGetName` | **Modified** — forwards first, then records the name off the return | Low | `g_netEnumName` |
+| Roster block | **Added** the paired Player\* array | Low | `g_admPlayer` |
+| `AdmBuildRows` | **Modified** — one line, reads `g_admPlayer` | Low | — |
+| `AdmRefreshNames` | **Rewrote** — hook first, console text as fallback | **Medium** | — |
+| `PkPaint` PLAYERS header | **Modified** — one line, counts `g_plRowN` | Low | — |
+
+**The names now come off the engine, not out of the console.**
+`Player::GetName` is `ret 4` and ends `mov eax, edi` — it hands back the string
+it just filled — and `net_GetPlayerList`'s handler does nothing with it except
+print it. So the detour reads the return value and gets exactly what the console
+was about to show, one step earlier: no echo to reject, no punctuation
+heuristic, and a name paired with its `Player*` by construction instead of by
+counting lines. The text parse stays as the fallback for a build where the
+`GetName` prologue does not match and the hook refuses to install.
+
+`STDSTR_SIZE_OFF` / `STDSTR_RES_OFF` are **gone** — check for them before
+merging anything that used them.
+
+**Tested off-game**: `DuniaStrRead` was compiled standalone against objects
+built to the measured layout — inline, heap, the capacity-8 boundary, a garbage
+length, an unreadable pointer, and truncation into a short buffer. It also
+reproduces the old reader's failure on the same objects (`"JasperZ"` → length
+90, capacity 7 → rejected), which is what makes the diagnosis above a
+measurement rather than a story.
+
 ### 2026-08-06 (i) — the panel is the tool; detection stops depending on the local list
 
 | Where | What | Risk | New symbols |
@@ -117,6 +186,13 @@ direct calls. Counting `E8 rel32` encodings across `.text` for each target:
 `0x10003590` 3369 callers, `0x10EE24B0` 8584 (CRT), `0x10004290` 62, and
 **`0x100AB660` just 5** — the shape of a private sink, reached with
 `mov ecx, esi` (the console) and one pushed argument.
+
+> **WRONG — corrected by (j) above.** The paragraph that follows described the
+> argument as a narrow `std::string` with size at `+0x10`. It is a **wide**
+> string with length at `+0x14`, capacity at `+0x18` and characters at `+0x04`,
+> and this mistake is why the capture returned nothing for the two days between
+> these entries. `StdStrRead` no longer exists. Left in place because the *hook
+> site* it describes is correct and still current.
 
 **The argument is a plain MSVC `std::string`,** read off `Printf`'s own call
 site: the object is built at `esp+0x28`, `mov [esp+0x40], 0xf` sets capacity and

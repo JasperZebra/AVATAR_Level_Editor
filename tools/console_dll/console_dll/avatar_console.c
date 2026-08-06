@@ -14005,34 +14005,90 @@ static int              g_capLen    = 0;
 
 typedef void (__fastcall *fnSinkFwd)(void*, void*, const void*);
 
-/* The sink's argument is a plain MSVC std::string, proved off the call site in
-   Printf: the object is built at esp+0x28, `mov [esp+0x40], 0xf` sets capacity
-   and `mov [esp+0x3c], ebx` sets size, and esp+0x2c is what gets pushed. So
-   relative to the pointer the sink receives: size at +0x10, capacity at +0x14,
-   and the characters are inline until capacity reaches 16. */
-#define STDSTR_SIZE_OFF 0x10
-#define STDSTR_RES_OFF  0x14
+/* ---- THE ARGUMENT IS A WIDE DUNIA STRING, NOT A NARROW std::string ---------
+   THIS IS WHY THE PLAYERS TAB WAS ALWAYS EMPTY. The names printed on the
+   console - the detour forwards everything it does not swallow - and the
+   capture came back with zero bytes every single time, so g_admNameN was 0,
+   so g_plRowN was 0, so the panel drew "No players" while the console right
+   behind it listed them. Nothing downstream was wrong; nothing ever reached it.
 
-static const char* StdStrRead(const void* s, int* out_len)
+   The layout is not a guess. Three independent readers in the retail 1.02
+   image agree, and the disassembly is unambiguous:
+
+     100AC1F0  the console's print. Formats with the WIDE vsnprintf
+               (0x7FF chars into a 0x1000-BYTE buffer), builds the object, and
+               calls the sink as thiscall:
+                   lea ecx, [esp+0xc]   ; the string
+                   push ecx             ; ...as the stack argument
+                   mov ecx, esi         ; ecx = the console
+                   call 100AB660
+               and cleans up with `cmp [obj+0x18], 8` / `free([obj+4])`.
+
+     100A78F0  the string's own find(): `cmp dword [ecx+0x18], 8` chooses heap
+               vs inline, `add ecx, 4` reaches the characters, and then indexes
+               them `[ecx + eax*2]` - SCALE 2. Wide, settled.
+
+     106F0DD0  net_GetPlayerListByTeam reads the same three fields the same way
+               before handing the text to the same printer.
+
+   So, relative to the pointer the sink receives:
+     +0x00  allocator (an empty type; its address is all that is stored)
+     +0x04  wchar_t buf[8]  OR  wchar_t* when it went to the heap
+     +0x14  length, IN CHARACTERS
+     +0x18  capacity - heap when this is >= 8
+
+   The reader here previously assumed a bare narrow MSVC std::string: size at
+   +0x10, capacity at +0x14, characters inline at +0x00. +0x10 is the TAIL OF
+   THE INLINE BUFFER, so `size` came back as two packed UTF-16 characters -
+   "ra" reads as 0x00610072 - which failed the 64 KB sanity test and returned
+   "not a string I understand" for every line the console has ever printed.
+
+   -> characters written to `out`, not counting the terminator. */
+#define DSTR_BUF_OFF   0x04
+#define DSTR_SIZE_OFF  0x14
+#define DSTR_RES_OFF   0x18
+#define DSTR_INLINE    8      /* wchar_t's held inline before it goes to the heap */
+
+static int DuniaStrRead(const void* s, char* out, int cap)
 {
-    const unsigned char* p = (const unsigned char*)s;
+    const unsigned char*  p = (const unsigned char*)s;
+    const unsigned short* w;
     unsigned int size, res;
+    int n, i;
 
-    *out_len = 0;
-    if (!p || !Readable((void*)p, STDSTR_RES_OFF + 4)) return 0;
-    size = *(const unsigned int*)(p + STDSTR_SIZE_OFF);
-    res  = *(const unsigned int*)(p + STDSTR_RES_OFF);
-    /* A console line is never 64 KB. Anything bigger means the layout guess is
-       wrong for this object, and the right response is to pass it through
-       untouched rather than read a wild pointer. */
-    if (size > 0xFFFFu || res < size) return 0;
-    *out_len = (int)size;
-    if (res >= 16) {
-        const char* q = *(const char* const*)p;
-        if (!q || !Readable((void*)q, (int)size)) { *out_len = 0; return 0; }
-        return q;
+    if (!out || cap < 2) return 0;
+    out[0] = 0;
+    if (!p || !Readable((void*)p, DSTR_RES_OFF + 4)) return 0;
+    size = *(const unsigned int*)(p + DSTR_SIZE_OFF);
+    res  = *(const unsigned int*)(p + DSTR_RES_OFF);
+    /* A console line is never 64 KB, and capacity is never below length.
+       Anything else means this is not the object we think it is, and the right
+       response is to pass it through untouched rather than read a wild
+       pointer. */
+    if (size == 0 || size > 0xFFFFu || res < size) return 0;
+    if (res >= DSTR_INLINE) {
+        w = *(const unsigned short* const*)(p + DSTR_BUF_OFF);
+        if (!w || !Readable((void*)w, (int)(size * 2))) return 0;
+    } else {
+        w = (const unsigned short*)(p + DSTR_BUF_OFF);
     }
-    return (const char*)p;
+
+    n = (int)size;
+    if (n > cap - 1) n = cap - 1;
+    /* CP_ACP, because that is the round trip: everything we send back into the
+       engine goes in narrow and the engine widens it the same way, so a name
+       has to survive the trip to still match on a kick. The manual fallback
+       only runs if the conversion fails outright. */
+    i = WideCharToMultiByte(CP_ACP, 0, (LPCWSTR)w, n, out, cap - 1, "?", 0);
+    if (i <= 0) {
+        for (i = 0; i < n; ++i) {
+            unsigned short c = w[i];
+            out[i] = (c && c < 0x80) ? (char)c : '?';
+        }
+    }
+    if (i > cap - 1) i = cap - 1;
+    out[i] = 0;
+    return i;
 }
 
 static void __fastcall hkSink(void* console, void* edx, const void* str)
@@ -14043,12 +14099,12 @@ static void __fastcall hkSink(void* console, void* edx, const void* str)
     (void)edx;
 
     if (g_capOn && g_capCsInit) {
-        int len = 0;
-        const char* txt = StdStrRead(str, &len);
-        if (txt && len > 0) {
+        char line[1024];
+        int  len = DuniaStrRead(str, line, sizeof(line));
+        if (len > 0) {
             EnterCriticalSection(&g_capCs);
             if (g_capLen + len + 1 < (int)sizeof(g_capBuf) - 1) {
-                memcpy(g_capBuf + g_capLen, txt, (size_t)len);
+                memcpy(g_capBuf + g_capLen, line, (size_t)len);
                 g_capLen += len;
                 /* One line per call - the sink is called once per LINE and the
                    text carries no newline of its own, so the parser would see
@@ -14126,22 +14182,43 @@ static unsigned char* g_gnAt    = 0;
 static unsigned char* g_gnTramp = 0;
 
 static void*         g_netEnum[NETPL_SANE_MAX];
+/* THE NAME, TAKEN OFF THE ENGINE'S OWN RETURN VALUE rather than scraped back
+   out of the console afterwards. GetName is `ret 4` and ends `mov eax, edi` -
+   it hands back the string it just filled - and net_GetPlayerList's handler
+   does nothing with it except print it:
+
+     mov ecx, [esi]        ; player = *it
+     call 10EEFF90         ; GetName(&out)  -> eax = the string
+     cmp [eax+0x18], 8     ; heap or inline
+     push <chars> / push 0 / push g_console
+     call 100AC1F0         ; print
+
+   So reading eax here gives us exactly what the console was about to show, one
+   step earlier and with no text to parse: no echo to reject, no punctuation
+   heuristic, and the name is paired with its Player* by construction instead of
+   by counting lines. The console capture stays as the fallback for the case
+   where the hook could not be installed at all. */
+static char          g_netEnumName[NETPL_SANE_MAX][ADM_NLEN];
 static volatile long g_netEnumN  = 0;
 static volatile long g_netEnumOn = 0;
 
 static void* __fastcall hkGetName(void* player, void* edx, void* outStr)
 {
+    void* r = g_gnTramp ? ((fnGetNameFwd)g_gnTramp)(player, edx, outStr) : 0;
+    /* AFTER the forward, not before: the string does not hold the name until
+       the real function has run. */
     if (g_netEnumOn) {
         long n = g_netEnumN;
         if (n < NETPL_SANE_MAX && player) {
             /* No lock: this runs inside our own RunConsoleLine, on the thread
                that armed it, and the engine enumerates serially. */
             g_netEnum[n] = player;
+            g_netEnumName[n][0] = 0;
+            if (r) DuniaStrRead(r, g_netEnumName[n], ADM_NLEN);
             InterlockedExchange(&g_netEnumN, n + 1);
         }
     }
-    if (g_gnTramp) return ((fnGetNameFwd)g_gnTramp)(player, edx, outStr);
-    return 0;
+    return r;
 }
 
 static int InstallGetNameHook(void)
@@ -14262,6 +14339,12 @@ static int CaptureRun(void* console, const char* line, char* out, int cap, int q
 /* The account names, as the session knows them. */
 #define ADM_NAMES_MAX 16
 static char          g_admNames[ADM_NAMES_MAX][ADM_NLEN];
+/* The Player* that went with each name, PAIRED HERE rather than looked up by
+   index in g_netEnum later. The two used to be joined by position - the k-th
+   GetName call is the k-th line - which is true only while nothing is ever
+   skipped. Keeping them together survives a nameless player and survives the
+   fallback path filling one array and not the other. */
+static void*         g_admPlayer[ADM_NAMES_MAX];
 static volatile long g_admNameN = 0;
 
 /* The host's account name, so exactly one row can be labelled HOST. Empty when
@@ -14357,7 +14440,7 @@ static void AdmBuildRows(void)
             _snprintf(r->name, ADM_NLEN - 1, "%s", g_admNames[i]);
             r->name[ADM_NLEN - 1] = 0;
         }
-        r->player = (i < g_netEnumN) ? g_netEnum[i] : 0;
+        r->player = g_admPlayer[i];
         r->host   = (g_admHost[0] && _stricmp(r->name, g_admHost) == 0);
     }
     InterlockedExchange(&g_plRowN, n);
@@ -14417,31 +14500,50 @@ static void AdmRefreshTeams(void* console, int quiet)
     }
 }
 
-/* Pull names out of net_GetPlayerList's reply.
+/* Ask the session who is connected.
 
-   MEASURED FORMAT: one bare name per line ("Zebra", "Jasper"). So the parse is
-   "every non-empty line", with the obvious junk rejected - the echoed command
-   itself, and anything carrying punctuation a player name would not. Kept
-   deliberately loose: an over-inclusive list shows a stray row that a human can
-   ignore, while an over-strict one silently drops the person you are trying to
-   kick. */
+   TWO SOURCES, in this order, and the order is the point:
+
+     1. THE GetName HOOK. Running net_GetPlayerList makes the engine walk its
+        own player list and call Player::GetName on every entry; the detour sees
+        each Player* and the string the engine just filled, so a name and its
+        object arrive together and neither is inferred from the other. No text,
+        no parsing, nothing to reject.
+
+     2. THE CONSOLE TEXT, if the hook could not be installed (a different build,
+        a prologue we refuse to patch). MEASURED FORMAT: one bare name per line
+        ("Zebra", "Jasper"), so the parse is "every non-empty line" with the
+        obvious junk rejected - the echoed command itself, and anything carrying
+        punctuation a player name would not. Kept deliberately loose: an
+        over-inclusive list shows a stray row a human can ignore, while an
+        over-strict one silently drops the person you are trying to kick. */
 static void AdmRefreshNames(void* console, int quiet)
 {
     char buf[4096];
     char* p;
     long  n = 0;
+    int   got, hooked;
 
-    /* Arm the GetName hook across the run: the engine walks its own player list
-       to print the names, so every connected player passes through our detour
-       and we come out with the Player* objects AND the names, in the same
-       order. That ordering IS the join - the k-th GetName call is the k-th line
-       the sink captured. */
-    InstallGetNameHook();
+    hooked = InstallGetNameHook();
     InterlockedExchange(&g_netEnumN, 0);
     InterlockedExchange(&g_netEnumOn, 1);
-    {
-        int got = CaptureRun(console, "net_GetPlayerList", buf, sizeof(buf), quiet);
-        InterlockedExchange(&g_netEnumOn, 0);
+    got = CaptureRun(console, "net_GetPlayerList", buf, sizeof(buf), quiet);
+    InterlockedExchange(&g_netEnumOn, 0);
+
+    if (hooked) {
+        long e = g_netEnumN, k;
+        for (k = 0; k < e && n < ADM_NAMES_MAX; ++k) {
+            if (!g_netEnumName[k][0]) continue;   /* no name object on that player */
+            _snprintf(g_admNames[n], ADM_NLEN - 1, "%s", g_netEnumName[k]);
+            g_admNames[n][ADM_NLEN - 1] = 0;
+            g_admPlayer[n] = g_netEnum[k];
+            ++n;
+        }
+    }
+
+    if (!n) {
+        /* Nothing from the hook - either it is not installed or the enumeration
+           reached nobody. Fall back to the printed reply. */
         if (!got) {
             /* Clear BOTH counts. Zeroing only the name count left g_plRowN
                holding the previous refresh's rows, so the panel kept drawing
@@ -14451,29 +14553,30 @@ static void AdmRefreshNames(void* console, int quiet)
             InterlockedExchange(&g_plRowN, 0);
             return;
         }
-    }
-    p = buf;
-    while (*p && n < ADM_NAMES_MAX) {
-        char* e = p;
-        while (*e && *e != '\n' && *e != '\r') ++e;
-        {
-            char save = *e;
-            int  len;
-            *e = 0;
-            while (*p == ' ' || *p == '\t') ++p;
-            len = (int)strlen(p);
-            while (len > 0 && (p[len-1] == ' ' || p[len-1] == '\t')) p[--len] = 0;
-            if (len > 0 && len < ADM_NLEN - 1 &&
-                _stricmp(p, "net_GetPlayerList") != 0 &&
-                !strchr(p, ':') && !strchr(p, '=')) {
-                _snprintf(g_admNames[n], ADM_NLEN - 1, "%s", p);
-                g_admNames[n][ADM_NLEN - 1] = 0;
-                ++n;
+        p = buf;
+        while (*p && n < ADM_NAMES_MAX) {
+            char* e = p;
+            while (*e && *e != '\n' && *e != '\r') ++e;
+            {
+                char save = *e;
+                int  len;
+                *e = 0;
+                while (*p == ' ' || *p == '\t') ++p;
+                len = (int)strlen(p);
+                while (len > 0 && (p[len-1] == ' ' || p[len-1] == '\t')) p[--len] = 0;
+                if (len > 0 && len < ADM_NLEN - 1 &&
+                    _stricmp(p, "net_GetPlayerList") != 0 &&
+                    !strchr(p, ':') && !strchr(p, '=')) {
+                    _snprintf(g_admNames[n], ADM_NLEN - 1, "%s", p);
+                    g_admNames[n][ADM_NLEN - 1] = 0;
+                    g_admPlayer[n] = (n < g_netEnumN) ? g_netEnum[n] : 0;
+                    ++n;
+                }
+                *e = save;
             }
-            *e = save;
+            p = e;
+            while (*p == '\n' || *p == '\r') ++p;
         }
-        p = e;
-        while (*p == '\n' || *p == '\r') ++p;
     }
     /* PUBLISH THE COUNT BEFORE ANYTHING READS IT. This was the bug behind
        "the names never show up": AdmBuildRows reads g_admNameN, and the store
@@ -14489,7 +14592,11 @@ static void AdmRefreshNames(void* console, int quiet)
     {
         long was = g_admNameN;
         InterlockedExchange(&g_admNameN, n);
-        if (was != n) logf_("[cap ] net_GetPlayerList -> %ld name(s)", n);
+        if (was != n)
+            logf_("[netp] roster -> %ld name(s) from %s (%d byte(s) of console "
+                  "text, %ld player object(s))",
+                  n, (n && g_netEnumN) ? "Player::GetName" : "the console text",
+                  got, (long)g_netEnumN);
     }
 
     /* Who is hosting, on the same trip. net_GetHostName is a shipped command and
@@ -21155,7 +21262,13 @@ static void PkPaint(void)
     r.left = PK_PAD; r.top = PK_TABY; r.bottom = PK_HEAD - 2;
     r.right = PK_W - PK_PAD - PK_XBTN - 8;   /* leave room for the close box */
     if (g_pickMode == PK_MODE_PLAYERS)
-        _snprintf(buf, sizeof(buf) - 1, "%ld in session", (long)g_admRectN);
+        /* COUNT THE ROWS THAT ARE ACTUALLY DRAWN. This read g_admRectN - the
+           number of ESP boxes the sampler placed last frame, which counts
+           matched pawns and not connected players. The two differ for anyone
+           who has not spawned yet, and a header that disagrees with the list
+           under it is the kind of thing that gets read as "the list is
+           broken". */
+        _snprintf(buf, sizeof(buf) - 1, "%ld in session", (long)g_plRowN);
     else
         _snprintf(buf, sizeof(buf) - 1, "%ld of %ld %s", g_pickShown, g_pickTotal,
                   (g_pickMode == PK_MODE_ENTS) ? "in the world" : "spawnable");
