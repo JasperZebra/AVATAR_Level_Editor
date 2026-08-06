@@ -13846,6 +13846,34 @@ static volatile long    g_admSelf   = 1;
    under __try on the render thread - see AdmDrawD3D. */
 static void* volatile   g_admCam    = 0;
 
+/* ---- ARM AT STARTUP, WITHOUT ANYONE TYPING ANYTHING -----------------------
+   Staff running this are not going to open a console and type `admin_gui`, so
+   the overlay has to be on when the game reaches the menu.
+
+   A MARKER FILE, not a hardcoded default, and for the same reason the
+   multi-instance hook uses one: this DLL gets copied around, and a build that
+   silently draws every player through walls the moment it loads is exactly the
+   surprise that gets blamed on something else later. Drop `avatar_admin.txt`
+   next to the DLL in the staff build and it is on with no commands; a copy
+   without the marker behaves like stock. AVATAR_ADMIN=1 does the same for
+   scripted launches.
+
+   Checked once, on the first frame that has a console - g_dir is set in DllMain
+   but the console is what we need in order to say anything about it. */
+#define ADM_MARKER "avatar_admin.txt"
+
+static int AdmWanted(void)
+{
+    char path[MAX_PATH];
+    char env[16];
+    _snprintf(path, sizeof(path) - 1, "%s\\%s", g_dir, ADM_MARKER);
+    path[sizeof(path) - 1] = 0;
+    if (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES) return 1;
+    env[0] = 0;
+    GetEnvironmentVariableA("AVATAR_ADMIN", env, sizeof(env));
+    return env[0] && env[0] != '0';
+}
+
 /* Lazily, on the main thread, the first time anything arms. Not in DllMain:
    this is state only the admin feature needs, and DllMain already does the
    minimum it can get away with under the loader lock. */
@@ -16244,6 +16272,17 @@ static void __fastcall hkUpdateUI(void* thisptr, void* edx, float dt)
         ((fnPrintf)FN_PRINTF)(thisptr, 0,
             "avatar_console.dll ready (built " __DATE__ " " __TIME__ ") - "
             "type 'modhelp' for added commands\n");
+        /* Arm the admin overlay if the marker says so - see AdmWanted. This is
+           the only place it can happen without someone typing a command, and it
+           is per-process, so every instance arms itself independently. */
+        if (AdmWanted()) {
+            AdmEnsureCs();
+            InterlockedExchange(&g_admOn, 1);
+            ((fnPrintf)FN_PRINTF)(thisptr, 0,
+                "admin overlay ARMED by " ADM_MARKER " - player boxes are on. "
+                "'admin_gui' for the panel, 'admin_gui off' to stop.\n");
+            logf_("[admn] armed at startup by " ADM_MARKER);
+        }
     }
 
     InterlockedIncrement(&g_frames);
