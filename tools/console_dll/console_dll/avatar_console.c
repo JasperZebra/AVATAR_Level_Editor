@@ -13784,12 +13784,25 @@ static void SpeedInfo(void* console)
 #define ADM_NEAR  0.15f
 #define ADM_LOG_NAME "avatar_admin_track.csv"
 
+/* WORLD SPACE, not screen space - and that is the whole point.
+
+   The first version stored finished screen rectangles: the main thread projected
+   them, the render thread drew the stored pixels. That is wrong by one sample.
+   The sampler runs every g_admEvery frames while the render thread draws EVERY
+   frame, so between samples the rectangle is frozen at where the model was and
+   the world slides out from under it as the camera turns. The symptom is a box
+   that appears glued to the camera instead of stuck to the model - which is
+   exactly what it looked like in game.
+
+   So the sampler now publishes the world AABB, and projection happens at DRAW
+   time against the camera as it is right then. The box cannot lag, because
+   nothing about it is precomputed in screen space. */
 typedef struct {
-    int   x0, y0, x1, y1;
-    float dist;
-    float wpos[3];              /* kept so telemetry logs WORLD space, not pixels */
+    float mn[3], mx[3];         /* world-space AABB - projected at draw time */
+    float wpos[3];              /* origin; telemetry logs WORLD space, not pixels */
+    float dist;                 /* at sample time; for the list, not the box */
     int   local;
-    int   onScreen;
+    int   valid;
     char  name[ADM_NLEN];
 } AdmRect;
 
@@ -13799,7 +13812,11 @@ static CRITICAL_SECTION g_admCs;
 static volatile long    g_admCsInit = 0;
 static volatile long    g_admOn     = 0;   /* draw boxes                        */
 static volatile long    g_admLog    = 0;   /* append positions to the telemetry */
-static volatile long    g_admEvery  = 2;   /* sample every N frames             */
+/* EVERY frame by default. The box is projected at draw time now, so this no
+   longer controls how smoothly it tracks the CAMERA - but the world AABB still
+   comes from the last sample, so it does control how smoothly it tracks a
+   MOVING PLAYER. At 2 a sprinting target visibly trailed its box. */
+static volatile long    g_admEvery  = 1;
 static volatile long    g_admSrc    = 0;   /* 1 = player list, 2 = entity scan  */
 static volatile long    g_admSeen   = 0;   /* how many the last sample found    */
 static volatile long    g_admListN  = 0;   /* what the player list itself said  */
@@ -13814,6 +13831,9 @@ static volatile long    g_admDrawn  = 0;   /* boxes the last frame actually drew
    (and for `pickfov`, which feeds it). Drawn in a different colour so it is
    never mistaken for somebody else. */
 static volatile long    g_admSelf   = 1;
+/* The camera the DRAW side projects against, republished every sample. Read
+   under __try on the render thread - see AdmDrawD3D. */
+static void* volatile   g_admCam    = 0;
 
 /* Lazily, on the main thread, the first time anything arms. Not in DllMain:
    this is state only the admin feature needs, and DllMain already does the
@@ -15962,13 +15982,11 @@ static int AdmProject(const AdmView* v, const float* wp, float* sx, float* sy,
    A corner behind the camera makes the whole box unreliable, so the box is kept
    (the player is still tracked, and telemetry still wants the position) but
    flagged off-screen rather than drawn at a mirrored position. */
-static int AdmBoxFor(void* ent, const AdmView* v, int local, const char* name,
+static int AdmBoxFor(void* ent, const float* camPos, int local, const char* name,
                      AdmRect* out)
 {
-    float mn[3], mx[3];
-    float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f, best = 1e9f;
     const float* p;
-    int   i, ok = 1;
+    float d[3];
 
     if (!Readable(ent, OFF_ENT_POS + 12)) return 0;
     p = (const float*)((char*)ent + OFF_ENT_POS);
@@ -15979,28 +15997,25 @@ static int AdmBoxFor(void* ent, const AdmView* v, int local, const char* name,
     _snprintf(out->name, ADM_NLEN - 1, "%s", name ? name : "?");
     out->name[ADM_NLEN - 1] = 0;
 
+    d[0] = p[0] - camPos[0]; d[1] = p[1] - camPos[1]; d[2] = p[2] - camPos[2];
+    out->dist = (float)sqrt(d[0]*d[0] + d[1]*d[1] + d[2]*d[2]);
+
     if (!Readable((const void*)FN_WORLD_AABB, 8)) return 0;
-    __try { ((fnWorldAABB)FN_WORLD_AABB)(ent, mn, mx); }
+    /* World AABB, kept in WORLD space. The projection is the render thread's
+       job now - see the AdmRect header. */
+    __try { ((fnWorldAABB)FN_WORLD_AABB)(ent, out->mn, out->mx); }
     __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
 
-    for (i = 0; i < 8; ++i) {
-        float c[3], sx, sy, dz;
-        c[0] = (i & 1) ? mx[0] : mn[0];
-        c[1] = (i & 2) ? mx[1] : mn[1];
-        c[2] = (i & 4) ? mx[2] : mn[2];
-        if (!AdmProject(v, c, &sx, &sy, &dz)) { ok = 0; break; }
-        if (sx < x0) x0 = sx;
-        if (sy < y0) y0 = sy;
-        if (sx > x1) x1 = sx;
-        if (sy > y1) y1 = sy;
-        if (dz < best) best = dz;
+    /* A degenerate box means GetWorldAABB gave us nothing usable; fall back to a
+       2m cube on the origin so the player is still marked rather than dropped. */
+    if (out->mx[0] - out->mn[0] < 0.01f && out->mx[1] - out->mn[1] < 0.01f) {
+        int k;
+        for (k = 0; k < 3; ++k) {
+            out->mn[k] = p[k] - 1.0f;
+            out->mx[k] = p[k] + 1.0f;
+        }
     }
-
-    out->dist     = ok ? best : 0.0f;
-    out->onScreen = ok && x1 > 0 && y1 > 0 &&
-                    x0 < (float)v->cw && y0 < (float)v->ch;
-    out->x0 = (int)x0; out->y0 = (int)y0;
-    out->x1 = (int)x1; out->y1 = (int)y1;
+    out->valid = 1;
     return 1;
 }
 
@@ -16066,10 +16081,9 @@ static void AdmLogRow(long frame, const char* name, const float* p)
    g_admSrc, so a run settles the count question rather than hiding it. */
 static int AdmCollect(AdmRect* out, int cap)
 {
-    AdmView v;
     void*   cam;
     const float* m;
-    RECT    rc;
+    float   camPos[3];
     int     n = 0;
     void*   lst;
     void**  arr;
@@ -16079,15 +16093,11 @@ static int AdmCollect(AdmRect* out, int cap)
 
     cam = GetCameraEntityDirect();
     if (!Readable(cam, OFF_ENT_XFORM + 0x40)) return 0;
-    if (!g_gameWnd || !IsWindow(g_gameWnd)) return 0;
-    if (!GetClientRect(g_gameWnd, &rc) || rc.right < 16 || rc.bottom < 16) return 0;
-
     m = (const float*)((char*)cam + OFF_ENT_XFORM);
-    v.right = m + 0; v.fwd = m + 4; v.up = m + 8; v.cpos = m + 12;
-    v.cw = (int)rc.right;
-    v.ch = (int)rc.bottom;
-    v.ty = (float)tan((double)g_pickFov * 3.14159265358979 / 360.0);
-    v.tx = v.ty * ((float)v.cw / (float)v.ch);
+    camPos[0] = m[12]; camPos[1] = m[13]; camPos[2] = m[14];
+    /* Publish the camera the DRAW side must project against. It re-reads this
+       entity's matrix every frame, so boxes track even between samples. */
+    g_admCam = cam;
 
     /* ---- source 1: the player list, walked in full ---------------------- */
     if (Readable((void*)PLAYERLIST_PTR, 4)) {
@@ -16107,7 +16117,7 @@ static int AdmCollect(AdmRect* out, int cap)
                     node = *(void**)((char*)inner + 8);
                     if (!Readable(node, 0x10)) continue;
                     ent = *(void**)((char*)node + 0x0C);
-                    if (AdmBoxFor(ent, &v, (i == 0), EntityName(ent), &out[n]))
+                    if (AdmBoxFor(ent, camPos, (i == 0), EntityName(ent), &out[n]))
                         ++n;
                 }
                 if (n) InterlockedExchange(&g_admSrc, 1);
@@ -16154,7 +16164,7 @@ static int AdmCollect(AdmRect* out, int cap)
             const EntRow* r = &g_entRows[k];
             if (!r->ent || !AdmLooksLikePlayer(r->name, r->cls)) continue;
             if (AdmAlreadyHave(out, n, r->pos)) continue;
-            if (AdmBoxFor(r->ent, &v, 0, r->name, &out[n])) { ++n; ++added; }
+            if (AdmBoxFor(r->ent, camPos, 0, r->name, &out[n])) { ++n; ++added; }
         }
         if (added) InterlockedExchange(&g_admSrc, 2);
     }
@@ -17210,8 +17220,12 @@ static void DrawOverlayD3D(IDirect3DDevice9* dev)
    an overlay problem. */
 static void AdmDrawD3D(IDirect3DDevice9* dev)
 {
-    struct LV { float x, y, z, rhw; DWORD c; } v[8];
+    struct LV { float x, y, z, rhw; DWORD c; } lv[8];
     AdmRect local[ADM_MAX];
+    AdmView v;
+    void*   cam;
+    const float* m;
+    RECT    rc;
     int     n, i, drawn = 0;
     DWORD   oldFVF = 0, rsZ, rsZW, rsLight, rsAB, rsCull, rsFog, rsAT, rsSten, rsScis;
     IDirect3DBaseTexture9* oldTex = 0;
@@ -17219,6 +17233,23 @@ static void AdmDrawD3D(IDirect3DDevice9* dev)
     IDirect3DPixelShader9*  oldPS = 0;
 
     if (!g_admOn || !g_admCsInit) return;
+
+    /* THE CAMERA, READ THIS FRAME. This is a plain memory read of an engine
+       object from the render thread - not an engine CALL, which is the thing
+       this file forbids off the main thread. The pointer was validated when the
+       sampler published it and the whole draw is inside a __try in hkRDPresent,
+       which is what covers the window where a camera could be torn down between
+       the two. */
+    cam = g_admCam;
+    if (!Readable(cam, OFF_ENT_XFORM + 0x40)) return;
+    if (!g_gameWnd || !GetClientRect(g_gameWnd, &rc)) return;
+    if (rc.right < 16 || rc.bottom < 16) return;
+    m = (const float*)((char*)cam + OFF_ENT_XFORM);
+    v.right = m + 0; v.fwd = m + 4; v.up = m + 8; v.cpos = m + 12;
+    v.cw = (int)rc.right;
+    v.ch = (int)rc.bottom;
+    v.ty = (float)tan((double)g_pickFov * 3.14159265358979 / 360.0);
+    v.tx = v.ty * ((float)v.cw / (float)v.ch);
 
     EnterCriticalSection(&g_admCs);
     n = (int)g_admRectN;
@@ -17258,25 +17289,48 @@ static void AdmDrawD3D(IDirect3DDevice9* dev)
     for (i = 0; i < n; ++i) {
         const AdmRect* r = &local[i];
         DWORD col;
-        float x0, y0, x1, y1;
-        int   k;
+        float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+        int   k, ok = 1;
 
-        if (!r->onScreen) continue;
+        if (!r->valid) continue;
         if (r->local && !g_admSelf) continue;
+
+        /* PROJECT NOW, against the camera as it is THIS frame. Doing it here
+           rather than at sample time is what keeps the box on the model instead
+           of drifting with the view between samples. */
+        for (k = 0; k < 8; ++k) {
+            float c[3], sx, sy;
+            c[0] = (k & 1) ? r->mx[0] : r->mn[0];
+            c[1] = (k & 2) ? r->mx[1] : r->mn[1];
+            c[2] = (k & 4) ? r->mx[2] : r->mn[2];
+            if (!AdmProject(&v, c, &sx, &sy, 0)) { ok = 0; break; }
+            if (sx < x0) x0 = sx;
+            if (sy < y0) y0 = sy;
+            if (sx > x1) x1 = sx;
+            if (sy > y1) y1 = sy;
+        }
+        if (!ok) continue;                       /* behind the near plane */
+        if (x1 < 0 || y1 < 0 || x0 > (float)v.cw || y0 > (float)v.ch) continue;
+
+        /* A MINIMUM SIZE, so distance does not silently erase people. A player
+           a kilometre out projects to well under a pixel; without this the box
+           is mathematically correct and completely invisible, which reads as
+           "the range is too short". Nothing here culls by distance - range is
+           bounded only by whether the engine still has the entity streamed in. */
+        if (x1 - x0 < 3.0f) { float m2 = (x0 + x1) * 0.5f; x0 = m2 - 1.5f; x1 = m2 + 1.5f; }
+        if (y1 - y0 < 3.0f) { float m2 = (y0 + y1) * 0.5f; y0 = m2 - 1.5f; y1 = m2 + 1.5f; }
+
         /* green for you, blue for everyone else - see g_admSelf */
         col = r->local ? 0xFF50E08Cu : 0xFF32C8FFu;
         ++drawn;
 
-        x0 = (float)r->x0; y0 = (float)r->y0;
-        x1 = (float)r->x1; y1 = (float)r->y1;
+        lv[0].x = x0; lv[0].y = y0;  lv[1].x = x1; lv[1].y = y0;
+        lv[2].x = x1; lv[2].y = y0;  lv[3].x = x1; lv[3].y = y1;
+        lv[4].x = x1; lv[4].y = y1;  lv[5].x = x0; lv[5].y = y1;
+        lv[6].x = x0; lv[6].y = y1;  lv[7].x = x0; lv[7].y = y0;
+        for (k = 0; k < 8; ++k) { lv[k].z = 0.0f; lv[k].rhw = 1.0f; lv[k].c = col; }
 
-        v[0].x = x0; v[0].y = y0;  v[1].x = x1; v[1].y = y0;
-        v[2].x = x1; v[2].y = y0;  v[3].x = x1; v[3].y = y1;
-        v[4].x = x1; v[4].y = y1;  v[5].x = x0; v[5].y = y1;
-        v[6].x = x0; v[6].y = y1;  v[7].x = x0; v[7].y = y0;
-        for (k = 0; k < 8; ++k) { v[k].z = 0.0f; v[k].rhw = 1.0f; v[k].c = col; }
-
-        dev->DrawPrimitiveUP(D3DPT_LINELIST, 4, v, sizeof(v[0]));
+        dev->DrawPrimitiveUP(D3DPT_LINELIST, 4, lv, sizeof(lv[0]));
     }
 
     InterlockedExchange(&g_admDrawn, drawn);
@@ -19325,11 +19379,9 @@ static void PkPaint(void)
             row.bottom = row.top + PK_ROWH;
             if (k == g_pkPlSel) PkFillRect(&row, PKV_EDGE);
             SetTextColor(g_pkDc, rows[k].local ? PKV_ORCHID : PKV_GOLD);
-            _snprintf(line, sizeof(line) - 1, "%d  %-22s %6.0fm  %s",
+            _snprintf(line, sizeof(line) - 1, "%d  %-24s %6.0fm  %s",
                       k, rows[k].name[0] ? rows[k].name : "(unnamed)",
-                      rows[k].dist,
-                      rows[k].local ? "you" :
-                      (rows[k].onScreen ? "on screen" : "off screen"));
+                      rows[k].dist, rows[k].local ? "you" : "");
             line[sizeof(line) - 1] = 0;
             row.left += 8;
             DrawTextA(g_pkDc, line, -1, &row,
