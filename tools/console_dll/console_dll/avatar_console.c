@@ -13849,6 +13849,12 @@ static void* volatile   g_admCam    = 0;
    the draw. Float rather than long deliberately: a torn read is impossible for
    an aligned 32-bit word on x86, and a one-frame-stale FOV is invisible. */
 static float            g_admFov    = 65.0f;
+/* The view*projection actually in use, and where it came from. Declared here
+   with the rest of the admin state because the command dispatcher is earlier in
+   the file than the draw code that fills them. */
+static float            g_admVP[16];
+static int              g_admVpOk   = 0;
+static const char*      g_admVpSrc  = "not sampled yet";
 
 /* ---- ARM AT STARTUP, WITHOUT ANYONE TYPING ANYTHING -----------------------
    Staff running this are not going to open a console and type `admin_gui`, so
@@ -14182,6 +14188,15 @@ static void AdminGui(void* console, const char* arg)
         P_(console, 0, AC "  TURN 90 DEGREES AND RUN THIS AGAIN. If row0/1/2 do "
                           "not change, the orientation is not here and that is "
                           "the whole bug.\n");
+        P_(console, 0, AC "  projection source: %s\n", g_admVpSrc);
+        if (g_admVpOk)
+            P_(console, 0, AC "  using D3D's own view*proj - the entity basis "
+                              "above is NOT being used, so its rows do not "
+                              "matter.\n");
+        else
+            P_(console, 0, AC "  D3D's fixed-function transform is not set by "
+                              "this engine, so the entity basis above IS the "
+                              "projection - and its rows matter a great deal.\n");
         return;
     }
     if (_stricmp(arg, "list") == 0) { PlayersList(console, 0); return; }
@@ -16054,6 +16069,62 @@ typedef struct {
     int   ox, oy;      /* viewport origin - non-zero on letterboxed setups */
 } AdmView;
 
+/* ---- the view-projection matrix, taken from D3D ---------------------------
+   THE CAMERA-BASIS ROUTE KEEPS BEING WRONG. Two fixes on top of it did not make
+   boxes sit on models, which means the input is wrong rather than the maths.
+   Reading a basis out of the camera ENTITY assumes the engine keeps a live
+   orientation there, and that assumption has never actually been measured -
+   only inherited from CursorRay, which is only ever verified at the crosshair,
+   i.e. at screen centre, which is exactly where a wrong basis still looks right.
+
+   So stop deriving the transform and ask for it. GetTransform returns what the
+   device was told, and if the engine sets it at all it is the real thing, in
+   the real convention, with no offsets to guess.
+
+   IT MAY NOT BE SET. Dunia is a 2009 shader engine and shader-only renderers
+   often never touch the fixed-function transform state. That is why this is
+   VALIDATED rather than trusted: a view matrix that is identity means nobody
+   set it, and we fall back to the entity basis. g_admVpSrc reports which one is
+   live so the readout can say so instead of leaving it a mystery. */
+static int MatIsIdentity(const float* m)
+{
+    int i;
+    for (i = 0; i < 16; ++i) {
+        float want = ((i & 3) == (i >> 2)) ? 1.0f : 0.0f;
+        float d = m[i] - want;
+        if (d > 0.001f || d < -0.001f) return 0;
+    }
+    return 1;
+}
+
+static void MatMul(float* out, const float* a, const float* b)
+{
+    int r, c, k;
+    for (r = 0; r < 4; ++r)
+        for (c = 0; c < 4; ++c) {
+            float s = 0.0f;
+            for (k = 0; k < 4; ++k) s += a[r * 4 + k] * b[k * 4 + c];
+            out[r * 4 + c] = s;
+        }
+}
+
+/* Row-vector convention (v * M), which is what D3D9 uses. Returns 0 when the
+   point is behind the near plane - w <= 0 - which is the same rejection the
+   basis path makes and for the same reason. */
+static int AdmProjectVP(const float* wp, int cw, int ch, int ox, int oy,
+                        float* sx, float* sy)
+{
+    const float* m = g_admVP;
+    float x, y, w;
+    x = wp[0]*m[0] + wp[1]*m[4] + wp[2]*m[8]  + m[12];
+    y = wp[0]*m[1] + wp[1]*m[5] + wp[2]*m[9]  + m[13];
+    w = wp[0]*m[3] + wp[1]*m[7] + wp[2]*m[11] + m[15];
+    if (w <= 0.0001f) return 0;
+    *sx = (float)ox + ( x / w * 0.5f + 0.5f) * (float)cw;
+    *sy = (float)oy + (0.5f - y / w * 0.5f) * (float)ch;
+    return 1;
+}
+
 /* World point -> screen pixel. 0 when the point is at or behind the near plane;
    see the header for why that test is not optional. */
 static int AdmProject(const AdmView* v, const float* wp, float* sx, float* sy,
@@ -17412,6 +17483,22 @@ static void AdmDrawD3D(IDirect3DDevice9* dev)
     m = (const float*)((char*)cam + OFF_ENT_XFORM);
     v.right = m + 0; v.fwd = m + 4; v.up = m + 8; v.cpos = m + 12;
     (void)rc;
+
+    /* Ask the device for the real transform, every frame - it changes every
+       frame, and a cached one would reintroduce exactly the staleness this
+       whole feature has already been bitten by twice. */
+    {
+        D3DMATRIX view, proj;
+        g_admVpOk = 0;
+        g_admVpSrc = "camera basis (D3D transform not set)";
+        if (SUCCEEDED(dev->GetTransform(D3DTS_VIEW, &view)) &&
+            SUCCEEDED(dev->GetTransform(D3DTS_PROJECTION, &proj)) &&
+            !MatIsIdentity((const float*)&view)) {
+            MatMul(g_admVP, (const float*)&view, (const float*)&proj);
+            g_admVpOk  = 1;
+            g_admVpSrc = "D3D view*projection";
+        }
+    }
     v.ty = (float)tan((double)g_admFov * 3.14159265358979 / 360.0);
     v.tx = v.ty * ((float)v.cw / (float)v.ch);
 
@@ -17467,7 +17554,10 @@ static void AdmDrawD3D(IDirect3DDevice9* dev)
             c[0] = (k & 1) ? r->mx[0] : r->mn[0];
             c[1] = (k & 2) ? r->mx[1] : r->mn[1];
             c[2] = (k & 4) ? r->mx[2] : r->mn[2];
-            if (!AdmProject(&v, c, &sx, &sy, 0)) { ok = 0; break; }
+            if (g_admVpOk) {
+                if (!AdmProjectVP(c, v.cw, v.ch, v.ox, v.oy, &sx, &sy))
+                    { ok = 0; break; }
+            } else if (!AdmProject(&v, c, &sx, &sy, 0)) { ok = 0; break; }
             if (sx < x0) x0 = sx;
             if (sy < y0) y0 = sy;
             if (sx > x1) x1 = sx;
