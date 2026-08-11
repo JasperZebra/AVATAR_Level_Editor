@@ -418,7 +418,7 @@ A full Ghidra decompile of `Avatar_Dunia_Retail_1.02_decrypted.dll` (65 MB text,
 - **FCB format verified against the engine's own reader/writer** (`FUN_10111af0`/`FUN_10112430` in the dump): magic `0x4643626e` 'nbCF', version 2, varint counts, 1-byte attr size with `0xFE`/`0xFF` escape + value back-reference dedup. Our `tools/fcb_convert.py` matches (it round-trips byte-exact vs FCBConverter). FCB name hashing is standard reflected CRC-32 (plus a case-insensitive lowercase variant).
 - **XBT verified**: engine parser accepts versions 10 (20-byte prefix) and 11 (28-byte prefix); payload offset lives at header dword[2] — exactly what `texture_loader.py::_extract_dds_from_xbt` reads. No change needed.
 - **Name-dictionary idea measured and rejected**: all 12,396 string literals in the dump were CRC32'd and diffed against `tools/fcb_names_cache.n32.pkl` (509k entries) — 5,030 new hashes but **zero** of them resolve the remaining unnamed hashes in real converted XML from either game (sampled 1,200 files). The unknown hashes are not literal strings in the binary.
-- **Class hierarchy scraped**: `tools/scrape_class_hierarchy.py` reconstructs the full inheritance tree of 1,530 gameplay classes from the self-registration getters (`FUN_100016b0("CClassName", parentGetter())`; roots like `CNomadObject`/`CResource` use an inline pattern). Outputs `tools/avatar_class_hierarchy.tsv` + `.txt` (local-only, tools/ is gitignored; rerun the script to regenerate). Notable: `CMetaSector` derives from `CWorldSector` (under `CResource`); `CEntity → COmniEntity → CSingletonEntity` holds all the manager singletons. Same class system applies to FC2 (shared engine family).
+- **Class hierarchy scraped**: `tools/scrape_class_hierarchy.py` reconstructs the full inheritance tree of 1,530 gameplay classes from the self-registration getters (`FUN_100016b0("CClassName", parentGetter())`; roots like `CNomadObject`/`CResource` use an inline pattern). Outputs `tools/avatar_class_hierarchy.tsv` + `.txt` (both tracked since Aug 2026; rerun the script to regenerate). Notable: `CMetaSector` derives from `CWorldSector` (under `CResource`); `CEntity → COmniEntity → CSingletonEntity` holds all the manager singletons. Same class system applies to FC2 (shared engine family).
 - Worldsector descriptor attribute names confirmed as engine strings: `SectorId`, `HasMainSectorData`, `isSectorAccessible`, `HasLandmarkNear`, `HasLandmarkFar`, `SectorCountX/Y`, `SectorOffsetX/Y`.
 
 ### FCBConverter — full command-line reference
@@ -1171,7 +1171,7 @@ Avatar_Level_Editor/
 
 | Path | Description |
 |------|-------------|
-| `tools/` | FCBConverter.exe, Gibbed tools, DLLs — must be provided separately |
+| `tools/` | **Partly tracked since Aug 2026.** The ~19 MB a clone needs to run (native FCB converter + its name cache, the Dunia XML codec, the Tools-menu scripts, texconv/ww2ogg/revorb, minilzo) IS in git; the bulk (659 MB `fcb_names.csv`, 129 MB of Ghidra decompiles, sound/string dumps) is not — see the annotated block in `.gitignore` and `tools/THIRD_PARTY.md` |
 | `objects/` | Game object collections |
 | `__pycache__/` | Python bytecode |
 | `cache/` | Runtime FCB conversion and XML cache |
@@ -3269,7 +3269,7 @@ Goal: rebuild the opaque prefix purely from the node tree so edits (value + add/
 
 ## Native FCB converter — replaced FCBConverter.exe (June 2026)
 
-The editor no longer shells out to **FCBConverter.exe** for FCB↔XML. It uses our native pure-Python converter `tools/fcb_convert.py` (+ `fcb_names.csv`/`fcb_names_cache.pkl` name tables; both gitignored, like the old exe). Native is **faster than the exe** (warm 5.4s vs 16.7s on the 4 test files; the exe reloads its 509k-name list every run, ours memoizes via `fcb_convert.load_names()`), **byte-exact on round-trip** (the exe is not — it can't reproduce the game's dedup), and resolves **more names** (superset table).
+The editor no longer shells out to **FCBConverter.exe** for FCB↔XML. It uses our native pure-Python converter `tools/fcb_convert.py` (+ the `fcb_names_cache.n32.pkl` name table, which IS tracked since Aug 2026 — only the 659 MB `fcb_names.csv` it is *built from* stays out, being over GitHub's 100 MB per-file limit). Native is **faster than the exe** (warm 5.4s vs 16.7s on the 4 test files; the exe reloads its 509k-name list every run, ours memoizes via `fcb_convert.load_names()`), **byte-exact on round-trip** (the exe is not — it can't reproduce the game's dedup), and resolves **more names** (superset table).
 
 **`fcb_convert.py` API:** `fcb_to_xml(data, names=None, defs=None) -> str` and `xml_to_fcb(xml_text) -> bytes`. It reproduces FCBConverter's XML exactly, INCLUDING the structural-field expansions the editor depends on — `hidDescriptor` → `<component class="GraphicComponent"|"GraphicKitComponent">` / `<object>/<resource>/<skeleton>/<slot>/<part>` (read by `canvas/model_loader.py`, `map_canvas_gpu.py`, `game_paths_config.py` for 3D model paths) and Array fields (`<Point>`, color arrays). Byte-exactness is preserved via a hidden `__rawhex` attribute + a leading `<!--fcb_meta ...-->` comment (header counts + dedup decision stream). **Edit-safe:** when the XML tree is edited (entities added/removed) the stale dedup is discarded and it fresh-encodes a valid FCB (verified).
 
@@ -3307,7 +3307,7 @@ A full audit of every `.connect()` target across the app (78 modules, AST-checke
 
 ### tools/convert_avatar_xml.py was CLOBBERED by the BinHex GUI — restored (Aug 2026)
 
-The World Editor died with `module 'convert_avatar_xml' has no attribute 'decode'` on any binary `.game.xml`. Root cause: on Aug 1 an improved version of the **BinHex GUI** (`binhex_convertor.py`'s tool, with a pin button + resizable window) was accidentally saved over `tools/convert_avatar_xml.py`, wiping the Dunia binary-XML codec. Recovery: the improved GUI now lives where it belongs (`tools/binhex_convertor.py`; the old one kept as `.bak`), and the codec was restored from the **AFOP_TESTING project copies** (`Desktop/AFOP_TESTING/AFOP_Level_Editor[_pyqt5_backup]/tools/convert_avatar_xml.py` — both identical, full API: `decode/encode/is_ai_rml/decode_ai_rml/encode_ai_rml/_vcnt/_META_ATTRS`). Verified functionally: byte-exact round-trip on the failing `z_anim_creatures.game.xml`, World Editor opens it AND FC2's `world1.game.xml` headlessly, `ai_prefix_regen` imports again. **tools/ is gitignored — this restoration exists only on this machine; the AFOP_TESTING folders are the de-facto backup of the gitignored tools.** Watch out: `convert_avatar_xml.py` (codec) vs `binhex_convertor.py` (GUI tool) are easy to confuse — check `def decode(` is present before trusting the codec file.
+The World Editor died with `module 'convert_avatar_xml' has no attribute 'decode'` on any binary `.game.xml`. Root cause: on Aug 1 an improved version of the **BinHex GUI** (`binhex_convertor.py`'s tool, with a pin button + resizable window) was accidentally saved over `tools/convert_avatar_xml.py`, wiping the Dunia binary-XML codec. Recovery: the improved GUI now lives where it belongs (`tools/binhex_convertor.py`; the old one kept as `.bak`), and the codec was restored from the **AFOP_TESTING project copies** (`Desktop/AFOP_TESTING/AFOP_Level_Editor[_pyqt5_backup]/tools/convert_avatar_xml.py` — both identical, full API: `decode/encode/is_ai_rml/decode_ai_rml/encode_ai_rml/_vcnt/_META_ATTRS`). Verified functionally: byte-exact round-trip on the failing `z_anim_creatures.game.xml`, World Editor opens it AND FC2's `world1.game.xml` headlessly, `ai_prefix_regen` imports again. **`convert_avatar_xml.py` is tracked since Aug 2026, so this can no longer be lost silently; the AFOP_TESTING folders remain the backup for the parts of `tools/` that are still untracked.** Watch out: `convert_avatar_xml.py` (codec) vs `binhex_convertor.py` (GUI tool) are easy to confuse — check `def decode(` is present before trusting the codec file.
 
 **Lesson (user directive): compile/import checks are not enough — functionally exercise the integration paths.** The headless pattern that caught this + a second live bug: `QT_QPA_PLATFORM=offscreen`, construct the real dialog on real game files. The second bug: `ThemeSettings` printed ✓/⚠/🌙 glyphs with bare `print()` → `UnicodeEncodeError` on a cp1252 stdout, and the except handler printed ⚠ too so the exception ESCAPED — crashing `apply_dialog_theme` inside dialog constructors. All its prints now route through `_safe_print` (ASCII-replace fallback; also survives `stdout=None` under pythonw/frozen) and `is_dark_theme`'s config fallback can never raise. Same bug class as the `set_patch_folder` scan-log fix — **never print glyphs with bare print() in code reachable from dialog constructors or startup.** Regression test: `tests/test_theme_settings_safe_print.py`.
 
@@ -4537,7 +4537,7 @@ packer emits them whenever compression doesn't pay.
 
 ### Gotchas
 
-- **`tools/` is gitignored**, so the modules live at the repo root
+- **`tools/` was fully gitignored when this was written**, so the modules live at the repo root
   (`pak_archive.py`, `pak_ui.py`) and are registered in both `packages` and
   `root_files` in `setup.py` (enforced by `tests/test_setup_packages.py`).
 - **`pak_tool.py` crashes on cp1252 stdout** at its final `✓` summary line —
@@ -5542,7 +5542,60 @@ verified) and edited ones now encode instead of crashing. A missing-rawhex field
 now raises a message naming the field and telling you to reconvert, instead of a
 cryptic `int()` failure.
 
-**`tools/` is gitignored, so this fix exists only on this machine** — it is not
-in the repo, and a fresh clone will hit the bug again. Same caveat as the
-`convert_avatar_xml.py` restoration noted above; the AFOP_TESTING copies are the
-de-facto backup.
+This fix **is** in the repo: `tools/fcb_convert.py` became tracked in the same
+session (see "Sharing `tools/` with a collaborator" below), so a fresh clone gets
+it. That was not true when the fix was written.
+
+---
+
+## Sharing `tools/` with a collaborator (Aug 2026)
+
+`tools/` used to be untracked wholesale, which meant **a fresh clone could not
+convert a single `.fcb`** — the native converter, its name table and the
+Tools-menu scripts all lived only on one machine. It is now *partly* tracked so
+a second developer gets a working editor from `git clone` alone.
+
+**What is tracked (~19 MB, 29 files):** `fcb_convert.py` +
+`fcb_names_cache.n32.pkl` + `fcb_names_build.py`, `FCBConverterDefinitions.xml`,
+`binhex_convertor.py`, `convert_avatar_xml.py`, `ai_prefix_regen.py` +
+`ai_slice_spec.md`, `create_sector.py`, `enable_all_sectors.py`,
+`build_env_preset_catalog.py`, `scrape_class_hierarchy.py`, the CRC helpers, the
+class-hierarchy and function-name references, `pak_converter/`, and the
+`texconv` / `ww2ogg` / `revorb` binaries. Plus what was already tracked:
+`console_dll/`, `DevAccess/`, `rte_tool/`, `camera_tool_project/`.
+
+**What is deliberately NOT tracked, and why:**
+
+| | size | reason |
+|---|---|---|
+| `fcb_names.csv` | 659 MB | **GitHub hard-rejects files over 100 MB — tracking it makes the push fail.** It is only the build input for `fcb_names_build.py`; the runtime reads the `.n32.pkl`, which IS tracked. |
+| `*_FULL_DECOMPILE.txt` ×2 | 129 MB | Ghidra dumps, regenerable from binaries you already own. Git history never shrinks. |
+| `SoundDataIDs.bin`, `FCBConverterStrings.list` | 36 MB | build inputs |
+| `luac51*`, `Bootstrap.exe`, `DumpBinaryStrings.exe`, `RebuildFileLists.exe` | small | unclear provenance; an unexplained `.exe` in a public repo reads as malware |
+| `tools/README.md`, `tools/.gitignore` | tiny | they belong to **FCBConverter**, not this project |
+
+**Verified**: a simulated fresh clone (only the tracked files) loads all 509,512
+CRC-32 names and round-trips `omnis.fcb` byte-identically, so nothing untracked
+is needed at runtime.
+
+### Two traps
+
+1. **`.gitignore` has NO trailing comments.** `#` only starts a comment at the
+   START of a line, so `!tools/fcb_convert.py   # why` is a literal pattern that
+   matches nothing. Half the negations silently did nothing until this was
+   caught by actually checking `git check-ignore`. Annotations go on their own
+   line. **Always verify a new negation with `git status --porcelain -uall
+   tools/` rather than assuming it took.**
+2. The `tools/*` + `!tools/x` form is required — git will not descend into an
+   excluded *directory*, so `tools/` + a negation can never work. That was
+   already documented at the top of the file; it still holds.
+
+### Public repo: attribution
+
+The repo is public and `tools/` carries third-party code, so
+**`tools/THIRD_PARTY.md`** records provenance and licence for each redistributed
+file. Two are copyleft and worth knowing about: `FCBConverterDefinitions.xml` is
+**GPL v3** (FCBConverter, Jakub Mareček — and we ship a *modified* copy), and the
+`minilzo_*.dll` pair is **GPL v2+** (Markus Oberhumer), loaded via `ctypes`
+rather than linked. Add a row to that file whenever a new binary lands in
+`tools/`.

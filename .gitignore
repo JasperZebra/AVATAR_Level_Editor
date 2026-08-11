@@ -25,6 +25,65 @@ tools/**/*.log
 # Runtime caches and per-machine state the DLL writes next to itself.
 tools/rte_tool/rte_config.json
 tools/console_dll/console_dll/data/console_dump.txt
+
+# ── Tools a collaborator needs to actually RUN the editor (Aug 2026) ─────────
+# tools/ used to be untracked wholesale, which meant a fresh clone could not
+# convert a single .fcb. These are the ~18 MB that make it work. The heavy
+# stuff below stays out on purpose — see the block after this one.
+# NOTE: .gitignore has NO trailing comments — '#' only starts a comment at the
+# START of a line. "!tools/x.py  # why" is a literal pattern that matches
+# nothing, so every annotation below has to sit on its own line.
+#
+# native FCB<->XML converter (replaced FCBConverter.exe) + the ONLY name table
+# read at runtime (16 MB) + the script that rebuilds it from fcb_names.csv
+!tools/fcb_convert.py
+!tools/fcb_names_cache.n32.pkl
+!tools/fcb_names_build.py
+# conversion schema — see tools/THIRD_PARTY.md
+!tools/FCBConverterDefinitions.xml
+# imported by entity_editor
+!tools/binhex_convertor.py
+# Dunia binary-XML codec — the World Editor depends on it
+!tools/convert_avatar_xml.py
+!tools/ai_prefix_regen.py
+!tools/ai_slice_spec.md
+# Tools-menu scripts, loaded IN-PROCESS — these must stay PyQt5 (AGENTS.md)
+!tools/create_sector.py
+!tools/enable_all_sectors.py
+!tools/build_env_preset_catalog.py
+!tools/scrape_class_hierarchy.py
+!tools/32_crc_converter.py
+!tools/crc64_table.py
+!tools/XBTTemplate.xml
+!tools/avatar_class_hierarchy.tsv
+!tools/avatar_class_hierarchy.txt
+# RE reference for the console-DLL work
+!tools/avatar_function_names.md
+!tools/fc2_function_names.md
+# provenance/licence of the redistributed binaries
+!tools/THIRD_PARTY.md
+# Third-party helper binaries the editor shells out to. Small, and the editor is
+# useless without them; provenance is recorded in tools/THIRD_PARTY.md.
+!tools/texconv.exe
+!tools/ww2ogg.exe
+!tools/revorb.exe
+!tools/packed_codebooks_aoTuV_603.bin
+!tools/pak_converter/
+tools/pak_converter/__pycache__/
+
+# ── Deliberately NOT tracked, and why ───────────────────────────────────────
+#   fcb_names.csv .......... 659 MB. GitHub HARD-REJECTS files over 100 MB, so
+#                            tracking it makes the push fail. It is only the
+#                            build input for fcb_names_build.py; the runtime
+#                            reads fcb_names_cache.n32.pkl, which IS tracked.
+#   *_FULL_DECOMPILE.txt ... 129 MB of Ghidra dumps. Regenerable from the game
+#                            binaries, and git history never shrinks again.
+#   SoundDataIDs.bin ....... 23 MB, FCBConverterStrings.list 13 MB — build inputs.
+#   luac51*, *.exe utils ... unclear provenance; an unexplained .exe in a public
+#                            repo reads as malware at a glance.
+#   tools/README.md ........ belongs to FCBConverter, not to this project.
+#   tools/.gitignore ....... likewise (a stray Visual Studio template).
+# Nothing here is needed to build or run the editor.
 mass_exported_objects/
 # exported sequence bundles are user data, like objects/ above
 sequences/

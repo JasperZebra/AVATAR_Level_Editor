@@ -1,0 +1,664 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FCBConverter>
+	<File name="$(?&lt;=(entitylibrary.fcb))">
+		<object hash="" name="EntityPrototype" action="External" FieldForName="Name" />
+	</File>
+	<File name="$(?&lt;=(nomadobjecttemplates_rt.fcb))">
+		<object hash="" name="Template" action="External" FieldForName="FullName" />
+	</File>
+	<File name="$(?&lt;=(\.material\.bin|\.material\.bin\.converted\.xml))">
+		<object hash="" name="parameter">
+			<primaryKey hash="" name="name" valueBinHex="74C1B63C" valueR="BaseColorArray" />
+			<field hash="" name="value" type="" forceType="false" action="Array" ArrayItemType="Vector4" ArrayItemName="Color" />
+		</object>
+		<object hash="" name="parameter">
+			<primaryKey hash="" name="name" valueBinHex="7FCF66E6" valueR="PaintBaseColorArray" />
+			<field hash="" name="value" type="" forceType="false" action="Array" ArrayItemType="Vector4" ArrayItemName="PaintColor" />
+		</object>
+		<object hash="" name="parameter">
+			<primaryKey hash="" name="name" valueBinHex="2FBC5E53" valueR="UndercoatBaseColorArray" />
+			<field hash="" name="value" type="" forceType="false" action="Array" ArrayItemType="Vector4" ArrayItemName="UndercoatColor" />
+		</object>
+		<object hash="" name="parameter">
+			<primaryKey hash="" name="name" valueBinHex="E3EC982B" valueR="GlassColorArray" />
+			<field hash="" name="value" type="" forceType="false" action="Array" ArrayItemType="Vector4" ArrayItemName="GlassColor" />
+		</object>
+		<object hash="" name="parameter">
+			<primaryKey hash="" name="name" valueBinHex="24C77693" valueR="TilingArray" />
+			<field hash="" name="value" type="" forceType="false" action="Array" ArrayItemType="Vector4" ArrayItemName="Tiling" />
+		</object>
+		<object hash="" name="parameter">
+			<primaryKey hash="" name="name" valueBinHex="857A7F35" valueR="MaterialPropertiesArray" />
+			<field hash="" name="value" type="" forceType="false" action="Array" ArrayItemType="Vector4" ArrayItemName="MaterialProperties" />
+		</object>
+		<object hash="" name="parameter">
+			<primaryKey hash="" name="name" valueBinHex="66CAC6BA" valueR="PaintMaterialPropertiesArray" />
+			<field hash="" name="value" type="" forceType="false" action="Array" ArrayItemType="Vector4" ArrayItemName="PaintProperties" />
+		</object>
+		<object hash="" name="parameter">
+			<primaryKey hash="" name="name" valueBinHex="9F549D07" valueR="PorosityFactorsArray" />
+			<field hash="" name="value" type="" forceType="false" action="Array" ArrayItemType="Vector3" ArrayItemName="PorosityFactors" />
+		</object>
+		<object hash="" name="parameter">
+			<primaryKey hash="" name="name" valueBinHex="91490EDD" valueR="PackedSkinPropertiesColorModeArray" />
+			<field hash="" name="value" type="" forceType="false" action="Array" ArrayItemType="Vector4" ArrayItemName="PackedSkinPropertyColorMode" />
+		</object>
+		<object hash="" name="parameter">
+			<primaryKey hash="" name="name" valueBinHex="B4FDCDC7" valueR="PackedPropertiesArray" />
+			<field hash="" name="value" type="" forceType="false" action="Array" ArrayItemType="Vector4" ArrayItemName="PackedProperties" />
+		</object>
+		<object hash="" name="parameter">
+			<primaryKey hash="" name="name" valueBinHex="550B4012" valueR="GlassPackedPropertiesArray" />
+			<field hash="" name="value" type="" forceType="false" action="Array" ArrayItemType="Vector4" ArrayItemName="GlassPackedProperties" />
+		</object>
+	</File>
+	<File name="$(?&lt;=(.animtrackcol))">
+		<object hash="" name="Track">
+			<primaryKey hash="" name="hid_DTCTH_ClassName" valueBinHex="6829B7AC" valueR="" /> <!--CLinearAnimationTrack&lt;ndVec3&gt;-->
+			<object hash="" name="Keys">
+				<object hash="" name="Key">
+					<field hash="" name="TimePrecise" type="Float32" forceType="false" action="FindInDictionarySkip" />
+					<field hash="" name="Value" type="Vector3" forceType="false" action="" />
+				</object>
+			</object>
+		</object>
+		<object hash="" name="Track">
+			<primaryKey hash="" name="hid_DTCTH_ClassName" valueBinHex="4BAF32F2" valueR="" /> <!--CLinearAnimationTrack&lt;ndQuat&gt;-->
+			<object hash="" name="Keys">
+				<object hash="" name="Key">
+					<field hash="" name="TimePrecise" type="Float32" forceType="false" action="FindInDictionarySkip" />
+					<field hash="" name="Value" type="Vector4" forceType="false" action="FindInDictionarySkip" />
+				</object>
+			</object>
+		</object>
+		<object hash="" name="Track">
+			<primaryKey hash="" name="hid_DTCTH_ClassName" valueBinHex="43768129" valueR="" /> <!--CLinearAnimationTrack&lt;float&gt;-->
+			<object hash="" name="Keys">
+				<object hash="" name="Key">
+					<field hash="" name="TimePrecise" type="Float32" forceType="false" action="FindInDictionarySkip" />
+					<field hash="" name="Value" type="Float32" forceType="false" action="FindInDictionarySkip" />
+				</object>
+			</object>
+		</object>
+	</File>
+	
+	<!--global settings for all files-->
+	<File name="">
+		<object hash="" name="hidConvexVolume">
+			<object hash="" name="hidVertices">
+				<object hash="" name="Vertex">
+					<field hash="" name="Vertex" type="Vector3" forceType="false" action="" />
+				</object>
+			</object>
+		</object>
+		<object hash="" name="Knot">
+			<field hash="" name="Value" type="Vector4" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="Info" type="Vector4" forceType="false" action="FindInDictionarySkip" />
+		</object>
+		<object hash="" name="instances">
+			<field hash="" name="SectorData" type="" forceType="false" action="InstancesSectorData" />
+		</object>
+		<object hash="" name="CollectionZoneData">
+			<!-- <field hash="" name="ZoneData" type="" forceType="false" action="CollectionZoneData" /> -->
+		</object>
+
+		<!--global settings for all objects and fields-->
+		<Globals>
+			<!--some known fields, it can speed up converting-->
+			<field hash="" name="text_hid_DTCTH_ClassName" type="String" forceType="false" action="" />
+			<field hash="" name="text_hid_DbRefT" type="String" forceType="false" action="" />
+			<!-- <field hash="" name="hid_DbRefT" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" /> -->
+			<field hash="" name="TypeId" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="selAbilityName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- Seat bone name hash — FCBConverter otherwise misdetects this as Float32 -->
+			<field hash="" name="SeatBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- CAvatarSkinComponent material path hashes — empty slots use FFFFFFFF which the ComputeHash32 heuristic explicitly excludes, causing misdetection as Float32 -->
+			<field hash="" name="fileOriginalMaterial" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileMaterialOverride" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- file* — model/skeleton/animation/texture path hashes -->
+			<field hash="" name="fileName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileSkeleton" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileStateMachine" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileCubeMap" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileFacialActor" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileFacialFile" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileBack" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileBottom" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileFront" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileLeft" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileRight" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileTop" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileClosedAnimationName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileOpenedAnimationName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileWaterMesh" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fileWaterNormalMap" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- obj* -->
+			<field hash="" name="objModel" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- tex* -->
+			<field hash="" name="texTexture" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- ps* — particle system references -->
+			<field hash="" name="psAvailable" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psBackfireParticleSystem" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psBrokenEngineSmoke" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psBrokenEngineSmokeNoHood" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psBulletCaseParticleId" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psBulletUnderwaterId" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psComplete" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psCorpParticle" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psCorpPickupParticle" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psDeathFx" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psDeathParticleEffect" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psDiveMove" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psEmerge" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psEmitter" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psEngineExplosion" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psEngineFire" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psEngineFireNoHood" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psEngineSmoke" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psEngineSmokeNoHood" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psExhaust" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psExplode" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psExplodeParticleEffect" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psExplosion" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psExplosionUnderwater" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psFalling" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psFastFlyingFX" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psFly" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psFlyingFX" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psFront" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psFX" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psFxExhaust" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psFxExplosion" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psFxWaterSplash" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psGearAgent" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psInfoAgent" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psInProgress" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psLand" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psLaunch" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psLeft" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psLightFx" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psLoopPS" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psMuzzleParticlesId" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psMuzzleParticlesId_3rd" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psNaviParticle" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psNaviPickupParticle" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psParticleEffect" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psParticles" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psParticleSystem" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psPartSys" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psPickupParticle" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psRainEmitter" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psRainSplash" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psRear" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psRemains" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psRight" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psShell" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSideQuestAvailable" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSideQuestComplete" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSideQuestInProgress" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSideQuestTalkToMeStep" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSkillAgent" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSmallDeathParticleEffect" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSmoke" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSprayParticleEffect" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psStartPS" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psStorm" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSubmerge" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSwimIdleChest" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSwimIdleHands" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSwimMoveChest" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psSwimMoveHands" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psTalkToMeStep" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psTracer" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psTrail" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psTravelAgent" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="psTravelAgentHighlighted" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- mix* — audio mixing preset references -->
+			<field hash="" name="mixBriefingMixingPreset" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixBuddyRescuePreset" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixDeathRecoverySoundPreset" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixDeathSoundPreset" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixDistanceToEdge_1" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixDistanceToEdge_2" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixDistanceToEdge_3" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixDistanceToEdge_4" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixDistanceToEdge_5" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixDistanceToEdge_min" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixFlyingSoundPreset" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixInsideMixingPreset" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixInVehicleSoundPreset" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixMalariaBlackoutPreset" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixMalariaMajorAttackPreset" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixMalariaMinorAttackPreset" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixMixingPresetAtCenter" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="mixScanMixingPreset" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- matimp* — material impact effect references -->
+			<field hash="" name="matimpBigCollisionImpact" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpBounceImpactFx" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpBulletImpactFx" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpDropImpact" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpExplosionFx" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpFakeBulletFx" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpFootStep" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpGroundFx" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpLanding" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpMediumCollisionImpact" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpMeleeImpactFx" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpNaviBootFootStep" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpSecondaryBulletImpactFx" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpShellImpactFx" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpSlideImpact" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpSmallCollisionImpact" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="matimpWheelDustFx" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- aiws* — AI brain workspace references -->
+			<field hash="" name="aiwsBrainWorkspace" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="aiwsHitAndRunBrainWorkspace" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="aiwsMoveToPlanWorkspace" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="aiwsPlanWorkspace" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="aiwsSwitchWeaponPlanWorkspace" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- Bone/node name hashes -->
+			<field hash="" name="ActiveBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="BaseBoneName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="Bone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="BoneId" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="BoneID" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="BoneName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="BoneNameOffHand" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="BulletCaseBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="BulletCaseOffHandBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="FXBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="FXBoneName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidDoorBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidDynamicLightBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidEntityClass" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidFXNode" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidGaugeRPMBoneName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidGaugeSpeedBoneName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidHighresRigidbodyName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidNodeName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidNodeNameLOD0" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidPropellerName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidResourceId" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="hidRigidbodyName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="InactiveBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="LaunchBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="MuzzleBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="MuzzleOffHandBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="PickupAttachBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="SpawnBoneName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="SprayBoneName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="StartBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="SteeringBoneName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="WeaponBoneName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- FX / effect name hashes -->
+			<field hash="" name="BriefingPostFX" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="DeathFX" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="disFXName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="IronsightFX" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="ScanPostFX" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sFX" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sTargetFX" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="UserEffectParamSetName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- stim* / ammo* / curves -->
+			<field hash="" name="stimIgniteId" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="stimIgniteIdMP" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="ammoAmmoType" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="AmmoType" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="CurvesID" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="PartID" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- Misc name/type/tag hashes -->
+			<field hash="" name="disName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="FaceTag" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="MoveToPlanName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="PlanName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sBeautifierClass" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sDetail" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sEffectName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sHeadTag" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sNeedleBone" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sOverrideTag" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sSTPSubtype" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sTag" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sType" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sVoiceIntroEventName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sVoiceOutroEventName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sVoiceSeparatorEventName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sWeaponDB_ID" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="SwitchWeaponPlanName" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- Individual hash fields not covered by prefix/suffix rules above -->
+			<field hash="" name="HitAndRunBrain" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="ArmorTag" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="CorpModifier" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="NaviModifier" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="InitialMoveState" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="LandingSkill" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="PlayerCommunicationChannel" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="SpeakerChannel" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="RelativeBonePos1" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="RelativeBonePos2" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="RelaxSequence" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="ScareSequence" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="packInventoryPack" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="fireBulletShakeAndRumbleEffect" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="CriticalHurtShakeAndRumble" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="MediumHurtShakeAndRumble" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="PulseShakeAndRumble" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="LandingShakeAndRumble" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<!-- s-prefix hash fields (sEnterSignal, sMode, etc.) — FCBConverter misdetects as Float32 -->
+			<field hash="" name="sActionMap" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sActionMapInVehicle" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sAssociatedMission" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sCompletionEvent" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sCompletionEventOnPlayerKill" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sContext" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sControlSchemePedia" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sDrivingActionMap" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sEnterSignal" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sInitialWeaponCategory" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sLeaveTransitionSignal" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sMissionEventOnSocketFilled" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sMode" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sPedia" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sPulseSkill" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sSkillRingActionMap" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sTeam" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="sWeakWeaponCategory" type="ComputeHash32" forceType="false" action="FindInDictionarySkip" />
+			<field hash="" name="disDbObjectName" type="String" forceType="false" action="" />
+			<field hash="" name="hid_ArchRefId" type="Id64" forceType="false" action="" />
+			<field hash="" name="hid_DbRefId" type="Id64" forceType="false" action="" />
+			<field hash="" name="disLibItemId" type="Id64" forceType="false" action="" />
+			<field hash="" name="dir" type="Vector3" forceType="false" action="" />
+			<field hash="" name="rawPosition" type="Vector3" forceType="false" action="" />
+			<field hash="" name="edgeLine" type="Vector3" forceType="false" action="" />
+			<field hash="" name="hidNormal" type="Vector3" forceType="false" action="" />
+			<field hash="" name="loaddep" type="Boolean" forceType="false" action="" />
+			<field hash="" name="SpawnThreadSafe" type="Boolean" forceType="false" action="" />
+			<field hash="" name="hidHasAliasName" type="Boolean" forceType="false" action="" />
+			<field hash="" name="SoundGuid" type="String" forceType="false" action="" />
+
+			<!--special fields-->
+			<field hash="" name="data" type="" forceType="false" action="MoveBinDataChunk" />
+			<field hash="" name="TypeIds" type="" forceType="false" action="ReadListHashes" />
+			<field hash="" name="ResIds" type="" forceType="false" action="ReadListFiles" />
+			<field hash="" name="ArchetypeResDepList" type="" forceType="false" action="ReadListFiles" listFromParent="1" />
+			<field hash="" name="hidShapePoints" type="" forceType="false" action="Array" ArrayItemType="Vector3" ArrayItemName="Point" />
+			<field hash="" name="hidDescriptor" type="" forceType="false" action="XMLRML" />
+			<field hash="" name="LocalProperties" type="" forceType="false" action="XMLRML" />
+			<field hash="" name="RML_DATA" type="" forceType="false" action="FCBRML" />
+			<field hash="" name="CNH_CompressedData" type="" forceType="false" action="CompressedFCB" />
+			<field hash="" name="buffer" type="" forceType="false" action="CompressedFCB" />
+			<field hash="" name="CNH_UncompressedSize" type="" forceType="false" action="DoNothing" comment="Do not edit CNH_UncompressedSize, it will be changed during converting back to FCB." />
+			<field hash="" name="CNH_CompressedSize" type="" forceType="false" action="DoNothing" comment="Do not edit CNH_CompressedSize, it will be changed during converting back to FCB." />
+
+			<!--hid_DbRefT-->
+			<!--because this exists as Hash32 and also as String-->
+			<ConditionList type="ComputeHash32" forceType="false" action="FindInDictionarySkip">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="8" />
+					<Condition action="ExactName" value="hid_DbRefT" />
+				</ConditionArray>
+			</ConditionList>
+			<ConditionList type="String" forceType="false">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="8" type="not" />
+					<Condition action="ByteLast" value="00" />
+					<Condition action="ExactName" value="hid_DbRefT" />
+				</ConditionArray>
+			</ConditionList>
+
+
+			<!--Enum-->
+			<ConditionList type="Enum" forceType="false">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="8" />
+					<Condition action="StartsWithType" value="sel" />
+				</ConditionArray>
+			</ConditionList>
+
+			<!--UInt32-->
+			<ConditionList type="UInt32" forceType="false">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="8" />
+					<ConditionArray type="or">
+						<Condition action="StartsWithType" value="snd" />
+						<Condition action="StartsWithType" value="sndtp" />
+						<Condition action="StartsWith" value="SoundId" />
+					</ConditionArray>
+				</ConditionArray>
+			</ConditionList>
+
+			<!--Int32-->
+			<ConditionList type="Int32" forceType="false">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="8" />
+					<ConditionArray type="or">
+						<ConditionArray type="and">
+							<Condition action="ByteLast" value="00" />
+							<Condition action="StartsWithType" value="f" type="not" />
+							<Condition action="StartsWith" value="text_" type="not" />
+							<Condition action="ContainsCI" value="name" type="not" />
+							<Condition action="ExactName" value="String" type="not" />
+							<Condition action="ExactName" value="shader" type="not" />
+						</ConditionArray>
+						<ConditionArray type="or">
+							<Condition action="Contains" value="locid" />
+							<Condition action="StartsWith" value="loc" />
+							<Condition action="StartsWithType" value="i" />
+							<Condition action="StartsWithType" value="u" />
+							<Condition action="ExactName" value="Id" />
+						</ConditionArray>
+					</ConditionArray>
+				</ConditionArray>
+			</ConditionList>
+
+			<!--Int16-->
+			<ConditionList type="Int16" forceType="false">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="4" />
+					<Condition action="StartsWithType" value="f" type="not" />
+				</ConditionArray>
+			</ConditionList>
+
+			<!--String-->
+			<ConditionList type="String" forceType="false">
+				<ConditionArray type="or">
+					<ConditionArray type="and">
+						<Condition action="ByteLen" value=">4" />
+						<Condition action="ByteLast" value="00" />
+						<Condition action="Regex" value="^[a-zA-Z0-9_.:\/\-\x20\\\(\)]+$" />
+					</ConditionArray>
+					<Condition action="StartsWith" value="text_" />
+					<!-- <Condition action="StartsWithType" value="s" /> -->
+				</ConditionArray>
+			</ConditionList>
+
+			<!--hash64-->
+			<ConditionList type="Hash64" forceType="false">
+				<ConditionArray type="and">
+					<ConditionArray type="or">
+						<ConditionArray type="and">
+							<Condition action="ByteLen" value="16" />
+							<Condition action="RegexBinaryHex" value="^[0-9a-fA-F]{16}$" />
+							<Condition action="ExactValue" value="0000000000000000" type="not" />
+							<Condition action="ExactValue" value="ffffffffffffffff" type="not" />
+							<Condition action="StartsWith" value="vec" type="not" />
+							<Condition action="ContainsCI" value="value" type="not" />
+						</ConditionArray>
+						<Condition action="ExactName" value="hash" />
+						<Condition action="ExactName" value="kitidGraphicKit" />
+					</ConditionArray>
+					<ConditionArray type="and">
+						<Condition action="ByteLast" value="00" type="not" />
+						<Condition action="ContainsCI" value="layerid" type="not" />
+						<Condition action="StartsWithType" value="ent" type="not" />
+						<Condition action="ExactName" value="GameElementId" type="not" />
+						<Condition action="EndsWith" value="Id" type="not" />
+						<Condition action="ExactName" value="kitidGraphicKit" type="not" />
+					</ConditionArray>
+				</ConditionArray>
+			</ConditionList>
+
+			<!--id64-->
+			<ConditionList type="Id64" forceType="false">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="16" />
+					<Condition action="RegexBinaryHex" value="^[0-9a-fA-F]{16}$" />
+					<Condition action="ExactValue" value="0000000000000000" type="not" />
+					<Condition action="ExactValue" value="ffffffffffffffff" type="not" />
+					<Condition action="StartsWith" value="vec" type="not" />
+					<Condition action="ContainsCI" value="value" type="not" />
+				</ConditionArray>
+			</ConditionList>
+
+			<!--float32-->
+			<ConditionList type="Float32" forceType="false">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="8" />
+					<Condition action="RegexBinaryHex" value="^[0-9a-fA-F]{8}$" />
+					<ConditionArray type="or">
+						<ConditionArray type="and">
+							<Condition action="ExactValue" value="00000000" type="not" />
+							<Condition action="ExactValue" value="ffffffff" type="not" />
+							<Condition action="ByteLast" value="00" type="not" />
+						</ConditionArray>
+						<Condition action="StartsWithType" value="f" />
+						<Condition action="ExactName" value="shader" />
+					</ConditionArray>
+					<ConditionArray type="or">
+						<ConditionArray type="and">
+							<Condition action="ContainsCI" value="hid_DTCTH_ClassName" type="not" />
+							<Condition action="ContainsCI" value="Name" type="not" />
+							<Condition action="ContainsCI" value="BoneID" type="not" />
+							<Condition action="Contains" value="Type" type="not" />
+							<Condition action="ContainsCI" value="Id" type="not" />
+							<Condition action="Contains" value="sDetail" type="not" />
+							<Condition action="Contains" value="class" type="not" />
+							<Condition action="Contains" value="type" type="not" />
+							<Condition action="ExactName" value="shader" type="not" />
+							<!-- Hash-typed naming-convention prefixes — these are never floats -->
+							<Condition action="StartsWith" value="ps" type="not" />
+							<Condition action="StartsWith" value="mix" type="not" />
+							<Condition action="StartsWith" value="matimp" type="not" />
+							<Condition action="StartsWith" value="aiws" type="not" />
+							<Condition action="StartsWith" value="file" type="not" />
+							<Condition action="StartsWith" value="tex" type="not" />
+							<Condition action="StartsWith" value="obj" type="not" />
+							<Condition action="ContainsCI" value="Bone" type="not" />
+							<Condition action="ContainsCI" value="Brain" type="not" />
+							<Condition action="Contains" value="FX" type="not" />
+							<Condition action="Contains" value="Tag" type="not" />
+							<Condition action="Contains" value="Modifier" type="not" />
+						</ConditionArray>
+						<Condition action="StartsWithType" value="f" />
+						<Condition action="Contains" value="Duration" />
+						<Condition action="Contains" value="Multiplier" />
+						<Condition action="Contains" value="Distance" />
+					</ConditionArray>
+				</ConditionArray>
+			</ConditionList>
+
+			<!-- ComputeHash32 for generic names that may have values ending in 0x00 -->
+			<!-- ByteLen guard prevents FindInDictionarySkip from crashing on short fields -->
+			<ConditionList type="ComputeHash32" forceType="false" action="FindInDictionarySkip">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="8" />
+					<ConditionArray type="or">
+						<Condition action="ExactName" value="Name" />
+						<Condition action="ExactName" value="Type" />
+						<Condition action="ExactName" value="Brain" />
+						<Condition action="ExactName" value="Item" />
+					</ConditionArray>
+				</ConditionArray>
+			</ConditionList>
+
+			<!--ComputeHash32-->
+			<ConditionList type="ComputeHash32" forceType="false" action="FindInDictionarySkip">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="8" />
+					<Condition action="RegexBinaryHex" value="^[0-9a-fA-F]{8}$" />
+					<ConditionArray type="or">
+						<ConditionArray type="and">
+							<Condition action="ExactValue" value="00000000" type="not" />
+							<Condition action="ExactValue" value="ffffffff" type="not" />
+							<Condition action="ByteLast" value="00" type="not" />
+						</ConditionArray>
+						<Condition action="ExactName" value="shader" />
+					</ConditionArray>
+				</ConditionArray>
+			</ConditionList>
+
+			<!--Bool-->
+			<ConditionList type="Boolean" forceType="false">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="2" />
+					<ConditionArray type="or">
+						<Condition action="StartsWithType" value="b" />
+						<Condition action="StartsWithType" value="is" />
+					</ConditionArray>
+				</ConditionArray>
+			</ConditionList>
+
+			<!--vec4-->
+			<ConditionList type="Vector4" forceType="false">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="32" />
+					<ConditionArray type="or">
+						<Condition action="ExactName" value="Value" />
+						<Condition action="ExactName" value="Info" />
+						<Condition action="ContainsCI" value="offset" />
+						<Condition action="ContainsCI" value="position" />
+						<Condition action="ContainsCI" value="rotation" />
+						<Condition action="ContainsCI" value="vector" />
+						<Condition action="StartsWith" value="vec" />
+						<Condition action="Contains" value="value" />
+						<Condition action="ContainsCI" value="color" />
+					</ConditionArray>
+				</ConditionArray>
+			</ConditionList>
+
+			<!--vec3-->
+			<ConditionList type="Vector3" forceType="false">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="24" />
+					<ConditionArray type="or">
+						<Condition action="ContainsCI" value="Angle" />
+						<Condition action="Contains" value="Dimensions" />
+						<Condition action="ContainsCI" value="offset" />
+						<Condition action="ContainsCI" value="position" />
+						<Condition action="Contains" value="Pos" />
+						<Condition action="ContainsCI" value="rotation" />
+						<Condition action="Contains" value="Orientation" />
+						<Condition action="Contains" value="Direction" />
+						<Condition action="Contains" value="Multiplier" />
+						<Condition action="ContainsCI" value="vector" />
+						<Condition action="ContainsCI" value="color" />
+						<Condition action="ContainsCI" value="clr" />
+						<Condition action="ContainsCI" value="BBoxMin" />
+						<Condition action="ContainsCI" value="BBoxMax" />
+						<Condition action="ContainsCI" value="BBMin" />
+						<Condition action="ContainsCI" value="BBMax" />
+						<Condition action="StartsWith" value="vec" />
+						<Condition action="Contains" value="value" />
+					</ConditionArray>
+				</ConditionArray>
+			</ConditionList>
+
+			<!--vec2-->
+			<ConditionList type="Vector2" forceType="false">
+				<ConditionArray type="and">
+					<Condition action="ByteLen" value="16" />
+					<ConditionArray type="or">
+						<Condition action="Contains" value="offset" />
+						<Condition action="Contains" value="position" />
+						<Condition action="Contains" value="rotation" />
+						<Condition action="Contains" value="vector" />
+						<Condition action="StartsWith" value="vec" />
+						<Condition action="Contains" value="value" />
+					</ConditionArray>
+				</ConditionArray>
+			</ConditionList>
+
+		</Globals>
+	</File>
+</FCBConverter>
