@@ -16,6 +16,7 @@ A comprehensive level editor for modifying **Avatar: The Game** and **Far Cry 2*
 - **Smart Entity Operations**: Copy/paste, duplication with auto-generated IDs, and batch operations
 - **Interactive Canvas**: Color-coded entity visualization with adaptive grid system
 - **Sector Management**: Visual boundary display with violation detection; entities moved across sector (or FC2 cell) borders are re-homed to the correct sector file on save
+- **Spawn generators** *(Avatar only)*: one click builds working spawn setups — a **Creature Spawn Point** (wildlife + the area it roams), or a complete **War Battle**: two armies that spawn in their own camps, charge converging rush markers in the middle and fight endlessly, exactly the way Plains of Goliath builds its WarZones
 - **Terrain Editor**: In-app heightmap editing with brush tools and live preview — Avatar `.csdat` and Far Cry 2 `.sdat`
 - **Archive Support** *(both games)*: Point the editor at an archive — Avatar `.pak` or Far Cry 2 `.fat`/`.dat` — and it unpacks it and uses the resulting folder automatically, or pick a patch folder you have already unpacked. Repacking to `.pak` (Avatar) is one click with no options — it writes the archive beside the folder, holding just your changes when the editor unpacked it and everything otherwise
 
@@ -232,6 +233,16 @@ Both FCB (native game format) and XML (human-readable) formats are supported wit
   *Sequences* tab, choose a camera, then play or scrub — the preview flies the
   camera along its animation while the entities act out the sequence in the
   main view. Both games.
+- **Creature Spawn Points** *(Avatar only)*: *Tools ▸ 🐾 Add Creature Spawn Point*, or
+  right-click the 2D map to place one exactly where you clicked. Pick a species,
+  how many stay alive, the roam radius and the respawn delay — it writes the
+  spawner and its spawn area, active immediately.
+- **War Battles** *(Avatar only)*: *Tools ▸ ⚔ Create War Battle*, or right-click the
+  2D map. Choose the two factions, how far apart the camps sit and how close
+  their rush markers meet, and it generates the whole fight — two spawn areas,
+  two rush markers and the spawners for both sides, respawning forever. It runs
+  as soon as the map loads; untick *Start on load* if you would rather have the
+  retail script-gated form.
 - **Armed vehicles render complete**: mounted weapons (the Dove's rear turret
   gun, FC2's jeep/boat .50cals) are attached automatically from the games'
   entity-library data, so vehicles no longer show up missing their guns.

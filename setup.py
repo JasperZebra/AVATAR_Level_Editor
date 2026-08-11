@@ -501,6 +501,8 @@ build_options = {
         'canvas.water_plane_renderer',
         'canvas.movie_renderer',
         'canvas.mp_spawn_creator',
+        'canvas.spawn_builder',         # ← GUI-free NPC/creature/war spawn entity builders
+        'canvas.spawn_dialogs',         # ← Creature Spawn Point + War Battle creators
         'canvas.xbg_parser',
         'canvas.xbg_direct_loader',     # ← Direct XBG→model loading (no GLTF cache)
         'canvas.model_shader',          # ← GLSL per-pixel material shader (normal maps + spec + emission)

@@ -2243,6 +2243,33 @@ class SimplifiedMapEditor(QMainWindow):
             "Place a new entity by referencing an archetype in this level's entitylibrary")
         tools_menu.addAction(object_library_action)
 
+        # Spawn generators — Avatar only (FC2 ships none of the NPC-spawner
+        # components; see the Rule 8 note in canvas/spawn_builder.py).
+        tools_menu.addSeparator()
+
+        creature_spawn_action = QAction("🐾 Add Creature Spawn Point...", self)
+        creature_spawn_action.triggered.connect(self.open_creature_spawn_creator)
+        creature_spawn_action.setToolTip(
+            "Place a wildlife spawner (+ its roam area) at the view centre")
+        tools_menu.addAction(creature_spawn_action)
+
+        war_battle_action = QAction("⚔ Create War Battle...", self)
+        war_battle_action.triggered.connect(self.open_war_battle_creator)
+        war_battle_action.setToolTip(
+            "Generate a two-sided endless battle at the view centre, the way "
+            "Plains of Goliath builds its WarZones")
+        tools_menu.addAction(war_battle_action)
+
+        if self.game_mode == "farcry2":
+            for _a in (creature_spawn_action, war_battle_action):
+                _a.setEnabled(False)
+                _a.setText(_a.text() + "  (Avatar only)")
+                _a.setToolTip(
+                    "Far Cry 2 has no CNPCSpawnerComponent / BtzOmniTagPoint — "
+                    "these entities exist only in Avatar")
+
+        tools_menu.addSeparator()
+
         # Convert Entity Library FCB action
         convert_entitylib_action = QAction("Convert Entity Library FCB...", self)
         convert_entitylib_action.triggered.connect(self.open_convert_entitylibrary)
@@ -3763,6 +3790,86 @@ class SimplifiedMapEditor(QMainWindow):
             import traceback
             traceback.print_exc()
             self.statusBar().showMessage(f"Object Library failed to open: {e}", 8000)
+
+    # ── Spawn generators (Avatar only) ───────────────────────────────────────
+
+    def _spawn_drop_point(self):
+        """World (x, y, z) to drop a generated spawn entity at.
+
+        Uses the viewport centre so the Tools-menu entries work in BOTH view
+        modes — 3D right-click is mouse-look, so it has no context menu of its
+        own (see AGENTS.md Rule 9 / "3D right-click pan").  Z follows the
+        terrain when a heightmap is loaded.
+        """
+        x = y = 0.0
+        canvas = getattr(self, 'canvas', None)
+        try:
+            if canvas is not None and getattr(canvas, 'mode', None) == getattr(canvas, 'MODE_3D', object()):
+                cam = getattr(canvas, 'camera_3d', None)
+                if cam is not None:
+                    # GL (x, y, z) -> world (x, -z, y)
+                    p = cam.position
+                    x, y = float(p[0]), -float(p[2])
+            elif canvas is not None:
+                x, y = canvas.screen_to_world(canvas.width() / 2.0,
+                                              canvas.height() / 2.0)
+        except Exception:
+            pass
+
+        z = 0.0
+        try:
+            if canvas is not None and hasattr(canvas, 'get_terrain_height_at'):
+                h = canvas.get_terrain_height_at(x, y)
+                if h is not None:
+                    z = float(h)
+        except Exception:
+            pass
+        return float(x), float(y), z
+
+    def _open_spawn_dialog(self, which, x=None, y=None, z=None):
+        """Shared, exception-proof launcher for both spawn generators."""
+        title = 'Creature Spawn Point' if which == 'creature' else 'War Battle'
+        try:
+            if self.game_mode == "farcry2":
+                QMessageBox.information(
+                    self, title,
+                    "Far Cry 2 does not use Avatar's NPC spawner entities "
+                    "(CNPCSpawnerComponent / BtzOmniTagPoint), so this "
+                    "generator is Avatar only.")
+                return
+            if getattr(self, 'xml_tree', None) is None:
+                QMessageBox.information(
+                    self, title,
+                    "Load a level first — the generated entities are written "
+                    "into the level's mapsdata (and omnis).")
+                return
+
+            if x is None or y is None:
+                x, y, z = self._spawn_drop_point()
+            if z is None:
+                z = 0.0
+                try:
+                    if hasattr(self.canvas, 'get_terrain_height_at'):
+                        h = self.canvas.get_terrain_height_at(x, y)
+                        if h is not None:
+                            z = float(h)
+                except Exception:
+                    pass
+
+            from canvas.spawn_dialogs import CreatureSpawnDialog, WarBattleDialog
+            cls = CreatureSpawnDialog if which == 'creature' else WarBattleDialog
+            dlg = cls(self, x, y, z, parent=self)
+            dlg.exec()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.warning(self, title, f"Could not open {title}:\n{e}")
+
+    def open_creature_spawn_creator(self, checked=False, x=None, y=None, z=None):
+        self._open_spawn_dialog('creature', x, y, z)
+
+    def open_war_battle_creator(self, checked=False, x=None, y=None, z=None):
+        self._open_spawn_dialog('war', x, y, z)
 
     def open_convert_entitylibrary(self):
         """Convert entitylibrary_full.fcb files to .fcb.converted.xml (per-file, not batch).
@@ -11868,6 +11975,42 @@ class SimplifiedMapEditor(QMainWindow):
                             QMessageBox.warning(self, "MP Spawn Creator",
                                                 f"Could not open the MP Spawn Creator:\n{e}")
                     mp_spawn_action.triggered.connect(_open_mp_spawn)
+
+            # Spawn generators — place at the clicked spot. Avatar only: FC2
+            # ships none of these components (see canvas/spawn_builder.py).
+            # 3D has no context menu (right-drag is mouse-look), so the Tools
+            # menu carries these for 3D — Rule 9 is satisfied by that pairing.
+            if getattr(self, 'xml_tree', None) is not None:
+                menu.addSeparator()
+                creature_action = menu.addAction("🐾 Add Creature Spawn Point Here...")
+                war_action = menu.addAction("⚔ Create War Battle Here...")
+                if self.game_mode == "farcry2":
+                    for _a in (creature_action, war_action):
+                        _a.setEnabled(False)
+                        _a.setText(_a.text().replace("...", " (Avatar only)"))
+                else:
+                    def _spawn_at(kind, _event=event):
+                        try:
+                            lpos = _event.localPos()
+                            wx, wy = self.canvas.screen_to_world(lpos.x(), lpos.y())
+                            wz = 0.0
+                            try:
+                                if hasattr(self.canvas, 'get_terrain_height_at'):
+                                    h = self.canvas.get_terrain_height_at(wx, wy)
+                                    if h is not None:
+                                        wz = float(h)
+                            except Exception:
+                                pass
+                            self._open_spawn_dialog(kind, wx, wy, wz)
+                        except Exception as e:
+                            import traceback
+                            traceback.print_exc()
+                            QMessageBox.warning(self, "Spawn Creator",
+                                                f"Could not open the creator:\n{e}")
+                    creature_action.triggered.connect(
+                        lambda checked=False: _spawn_at('creature'))
+                    war_action.triggered.connect(
+                        lambda checked=False: _spawn_at('war'))
 
             # Selection actions
             if not has_selection:

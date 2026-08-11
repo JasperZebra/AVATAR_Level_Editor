@@ -222,6 +222,7 @@ This rule sits alongside Rule 3, not inside it: Rule 3 keeps AGENTS.md current f
 | `tools/create_sector.py` | `tests/test_create_sector_fc2.py` | — | Game-aware sector creation: `sector_xy` with stride 80 matches retail FC2 header (2592 → X=32,Y=32), `cell_id_block` derives an FC2 cell's 16×16 global block from existing files / returns None on an empty cell folder (bulk aborts, never sprays the whole 80×80 grid), Avatar stays 0–255; template writes global Id/X/Y; module by **file path** — excluded from `--cov` |
 | `entity_library_browser.py` | `tests/test_library_browser_binhex.py` | — | Library-browser edits sync the AUTHORITATIVE BinHex text with the cosmetic value-* attr (`_apply_field_edit` retail-verified: ComputeHash32=CRC-32 LE, String=null-terminated ASCII, Boolean 1 byte, Vector3 LE floats), structural/`__rawhex` fields refuse edits, bad input raises + leaves the field untouched, `_resync_binhex` regenerates only stale hex and never touches `__rawhex` — excluded from `--cov` |
 | `theme_settings.py` | `tests/test_dialog_theme.py` | — | Central dialog theming: `dialog_stylesheet` matches the main window's palettes (#2b2b2b/#f0f0f0), `is_dark_theme` resolves the live main window's `force_dark_theme` up the parent chain before falling back to config, `apply_dialog_theme` styles + tags the window and invokes its `_retheme(dark)` hook; stub widgets, no QApplication — excluded from `--cov` |
+| `canvas/spawn_builder.py` | `tests/test_spawn_builder.py` | — | Creature/WarZone generators: `value-ComputeHash32` is **CRC-32** (six retail hashes pinned — the djb2 in `entity_editor` produces different bytes), a creature spawner links its collection and keeps `entRushPoint` null, the war geometry puts BOTH tag points strictly between the camps `tag_gap` apart (the whole battle mechanic) with each spawner wired to its own camp+tag and endless respawn, and self-starting vs script-gated emit the right `bActive`/`CMissionComponent`/layer shape; module loaded by **file path** — excluded from `--cov` |
 
 ### Key patterns used
 - **Dependency injection via constructor**: `CacheManager(cache_dir=str(tmp_path), enabled=True/False)` — no mocks needed for most tests
@@ -5420,3 +5421,128 @@ anything in them. **The Ghidra decompile has large unanalysed gaps**: it showed 
 `CreateMutexA` call sites where the binary has 5, which is how the
 single-instance check stayed hidden. For anything load-bearing, disassemble the
 shipped DLL rather than trusting the decompile.
+
+---
+
+## Creature spawn points and WarZone battles — the format, and the generators (Aug 2026)
+
+Two one-click generators, Tools ▸ **🐾 Add Creature Spawn Point** and Tools ▸
+**⚔ Create War Battle** (plus the same two on the 2D canvas right-click, which
+place at the clicked spot). Code: `canvas/spawn_builder.py` (GUI-free builders,
+unit-tested) and `canvas/spawn_dialogs.py` (the two dialogs + `commit_plan`).
+
+Ground-truthed against retail `sp_plainsofgoliath_of_fm_01` (POG) and
+`sp_sebastien_rb_02` (Blue Lagoon).
+
+### The three entity types
+
+| Entity | Class | Lives in | What it is |
+|---|---|---|---|
+| `AvatarNPCSpawnPoint_*` | `COmniMapTickedEntity` + `CNPCSpawnerComponent` | mapsdata | the thing that spawns NPCs |
+| `NPCSpawnPointCollection_*` | `CBasicShapeEntity` + `hidShapePoints` | mapsdata | the polygon it scatters into |
+| `BtzOmniTagPoint_*` | `CBtzOmniTagPoint` | **omnis** | a bare marker used as `entRushPoint` |
+
+Tag points are **omnis-only** — all 51 in POG are in `*.omnis.xml`, zero in
+mapsdata. Don't "simplify" by putting them in mapsdata.
+
+### The war mechanic, in one sentence
+
+**Each side's spawners rush their OWN tag point, and the two tag points are
+placed a short distance apart in the middle, so the two armies converge on that
+contested ground and fight.** `bRespawnWhenDead=True` +
+`iNPCMaximumRespawns=-1` makes it endless.
+
+Retail geometry (WarZone_1..4): camps are 30–90 m out from the middle, and the
+paired Corp/Navi tag points sit **17.7–62.5 m apart** — hence
+`DEFAULT_TAG_GAP = 30`. The dialog refuses `tag_gap >= separation`, because
+past that each side's marker lands behind the enemy camp and the armies never
+meet. 26 of 28 shipped warzone spawners rush a tag tagged with their **own**
+side's name; the 2 exceptions are hand-tweaked.
+
+`selSpawnerType` enum: 0 Single, 1 Random, 2 Cycle, 3 Mounted, 4 Group.
+`selSpecificToTerritoryController`: 1 Corp, 2 Navi, 6 All.
+
+### Activation — this is the load-bearing finding
+
+Every retail `ld_spawners\warzone_*` spawner is `bActive=False` and waits for
+mission scripting. Every `ld_spawners\pacificzone_*` spawner is `bActive=True`.
+**So self-activation provably works**, and the generator defaults to it: the
+entities go into the `main` MissionLayer with **no `CMissionComponent` at all**
+and `bActive=True`, which is exactly how the 45 always-on no-layer spawners in
+POG are shipped. The dialog's opt-out writes the retail script-gated shape
+instead (`bActive=False` inside `ld_spawners\<zone>`) and says plainly that
+nothing will spawn without scripting.
+
+**Container/field agreement is mandatory**: the `main` container holds entities
+with no `CMissionComponent` (443 mapsdata / 189 omnis in POG); every other
+container's `text_PathId` exactly equals its entities'
+`text_hidMissionLayerPath`. `_find_or_create_layer` maintains that.
+
+### `value-ComputeHash32` is CRC-32, NOT the djb2 in `entity_editor`
+
+`entity_editor.compute_hash32` is a djb2 variant and produces different bytes —
+which is why `mp_spawn_creator` had to hardcode `CBasicShapeEntity` →
+`E6026070`. Verified on six retail pairs (`COmniMapTickedEntity` 7773ED6B,
+`CBasicShapeEntity` E6026070, `CBtzOmniTagPoint` 7DBB5B45, `COmniMapEntity`
+B2648188, `CNavMeshGenComponent` DF3CCB94, `ld_spawners\warzone_2` 65D2895E):
+all six are `zlib.crc32` little-endian, none are djb2. Use
+`spawn_builder.compute_hash32_crc_binhex`. This matches the
+Entity-Library-Browser finding already in this file.
+
+### Creature spawners
+
+Wildlife is the same `AvatarNPCSpawnPoint` with an `Animals.Avatar.*`
+archetype, `selSpawnerType=Single` (148/152), and **`entRushPoint` null** — a
+rush target would march the animals across the map instead of letting them
+roam. 134 of 152 own a collection, so the dialog defaults to giving one.
+Component set is `CNPCSpawnerComponent + CFCXAIComponent + CEventComponent`
+(+ `CMissionComponent` only when layered).
+
+### Verified how
+
+Builder output was diffed element-for-element against the real retail entities:
+**106/106, 36/36 and 30/30 elements with zero hash mismatches and zero field-value
+differences.** Then end-to-end through the actual editor path — native FCB →
+XML → `ET.parse` → `commit_plan` → write → native FCB → re-decode — with every
+`entSpawnPoints`/`entRushPoint` resolving to the right named entity.
+
+### Rule 8 exception: Avatar only, on evidence
+
+A scan of all **16,238** converted FC2 worldsector XMLs found **zero**
+occurrences of `CNPCSpawnerComponent`, `CBtzOmniTagPoint`,
+`NPCSpawnPointCollection`, `archNPCArchetype` or `entRushPoint`. FC2 simply has
+no such system. Both menu entries and both context-menu entries are disabled
+with an explanatory label in FC2 mode, like MP Spawn Creator.
+
+### Rule 9 note
+
+The 2D canvas right-click carries both actions; **3D has no context menu at all**
+(right-drag is mouse-look), so the Tools menu is the 3D entry point and drops at
+the viewport centre via `_spawn_drop_point()` (terrain height sampled when a
+heightmap is loaded). That pairing is how this feature satisfies Rule 9 — don't
+"fix" it by adding a 3D right-click menu, that would break camera control.
+
+### Bug found and fixed while building this: `__rawhex` must be an ATTRIBUTE
+
+`tools/fcb_convert.py`'s XMLRML branch emitted the authoritative descriptor
+bytes as an XML **comment** (`<!--rawhex ...-->`) for cosmetic reasons. Both
+encoders read `__rawhex` as an **attribute** (`attr.get`/`child.get`), and
+**ElementTree drops comments** — so the instant a tree round-tripped through
+`ET.parse` (which the editor does for every mapsdata/omnis edit) the bytes were
+gone, `build()` fell through to the array branch, and re-encoding died with
+`invalid literal for int() with base 10: '\n              '` on the nested
+`<component>`. The byte-exact round-trip only ever survived via the `fcb_meta`
+fast path, which an edited tree also loses.
+
+This was **pre-existing and not specific to this feature** — it broke re-encoding
+of any omnis carrying `hidDescriptor` expansions (183 of them in POG), i.e. any
+edit to an omnis entity on such a level. Fixed by emitting `__rawhex` as an
+attribute; unedited files still repack byte-identically (103,037 → 103,037 B
+verified) and edited ones now encode instead of crashing. A missing-rawhex field
+now raises a message naming the field and telling you to reconvert, instead of a
+cryptic `int()` failure.
+
+**`tools/` is gitignored, so this fix exists only on this machine** — it is not
+in the repo, and a fresh clone will hit the bug again. Same caveat as the
+`convert_avatar_xml.py` restoration noted above; the AFOP_TESTING copies are the
+de-facto backup.
