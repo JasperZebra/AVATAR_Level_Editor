@@ -76,7 +76,30 @@ dwords in one compare; 84 linear compares per dword made a full scan take
 minutes.
 
 `__try`-wrapped, skips uncommitted/guard pages and regions over 64 MB, on demand
-only — never from the frame path. **Untested against a running game.**
+only — never from the frame path.
+
+**RESULT, from a live match — it found the schema, not the values.** The dense
+clusters (33 and 28 distinct stats) are inside **Dunia's own data section, 4
+bytes apart**: compiled-in arrays of stat IDs — the stats UI's tag lists — not
+anything live. The heap hits are 0x80-strided with `0xFFFFFFFF` at +4 and are
+noise. Keep the tool anyway: **33 of our hashes consecutive in the engine's own
+array proves the CRC-32 derivation in `MP_STATS.md` is exactly right.**
+
+**`statwatch` is the follow-up that hunts values instead of keys**, anchored on
+`score` — the one number `net_GetGameScoreStats` already gives us. Snapshot
+every **writable** address holding that value, score, run again, keep only those
+that followed. Writable-only is the point: a live counter is never in a
+read-only page, and the restriction drops exactly the static tables `statscan`
+tripped over. Then it dumps `-0x40..+0x60` around each survivor, because
+whatever block holds `score` holds `kills` and `deaths` too.
+
+**Also fixed here: "Unknown command" was being parsed as data.** The `net_`
+commands only exist while the MP level is loaded, and the match-end sample runs
+just *after* teardown — so a match recorded `gamemode` as
+`"Unknown command: net_GetCurrent"`. An unregistered command is now treated as
+no output at all, uniformly, so every field keeps its last good value. The
+roster had survived only because the scoreboard parser already rejected captures
+with no `TEAM ` line; that guard is now the general rule.
 
 ### 2026-08-11 (n) — multiplayer match stats, recorded with no keypress
 

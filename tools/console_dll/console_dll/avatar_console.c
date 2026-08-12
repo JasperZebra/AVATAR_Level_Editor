@@ -165,6 +165,7 @@ static HWND  g_focusWndFwd(void);
 static void MpStatsTick(void* console);
 static void MpStatsCmd(void* console, const char* arg);
 static void MpStatScan(void* console);
+static void MpStatWatch(void* console);
 
 /* A disabled window gets no keyboard or mouse input, but GetAsyncKeyState - our
    input path - still works. That is exactly the asymmetry we need: we keep
@@ -1763,6 +1764,7 @@ static void ModHelp(void* c)
     P_(c, 0, AC "vehexit        get out    vehstatus - what am I in?\n");
     P_(c, 0, AC "mpstats        multiplayer match recording - status + sample now\n");
     P_(c, 0, AC "statscan       hunt CGameStatsService in memory (run DURING a match)\n");
+    P_(c, 0, AC "statwatch      find stats by watching them change - run, score, run again\n");
     P_(c, 0, AC "freecam        detached camera - the body stays put (toggle)\n");
     P_(c, 0, AC "camspeed <n>   freecam speed - in freecam, hold Shift/LCtrl to ramp\n");
     P_(c, 0, AC "firstperson    the game's own first-person camera (toggle)\n");
@@ -16379,6 +16381,7 @@ static int TryModCommand(void* console, const char* line)
     if (_stricmp(p, "vehstatus") == 0){ VehStatus(console);    return 1; }
     if (_stricmp(p, "mpstats") == 0)  { MpStatsCmd(console, ""); return 1; }
     if (_stricmp(p, "statscan") == 0) { MpStatScan(console);     return 1; }
+    if (_stricmp(p, "statwatch") == 0){ MpStatWatch(console);    return 1; }
     if (_strnicmp(p, "camspeed", 8) == 0 && (p[8] == ' ' || p[8] == '\t' || !p[8])) {
         double v = 0;
         if (sscanf(p + 8, "%lf", &v) == 1 && v > 0) {
@@ -20138,7 +20141,7 @@ static const char* const kOurCmds[] = {
     "entflag", "fixcontrol", "trace", "freecam",
     "firstperson", "fpoffset", "fpfov", "fpaim",
     "fpdiag", "verbose", "fpbody", "camspeed",
-    "vehenter", "vehexit", "vehstatus", "mpstats", "statscan", "spawn",
+    "vehenter", "vehexit", "vehstatus", "mpstats", "statscan", "statwatch", "spawn",
     "spawn_list", "spawn_all", "anchor", "editorlink",
     "agentinfo", "vehinfo", "facing", "facinginfo",
     "driveai", "rcprobe", "respawn", "resurrect",
@@ -23412,6 +23415,19 @@ static void MpSample(void* con, const char* why)
 
     for (i = 0; i < (int)(sizeof(CMDS) / sizeof(CMDS[0])); ++i) {
         int n = MpCapture(con, CMDS[i], buf, sizeof(buf));
+
+        /* THE net_ COMMANDS ONLY EXIST WHILE THE MP LEVEL IS LOADED.
+           The match-end sample runs just after the world is torn down, so every
+           one of them answers "Unknown command:" - and the first match recorded
+           this way came out with gamemode "Unknown command: net_GetCurrent",
+           because that string parsed perfectly well as a mode name.
+
+           Treat an unregistered command as no output at all. Everything below
+           then keeps the last good value instead of overwriting it with an
+           error message, which is what the scoreboard guard was already doing
+           and the reason the roster survived while the mode did not. */
+        if (n > 0 && strstr(buf, "Unknown command:")) n = 0;
+
         if (n > 0) g_mpGotOutput = 1;
 
         /* Parse as we go. Only accept a scoreboard that actually contained a
@@ -23834,6 +23850,164 @@ static void MpStatScan(void* console)
     }
     if (f) fclose(f);
     P_(console, 0, AC "statscan: wrote mp_statscan.log\n");
+}
+
+/* ==================== statwatch: FIND THE VALUES BY WATCHING THEM MOVE ====
+   statscan hunted the stat table by its CRC-32 keys and found the schema but
+   not the values: the dense clusters are inside Dunia's own data section, 4
+   bytes apart, which makes them compiled-in arrays of stat IDs (the stats UI's
+   tag lists) rather than anything live. Confirming, not useless - 33 of our
+   hashes consecutive in the engine's own array proves the hash derivation is
+   right - but the live numbers are elsewhere and not adjacent to their keys.
+
+   So stop looking for keys and look for VALUES, anchored on the one number we
+   can already read independently: `score`, straight off net_GetGameScoreStats.
+
+   Two phases, because one snapshot cannot tell a real stat from any other word
+   that happens to hold the number 4:
+
+     statwatch          snapshot every address whose float or int == my score
+     ...score changes...
+     statwatch          keep only the candidates that FOLLOWED it
+
+   Anything that tracks the score across a change is either the score or a copy
+   of it, and after two or three rounds the list collapses to a handful. Then we
+   dump memory around the survivors: whatever block holds `score` holds kills,
+   deaths and the rest at fixed offsets, because they are one player's record.
+
+   Read-only throughout. */
+
+#define MPWATCH_MAX 65536
+static unsigned long g_mpwAddr[MPWATCH_MAX];
+static int           g_mpwCount = 0;
+static int           g_mpwRound = 0;
+static long          g_mpwValue = 0;
+
+/* Which score do we anchor on? The local player's, if we can tell who that is;
+   otherwise the highest, which at least changes during a match. */
+static long MpWatchAnchor(char* whoOut, int whoCap)
+{
+    int i, best = -1;
+    for (i = 0; i < g_mpNPlayers; ++i)
+        if (best < 0 || g_mpPlayers[i].score > g_mpPlayers[best].score) best = i;
+    if (best < 0) { if (whoCap) whoOut[0] = 0; return 0; }
+    _snprintf(whoOut, whoCap - 1, "%s", g_mpPlayers[best].name);
+    whoOut[whoCap - 1] = 0;
+    return g_mpPlayers[best].score;
+}
+
+static int MpWatchMatches(unsigned long* q, long want)
+{
+    unsigned long v = *q;
+    if ((long)v == want) return 1;                  /* stored as int   */
+    { float f = *(float*)&v;                        /* stored as float */
+      if (f == (float)want) return 1; }
+    return 0;
+}
+
+static void MpStatWatch(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    SYSTEM_INFO si;
+    MEMORY_BASIC_INFORMATION mbi;
+    unsigned char *p, *limit;
+    char who[64];
+    long want = MpWatchAnchor(who, sizeof(who));
+    char path[MAX_PATH];
+    FILE* f;
+    int i;
+
+    if (!g_mpActive || !g_mpNPlayers) {
+        P_(console, 0, AC "statwatch: no live scoreboard yet - run this in a "
+                          "match, after somebody has scored.\n");
+        return;
+    }
+
+    /* ---- round 1, or a restart because the anchor has not moved ---------- */
+    if (g_mpwRound == 0 || want == g_mpwValue) {
+        int n = 0;
+        GetSystemInfo(&si);
+        p = (unsigned char*)si.lpMinimumApplicationAddress;
+        limit = (unsigned char*)si.lpMaximumApplicationAddress;
+        while (p < limit && n < MPWATCH_MAX) {
+            if (VirtualQuery(p, &mbi, sizeof(mbi)) != sizeof(mbi)) break;
+            {
+                unsigned char* base = (unsigned char*)mbi.BaseAddress;
+                SIZE_T sz = mbi.RegionSize;
+                /* WRITABLE only: a live counter is not in a read-only page,
+                   and skipping them drops Dunia's static tables outright. */
+                int ok = (mbi.State == MEM_COMMIT) &&
+                         !(mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) &&
+                         (mbi.Protect & (PAGE_READWRITE | PAGE_WRITECOPY |
+                                         PAGE_EXECUTE_READWRITE));
+                if (ok && sz <= MPSCAN_MAXREGION) {
+                    unsigned long* q   = (unsigned long*)base;
+                    unsigned long* end = (unsigned long*)(base + (sz & ~3u));
+                    __try {
+                        for (; q < end && n < MPWATCH_MAX; ++q)
+                            if (MpWatchMatches(q, want))
+                                g_mpwAddr[n++] = (unsigned long)q;
+                    } __except (EXCEPTION_EXECUTE_HANDLER) { }
+                }
+                p = base + (sz ? sz : si.dwPageSize);
+            }
+        }
+        g_mpwCount = n;
+        g_mpwRound = 1;
+        g_mpwValue = want;
+        P_(console, 0, AC "statwatch round 1: %d candidate(s) holding %s's "
+                          "score (%ld).\n", n, who, want);
+        P_(console, 0, AC "  Now go score, then run statwatch again.\n");
+        return;
+    }
+
+    /* ---- later rounds: keep only what followed the score ----------------- */
+    {
+        int kept = 0;
+        for (i = 0; i < g_mpwCount; ++i) {
+            unsigned long a = g_mpwAddr[i];
+            if (!Readable((void*)a, 4)) continue;
+            __try {
+                if (MpWatchMatches((unsigned long*)a, want))
+                    g_mpwAddr[kept++] = a;
+            } __except (EXCEPTION_EXECUTE_HANDLER) { }
+        }
+        g_mpwCount = kept;
+        ++g_mpwRound;
+        g_mpwValue = want;
+        P_(console, 0, AC "statwatch round %d: %d candidate(s) still tracking "
+                          "%s (now %ld).\n", g_mpwRound, kept, who, want);
+    }
+
+    if (g_mpwCount > 40) {
+        P_(console, 0, AC "  Still broad - score again and repeat.\n");
+        return;
+    }
+
+    /* Few enough to be worth dumping. Whatever block holds `score` holds the
+       rest of that player's stats, so print a window around each survivor. */
+    _snprintf(path, sizeof(path) - 1, "%s\\mp_statwatch.log", g_dir);
+    f = fopen(path, "w");
+    if (f) fprintf(f, "statwatch round %d: %d survivor(s), anchor %s = %ld\n\n",
+                   g_mpwRound, g_mpwCount, who, want);
+    for (i = 0; i < g_mpwCount && f; ++i) {
+        unsigned long a = g_mpwAddr[i];
+        long off;
+        fprintf(f, "===== %08lX =====\n", a);
+        for (off = -0x40; off <= 0x60; off += 4) {
+            unsigned long addr = a + off;
+            if (!Readable((void*)addr, 4)) continue;
+            __try {
+                unsigned long v = *(unsigned long*)addr;
+                float fv = *(float*)&v;
+                fprintf(f, "  %+05ld  %08lX  int=%-12ld float=%.3f%s\n",
+                        off, v, (long)v, fv, off == 0 ? "   <-- anchor" : "");
+            } __except (EXCEPTION_EXECUTE_HANDLER) { }
+        }
+        fprintf(f, "\n");
+    }
+    if (f) fclose(f);
+    P_(console, 0, AC "statwatch: wrote mp_statwatch.log - send it over.\n");
 }
 
 /* `mpstats` - manual view of the same thing, for when the automatic path is
