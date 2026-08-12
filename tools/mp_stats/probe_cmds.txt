@@ -1,0 +1,43 @@
+; probe_cmds.txt -- answers "can we read match stats without memory-walking?"
+;
+; HOW TO RUN IT
+;   1. Copy this file over the game's avatar_cmds.txt, next to the DLL:
+;        <install>\bin\avatar_cmds.txt          (dinput8 drop-in)
+;        or the injector's folder                (inject.py)
+;   2. Start a multiplayer match and play long enough to score -- a couple of
+;      kills, at least one death. Zeroes everywhere are indistinguishable from
+;      "the command does nothing", which is the one result we cannot use.
+;   3. While still IN the match, press F11.  That runs every line below.
+;   4. Press F10.  That writes the scrollback to console_dump.txt.
+;   5. Send console_dump.txt back.
+;
+; Do it a second time on the END-OF-MATCH scoreboard if you can. If the
+; numbers survive into PostRound, the record can be written there and nothing
+; needs sampling during play.
+;
+; EVERY COMMAND HERE IS A GETTER. Nothing below changes match state.
+; Deliberately NOT included, because they would: net_EndMatch,
+; net_restartmatch, net_ExtendMatch, net_KickClient, net_KickBanClient.
+; Do not add them to this file.
+;
+; If a line prints nothing at all, that is a real result too -- plenty of
+; Avatar's inherited Far Cry 2 commands are inert (Cheat_godmode and friends
+; execute happily and do nothing).
+
+modhelp
+
+; --- the one that matters -------------------------------------------------
+net_GetGameScoreStats
+
+; --- who was in the match, and on which side ------------------------------
+net_GetPlayerList
+net_GetPlayerListByTeam
+
+; --- match identity, for the record's map/gamemode/host fields ------------
+net_GetCurrentGameMode
+net_GetCurrentGameModeName
+net_GetCurrentMapName
+net_GetCurrentSessionMaxPlayer
+net_GetHostName
+net_GetHostAddress
+net_DisplayTime

@@ -113,6 +113,74 @@ deliberate duplicate returns `200`; a wrong token returns `401`.
 
 ---
 
+## Making it automatic — the game already has the state machine
+
+Nothing here needs a keypress, and nothing needs a command typed. The engine
+runs the match as an explicit state machine, and every trigger we need is a
+transition in it. From `avatar_class_hierarchy.tsv`:
+
+```
+CGRStateIdle
+CGRStateLoad ─► CGRStateLoadWorld ─► CGRStateLoadPlayer
+CGRStateAdversarialLobby / CGRStateTeamAdversarialLobby    ← players joining
+CGRStatePreRound  (CFCXGRStatePreRound)                    ← about to start
+   │
+   ├─ CFCXGRStateDeathMatchInRound        ◄── ARM HERE
+   ├─ CFCXGRStateTeamDeathMatchInRound         (one class per game mode,
+   ├─ CFCXGRStateCTFInRound                     so the state itself tells
+   ├─ CFCXGRStateVIPInRound                     us which mode is running --
+   ├─ CBTZGRStateCNHInRound                     no separate lookup)
+   ├─ CBTZGRStateHordeInRound
+   └─ CBTZGRStateFinalBattleInRound
+   │
+CGRStatePostRound (CFCXGRStatePostRound)                   ◄── WRITE HERE
+```
+
+So the whole lifecycle the stats need is:
+
+| Transition | What the DLL does |
+|---|---|
+| → any `*InRound` | new match: stamp start time, generate `match_id`, note the mode (from *which* InRound state it is), read map/host once |
+| during the round | nothing, if the numbers survive to PostRound — otherwise sample periodically |
+| → `PostRound` | collect the final stats, append **one** line to `matches.jsonl`, close |
+
+`PostRound` is the right place to write because it is where the engine itself
+considers the round finished and the scoreboard final — the same moment
+`CGREventEndGameStatsReceived` exists for.
+
+Observing it should be **polling, not hooking**: a background thread comparing
+the current state object's identity every second or so. That is how the DLL
+already does its other watching, it cannot corrupt a vtable it never writes to,
+and a missed poll costs one match rather than the process.
+
+Identity comes from the RTTI class-descriptor globals, which are lazily
+initialised per class and unique:
+
+| State | class-descriptor global |
+|---|---|
+| `CFCXGRStateDeathMatchInRound` | `DAT_1122AB38` |
+| `CFCXGRStateTeamDeathMatchInRound` | `DAT_1122A6FC` |
+| `CGRStatePostRound` | `DAT_1122A55C` |
+
+**Not yet found: how to reach the current `CGRState` from a global.** That is
+the one piece of plumbing the automatic version still needs, and it is the same
+kind of pointer-chase the DLL already does for `CConsole` and `CBTZGame`.
+
+### Who runs the uploader
+
+**The host, not every player.** In a match the host has the authoritative
+numbers; a client only ever sees what was replicated to it (37 of the 84 stats
+carry `livereplication="1"`). So the machine that should be writing and
+uploading `matches.jsonl` is the one hosting — which is also the machine where
+requiring Python is nothing, because it is ours.
+
+That keeps the player-facing story exactly as it is today: **drop in
+`dinput8.dll`, start the game, play.** No Python, no terminal, no hosts edit
+for stats. This matters — `DISTRIBUTION.md` promises the drop-in needs nothing
+else, and stats must not be what breaks that promise.
+
+---
+
 ## The open end: getting the numbers out of the game
 
 Everything above works today. **What does not exist yet is the DLL code that writes
@@ -131,16 +199,17 @@ already uses for `CConsole` and `CBTZGame`. But the per-player stat container's 
 established, and this is precisely what AGENTS.md warns about: *"for anything load-bearing,
 disassemble the shipped DLL rather than trusting the decompile."*
 
-**The test that decides it:** inject the DLL, get into a multiplayer match, and run
+**The test that decides it is `probe_cmds.txt`, in this folder.** Copy it over the game's
+`avatar_cmds.txt`, get into a match, score a couple of kills, press **F11** (runs every line) then
+**F10** (writes `console_dump.txt`). No typing, and every command in it is a getter —
+`net_EndMatch`, `net_restartmatch` and the kick commands are deliberately excluded and must not be
+added.
 
-```
-net_GetPlayerList
-net_GetGameScoreStats
-```
+If real numbers come out, Route A is the whole job. If nothing prints — plenty of Avatar's
+inherited Far Cry 2 commands are inert, exactly like `Cheat_godmode` — Route B is the only way and
+the offsets have to be found against a live process.
 
-then press **F10** and read `console_dump.txt`. If real numbers come out, build Route A. If they
-print nothing — plenty of Avatar's inherited Far Cry 2 commands are inert, exactly like
-`Cheat_godmode` — then Route B is the only way and the offsets have to be found against a live
-process.
+Score something before probing. **Zeroes everywhere are indistinguishable from "the command does
+nothing"**, which is the one outcome that answers nothing.
 
 Nothing in Route A or B has been run against a running game.
