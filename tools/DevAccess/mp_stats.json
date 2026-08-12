@@ -1,0 +1,6888 @@
+{
+  "source": "C:\\Users\\sambe\\Desktop\\____AVATAR_STUFF\\__GameFilesPC\\data\\engine\\gamemodes\\gamemodesconfig.xml",
+  "modes": {
+    "Adversarial": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "default": "0"
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": -2
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "FB_objectRepaired": {
+          "name": "FB_objectRepaired",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "FB_objectDestroyed": {
+          "name": "FB_objectDestroyed",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "animalKills": {
+          "name": "animalKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_pointsRecovered": {
+          "name": "VIP_pointsRecovered",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        }
+      }
+    },
+    "TeamAdversarial": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "default": "0"
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": -2
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "FB_objectRepaired": {
+          "name": "FB_objectRepaired",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "FB_objectDestroyed": {
+          "name": "FB_objectDestroyed",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "animalKills": {
+          "name": "animalKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_pointsRecovered": {
+          "name": "VIP_pointsRecovered",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        }
+      }
+    },
+    "FCXDeathMatch": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "default": "0"
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "score": 1
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "score": -1
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "FB_objectRepaired": {
+          "name": "FB_objectRepaired",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "FB_objectDestroyed": {
+          "name": "FB_objectDestroyed",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "animalKills": {
+          "name": "animalKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_pointsRecovered": {
+          "name": "VIP_pointsRecovered",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        }
+      }
+    },
+    "FCXTeamDeathMatch": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "default": "0"
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "score": 1
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "score": -1
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "FB_objectRepaired": {
+          "name": "FB_objectRepaired",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "FB_objectDestroyed": {
+          "name": "FB_objectDestroyed",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "animalKills": {
+          "name": "animalKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_pointsRecovered": {
+          "name": "VIP_pointsRecovered",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        }
+      }
+    },
+    "FCXCTF": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "default": "0"
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": -2
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "live": true,
+          "modifiers": {
+            "xp": 25
+          }
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "live": true,
+          "modifiers": {
+            "score": 1,
+            "xp": 50
+          }
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "live": true,
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "FB_objectRepaired": {
+          "name": "FB_objectRepaired",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "FB_objectDestroyed": {
+          "name": "FB_objectDestroyed",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "animalKills": {
+          "name": "animalKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_pointsRecovered": {
+          "name": "VIP_pointsRecovered",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        }
+      }
+    },
+    "FCXVIP": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "default": "0"
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": -2
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "FB_objectRepaired": {
+          "name": "FB_objectRepaired",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "FB_objectDestroyed": {
+          "name": "FB_objectDestroyed",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "animalKills": {
+          "name": "animalKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "live": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "VIP_pointsRecovered": {
+          "name": "VIP_pointsRecovered",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true,
+          "live": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        },
+        "finalVipKills": {
+          "name": "finalVipKills",
+          "kind": "Stat",
+          "live": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "score": 1
+          }
+        },
+        "isAvip": {
+          "name": "isAvip",
+          "kind": "Stat",
+          "live": true,
+          "reset": true
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        }
+      }
+    },
+    "BTZCNH": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "default": "0"
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": -2
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "FB_objectRepaired": {
+          "name": "FB_objectRepaired",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "FB_objectDestroyed": {
+          "name": "FB_objectDestroyed",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "animalKills": {
+          "name": "animalKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "live": true,
+          "modifiers": {
+            "xp": 50
+          }
+        },
+        "VIP_pointsRecovered": {
+          "name": "VIP_pointsRecovered",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "live": true,
+          "modifiers": {
+            "xp": 100
+          }
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        }
+      }
+    },
+    "BTZKingOfTheHill": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "default": "0"
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": -2
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "FB_objectRepaired": {
+          "name": "FB_objectRepaired",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "FB_objectDestroyed": {
+          "name": "FB_objectDestroyed",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "animalKills": {
+          "name": "animalKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "live": true,
+          "modifiers": {
+            "xp": 50
+          }
+        },
+        "VIP_pointsRecovered": {
+          "name": "VIP_pointsRecovered",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "live": true,
+          "modifiers": {
+            "xp": 100
+          }
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        }
+      }
+    },
+    "BTZFinalBattle": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "default": "0"
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": -2
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "FB_objectRepaired": {
+          "name": "FB_objectRepaired",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "live": true,
+          "modifiers": {
+            "xp": 1
+          }
+        },
+        "FB_objectDestroyed": {
+          "name": "FB_objectDestroyed",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "live": true,
+          "modifiers": {
+            "xp": 1
+          }
+        },
+        "animalKills": {
+          "name": "animalKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_pointsRecovered": {
+          "name": "VIP_pointsRecovered",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        }
+      }
+    },
+    "BTZHorde": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "default": "0"
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "score": 1
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": -5
+          }
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "score": -1
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "FB_objectRepaired": {
+          "name": "FB_objectRepaired",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "FB_objectDestroyed": {
+          "name": "FB_objectDestroyed",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "animalKills": {
+          "name": "animalKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0",
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_pointsRecovered": {
+          "name": "VIP_pointsRecovered",
+          "kind": "Stat",
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        },
+        "RespawnLeft": {
+          "name": "RespawnLeft",
+          "kind": "Stat"
+        }
+      }
+    },
+    "FCXSingle": {
+      "stats": {
+        "npc_killed": {
+          "name": "npc_killed",
+          "kind": "Stat"
+        },
+        "npc_machete_killed": {
+          "name": "npc_machete_killed",
+          "kind": "Stat"
+        },
+        "npc_burn_killed": {
+          "name": "npc_burn_killed",
+          "kind": "Stat"
+        },
+        "buddy_rescue": {
+          "name": "buddy_rescue",
+          "kind": "Stat"
+        },
+        "diamond_found": {
+          "name": "diamond_found",
+          "kind": "Stat"
+        },
+        "diamond_current": {
+          "name": "diamond_current",
+          "kind": "Stat"
+        },
+        "purchased_weapon": {
+          "name": "purchased_weapon",
+          "kind": "Stat"
+        },
+        "purchased_training_manual": {
+          "name": "purchased_training_manual",
+          "kind": "Stat"
+        },
+        "purchased_ops_manual": {
+          "name": "purchased_ops_manual",
+          "kind": "Stat"
+        },
+        "purchased_rm_manual": {
+          "name": "purchased_rm_manual",
+          "kind": "Stat"
+        },
+        "purchased_vehicle_manual": {
+          "name": "purchased_vehicle_manual",
+          "kind": "Stat"
+        },
+        "purchased_stealth_manual": {
+          "name": "purchased_stealth_manual",
+          "kind": "Stat"
+        },
+        "purchased_firstaid": {
+          "name": "purchased_firstaid",
+          "kind": "Stat"
+        },
+        "purchased_bandolier": {
+          "name": "purchased_bandolier",
+          "kind": "Stat"
+        },
+        "purchased_camouflage": {
+          "name": "purchased_camouflage",
+          "kind": "Stat"
+        },
+        "distance_travel_foot": {
+          "name": "distance_travel_foot",
+          "kind": "Stat"
+        },
+        "distance_travel_vehicle": {
+          "name": "distance_travel_vehicle",
+          "kind": "Stat"
+        },
+        "distance_travel_swim": {
+          "name": "distance_travel_swim",
+          "kind": "Stat"
+        },
+        "injury_healed": {
+          "name": "injury_healed",
+          "kind": "Stat"
+        },
+        "shot_fired": {
+          "name": "shot_fired",
+          "kind": "Stat"
+        },
+        "shot_success": {
+          "name": "shot_success",
+          "kind": "Stat"
+        }
+      },
+      "gamestats": {}
+    }
+  },
+  "names": [
+    {
+      "name": "CTF_diamondsReturned",
+      "crc32": "6C93FE89",
+      "crc32_lower": "F4DB02F0",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_diamondsSaved",
+      "crc32": "C6C35BFA",
+      "crc32_lower": "B65B03E7",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_diamondsStolen",
+      "crc32": "B67D71A2",
+      "crc32_lower": "D50B8523",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_losses",
+      "crc32": "1939DF39",
+      "crc32_lower": "2DE33C1C",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_matchesPlayed",
+      "crc32": "B455B3FB",
+      "crc32_lower": "02A0C1D4",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_ties",
+      "crc32": "04351EA8",
+      "crc32_lower": "35524054",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_winLossRatio",
+      "crc32": "56D4B5B1",
+      "crc32_lower": "477A252D",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_winLossSum",
+      "crc32": "823CE13F",
+      "crc32_lower": "13E77696",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_wins",
+      "crc32": "F574688D",
+      "crc32_lower": "C4133671",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_kills",
+      "crc32": "F9B47559",
+      "crc32_lower": "CF7F2E93",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_losses",
+      "crc32": "989D4165",
+      "crc32_lower": "E31AA190",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_matchesPlayed",
+      "crc32": "A70EAF03",
+      "crc32_lower": "3F58EFD6",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_ties",
+      "crc32": "5670B7BC",
+      "crc32_lower": "9E618B16",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_winLossRatio",
+      "crc32": "61501BA9",
+      "crc32_lower": "67C1F048",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_winLossSum",
+      "crc32": "A4BE0E84",
+      "crc32_lower": "F801E1F5",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_wins",
+      "crc32": "A731C199",
+      "crc32_lower": "6F20FD33",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "FB_objectDestroyed",
+      "crc32": "6A8BA2B7",
+      "crc32_lower": "9B9FAADE",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "FB_objectRepaired",
+      "crc32": "A23EEAD5",
+      "crc32_lower": "62D4C104",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "RespawnLeft",
+      "crc32": "FF1050F3",
+      "crc32_lower": "D9BE701A",
+      "in_modes": [
+        "BTZHorde"
+      ]
+    },
+    {
+      "name": "TDM_kills",
+      "crc32": "5521AEE4",
+      "crc32_lower": "E11B778D",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_losses",
+      "crc32": "2DE11B8F",
+      "crc32_lower": "193BF8AA",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_matchesPlayed",
+      "crc32": "BB45CEAD",
+      "crc32_lower": "0DB0BC82",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_ties",
+      "crc32": "7F524A97",
+      "crc32_lower": "4E35146B",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_winLossRatio",
+      "crc32": "4650D7F8",
+      "crc32_lower": "57FE4764",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_winLossSum",
+      "crc32": "44D67547",
+      "crc32_lower": "D50DE2EE",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_wins",
+      "crc32": "8E133CB2",
+      "crc32_lower": "BF74624E",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_losses",
+      "crc32": "3FE5081F",
+      "crc32_lower": "0B3FEB3A",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_matchesPlayed",
+      "crc32": "DE5FF170",
+      "crc32_lower": "68AA835F",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_pointsCaptured",
+      "crc32": "45AAC38B",
+      "crc32_lower": "D806506A",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_pointsRecovered",
+      "crc32": "68380726",
+      "crc32_lower": "BFA8795B",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_ties",
+      "crc32": "E3E83D6F",
+      "crc32_lower": "D28F6393",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_timesAsVIP",
+      "crc32": "CD1B232A",
+      "crc32_lower": "FC56A671",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_vipKills",
+      "crc32": "46DE6D5E",
+      "crc32_lower": "56EF15A5",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_winLossRatio",
+      "crc32": "ECB6CCA0",
+      "crc32_lower": "FD185C3C",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_winLossSum",
+      "crc32": "70233D86",
+      "crc32_lower": "E1F8AA2F",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_wins",
+      "crc32": "12A94B4A",
+      "crc32_lower": "23CE15B6",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "animalKills",
+      "crc32": "F4AE218A",
+      "crc32_lower": "356F0E8E",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "award_end_round_achievements",
+      "crc32": "436D8F94",
+      "crc32_lower": "436D8F94",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "blueTeamScore",
+      "crc32": "EF5C33A3",
+      "crc32_lower": "AC6C9E04",
+      "in_modes": [
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "buddy_rescue",
+      "crc32": "C47B9B96",
+      "crc32_lower": "C47B9B96",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "bulletKills",
+      "crc32": "2FF5DCA0",
+      "crc32_lower": "EE34F3A4",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "burnKills",
+      "crc32": "11A16AE8",
+      "crc32_lower": "D06045EC",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "classLevelTokens",
+      "crc32": "1ECD7020",
+      "crc32_lower": "9FFDFAC1",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "consecutiveWins",
+      "crc32": "C14CB07D",
+      "crc32_lower": "617E1F43",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "creationDate",
+      "crc32": "3CFD6CD1",
+      "crc32_lower": "9CCFC3EF",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "deaths",
+      "crc32": "C73F8511",
+      "crc32_lower": "C73F8511",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "diamond_current",
+      "crc32": "9896B1B9",
+      "crc32_lower": "9896B1B9",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "diamond_found",
+      "crc32": "93B064A8",
+      "crc32_lower": "93B064A8",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "distance_travel_foot",
+      "crc32": "131A0B2E",
+      "crc32_lower": "131A0B2E",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "distance_travel_swim",
+      "crc32": "54D9510D",
+      "crc32_lower": "54D9510D",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "distance_travel_vehicle",
+      "crc32": "BB13BAA5",
+      "crc32_lower": "BB13BAA5",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "executed",
+      "crc32": "F949D60F",
+      "crc32_lower": "F949D60F",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "executions",
+      "crc32": "DD00B66E",
+      "crc32_lower": "DD00B66E",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "explosionKills",
+      "crc32": "06541C82",
+      "crc32_lower": "C7953386",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "finalVipKills",
+      "crc32": "3C88AC56",
+      "crc32_lower": "043FE104",
+      "in_modes": [
+        "FCXVIP"
+      ]
+    },
+    {
+      "name": "gameCancelled",
+      "crc32": "FE80C322",
+      "crc32_lower": "7C714181",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "headshotKills",
+      "crc32": "ADCA6926",
+      "crc32_lower": "6C0B4622",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "injury_healed",
+      "crc32": "78CABC7F",
+      "crc32_lower": "78CABC7F",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "isAvip",
+      "crc32": "B7A5EF46",
+      "crc32_lower": "17974078",
+      "in_modes": [
+        "FCXVIP"
+      ]
+    },
+    {
+      "name": "killDeathRatio",
+      "crc32": "7649E2BE",
+      "crc32_lower": "F8D5CE6A",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "killDeathSum",
+      "crc32": "3280DA6C",
+      "crc32_lower": "F3BBFEDA",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "kills",
+      "crc32": "2F673FA1",
+      "crc32_lower": "2F673FA1",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "lastPlayedOn",
+      "crc32": "C771F212",
+      "crc32_lower": "AB83B4E6",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_agent",
+      "crc32": "12A983B0",
+      "crc32_lower": "0A985848",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_assault",
+      "crc32": "61CBB534",
+      "crc32_lower": "ACAFCDEC",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_cqb",
+      "crc32": "8F89D389",
+      "crc32_lower": "C0D4D059",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_grenadier",
+      "crc32": "E9BB0389",
+      "crc32_lower": "FE8478F4",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_heavy",
+      "crc32": "4E136572",
+      "crc32_lower": "5622BE8A",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_sniper",
+      "crc32": "EBC336A1",
+      "crc32_lower": "58BD7D54",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "losses",
+      "crc32": "2B2DE801",
+      "crc32_lower": "2B2DE801",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "meleeKills",
+      "crc32": "FF108CBA",
+      "crc32_lower": "3ED1A3BE",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "npc_burn_killed",
+      "crc32": "2D2F9581",
+      "crc32_lower": "2D2F9581",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "npc_killed",
+      "crc32": "C3870B9F",
+      "crc32_lower": "C3870B9F",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "npc_machete_killed",
+      "crc32": "29263084",
+      "crc32_lower": "29263084",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_bandolier",
+      "crc32": "01C08AA8",
+      "crc32_lower": "01C08AA8",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_camouflage",
+      "crc32": "BB032E8B",
+      "crc32_lower": "BB032E8B",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_firstaid",
+      "crc32": "FD2764A1",
+      "crc32_lower": "FD2764A1",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_ops_manual",
+      "crc32": "18D39E9F",
+      "crc32_lower": "18D39E9F",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_rm_manual",
+      "crc32": "4DD2F621",
+      "crc32_lower": "4DD2F621",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_stealth_manual",
+      "crc32": "051000CE",
+      "crc32_lower": "051000CE",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_training_manual",
+      "crc32": "0350A1F8",
+      "crc32_lower": "0350A1F8",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_vehicle_manual",
+      "crc32": "B1585F62",
+      "crc32_lower": "B1585F62",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_weapon",
+      "crc32": "537DC537",
+      "crc32_lower": "537DC537",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "rank",
+      "crc32": "8879E8E5",
+      "crc32_lower": "8879E8E5",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "redTeamScore",
+      "crc32": "514F4D4C",
+      "crc32_lower": "127FE0EB",
+      "in_modes": [
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "revived",
+      "crc32": "8C370332",
+      "crc32_lower": "8C370332",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "revives",
+      "crc32": "0FE486F5",
+      "crc32_lower": "0FE486F5",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "score",
+      "crc32": "32993751",
+      "crc32_lower": "32993751",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "shot_fired",
+      "crc32": "A00735A5",
+      "crc32_lower": "A00735A5",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "shot_success",
+      "crc32": "31DFCE94",
+      "crc32_lower": "31DFCE94",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "suicides",
+      "crc32": "D0B28188",
+      "crc32_lower": "D0B28188",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "teamExecutions",
+      "crc32": "68C40A44",
+      "crc32_lower": "27990994",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "teamKills",
+      "crc32": "626294C5",
+      "crc32_lower": "A3A3BBC1",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "ties",
+      "crc32": "5399A71C",
+      "crc32_lower": "5399A71C",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "timePlayed",
+      "crc32": "A42BC7E2",
+      "crc32_lower": "A387C2D4",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "totalMatches",
+      "crc32": "F8BCE8B3",
+      "crc32_lower": "3701D12F",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "vehicleKills",
+      "crc32": "C11E53E2",
+      "crc32_lower": "00DF7CE6",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "wentDown",
+      "crc32": "B91CEC9E",
+      "crc32_lower": "192E43A0",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "winLossRatio",
+      "crc32": "5568A5D1",
+      "crc32_lower": "16580876",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "winLossSum",
+      "crc32": "70FE44B1",
+      "crc32_lower": "870E3BCD",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "wins",
+      "crc32": "A2D8D139",
+      "crc32_lower": "A2D8D139",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "xp",
+      "crc32": "F63A903D",
+      "crc32_lower": "F63A903D",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "xpGain",
+      "crc32": "FE8293E2",
+      "crc32_lower": "5EB03CDC",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "xpLoss",
+      "crc32": "F036AFEB",
+      "crc32_lower": "500400D5",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "xp_last_win_reward",
+      "crc32": "4DB2C466",
+      "crc32_lower": "4DB2C466",
+      "in_modes": [
+        "Adversarial",
+        "BTZCNH",
+        "BTZFinalBattle",
+        "BTZHorde",
+        "BTZKingOfTheHill",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    }
+  ]
+}

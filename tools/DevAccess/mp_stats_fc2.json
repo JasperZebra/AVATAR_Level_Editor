@@ -1,0 +1,7952 @@
+{
+  "source": "C:\\Users\\sambe\\Desktop\\____AVATAR_STUFF\\Far Cry 2 Fortune's Edition\\Data_Win32\\..MODDED\\engine\\gamemodes\\gamemodesconfig.xml",
+  "modes": {
+    "Adversarial": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat"
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat"
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -5
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "Executions_ithaca": {
+          "name": "Executions_ithaca",
+          "kind": "Stat"
+        },
+        "Kills_ithaca": {
+          "name": "Kills_ithaca",
+          "kind": "Stat"
+        },
+        "Headshots_ithaca": {
+          "name": "Headshots_ithaca",
+          "kind": "Stat"
+        },
+        "Executions_spas12": {
+          "name": "Executions_spas12",
+          "kind": "Stat"
+        },
+        "Kills_spas12": {
+          "name": "Kills_spas12",
+          "kind": "Stat"
+        },
+        "Headshots_spas12": {
+          "name": "Headshots_spas12",
+          "kind": "Stat"
+        },
+        "Executions_usas12": {
+          "name": "Executions_usas12",
+          "kind": "Stat"
+        },
+        "Kills_usas12": {
+          "name": "Kills_usas12",
+          "kind": "Stat"
+        },
+        "Headshots_usas12": {
+          "name": "Headshots_usas12",
+          "kind": "Stat"
+        },
+        "Executions_g3ka4": {
+          "name": "Executions_g3ka4",
+          "kind": "Stat"
+        },
+        "Kills_g3ka4": {
+          "name": "Kills_g3ka4",
+          "kind": "Stat"
+        },
+        "Headshots_g3ka4": {
+          "name": "Headshots_g3ka4",
+          "kind": "Stat"
+        },
+        "Executions_mp5": {
+          "name": "Executions_mp5",
+          "kind": "Stat"
+        },
+        "Kills_mp5": {
+          "name": "Kills_mp5",
+          "kind": "Stat"
+        },
+        "Headshots_mp5": {
+          "name": "Headshots_mp5",
+          "kind": "Stat"
+        },
+        "Executions_ak47": {
+          "name": "Executions_ak47",
+          "kind": "Stat"
+        },
+        "Kills_ak47": {
+          "name": "Kills_ak47",
+          "kind": "Stat"
+        },
+        "Headshots_ak47": {
+          "name": "Headshots_ak47",
+          "kind": "Stat"
+        },
+        "Executions_m16": {
+          "name": "Executions_m16",
+          "kind": "Stat"
+        },
+        "Kills_m16": {
+          "name": "Kills_m16",
+          "kind": "Stat"
+        },
+        "Headshots_m16": {
+          "name": "Headshots_m16",
+          "kind": "Stat"
+        },
+        "Executions_fnfal": {
+          "name": "Executions_fnfal",
+          "kind": "Stat"
+        },
+        "Kills_fnfal": {
+          "name": "Kills_fnfal",
+          "kind": "Stat"
+        },
+        "Headshots_fnfal": {
+          "name": "Headshots_fnfal",
+          "kind": "Stat"
+        },
+        "Executions_m1903": {
+          "name": "Executions_m1903",
+          "kind": "Stat"
+        },
+        "Kills_m1903": {
+          "name": "Kills_m1903",
+          "kind": "Stat"
+        },
+        "Headshots_m1903": {
+          "name": "Headshots_m1903",
+          "kind": "Stat"
+        },
+        "Executions_dragunov": {
+          "name": "Executions_dragunov",
+          "kind": "Stat"
+        },
+        "Kills_dragunov": {
+          "name": "Kills_dragunov",
+          "kind": "Stat"
+        },
+        "Headshots_dragunov": {
+          "name": "Headshots_dragunov",
+          "kind": "Stat"
+        },
+        "Executions_as50": {
+          "name": "Executions_as50",
+          "kind": "Stat"
+        },
+        "Kills_as50": {
+          "name": "Kills_as50",
+          "kind": "Stat"
+        },
+        "Headshots_as50": {
+          "name": "Headshots_as50",
+          "kind": "Stat"
+        },
+        "Executions_pkm": {
+          "name": "Executions_pkm",
+          "kind": "Stat"
+        },
+        "Kills_pkm": {
+          "name": "Kills_pkm",
+          "kind": "Stat"
+        },
+        "Headshots_pkm": {
+          "name": "Headshots_pkm",
+          "kind": "Stat"
+        },
+        "Kills_rpg-7": {
+          "name": "Kills_rpg-7",
+          "kind": "Stat"
+        },
+        "Multikills_rpg-7": {
+          "name": "Multikills_rpg-7",
+          "kind": "Stat"
+        },
+        "Executions_rpg-7": {
+          "name": "Executions_rpg-7",
+          "kind": "Stat"
+        },
+        "Kills_lpo50": {
+          "name": "Kills_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_lpo50": {
+          "name": "Executions_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_m249": {
+          "name": "Executions_m249",
+          "kind": "Stat"
+        },
+        "Kills_m249": {
+          "name": "Kills_m249",
+          "kind": "Stat"
+        },
+        "Headshots_m249": {
+          "name": "Headshots_m249",
+          "kind": "Stat"
+        },
+        "Kills_carl_gustaf": {
+          "name": "Kills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Multikills_carl_gustaf": {
+          "name": "Multikills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_carl_gustaf": {
+          "name": "Executions_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_makarov": {
+          "name": "Executions_makarov",
+          "kind": "Stat"
+        },
+        "Kills_makarov": {
+          "name": "Kills_makarov",
+          "kind": "Stat"
+        },
+        "Headshots_makarov": {
+          "name": "Headshots_makarov",
+          "kind": "Stat"
+        },
+        "Executions_star45": {
+          "name": "Executions_star45",
+          "kind": "Stat"
+        },
+        "Kills_star45": {
+          "name": "Kills_star45",
+          "kind": "Stat"
+        },
+        "Headshots_star45": {
+          "name": "Headshots_star45",
+          "kind": "Stat"
+        },
+        "Executions_mac10": {
+          "name": "Executions_mac10",
+          "kind": "Stat"
+        },
+        "Kills_mac10": {
+          "name": "Kills_mac10",
+          "kind": "Stat"
+        },
+        "Headshots_mac10": {
+          "name": "Headshots_mac10",
+          "kind": "Stat"
+        },
+        "Executions_uzi": {
+          "name": "Executions_uzi",
+          "kind": "Stat"
+        },
+        "Kills_uzi": {
+          "name": "Kills_uzi",
+          "kind": "Stat"
+        },
+        "Headshots_uzi": {
+          "name": "Headshots_uzi",
+          "kind": "Stat"
+        },
+        "Executions_deserteagle": {
+          "name": "Executions_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_deserteagle": {
+          "name": "Kills_deserteagle",
+          "kind": "Stat"
+        },
+        "Headshots_deserteagle": {
+          "name": "Headshots_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_m79": {
+          "name": "Kills_m79",
+          "kind": "Stat"
+        },
+        "Multikills_m79": {
+          "name": "Multikills_m79",
+          "kind": "Stat"
+        },
+        "Executions_m79": {
+          "name": "Executions_m79",
+          "kind": "Stat"
+        },
+        "Kills_flare_gun": {
+          "name": "Kills_flare_gun",
+          "kind": "Stat"
+        },
+        "Executions_flare_gun": {
+          "name": "Executions_flare_gun",
+          "kind": "Stat"
+        },
+        "Kills_Dart_Rifle": {
+          "name": "Kills_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Executions_Dart_Rifle": {
+          "name": "Executions_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Headshots_Dart_Rifle": {
+          "name": "Headshots_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Kills_MGL140": {
+          "name": "Kills_MGL140",
+          "kind": "Stat"
+        },
+        "Multikills_MGL140": {
+          "name": "Multikills_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_MGL140": {
+          "name": "Executions_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_6p9": {
+          "name": "Executions_6p9",
+          "kind": "Stat"
+        },
+        "Kills_6p9": {
+          "name": "Kills_6p9",
+          "kind": "Stat"
+        },
+        "Headshots_6p9": {
+          "name": "Headshots_6p9",
+          "kind": "Stat"
+        },
+        "Kills_ied": {
+          "name": "Kills_ied",
+          "kind": "Stat"
+        },
+        "Multikills_ied": {
+          "name": "Multikills_ied",
+          "kind": "Stat"
+        },
+        "Executions_ied": {
+          "name": "Executions_ied",
+          "kind": "Stat"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        }
+      }
+    },
+    "TeamAdversarial": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat"
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat"
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -5
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "Executions_ithaca": {
+          "name": "Executions_ithaca",
+          "kind": "Stat"
+        },
+        "Kills_ithaca": {
+          "name": "Kills_ithaca",
+          "kind": "Stat"
+        },
+        "Headshots_ithaca": {
+          "name": "Headshots_ithaca",
+          "kind": "Stat"
+        },
+        "Executions_spas12": {
+          "name": "Executions_spas12",
+          "kind": "Stat"
+        },
+        "Kills_spas12": {
+          "name": "Kills_spas12",
+          "kind": "Stat"
+        },
+        "Headshots_spas12": {
+          "name": "Headshots_spas12",
+          "kind": "Stat"
+        },
+        "Executions_usas12": {
+          "name": "Executions_usas12",
+          "kind": "Stat"
+        },
+        "Kills_usas12": {
+          "name": "Kills_usas12",
+          "kind": "Stat"
+        },
+        "Headshots_usas12": {
+          "name": "Headshots_usas12",
+          "kind": "Stat"
+        },
+        "Executions_g3ka4": {
+          "name": "Executions_g3ka4",
+          "kind": "Stat"
+        },
+        "Kills_g3ka4": {
+          "name": "Kills_g3ka4",
+          "kind": "Stat"
+        },
+        "Headshots_g3ka4": {
+          "name": "Headshots_g3ka4",
+          "kind": "Stat"
+        },
+        "Executions_mp5": {
+          "name": "Executions_mp5",
+          "kind": "Stat"
+        },
+        "Kills_mp5": {
+          "name": "Kills_mp5",
+          "kind": "Stat"
+        },
+        "Headshots_mp5": {
+          "name": "Headshots_mp5",
+          "kind": "Stat"
+        },
+        "Executions_ak47": {
+          "name": "Executions_ak47",
+          "kind": "Stat"
+        },
+        "Kills_ak47": {
+          "name": "Kills_ak47",
+          "kind": "Stat"
+        },
+        "Headshots_ak47": {
+          "name": "Headshots_ak47",
+          "kind": "Stat"
+        },
+        "Executions_m16": {
+          "name": "Executions_m16",
+          "kind": "Stat"
+        },
+        "Kills_m16": {
+          "name": "Kills_m16",
+          "kind": "Stat"
+        },
+        "Headshots_m16": {
+          "name": "Headshots_m16",
+          "kind": "Stat"
+        },
+        "Executions_fnfal": {
+          "name": "Executions_fnfal",
+          "kind": "Stat"
+        },
+        "Kills_fnfal": {
+          "name": "Kills_fnfal",
+          "kind": "Stat"
+        },
+        "Headshots_fnfal": {
+          "name": "Headshots_fnfal",
+          "kind": "Stat"
+        },
+        "Executions_m1903": {
+          "name": "Executions_m1903",
+          "kind": "Stat"
+        },
+        "Kills_m1903": {
+          "name": "Kills_m1903",
+          "kind": "Stat"
+        },
+        "Headshots_m1903": {
+          "name": "Headshots_m1903",
+          "kind": "Stat"
+        },
+        "Executions_dragunov": {
+          "name": "Executions_dragunov",
+          "kind": "Stat"
+        },
+        "Kills_dragunov": {
+          "name": "Kills_dragunov",
+          "kind": "Stat"
+        },
+        "Headshots_dragunov": {
+          "name": "Headshots_dragunov",
+          "kind": "Stat"
+        },
+        "Executions_as50": {
+          "name": "Executions_as50",
+          "kind": "Stat"
+        },
+        "Kills_as50": {
+          "name": "Kills_as50",
+          "kind": "Stat"
+        },
+        "Headshots_as50": {
+          "name": "Headshots_as50",
+          "kind": "Stat"
+        },
+        "Executions_pkm": {
+          "name": "Executions_pkm",
+          "kind": "Stat"
+        },
+        "Kills_pkm": {
+          "name": "Kills_pkm",
+          "kind": "Stat"
+        },
+        "Headshots_pkm": {
+          "name": "Headshots_pkm",
+          "kind": "Stat"
+        },
+        "Kills_rpg-7": {
+          "name": "Kills_rpg-7",
+          "kind": "Stat"
+        },
+        "Multikills_rpg-7": {
+          "name": "Multikills_rpg-7",
+          "kind": "Stat"
+        },
+        "Executions_rpg-7": {
+          "name": "Executions_rpg-7",
+          "kind": "Stat"
+        },
+        "Kills_lpo50": {
+          "name": "Kills_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_lpo50": {
+          "name": "Executions_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_m249": {
+          "name": "Executions_m249",
+          "kind": "Stat"
+        },
+        "Kills_m249": {
+          "name": "Kills_m249",
+          "kind": "Stat"
+        },
+        "Headshots_m249": {
+          "name": "Headshots_m249",
+          "kind": "Stat"
+        },
+        "Kills_carl_gustaf": {
+          "name": "Kills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Multikills_carl_gustaf": {
+          "name": "Multikills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_carl_gustaf": {
+          "name": "Executions_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_makarov": {
+          "name": "Executions_makarov",
+          "kind": "Stat"
+        },
+        "Kills_makarov": {
+          "name": "Kills_makarov",
+          "kind": "Stat"
+        },
+        "Headshots_makarov": {
+          "name": "Headshots_makarov",
+          "kind": "Stat"
+        },
+        "Executions_star45": {
+          "name": "Executions_star45",
+          "kind": "Stat"
+        },
+        "Kills_star45": {
+          "name": "Kills_star45",
+          "kind": "Stat"
+        },
+        "Headshots_star45": {
+          "name": "Headshots_star45",
+          "kind": "Stat"
+        },
+        "Executions_mac10": {
+          "name": "Executions_mac10",
+          "kind": "Stat"
+        },
+        "Kills_mac10": {
+          "name": "Kills_mac10",
+          "kind": "Stat"
+        },
+        "Headshots_mac10": {
+          "name": "Headshots_mac10",
+          "kind": "Stat"
+        },
+        "Executions_uzi": {
+          "name": "Executions_uzi",
+          "kind": "Stat"
+        },
+        "Kills_uzi": {
+          "name": "Kills_uzi",
+          "kind": "Stat"
+        },
+        "Headshots_uzi": {
+          "name": "Headshots_uzi",
+          "kind": "Stat"
+        },
+        "Executions_deserteagle": {
+          "name": "Executions_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_deserteagle": {
+          "name": "Kills_deserteagle",
+          "kind": "Stat"
+        },
+        "Headshots_deserteagle": {
+          "name": "Headshots_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_m79": {
+          "name": "Kills_m79",
+          "kind": "Stat"
+        },
+        "Multikills_m79": {
+          "name": "Multikills_m79",
+          "kind": "Stat"
+        },
+        "Executions_m79": {
+          "name": "Executions_m79",
+          "kind": "Stat"
+        },
+        "Kills_flare_gun": {
+          "name": "Kills_flare_gun",
+          "kind": "Stat"
+        },
+        "Executions_flare_gun": {
+          "name": "Executions_flare_gun",
+          "kind": "Stat"
+        },
+        "Kills_Dart_Rifle": {
+          "name": "Kills_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Executions_Dart_Rifle": {
+          "name": "Executions_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Headshots_Dart_Rifle": {
+          "name": "Headshots_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Kills_MGL140": {
+          "name": "Kills_MGL140",
+          "kind": "Stat"
+        },
+        "Multikills_MGL140": {
+          "name": "Multikills_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_MGL140": {
+          "name": "Executions_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_6p9": {
+          "name": "Executions_6p9",
+          "kind": "Stat"
+        },
+        "Kills_6p9": {
+          "name": "Kills_6p9",
+          "kind": "Stat"
+        },
+        "Headshots_6p9": {
+          "name": "Headshots_6p9",
+          "kind": "Stat"
+        },
+        "Kills_ied": {
+          "name": "Kills_ied",
+          "kind": "Stat"
+        },
+        "Multikills_ied": {
+          "name": "Multikills_ied",
+          "kind": "Stat"
+        },
+        "Executions_ied": {
+          "name": "Executions_ied",
+          "kind": "Stat"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        }
+      }
+    },
+    "FCXDeathMatch": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat"
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat"
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "score": 1
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -5,
+            "score": -1
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "Executions_ithaca": {
+          "name": "Executions_ithaca",
+          "kind": "Stat"
+        },
+        "Kills_ithaca": {
+          "name": "Kills_ithaca",
+          "kind": "Stat"
+        },
+        "Headshots_ithaca": {
+          "name": "Headshots_ithaca",
+          "kind": "Stat"
+        },
+        "Executions_spas12": {
+          "name": "Executions_spas12",
+          "kind": "Stat"
+        },
+        "Kills_spas12": {
+          "name": "Kills_spas12",
+          "kind": "Stat"
+        },
+        "Headshots_spas12": {
+          "name": "Headshots_spas12",
+          "kind": "Stat"
+        },
+        "Executions_usas12": {
+          "name": "Executions_usas12",
+          "kind": "Stat"
+        },
+        "Kills_usas12": {
+          "name": "Kills_usas12",
+          "kind": "Stat"
+        },
+        "Headshots_usas12": {
+          "name": "Headshots_usas12",
+          "kind": "Stat"
+        },
+        "Executions_g3ka4": {
+          "name": "Executions_g3ka4",
+          "kind": "Stat"
+        },
+        "Kills_g3ka4": {
+          "name": "Kills_g3ka4",
+          "kind": "Stat"
+        },
+        "Headshots_g3ka4": {
+          "name": "Headshots_g3ka4",
+          "kind": "Stat"
+        },
+        "Executions_mp5": {
+          "name": "Executions_mp5",
+          "kind": "Stat"
+        },
+        "Kills_mp5": {
+          "name": "Kills_mp5",
+          "kind": "Stat"
+        },
+        "Headshots_mp5": {
+          "name": "Headshots_mp5",
+          "kind": "Stat"
+        },
+        "Executions_ak47": {
+          "name": "Executions_ak47",
+          "kind": "Stat"
+        },
+        "Kills_ak47": {
+          "name": "Kills_ak47",
+          "kind": "Stat"
+        },
+        "Headshots_ak47": {
+          "name": "Headshots_ak47",
+          "kind": "Stat"
+        },
+        "Executions_m16": {
+          "name": "Executions_m16",
+          "kind": "Stat"
+        },
+        "Kills_m16": {
+          "name": "Kills_m16",
+          "kind": "Stat"
+        },
+        "Headshots_m16": {
+          "name": "Headshots_m16",
+          "kind": "Stat"
+        },
+        "Executions_fnfal": {
+          "name": "Executions_fnfal",
+          "kind": "Stat"
+        },
+        "Kills_fnfal": {
+          "name": "Kills_fnfal",
+          "kind": "Stat"
+        },
+        "Headshots_fnfal": {
+          "name": "Headshots_fnfal",
+          "kind": "Stat"
+        },
+        "Executions_m1903": {
+          "name": "Executions_m1903",
+          "kind": "Stat"
+        },
+        "Kills_m1903": {
+          "name": "Kills_m1903",
+          "kind": "Stat"
+        },
+        "Headshots_m1903": {
+          "name": "Headshots_m1903",
+          "kind": "Stat"
+        },
+        "Executions_dragunov": {
+          "name": "Executions_dragunov",
+          "kind": "Stat"
+        },
+        "Kills_dragunov": {
+          "name": "Kills_dragunov",
+          "kind": "Stat"
+        },
+        "Headshots_dragunov": {
+          "name": "Headshots_dragunov",
+          "kind": "Stat"
+        },
+        "Executions_as50": {
+          "name": "Executions_as50",
+          "kind": "Stat"
+        },
+        "Kills_as50": {
+          "name": "Kills_as50",
+          "kind": "Stat"
+        },
+        "Headshots_as50": {
+          "name": "Headshots_as50",
+          "kind": "Stat"
+        },
+        "Executions_pkm": {
+          "name": "Executions_pkm",
+          "kind": "Stat"
+        },
+        "Kills_pkm": {
+          "name": "Kills_pkm",
+          "kind": "Stat"
+        },
+        "Headshots_pkm": {
+          "name": "Headshots_pkm",
+          "kind": "Stat"
+        },
+        "Kills_rpg-7": {
+          "name": "Kills_rpg-7",
+          "kind": "Stat"
+        },
+        "Multikills_rpg-7": {
+          "name": "Multikills_rpg-7",
+          "kind": "Stat"
+        },
+        "Executions_rpg-7": {
+          "name": "Executions_rpg-7",
+          "kind": "Stat"
+        },
+        "Kills_lpo50": {
+          "name": "Kills_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_lpo50": {
+          "name": "Executions_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_m249": {
+          "name": "Executions_m249",
+          "kind": "Stat"
+        },
+        "Kills_m249": {
+          "name": "Kills_m249",
+          "kind": "Stat"
+        },
+        "Headshots_m249": {
+          "name": "Headshots_m249",
+          "kind": "Stat"
+        },
+        "Kills_carl_gustaf": {
+          "name": "Kills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Multikills_carl_gustaf": {
+          "name": "Multikills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_carl_gustaf": {
+          "name": "Executions_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_makarov": {
+          "name": "Executions_makarov",
+          "kind": "Stat"
+        },
+        "Kills_makarov": {
+          "name": "Kills_makarov",
+          "kind": "Stat"
+        },
+        "Headshots_makarov": {
+          "name": "Headshots_makarov",
+          "kind": "Stat"
+        },
+        "Executions_star45": {
+          "name": "Executions_star45",
+          "kind": "Stat"
+        },
+        "Kills_star45": {
+          "name": "Kills_star45",
+          "kind": "Stat"
+        },
+        "Headshots_star45": {
+          "name": "Headshots_star45",
+          "kind": "Stat"
+        },
+        "Executions_mac10": {
+          "name": "Executions_mac10",
+          "kind": "Stat"
+        },
+        "Kills_mac10": {
+          "name": "Kills_mac10",
+          "kind": "Stat"
+        },
+        "Headshots_mac10": {
+          "name": "Headshots_mac10",
+          "kind": "Stat"
+        },
+        "Executions_uzi": {
+          "name": "Executions_uzi",
+          "kind": "Stat"
+        },
+        "Kills_uzi": {
+          "name": "Kills_uzi",
+          "kind": "Stat"
+        },
+        "Headshots_uzi": {
+          "name": "Headshots_uzi",
+          "kind": "Stat"
+        },
+        "Executions_deserteagle": {
+          "name": "Executions_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_deserteagle": {
+          "name": "Kills_deserteagle",
+          "kind": "Stat"
+        },
+        "Headshots_deserteagle": {
+          "name": "Headshots_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_m79": {
+          "name": "Kills_m79",
+          "kind": "Stat"
+        },
+        "Multikills_m79": {
+          "name": "Multikills_m79",
+          "kind": "Stat"
+        },
+        "Executions_m79": {
+          "name": "Executions_m79",
+          "kind": "Stat"
+        },
+        "Kills_flare_gun": {
+          "name": "Kills_flare_gun",
+          "kind": "Stat"
+        },
+        "Executions_flare_gun": {
+          "name": "Executions_flare_gun",
+          "kind": "Stat"
+        },
+        "Kills_Dart_Rifle": {
+          "name": "Kills_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Executions_Dart_Rifle": {
+          "name": "Executions_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Headshots_Dart_Rifle": {
+          "name": "Headshots_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Kills_MGL140": {
+          "name": "Kills_MGL140",
+          "kind": "Stat"
+        },
+        "Multikills_MGL140": {
+          "name": "Multikills_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_MGL140": {
+          "name": "Executions_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_6p9": {
+          "name": "Executions_6p9",
+          "kind": "Stat"
+        },
+        "Kills_6p9": {
+          "name": "Kills_6p9",
+          "kind": "Stat"
+        },
+        "Headshots_6p9": {
+          "name": "Headshots_6p9",
+          "kind": "Stat"
+        },
+        "Kills_ied": {
+          "name": "Kills_ied",
+          "kind": "Stat"
+        },
+        "Multikills_ied": {
+          "name": "Multikills_ied",
+          "kind": "Stat"
+        },
+        "Executions_ied": {
+          "name": "Executions_ied",
+          "kind": "Stat"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        }
+      }
+    },
+    "FCXTeamDeathMatch": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat"
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat"
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "score": 1
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -5,
+            "score": -1
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "Executions_ithaca": {
+          "name": "Executions_ithaca",
+          "kind": "Stat"
+        },
+        "Kills_ithaca": {
+          "name": "Kills_ithaca",
+          "kind": "Stat"
+        },
+        "Headshots_ithaca": {
+          "name": "Headshots_ithaca",
+          "kind": "Stat"
+        },
+        "Executions_spas12": {
+          "name": "Executions_spas12",
+          "kind": "Stat"
+        },
+        "Kills_spas12": {
+          "name": "Kills_spas12",
+          "kind": "Stat"
+        },
+        "Headshots_spas12": {
+          "name": "Headshots_spas12",
+          "kind": "Stat"
+        },
+        "Executions_usas12": {
+          "name": "Executions_usas12",
+          "kind": "Stat"
+        },
+        "Kills_usas12": {
+          "name": "Kills_usas12",
+          "kind": "Stat"
+        },
+        "Headshots_usas12": {
+          "name": "Headshots_usas12",
+          "kind": "Stat"
+        },
+        "Executions_g3ka4": {
+          "name": "Executions_g3ka4",
+          "kind": "Stat"
+        },
+        "Kills_g3ka4": {
+          "name": "Kills_g3ka4",
+          "kind": "Stat"
+        },
+        "Headshots_g3ka4": {
+          "name": "Headshots_g3ka4",
+          "kind": "Stat"
+        },
+        "Executions_mp5": {
+          "name": "Executions_mp5",
+          "kind": "Stat"
+        },
+        "Kills_mp5": {
+          "name": "Kills_mp5",
+          "kind": "Stat"
+        },
+        "Headshots_mp5": {
+          "name": "Headshots_mp5",
+          "kind": "Stat"
+        },
+        "Executions_ak47": {
+          "name": "Executions_ak47",
+          "kind": "Stat"
+        },
+        "Kills_ak47": {
+          "name": "Kills_ak47",
+          "kind": "Stat"
+        },
+        "Headshots_ak47": {
+          "name": "Headshots_ak47",
+          "kind": "Stat"
+        },
+        "Executions_m16": {
+          "name": "Executions_m16",
+          "kind": "Stat"
+        },
+        "Kills_m16": {
+          "name": "Kills_m16",
+          "kind": "Stat"
+        },
+        "Headshots_m16": {
+          "name": "Headshots_m16",
+          "kind": "Stat"
+        },
+        "Executions_fnfal": {
+          "name": "Executions_fnfal",
+          "kind": "Stat"
+        },
+        "Kills_fnfal": {
+          "name": "Kills_fnfal",
+          "kind": "Stat"
+        },
+        "Headshots_fnfal": {
+          "name": "Headshots_fnfal",
+          "kind": "Stat"
+        },
+        "Executions_m1903": {
+          "name": "Executions_m1903",
+          "kind": "Stat"
+        },
+        "Kills_m1903": {
+          "name": "Kills_m1903",
+          "kind": "Stat"
+        },
+        "Headshots_m1903": {
+          "name": "Headshots_m1903",
+          "kind": "Stat"
+        },
+        "Executions_dragunov": {
+          "name": "Executions_dragunov",
+          "kind": "Stat"
+        },
+        "Kills_dragunov": {
+          "name": "Kills_dragunov",
+          "kind": "Stat"
+        },
+        "Headshots_dragunov": {
+          "name": "Headshots_dragunov",
+          "kind": "Stat"
+        },
+        "Executions_as50": {
+          "name": "Executions_as50",
+          "kind": "Stat"
+        },
+        "Kills_as50": {
+          "name": "Kills_as50",
+          "kind": "Stat"
+        },
+        "Headshots_as50": {
+          "name": "Headshots_as50",
+          "kind": "Stat"
+        },
+        "Executions_pkm": {
+          "name": "Executions_pkm",
+          "kind": "Stat"
+        },
+        "Kills_pkm": {
+          "name": "Kills_pkm",
+          "kind": "Stat"
+        },
+        "Headshots_pkm": {
+          "name": "Headshots_pkm",
+          "kind": "Stat"
+        },
+        "Kills_rpg-7": {
+          "name": "Kills_rpg-7",
+          "kind": "Stat"
+        },
+        "Multikills_rpg-7": {
+          "name": "Multikills_rpg-7",
+          "kind": "Stat"
+        },
+        "Executions_rpg-7": {
+          "name": "Executions_rpg-7",
+          "kind": "Stat"
+        },
+        "Kills_lpo50": {
+          "name": "Kills_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_lpo50": {
+          "name": "Executions_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_m249": {
+          "name": "Executions_m249",
+          "kind": "Stat"
+        },
+        "Kills_m249": {
+          "name": "Kills_m249",
+          "kind": "Stat"
+        },
+        "Headshots_m249": {
+          "name": "Headshots_m249",
+          "kind": "Stat"
+        },
+        "Kills_carl_gustaf": {
+          "name": "Kills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Multikills_carl_gustaf": {
+          "name": "Multikills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_carl_gustaf": {
+          "name": "Executions_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_makarov": {
+          "name": "Executions_makarov",
+          "kind": "Stat"
+        },
+        "Kills_makarov": {
+          "name": "Kills_makarov",
+          "kind": "Stat"
+        },
+        "Headshots_makarov": {
+          "name": "Headshots_makarov",
+          "kind": "Stat"
+        },
+        "Executions_star45": {
+          "name": "Executions_star45",
+          "kind": "Stat"
+        },
+        "Kills_star45": {
+          "name": "Kills_star45",
+          "kind": "Stat"
+        },
+        "Headshots_star45": {
+          "name": "Headshots_star45",
+          "kind": "Stat"
+        },
+        "Executions_mac10": {
+          "name": "Executions_mac10",
+          "kind": "Stat"
+        },
+        "Kills_mac10": {
+          "name": "Kills_mac10",
+          "kind": "Stat"
+        },
+        "Headshots_mac10": {
+          "name": "Headshots_mac10",
+          "kind": "Stat"
+        },
+        "Executions_uzi": {
+          "name": "Executions_uzi",
+          "kind": "Stat"
+        },
+        "Kills_uzi": {
+          "name": "Kills_uzi",
+          "kind": "Stat"
+        },
+        "Headshots_uzi": {
+          "name": "Headshots_uzi",
+          "kind": "Stat"
+        },
+        "Executions_deserteagle": {
+          "name": "Executions_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_deserteagle": {
+          "name": "Kills_deserteagle",
+          "kind": "Stat"
+        },
+        "Headshots_deserteagle": {
+          "name": "Headshots_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_m79": {
+          "name": "Kills_m79",
+          "kind": "Stat"
+        },
+        "Multikills_m79": {
+          "name": "Multikills_m79",
+          "kind": "Stat"
+        },
+        "Executions_m79": {
+          "name": "Executions_m79",
+          "kind": "Stat"
+        },
+        "Kills_flare_gun": {
+          "name": "Kills_flare_gun",
+          "kind": "Stat"
+        },
+        "Executions_flare_gun": {
+          "name": "Executions_flare_gun",
+          "kind": "Stat"
+        },
+        "Kills_Dart_Rifle": {
+          "name": "Kills_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Executions_Dart_Rifle": {
+          "name": "Executions_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Headshots_Dart_Rifle": {
+          "name": "Headshots_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Kills_MGL140": {
+          "name": "Kills_MGL140",
+          "kind": "Stat"
+        },
+        "Multikills_MGL140": {
+          "name": "Multikills_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_MGL140": {
+          "name": "Executions_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_6p9": {
+          "name": "Executions_6p9",
+          "kind": "Stat"
+        },
+        "Kills_6p9": {
+          "name": "Kills_6p9",
+          "kind": "Stat"
+        },
+        "Headshots_6p9": {
+          "name": "Headshots_6p9",
+          "kind": "Stat"
+        },
+        "Kills_ied": {
+          "name": "Kills_ied",
+          "kind": "Stat"
+        },
+        "Multikills_ied": {
+          "name": "Multikills_ied",
+          "kind": "Stat"
+        },
+        "Executions_ied": {
+          "name": "Executions_ied",
+          "kind": "Stat"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        }
+      }
+    },
+    "FCXCTF": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat"
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat"
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -5
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true,
+          "live": true,
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true,
+          "live": true,
+          "modifiers": {
+            "score": 1,
+            "xp": 20
+          }
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true,
+          "live": true,
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "Executions_ithaca": {
+          "name": "Executions_ithaca",
+          "kind": "Stat"
+        },
+        "Kills_ithaca": {
+          "name": "Kills_ithaca",
+          "kind": "Stat"
+        },
+        "Headshots_ithaca": {
+          "name": "Headshots_ithaca",
+          "kind": "Stat"
+        },
+        "Executions_spas12": {
+          "name": "Executions_spas12",
+          "kind": "Stat"
+        },
+        "Kills_spas12": {
+          "name": "Kills_spas12",
+          "kind": "Stat"
+        },
+        "Headshots_spas12": {
+          "name": "Headshots_spas12",
+          "kind": "Stat"
+        },
+        "Executions_usas12": {
+          "name": "Executions_usas12",
+          "kind": "Stat"
+        },
+        "Kills_usas12": {
+          "name": "Kills_usas12",
+          "kind": "Stat"
+        },
+        "Headshots_usas12": {
+          "name": "Headshots_usas12",
+          "kind": "Stat"
+        },
+        "Executions_g3ka4": {
+          "name": "Executions_g3ka4",
+          "kind": "Stat"
+        },
+        "Kills_g3ka4": {
+          "name": "Kills_g3ka4",
+          "kind": "Stat"
+        },
+        "Headshots_g3ka4": {
+          "name": "Headshots_g3ka4",
+          "kind": "Stat"
+        },
+        "Executions_mp5": {
+          "name": "Executions_mp5",
+          "kind": "Stat"
+        },
+        "Kills_mp5": {
+          "name": "Kills_mp5",
+          "kind": "Stat"
+        },
+        "Headshots_mp5": {
+          "name": "Headshots_mp5",
+          "kind": "Stat"
+        },
+        "Executions_ak47": {
+          "name": "Executions_ak47",
+          "kind": "Stat"
+        },
+        "Kills_ak47": {
+          "name": "Kills_ak47",
+          "kind": "Stat"
+        },
+        "Headshots_ak47": {
+          "name": "Headshots_ak47",
+          "kind": "Stat"
+        },
+        "Executions_m16": {
+          "name": "Executions_m16",
+          "kind": "Stat"
+        },
+        "Kills_m16": {
+          "name": "Kills_m16",
+          "kind": "Stat"
+        },
+        "Headshots_m16": {
+          "name": "Headshots_m16",
+          "kind": "Stat"
+        },
+        "Executions_fnfal": {
+          "name": "Executions_fnfal",
+          "kind": "Stat"
+        },
+        "Kills_fnfal": {
+          "name": "Kills_fnfal",
+          "kind": "Stat"
+        },
+        "Headshots_fnfal": {
+          "name": "Headshots_fnfal",
+          "kind": "Stat"
+        },
+        "Executions_m1903": {
+          "name": "Executions_m1903",
+          "kind": "Stat"
+        },
+        "Kills_m1903": {
+          "name": "Kills_m1903",
+          "kind": "Stat"
+        },
+        "Headshots_m1903": {
+          "name": "Headshots_m1903",
+          "kind": "Stat"
+        },
+        "Executions_dragunov": {
+          "name": "Executions_dragunov",
+          "kind": "Stat"
+        },
+        "Kills_dragunov": {
+          "name": "Kills_dragunov",
+          "kind": "Stat"
+        },
+        "Headshots_dragunov": {
+          "name": "Headshots_dragunov",
+          "kind": "Stat"
+        },
+        "Executions_as50": {
+          "name": "Executions_as50",
+          "kind": "Stat"
+        },
+        "Kills_as50": {
+          "name": "Kills_as50",
+          "kind": "Stat"
+        },
+        "Headshots_as50": {
+          "name": "Headshots_as50",
+          "kind": "Stat"
+        },
+        "Executions_pkm": {
+          "name": "Executions_pkm",
+          "kind": "Stat"
+        },
+        "Kills_pkm": {
+          "name": "Kills_pkm",
+          "kind": "Stat"
+        },
+        "Headshots_pkm": {
+          "name": "Headshots_pkm",
+          "kind": "Stat"
+        },
+        "Kills_rpg-7": {
+          "name": "Kills_rpg-7",
+          "kind": "Stat"
+        },
+        "Multikills_rpg-7": {
+          "name": "Multikills_rpg-7",
+          "kind": "Stat"
+        },
+        "Executions_rpg-7": {
+          "name": "Executions_rpg-7",
+          "kind": "Stat"
+        },
+        "Kills_lpo50": {
+          "name": "Kills_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_lpo50": {
+          "name": "Executions_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_m249": {
+          "name": "Executions_m249",
+          "kind": "Stat"
+        },
+        "Kills_m249": {
+          "name": "Kills_m249",
+          "kind": "Stat"
+        },
+        "Headshots_m249": {
+          "name": "Headshots_m249",
+          "kind": "Stat"
+        },
+        "Kills_carl_gustaf": {
+          "name": "Kills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Multikills_carl_gustaf": {
+          "name": "Multikills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_carl_gustaf": {
+          "name": "Executions_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_makarov": {
+          "name": "Executions_makarov",
+          "kind": "Stat"
+        },
+        "Kills_makarov": {
+          "name": "Kills_makarov",
+          "kind": "Stat"
+        },
+        "Headshots_makarov": {
+          "name": "Headshots_makarov",
+          "kind": "Stat"
+        },
+        "Executions_star45": {
+          "name": "Executions_star45",
+          "kind": "Stat"
+        },
+        "Kills_star45": {
+          "name": "Kills_star45",
+          "kind": "Stat"
+        },
+        "Headshots_star45": {
+          "name": "Headshots_star45",
+          "kind": "Stat"
+        },
+        "Executions_mac10": {
+          "name": "Executions_mac10",
+          "kind": "Stat"
+        },
+        "Kills_mac10": {
+          "name": "Kills_mac10",
+          "kind": "Stat"
+        },
+        "Headshots_mac10": {
+          "name": "Headshots_mac10",
+          "kind": "Stat"
+        },
+        "Executions_uzi": {
+          "name": "Executions_uzi",
+          "kind": "Stat"
+        },
+        "Kills_uzi": {
+          "name": "Kills_uzi",
+          "kind": "Stat"
+        },
+        "Headshots_uzi": {
+          "name": "Headshots_uzi",
+          "kind": "Stat"
+        },
+        "Executions_deserteagle": {
+          "name": "Executions_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_deserteagle": {
+          "name": "Kills_deserteagle",
+          "kind": "Stat"
+        },
+        "Headshots_deserteagle": {
+          "name": "Headshots_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_m79": {
+          "name": "Kills_m79",
+          "kind": "Stat"
+        },
+        "Multikills_m79": {
+          "name": "Multikills_m79",
+          "kind": "Stat"
+        },
+        "Executions_m79": {
+          "name": "Executions_m79",
+          "kind": "Stat"
+        },
+        "Kills_flare_gun": {
+          "name": "Kills_flare_gun",
+          "kind": "Stat"
+        },
+        "Executions_flare_gun": {
+          "name": "Executions_flare_gun",
+          "kind": "Stat"
+        },
+        "Kills_Dart_Rifle": {
+          "name": "Kills_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Executions_Dart_Rifle": {
+          "name": "Executions_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Headshots_Dart_Rifle": {
+          "name": "Headshots_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Kills_MGL140": {
+          "name": "Kills_MGL140",
+          "kind": "Stat"
+        },
+        "Multikills_MGL140": {
+          "name": "Multikills_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_MGL140": {
+          "name": "Executions_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_6p9": {
+          "name": "Executions_6p9",
+          "kind": "Stat"
+        },
+        "Kills_6p9": {
+          "name": "Kills_6p9",
+          "kind": "Stat"
+        },
+        "Headshots_6p9": {
+          "name": "Headshots_6p9",
+          "kind": "Stat"
+        },
+        "Kills_ied": {
+          "name": "Kills_ied",
+          "kind": "Stat"
+        },
+        "Multikills_ied": {
+          "name": "Multikills_ied",
+          "kind": "Stat"
+        },
+        "Executions_ied": {
+          "name": "Executions_ied",
+          "kind": "Stat"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        }
+      }
+    },
+    "FCXVIP": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat"
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat"
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -5
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true,
+          "live": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true,
+          "live": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "Executions_ithaca": {
+          "name": "Executions_ithaca",
+          "kind": "Stat"
+        },
+        "Kills_ithaca": {
+          "name": "Kills_ithaca",
+          "kind": "Stat"
+        },
+        "Headshots_ithaca": {
+          "name": "Headshots_ithaca",
+          "kind": "Stat"
+        },
+        "Executions_spas12": {
+          "name": "Executions_spas12",
+          "kind": "Stat"
+        },
+        "Kills_spas12": {
+          "name": "Kills_spas12",
+          "kind": "Stat"
+        },
+        "Headshots_spas12": {
+          "name": "Headshots_spas12",
+          "kind": "Stat"
+        },
+        "Executions_usas12": {
+          "name": "Executions_usas12",
+          "kind": "Stat"
+        },
+        "Kills_usas12": {
+          "name": "Kills_usas12",
+          "kind": "Stat"
+        },
+        "Headshots_usas12": {
+          "name": "Headshots_usas12",
+          "kind": "Stat"
+        },
+        "Executions_g3ka4": {
+          "name": "Executions_g3ka4",
+          "kind": "Stat"
+        },
+        "Kills_g3ka4": {
+          "name": "Kills_g3ka4",
+          "kind": "Stat"
+        },
+        "Headshots_g3ka4": {
+          "name": "Headshots_g3ka4",
+          "kind": "Stat"
+        },
+        "Executions_mp5": {
+          "name": "Executions_mp5",
+          "kind": "Stat"
+        },
+        "Kills_mp5": {
+          "name": "Kills_mp5",
+          "kind": "Stat"
+        },
+        "Headshots_mp5": {
+          "name": "Headshots_mp5",
+          "kind": "Stat"
+        },
+        "Executions_ak47": {
+          "name": "Executions_ak47",
+          "kind": "Stat"
+        },
+        "Kills_ak47": {
+          "name": "Kills_ak47",
+          "kind": "Stat"
+        },
+        "Headshots_ak47": {
+          "name": "Headshots_ak47",
+          "kind": "Stat"
+        },
+        "Executions_m16": {
+          "name": "Executions_m16",
+          "kind": "Stat"
+        },
+        "Kills_m16": {
+          "name": "Kills_m16",
+          "kind": "Stat"
+        },
+        "Headshots_m16": {
+          "name": "Headshots_m16",
+          "kind": "Stat"
+        },
+        "Executions_fnfal": {
+          "name": "Executions_fnfal",
+          "kind": "Stat"
+        },
+        "Kills_fnfal": {
+          "name": "Kills_fnfal",
+          "kind": "Stat"
+        },
+        "Headshots_fnfal": {
+          "name": "Headshots_fnfal",
+          "kind": "Stat"
+        },
+        "Executions_m1903": {
+          "name": "Executions_m1903",
+          "kind": "Stat"
+        },
+        "Kills_m1903": {
+          "name": "Kills_m1903",
+          "kind": "Stat"
+        },
+        "Headshots_m1903": {
+          "name": "Headshots_m1903",
+          "kind": "Stat"
+        },
+        "Executions_dragunov": {
+          "name": "Executions_dragunov",
+          "kind": "Stat"
+        },
+        "Kills_dragunov": {
+          "name": "Kills_dragunov",
+          "kind": "Stat"
+        },
+        "Headshots_dragunov": {
+          "name": "Headshots_dragunov",
+          "kind": "Stat"
+        },
+        "Executions_as50": {
+          "name": "Executions_as50",
+          "kind": "Stat"
+        },
+        "Kills_as50": {
+          "name": "Kills_as50",
+          "kind": "Stat"
+        },
+        "Headshots_as50": {
+          "name": "Headshots_as50",
+          "kind": "Stat"
+        },
+        "Executions_pkm": {
+          "name": "Executions_pkm",
+          "kind": "Stat"
+        },
+        "Kills_pkm": {
+          "name": "Kills_pkm",
+          "kind": "Stat"
+        },
+        "Headshots_pkm": {
+          "name": "Headshots_pkm",
+          "kind": "Stat"
+        },
+        "Kills_rpg-7": {
+          "name": "Kills_rpg-7",
+          "kind": "Stat"
+        },
+        "Multikills_rpg-7": {
+          "name": "Multikills_rpg-7",
+          "kind": "Stat"
+        },
+        "Executions_rpg-7": {
+          "name": "Executions_rpg-7",
+          "kind": "Stat"
+        },
+        "Kills_lpo50": {
+          "name": "Kills_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_lpo50": {
+          "name": "Executions_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_m249": {
+          "name": "Executions_m249",
+          "kind": "Stat"
+        },
+        "Kills_m249": {
+          "name": "Kills_m249",
+          "kind": "Stat"
+        },
+        "Headshots_m249": {
+          "name": "Headshots_m249",
+          "kind": "Stat"
+        },
+        "Kills_carl_gustaf": {
+          "name": "Kills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Multikills_carl_gustaf": {
+          "name": "Multikills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_carl_gustaf": {
+          "name": "Executions_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_makarov": {
+          "name": "Executions_makarov",
+          "kind": "Stat"
+        },
+        "Kills_makarov": {
+          "name": "Kills_makarov",
+          "kind": "Stat"
+        },
+        "Headshots_makarov": {
+          "name": "Headshots_makarov",
+          "kind": "Stat"
+        },
+        "Executions_star45": {
+          "name": "Executions_star45",
+          "kind": "Stat"
+        },
+        "Kills_star45": {
+          "name": "Kills_star45",
+          "kind": "Stat"
+        },
+        "Headshots_star45": {
+          "name": "Headshots_star45",
+          "kind": "Stat"
+        },
+        "Executions_mac10": {
+          "name": "Executions_mac10",
+          "kind": "Stat"
+        },
+        "Kills_mac10": {
+          "name": "Kills_mac10",
+          "kind": "Stat"
+        },
+        "Headshots_mac10": {
+          "name": "Headshots_mac10",
+          "kind": "Stat"
+        },
+        "Executions_uzi": {
+          "name": "Executions_uzi",
+          "kind": "Stat"
+        },
+        "Kills_uzi": {
+          "name": "Kills_uzi",
+          "kind": "Stat"
+        },
+        "Headshots_uzi": {
+          "name": "Headshots_uzi",
+          "kind": "Stat"
+        },
+        "Executions_deserteagle": {
+          "name": "Executions_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_deserteagle": {
+          "name": "Kills_deserteagle",
+          "kind": "Stat"
+        },
+        "Headshots_deserteagle": {
+          "name": "Headshots_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_m79": {
+          "name": "Kills_m79",
+          "kind": "Stat"
+        },
+        "Multikills_m79": {
+          "name": "Multikills_m79",
+          "kind": "Stat"
+        },
+        "Executions_m79": {
+          "name": "Executions_m79",
+          "kind": "Stat"
+        },
+        "Kills_flare_gun": {
+          "name": "Kills_flare_gun",
+          "kind": "Stat"
+        },
+        "Executions_flare_gun": {
+          "name": "Executions_flare_gun",
+          "kind": "Stat"
+        },
+        "Kills_Dart_Rifle": {
+          "name": "Kills_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Executions_Dart_Rifle": {
+          "name": "Executions_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Headshots_Dart_Rifle": {
+          "name": "Headshots_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Kills_MGL140": {
+          "name": "Kills_MGL140",
+          "kind": "Stat"
+        },
+        "Multikills_MGL140": {
+          "name": "Multikills_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_MGL140": {
+          "name": "Executions_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_6p9": {
+          "name": "Executions_6p9",
+          "kind": "Stat"
+        },
+        "Kills_6p9": {
+          "name": "Kills_6p9",
+          "kind": "Stat"
+        },
+        "Headshots_6p9": {
+          "name": "Headshots_6p9",
+          "kind": "Stat"
+        },
+        "Kills_ied": {
+          "name": "Kills_ied",
+          "kind": "Stat"
+        },
+        "Multikills_ied": {
+          "name": "Multikills_ied",
+          "kind": "Stat"
+        },
+        "Executions_ied": {
+          "name": "Executions_ied",
+          "kind": "Stat"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        },
+        "finalVipKills": {
+          "name": "finalVipKills",
+          "kind": "Stat",
+          "live": true,
+          "modifiers": {
+            "score": 1
+          }
+        },
+        "isAvip": {
+          "name": "isAvip",
+          "kind": "Stat",
+          "live": true,
+          "reset": true
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        },
+        "redTeamScore": {
+          "name": "redTeamScore",
+          "kind": "Stat"
+        },
+        "blueTeamScore": {
+          "name": "blueTeamScore",
+          "kind": "Stat"
+        }
+      }
+    },
+    "FCXSingle": {
+      "stats": {
+        "npc_killed": {
+          "name": "npc_killed",
+          "kind": "Stat"
+        },
+        "npc_machete_killed": {
+          "name": "npc_machete_killed",
+          "kind": "Stat"
+        },
+        "npc_burn_killed": {
+          "name": "npc_burn_killed",
+          "kind": "Stat"
+        },
+        "buddy_rescue": {
+          "name": "buddy_rescue",
+          "kind": "Stat"
+        },
+        "diamond_found": {
+          "name": "diamond_found",
+          "kind": "Stat"
+        },
+        "diamond_current": {
+          "name": "diamond_current",
+          "kind": "Stat"
+        },
+        "purchased_weapon": {
+          "name": "purchased_weapon",
+          "kind": "Stat"
+        },
+        "purchased_training_manual": {
+          "name": "purchased_training_manual",
+          "kind": "Stat"
+        },
+        "purchased_ops_manual": {
+          "name": "purchased_ops_manual",
+          "kind": "Stat"
+        },
+        "purchased_rm_manual": {
+          "name": "purchased_rm_manual",
+          "kind": "Stat"
+        },
+        "purchased_vehicle_manual": {
+          "name": "purchased_vehicle_manual",
+          "kind": "Stat"
+        },
+        "purchased_stealth_manual": {
+          "name": "purchased_stealth_manual",
+          "kind": "Stat"
+        },
+        "purchased_firstaid": {
+          "name": "purchased_firstaid",
+          "kind": "Stat"
+        },
+        "purchased_bandolier": {
+          "name": "purchased_bandolier",
+          "kind": "Stat"
+        },
+        "purchased_camouflage": {
+          "name": "purchased_camouflage",
+          "kind": "Stat"
+        },
+        "distance_travel_foot": {
+          "name": "distance_travel_foot",
+          "kind": "Stat"
+        },
+        "distance_travel_vehicle": {
+          "name": "distance_travel_vehicle",
+          "kind": "Stat"
+        },
+        "distance_travel_swim": {
+          "name": "distance_travel_swim",
+          "kind": "Stat"
+        },
+        "injury_healed": {
+          "name": "injury_healed",
+          "kind": "Stat"
+        },
+        "shot_fired": {
+          "name": "shot_fired",
+          "kind": "Stat"
+        },
+        "shot_success": {
+          "name": "shot_success",
+          "kind": "Stat"
+        }
+      },
+      "gamestats": {}
+    },
+    "FCXEditor": {
+      "stats": {
+        "score": {
+          "name": "score",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "reset": true,
+          "default": "0"
+        },
+        "xp": {
+          "name": "xp",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "rank": {
+          "name": "rank",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "consecutiveWins": {
+          "name": "consecutiveWins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xpGain": {
+          "name": "xpGain",
+          "kind": "Stat"
+        },
+        "xpLoss": {
+          "name": "xpLoss",
+          "kind": "Stat"
+        },
+        "timePlayed": {
+          "name": "timePlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "creationDate": {
+          "name": "creationDate",
+          "kind": "Stat"
+        },
+        "lastPlayedOn": {
+          "name": "lastPlayedOn",
+          "kind": "Stat"
+        },
+        "totalMatches": {
+          "name": "totalMatches",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "wins": {
+          "name": "wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "xp_last_win_reward": {
+          "name": "xp_last_win_reward",
+          "kind": "Stat",
+          "reset": true
+        },
+        "ties": {
+          "name": "ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "losses": {
+          "name": "losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "winLossRatio": {
+          "name": "winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "wins",
+          "subStat": "losses"
+        },
+        "winLossSum": {
+          "name": "winLossSum",
+          "kind": "StatDiff",
+          "displayable": true,
+          "statA": "wins",
+          "statB": "losses"
+        },
+        "kills": {
+          "name": "kills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 10
+          }
+        },
+        "headshotKills": {
+          "name": "headshotKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "explosionKills": {
+          "name": "explosionKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "burnKills": {
+          "name": "burnKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "vehicleKills": {
+          "name": "vehicleKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "meleeKills": {
+          "name": "meleeKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "bulletKills": {
+          "name": "bulletKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "kills": 1,
+            "xp": 5
+          }
+        },
+        "executions": {
+          "name": "executions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 5
+          }
+        },
+        "revives": {
+          "name": "revives",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": 15
+          }
+        },
+        "teamExecutions": {
+          "name": "teamExecutions",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "teamKills": {
+          "name": "teamKills",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -15
+          }
+        },
+        "wentDown": {
+          "name": "wentDown",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "deaths": {
+          "name": "deaths",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "executed": {
+          "name": "executed",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "revived": {
+          "name": "revived",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "kind": "Stat",
+          "live": true,
+          "displayable": true,
+          "modifiers": {
+            "xp": -5
+          }
+        },
+        "killDeathRatio": {
+          "name": "killDeathRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "kills",
+          "subStat": "deaths"
+        },
+        "killDeathSum": {
+          "name": "killDeathSum",
+          "kind": "StatDiff",
+          "statA": "kills",
+          "statB": "deaths"
+        },
+        "DM_matchesPlayed": {
+          "name": "DM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_kills": {
+          "name": "DM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_wins": {
+          "name": "DM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_ties": {
+          "name": "DM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_losses": {
+          "name": "DM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "DM_winLossRatio": {
+          "name": "DM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "DM_wins",
+          "subStat": "DM_losses"
+        },
+        "DM_winLossSum": {
+          "name": "DM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "DM_wins",
+          "statB": "DM_losses"
+        },
+        "TDM_matchesPlayed": {
+          "name": "TDM_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_kills": {
+          "name": "TDM_kills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_wins": {
+          "name": "TDM_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_ties": {
+          "name": "TDM_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_losses": {
+          "name": "TDM_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "TDM_winLossRatio": {
+          "name": "TDM_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "TDM_wins",
+          "subStat": "TDM_losses"
+        },
+        "TDM_winLossSum": {
+          "name": "TDM_winLossSum",
+          "kind": "StatDiff",
+          "statA": "TDM_wins",
+          "statB": "TDM_losses"
+        },
+        "CTF_matchesPlayed": {
+          "name": "CTF_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_wins": {
+          "name": "CTF_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_ties": {
+          "name": "CTF_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_losses": {
+          "name": "CTF_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsStolen": {
+          "name": "CTF_diamondsStolen",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsReturned": {
+          "name": "CTF_diamondsReturned",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_diamondsSaved": {
+          "name": "CTF_diamondsSaved",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "CTF_winLossRatio": {
+          "name": "CTF_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "CTF_wins",
+          "subStat": "CTF_losses"
+        },
+        "CTF_winLossSum": {
+          "name": "CTF_winLossSum",
+          "kind": "StatDiff",
+          "statA": "CTF_wins",
+          "statB": "CTF_losses"
+        },
+        "VIP_matchesPlayed": {
+          "name": "VIP_matchesPlayed",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_timesAsVIP": {
+          "name": "VIP_timesAsVIP",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_pointsCaptured": {
+          "name": "VIP_pointsCaptured",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_vipKills": {
+          "name": "VIP_vipKills",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_wins": {
+          "name": "VIP_wins",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_ties": {
+          "name": "VIP_ties",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_losses": {
+          "name": "VIP_losses",
+          "kind": "Stat",
+          "displayable": true
+        },
+        "VIP_winLossRatio": {
+          "name": "VIP_winLossRatio",
+          "kind": "StatRatio",
+          "displayable": true,
+          "topStat": "VIP_wins",
+          "subStat": "VIP_losses"
+        },
+        "VIP_winLossSum": {
+          "name": "VIP_winLossSum",
+          "kind": "StatDiff",
+          "statA": "VIP_wins",
+          "statB": "VIP_losses"
+        },
+        "Executions_ithaca": {
+          "name": "Executions_ithaca",
+          "kind": "Stat"
+        },
+        "Kills_ithaca": {
+          "name": "Kills_ithaca",
+          "kind": "Stat"
+        },
+        "Headshots_ithaca": {
+          "name": "Headshots_ithaca",
+          "kind": "Stat"
+        },
+        "Executions_spas12": {
+          "name": "Executions_spas12",
+          "kind": "Stat"
+        },
+        "Kills_spas12": {
+          "name": "Kills_spas12",
+          "kind": "Stat"
+        },
+        "Headshots_spas12": {
+          "name": "Headshots_spas12",
+          "kind": "Stat"
+        },
+        "Executions_usas12": {
+          "name": "Executions_usas12",
+          "kind": "Stat"
+        },
+        "Kills_usas12": {
+          "name": "Kills_usas12",
+          "kind": "Stat"
+        },
+        "Headshots_usas12": {
+          "name": "Headshots_usas12",
+          "kind": "Stat"
+        },
+        "Executions_g3ka4": {
+          "name": "Executions_g3ka4",
+          "kind": "Stat"
+        },
+        "Kills_g3ka4": {
+          "name": "Kills_g3ka4",
+          "kind": "Stat"
+        },
+        "Headshots_g3ka4": {
+          "name": "Headshots_g3ka4",
+          "kind": "Stat"
+        },
+        "Executions_mp5": {
+          "name": "Executions_mp5",
+          "kind": "Stat"
+        },
+        "Kills_mp5": {
+          "name": "Kills_mp5",
+          "kind": "Stat"
+        },
+        "Headshots_mp5": {
+          "name": "Headshots_mp5",
+          "kind": "Stat"
+        },
+        "Executions_ak47": {
+          "name": "Executions_ak47",
+          "kind": "Stat"
+        },
+        "Kills_ak47": {
+          "name": "Kills_ak47",
+          "kind": "Stat"
+        },
+        "Headshots_ak47": {
+          "name": "Headshots_ak47",
+          "kind": "Stat"
+        },
+        "Executions_m16": {
+          "name": "Executions_m16",
+          "kind": "Stat"
+        },
+        "Kills_m16": {
+          "name": "Kills_m16",
+          "kind": "Stat"
+        },
+        "Headshots_m16": {
+          "name": "Headshots_m16",
+          "kind": "Stat"
+        },
+        "Executions_fnfal": {
+          "name": "Executions_fnfal",
+          "kind": "Stat"
+        },
+        "Kills_fnfal": {
+          "name": "Kills_fnfal",
+          "kind": "Stat"
+        },
+        "Headshots_fnfal": {
+          "name": "Headshots_fnfal",
+          "kind": "Stat"
+        },
+        "Executions_m1903": {
+          "name": "Executions_m1903",
+          "kind": "Stat"
+        },
+        "Kills_m1903": {
+          "name": "Kills_m1903",
+          "kind": "Stat"
+        },
+        "Headshots_m1903": {
+          "name": "Headshots_m1903",
+          "kind": "Stat"
+        },
+        "Executions_dragunov": {
+          "name": "Executions_dragunov",
+          "kind": "Stat"
+        },
+        "Kills_dragunov": {
+          "name": "Kills_dragunov",
+          "kind": "Stat"
+        },
+        "Headshots_dragunov": {
+          "name": "Headshots_dragunov",
+          "kind": "Stat"
+        },
+        "Executions_as50": {
+          "name": "Executions_as50",
+          "kind": "Stat"
+        },
+        "Kills_as50": {
+          "name": "Kills_as50",
+          "kind": "Stat"
+        },
+        "Headshots_as50": {
+          "name": "Headshots_as50",
+          "kind": "Stat"
+        },
+        "Executions_pkm": {
+          "name": "Executions_pkm",
+          "kind": "Stat"
+        },
+        "Kills_pkm": {
+          "name": "Kills_pkm",
+          "kind": "Stat"
+        },
+        "Headshots_pkm": {
+          "name": "Headshots_pkm",
+          "kind": "Stat"
+        },
+        "Kills_rpg-7": {
+          "name": "Kills_rpg-7",
+          "kind": "Stat"
+        },
+        "Multikills_rpg-7": {
+          "name": "Multikills_rpg-7",
+          "kind": "Stat"
+        },
+        "Executions_rpg-7": {
+          "name": "Executions_rpg-7",
+          "kind": "Stat"
+        },
+        "Kills_lpo50": {
+          "name": "Kills_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_lpo50": {
+          "name": "Executions_lpo50",
+          "kind": "Stat"
+        },
+        "Executions_m249": {
+          "name": "Executions_m249",
+          "kind": "Stat"
+        },
+        "Kills_m249": {
+          "name": "Kills_m249",
+          "kind": "Stat"
+        },
+        "Headshots_m249": {
+          "name": "Headshots_m249",
+          "kind": "Stat"
+        },
+        "Kills_carl_gustaf": {
+          "name": "Kills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Multikills_carl_gustaf": {
+          "name": "Multikills_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_carl_gustaf": {
+          "name": "Executions_carl_gustaf",
+          "kind": "Stat"
+        },
+        "Executions_makarov": {
+          "name": "Executions_makarov",
+          "kind": "Stat"
+        },
+        "Kills_makarov": {
+          "name": "Kills_makarov",
+          "kind": "Stat"
+        },
+        "Headshots_makarov": {
+          "name": "Headshots_makarov",
+          "kind": "Stat"
+        },
+        "Executions_star45": {
+          "name": "Executions_star45",
+          "kind": "Stat"
+        },
+        "Kills_star45": {
+          "name": "Kills_star45",
+          "kind": "Stat"
+        },
+        "Headshots_star45": {
+          "name": "Headshots_star45",
+          "kind": "Stat"
+        },
+        "Executions_mac10": {
+          "name": "Executions_mac10",
+          "kind": "Stat"
+        },
+        "Kills_mac10": {
+          "name": "Kills_mac10",
+          "kind": "Stat"
+        },
+        "Headshots_mac10": {
+          "name": "Headshots_mac10",
+          "kind": "Stat"
+        },
+        "Executions_uzi": {
+          "name": "Executions_uzi",
+          "kind": "Stat"
+        },
+        "Kills_uzi": {
+          "name": "Kills_uzi",
+          "kind": "Stat"
+        },
+        "Headshots_uzi": {
+          "name": "Headshots_uzi",
+          "kind": "Stat"
+        },
+        "Executions_deserteagle": {
+          "name": "Executions_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_deserteagle": {
+          "name": "Kills_deserteagle",
+          "kind": "Stat"
+        },
+        "Headshots_deserteagle": {
+          "name": "Headshots_deserteagle",
+          "kind": "Stat"
+        },
+        "Kills_m79": {
+          "name": "Kills_m79",
+          "kind": "Stat"
+        },
+        "Multikills_m79": {
+          "name": "Multikills_m79",
+          "kind": "Stat"
+        },
+        "Executions_m79": {
+          "name": "Executions_m79",
+          "kind": "Stat"
+        },
+        "Kills_flare_gun": {
+          "name": "Kills_flare_gun",
+          "kind": "Stat"
+        },
+        "Executions_flare_gun": {
+          "name": "Executions_flare_gun",
+          "kind": "Stat"
+        },
+        "Kills_Dart_Rifle": {
+          "name": "Kills_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Executions_Dart_Rifle": {
+          "name": "Executions_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Headshots_Dart_Rifle": {
+          "name": "Headshots_Dart_Rifle",
+          "kind": "Stat"
+        },
+        "Kills_MGL140": {
+          "name": "Kills_MGL140",
+          "kind": "Stat"
+        },
+        "Multikills_MGL140": {
+          "name": "Multikills_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_MGL140": {
+          "name": "Executions_MGL140",
+          "kind": "Stat"
+        },
+        "Executions_6p9": {
+          "name": "Executions_6p9",
+          "kind": "Stat"
+        },
+        "Kills_6p9": {
+          "name": "Kills_6p9",
+          "kind": "Stat"
+        },
+        "Headshots_6p9": {
+          "name": "Headshots_6p9",
+          "kind": "Stat"
+        },
+        "Kills_ied": {
+          "name": "Kills_ied",
+          "kind": "Stat"
+        },
+        "Multikills_ied": {
+          "name": "Multikills_ied",
+          "kind": "Stat"
+        },
+        "Executions_ied": {
+          "name": "Executions_ied",
+          "kind": "Stat"
+        },
+        "classLevelTokens": {
+          "name": "classLevelTokens",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_assault": {
+          "name": "levelTokens_assault",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_sniper": {
+          "name": "levelTokens_sniper",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_cqb": {
+          "name": "levelTokens_cqb",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_grenadier": {
+          "name": "levelTokens_grenadier",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_heavy": {
+          "name": "levelTokens_heavy",
+          "kind": "Stat",
+          "live": true
+        },
+        "levelTokens_agent": {
+          "name": "levelTokens_agent",
+          "kind": "Stat",
+          "live": true
+        },
+        "award_end_round_achievements": {
+          "name": "award_end_round_achievements",
+          "kind": "Stat",
+          "reset": true,
+          "default": "0"
+        }
+      },
+      "gamestats": {
+        "gameCancelled": {
+          "name": "gameCancelled",
+          "kind": "Stat"
+        }
+      }
+    }
+  },
+  "names": [
+    {
+      "name": "CTF_diamondsReturned",
+      "crc32": "6C93FE89",
+      "crc32_lower": "F4DB02F0",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_diamondsSaved",
+      "crc32": "C6C35BFA",
+      "crc32_lower": "B65B03E7",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_diamondsStolen",
+      "crc32": "B67D71A2",
+      "crc32_lower": "D50B8523",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_losses",
+      "crc32": "1939DF39",
+      "crc32_lower": "2DE33C1C",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_matchesPlayed",
+      "crc32": "B455B3FB",
+      "crc32_lower": "02A0C1D4",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_ties",
+      "crc32": "04351EA8",
+      "crc32_lower": "35524054",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_winLossRatio",
+      "crc32": "56D4B5B1",
+      "crc32_lower": "477A252D",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_winLossSum",
+      "crc32": "823CE13F",
+      "crc32_lower": "13E77696",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "CTF_wins",
+      "crc32": "F574688D",
+      "crc32_lower": "C4133671",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_kills",
+      "crc32": "F9B47559",
+      "crc32_lower": "CF7F2E93",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_losses",
+      "crc32": "989D4165",
+      "crc32_lower": "E31AA190",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_matchesPlayed",
+      "crc32": "A70EAF03",
+      "crc32_lower": "3F58EFD6",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_ties",
+      "crc32": "5670B7BC",
+      "crc32_lower": "9E618B16",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_winLossRatio",
+      "crc32": "61501BA9",
+      "crc32_lower": "67C1F048",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_winLossSum",
+      "crc32": "A4BE0E84",
+      "crc32_lower": "F801E1F5",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "DM_wins",
+      "crc32": "A731C199",
+      "crc32_lower": "6F20FD33",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_6p9",
+      "crc32": "CDDA7C17",
+      "crc32_lower": "00BE04CF",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_Dart_Rifle",
+      "crc32": "60AF505D",
+      "crc32_lower": "79FB5951",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_MGL140",
+      "crc32": "95FBE4DC",
+      "crc32_lower": "DD07532A",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_ak47",
+      "crc32": "1AA610FE",
+      "crc32_lower": "92632E60",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_as50",
+      "crc32": "8FEC46D4",
+      "crc32_lower": "0729784A",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_carl_gustaf",
+      "crc32": "83A965CF",
+      "crc32_lower": "0B36F70C",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_deserteagle",
+      "crc32": "2852CD7F",
+      "crc32_lower": "A0CD5FBC",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_dragunov",
+      "crc32": "C5B96BFE",
+      "crc32_lower": "E33D1DEA",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_flare_gun",
+      "crc32": "3B5D5728",
+      "crc32_lower": "21A10723",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_fnfal",
+      "crc32": "CA3E97DB",
+      "crc32_lower": "DD01ECA6",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_g3ka4",
+      "crc32": "A3512381",
+      "crc32_lower": "B46E58FC",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_ied",
+      "crc32": "8855DEC7",
+      "crc32_lower": "4531A61F",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_ithaca",
+      "crc32": "453DDD82",
+      "crc32_lower": "6B9EEF78",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_lpo50",
+      "crc32": "839311D6",
+      "crc32_lower": "94AC6AAB",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_m16",
+      "crc32": "D4EEDE93",
+      "crc32_lower": "198AA64B",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_m1903",
+      "crc32": "1114F0C3",
+      "crc32_lower": "062B8BBE",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_m249",
+      "crc32": "D4A5977E",
+      "crc32_lower": "5C60A9E0",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_m79",
+      "crc32": "120B6484",
+      "crc32_lower": "DF6F1C5C",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_mac10",
+      "crc32": "3B2034FC",
+      "crc32_lower": "2C1F4F81",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_makarov",
+      "crc32": "0B04CD77",
+      "crc32_lower": "56427547",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_mp5",
+      "crc32": "A485F16D",
+      "crc32_lower": "69E189B5",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_pkm",
+      "crc32": "7CFDD312",
+      "crc32_lower": "B199ABCA",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_rpg-7",
+      "crc32": "4E2F6477",
+      "crc32_lower": "59101F0A",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_spas12",
+      "crc32": "0AB55DB3",
+      "crc32_lower": "24166F49",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_star45",
+      "crc32": "1DE4F0A2",
+      "crc32_lower": "3347C258",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_usas12",
+      "crc32": "9B4CC47E",
+      "crc32_lower": "B5EFF684",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Executions_uzi",
+      "crc32": "2E82F6F0",
+      "crc32_lower": "E3E68E28",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_6p9",
+      "crc32": "4BF0285C",
+      "crc32_lower": "F88E63A9",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_Dart_Rifle",
+      "crc32": "F2FFE57D",
+      "crc32_lower": "669F99A2",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_ak47",
+      "crc32": "FB2EA2B2",
+      "crc32_lower": "364ADA6A",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_as50",
+      "crc32": "6E64F498",
+      "crc32_lower": "A3008C40",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_deserteagle",
+      "crc32": "13AEBD02",
+      "crc32_lower": "846698DA",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_dragunov",
+      "crc32": "F6F666A8",
+      "crc32_lower": "ABB0DE98",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_fnfal",
+      "crc32": "B5B512D2",
+      "crc32_lower": "3D702C4C",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_g3ka4",
+      "crc32": "DCDAA688",
+      "crc32_lower": "541F9816",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_ithaca",
+      "crc32": "3C9EEEA3",
+      "crc32_lower": "2BA195DE",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_m16",
+      "crc32": "52C48AD8",
+      "crc32_lower": "E1BAC12D",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_m1903",
+      "crc32": "6E9F75CA",
+      "crc32_lower": "E65A4B54",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_m249",
+      "crc32": "352D2532",
+      "crc32_lower": "F8495DEA",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_mac10",
+      "crc32": "44ABB1F5",
+      "crc32_lower": "CC6E8F6B",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_makarov",
+      "crc32": "47147E1A",
+      "crc32_lower": "69B74CE0",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_mp5",
+      "crc32": "22AFA526",
+      "crc32_lower": "91D1EED3",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_pkm",
+      "crc32": "FAD78759",
+      "crc32_lower": "49A9CCAC",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_spas12",
+      "crc32": "73166E92",
+      "crc32_lower": "642915EF",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_star45",
+      "crc32": "6447C383",
+      "crc32_lower": "7378B8FE",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_usas12",
+      "crc32": "E2EFF75F",
+      "crc32_lower": "F5D08C22",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Headshots_uzi",
+      "crc32": "A8A8A2BB",
+      "crc32_lower": "1BD6E94E",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_6p9",
+      "crc32": "3B8A3663",
+      "crc32_lower": "B97BB4C0",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_Dart_Rifle",
+      "crc32": "4D550BDF",
+      "crc32_lower": "D4F65C76",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_MGL140",
+      "crc32": "A7FED2DD",
+      "crc32_lower": "D9908C29",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_ak47",
+      "crc32": "4D38F591",
+      "crc32_lower": "0265F641",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_as50",
+      "crc32": "D872A3BB",
+      "crc32_lower": "972FA06B",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_carl_gustaf",
+      "crc32": "80327D98",
+      "crc32_lower": "AE914F62",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_deserteagle",
+      "crc32": "2BC9D528",
+      "crc32_lower": "056AE7D2",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_dragunov",
+      "crc32": "1318FD23",
+      "crc32_lower": "DE7C85FB",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_flare_gun",
+      "crc32": "C3E958D7",
+      "crc32_lower": "4B2C6649",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_fnfal",
+      "crc32": "176475F7",
+      "crc32_lower": "91F8FA20",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_g3ka4",
+      "crc32": "7E0BC1AD",
+      "crc32_lower": "F8974E7A",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_ied",
+      "crc32": "7E0594B3",
+      "crc32_lower": "FCF41610",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_ithaca",
+      "crc32": "7738EB83",
+      "crc32_lower": "6F09307B",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_lpo50",
+      "crc32": "5EC9F3FA",
+      "crc32_lower": "D8557C2D",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_m16",
+      "crc32": "22BE94E7",
+      "crc32_lower": "A04F1644",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_m1903",
+      "crc32": "CC4E12EF",
+      "crc32_lower": "4AD29D38",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_m249",
+      "crc32": "833B7211",
+      "crc32_lower": "CC6671C1",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_m79",
+      "crc32": "E45B2EF0",
+      "crc32_lower": "66AAAC53",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_mac10",
+      "crc32": "E67AD6D0",
+      "crc32_lower": "60E65907",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_makarov",
+      "crc32": "7C31F8D7",
+      "crc32_lower": "CF4FB322",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_mp5",
+      "crc32": "52D5BB19",
+      "crc32_lower": "D02439BA",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_pkm",
+      "crc32": "8AAD9966",
+      "crc32_lower": "085C1BC5",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_rpg-7",
+      "crc32": "9375865B",
+      "crc32_lower": "15E9098C",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_spas12",
+      "crc32": "38B06BB2",
+      "crc32_lower": "2081B04A",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_star45",
+      "crc32": "2FE1C6A3",
+      "crc32_lower": "37D01D5B",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_usas12",
+      "crc32": "A949F27F",
+      "crc32_lower": "B1782987",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Kills_uzi",
+      "crc32": "D8D2BC84",
+      "crc32_lower": "5A233E27",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Multikills_MGL140",
+      "crc32": "9A5C96F1",
+      "crc32_lower": "D2A02107",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Multikills_carl_gustaf",
+      "crc32": "2061B147",
+      "crc32_lower": "A8FE2384",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Multikills_ied",
+      "crc32": "D48F1C06",
+      "crc32_lower": "19EB64DE",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Multikills_m79",
+      "crc32": "4ED1A645",
+      "crc32_lower": "83B5DE9D",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "Multikills_rpg-7",
+      "crc32": "E9A47D3E",
+      "crc32_lower": "FE9B0643",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_kills",
+      "crc32": "5521AEE4",
+      "crc32_lower": "E11B778D",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_losses",
+      "crc32": "2DE11B8F",
+      "crc32_lower": "193BF8AA",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_matchesPlayed",
+      "crc32": "BB45CEAD",
+      "crc32_lower": "0DB0BC82",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_ties",
+      "crc32": "7F524A97",
+      "crc32_lower": "4E35146B",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_winLossRatio",
+      "crc32": "4650D7F8",
+      "crc32_lower": "57FE4764",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_winLossSum",
+      "crc32": "44D67547",
+      "crc32_lower": "D50DE2EE",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "TDM_wins",
+      "crc32": "8E133CB2",
+      "crc32_lower": "BF74624E",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_losses",
+      "crc32": "3FE5081F",
+      "crc32_lower": "0B3FEB3A",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_matchesPlayed",
+      "crc32": "DE5FF170",
+      "crc32_lower": "68AA835F",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_pointsCaptured",
+      "crc32": "45AAC38B",
+      "crc32_lower": "D806506A",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_ties",
+      "crc32": "E3E83D6F",
+      "crc32_lower": "D28F6393",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_timesAsVIP",
+      "crc32": "CD1B232A",
+      "crc32_lower": "FC56A671",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_vipKills",
+      "crc32": "46DE6D5E",
+      "crc32_lower": "56EF15A5",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_winLossRatio",
+      "crc32": "ECB6CCA0",
+      "crc32_lower": "FD185C3C",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_winLossSum",
+      "crc32": "70233D86",
+      "crc32_lower": "E1F8AA2F",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "VIP_wins",
+      "crc32": "12A94B4A",
+      "crc32_lower": "23CE15B6",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "award_end_round_achievements",
+      "crc32": "436D8F94",
+      "crc32_lower": "436D8F94",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "blueTeamScore",
+      "crc32": "EF5C33A3",
+      "crc32_lower": "AC6C9E04",
+      "in_modes": [
+        "FCXCTF",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "buddy_rescue",
+      "crc32": "C47B9B96",
+      "crc32_lower": "C47B9B96",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "bulletKills",
+      "crc32": "2FF5DCA0",
+      "crc32_lower": "EE34F3A4",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "burnKills",
+      "crc32": "11A16AE8",
+      "crc32_lower": "D06045EC",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "classLevelTokens",
+      "crc32": "1ECD7020",
+      "crc32_lower": "9FFDFAC1",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "consecutiveWins",
+      "crc32": "C14CB07D",
+      "crc32_lower": "617E1F43",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "creationDate",
+      "crc32": "3CFD6CD1",
+      "crc32_lower": "9CCFC3EF",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "deaths",
+      "crc32": "C73F8511",
+      "crc32_lower": "C73F8511",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "diamond_current",
+      "crc32": "9896B1B9",
+      "crc32_lower": "9896B1B9",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "diamond_found",
+      "crc32": "93B064A8",
+      "crc32_lower": "93B064A8",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "distance_travel_foot",
+      "crc32": "131A0B2E",
+      "crc32_lower": "131A0B2E",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "distance_travel_swim",
+      "crc32": "54D9510D",
+      "crc32_lower": "54D9510D",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "distance_travel_vehicle",
+      "crc32": "BB13BAA5",
+      "crc32_lower": "BB13BAA5",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "executed",
+      "crc32": "F949D60F",
+      "crc32_lower": "F949D60F",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "executions",
+      "crc32": "DD00B66E",
+      "crc32_lower": "DD00B66E",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "explosionKills",
+      "crc32": "06541C82",
+      "crc32_lower": "C7953386",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "finalVipKills",
+      "crc32": "3C88AC56",
+      "crc32_lower": "043FE104",
+      "in_modes": [
+        "FCXVIP"
+      ]
+    },
+    {
+      "name": "gameCancelled",
+      "crc32": "FE80C322",
+      "crc32_lower": "7C714181",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "headshotKills",
+      "crc32": "ADCA6926",
+      "crc32_lower": "6C0B4622",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "injury_healed",
+      "crc32": "78CABC7F",
+      "crc32_lower": "78CABC7F",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "isAvip",
+      "crc32": "B7A5EF46",
+      "crc32_lower": "17974078",
+      "in_modes": [
+        "FCXVIP"
+      ]
+    },
+    {
+      "name": "killDeathRatio",
+      "crc32": "7649E2BE",
+      "crc32_lower": "F8D5CE6A",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "killDeathSum",
+      "crc32": "3280DA6C",
+      "crc32_lower": "F3BBFEDA",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "kills",
+      "crc32": "2F673FA1",
+      "crc32_lower": "2F673FA1",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "lastPlayedOn",
+      "crc32": "C771F212",
+      "crc32_lower": "AB83B4E6",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_agent",
+      "crc32": "12A983B0",
+      "crc32_lower": "0A985848",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_assault",
+      "crc32": "61CBB534",
+      "crc32_lower": "ACAFCDEC",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_cqb",
+      "crc32": "8F89D389",
+      "crc32_lower": "C0D4D059",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_grenadier",
+      "crc32": "E9BB0389",
+      "crc32_lower": "FE8478F4",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_heavy",
+      "crc32": "4E136572",
+      "crc32_lower": "5622BE8A",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "levelTokens_sniper",
+      "crc32": "EBC336A1",
+      "crc32_lower": "58BD7D54",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "losses",
+      "crc32": "2B2DE801",
+      "crc32_lower": "2B2DE801",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "meleeKills",
+      "crc32": "FF108CBA",
+      "crc32_lower": "3ED1A3BE",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "npc_burn_killed",
+      "crc32": "2D2F9581",
+      "crc32_lower": "2D2F9581",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "npc_killed",
+      "crc32": "C3870B9F",
+      "crc32_lower": "C3870B9F",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "npc_machete_killed",
+      "crc32": "29263084",
+      "crc32_lower": "29263084",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_bandolier",
+      "crc32": "01C08AA8",
+      "crc32_lower": "01C08AA8",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_camouflage",
+      "crc32": "BB032E8B",
+      "crc32_lower": "BB032E8B",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_firstaid",
+      "crc32": "FD2764A1",
+      "crc32_lower": "FD2764A1",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_ops_manual",
+      "crc32": "18D39E9F",
+      "crc32_lower": "18D39E9F",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_rm_manual",
+      "crc32": "4DD2F621",
+      "crc32_lower": "4DD2F621",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_stealth_manual",
+      "crc32": "051000CE",
+      "crc32_lower": "051000CE",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_training_manual",
+      "crc32": "0350A1F8",
+      "crc32_lower": "0350A1F8",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_vehicle_manual",
+      "crc32": "B1585F62",
+      "crc32_lower": "B1585F62",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "purchased_weapon",
+      "crc32": "537DC537",
+      "crc32_lower": "537DC537",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "rank",
+      "crc32": "8879E8E5",
+      "crc32_lower": "8879E8E5",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "redTeamScore",
+      "crc32": "514F4D4C",
+      "crc32_lower": "127FE0EB",
+      "in_modes": [
+        "FCXCTF",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "revived",
+      "crc32": "8C370332",
+      "crc32_lower": "8C370332",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "revives",
+      "crc32": "0FE486F5",
+      "crc32_lower": "0FE486F5",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "score",
+      "crc32": "32993751",
+      "crc32_lower": "32993751",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "shot_fired",
+      "crc32": "A00735A5",
+      "crc32_lower": "A00735A5",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "shot_success",
+      "crc32": "31DFCE94",
+      "crc32_lower": "31DFCE94",
+      "in_modes": [
+        "FCXSingle"
+      ]
+    },
+    {
+      "name": "suicides",
+      "crc32": "D0B28188",
+      "crc32_lower": "D0B28188",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "teamExecutions",
+      "crc32": "68C40A44",
+      "crc32_lower": "27990994",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "teamKills",
+      "crc32": "626294C5",
+      "crc32_lower": "A3A3BBC1",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "ties",
+      "crc32": "5399A71C",
+      "crc32_lower": "5399A71C",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "timePlayed",
+      "crc32": "A42BC7E2",
+      "crc32_lower": "A387C2D4",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "totalMatches",
+      "crc32": "F8BCE8B3",
+      "crc32_lower": "3701D12F",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "vehicleKills",
+      "crc32": "C11E53E2",
+      "crc32_lower": "00DF7CE6",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "wentDown",
+      "crc32": "B91CEC9E",
+      "crc32_lower": "192E43A0",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "winLossRatio",
+      "crc32": "5568A5D1",
+      "crc32_lower": "16580876",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "winLossSum",
+      "crc32": "70FE44B1",
+      "crc32_lower": "870E3BCD",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "wins",
+      "crc32": "A2D8D139",
+      "crc32_lower": "A2D8D139",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "xp",
+      "crc32": "F63A903D",
+      "crc32_lower": "F63A903D",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "xpGain",
+      "crc32": "FE8293E2",
+      "crc32_lower": "5EB03CDC",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "xpLoss",
+      "crc32": "F036AFEB",
+      "crc32_lower": "500400D5",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    },
+    {
+      "name": "xp_last_win_reward",
+      "crc32": "4DB2C466",
+      "crc32_lower": "4DB2C466",
+      "in_modes": [
+        "Adversarial",
+        "FCXCTF",
+        "FCXDeathMatch",
+        "FCXEditor",
+        "FCXTeamDeathMatch",
+        "FCXVIP",
+        "TeamAdversarial"
+      ]
+    }
+  ]
+}
