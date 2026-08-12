@@ -85,6 +85,20 @@ anything live. The heap hits are 0x80-strided with `0xFFFFFFFF` at +4 and are
 noise. Keep the tool anyway: **33 of our hashes consecutive in the engine's own
 array proves the CRC-32 derivation in `MP_STATS.md` is exactly right.**
 
+**`statwatch` now runs itself, on its own thread.** It snapshots when a score
+first appears, filters whenever the score moves, and dumps once the list is
+small. **The thread is the point, not a detail:** the first pass walks every
+writable page and takes seconds — on the frame thread that is a visible freeze
+mid-match. Nothing in the hunt calls the engine (`VirtualQuery` + guarded reads
+only), so unlike the console commands it does not need the main thread.
+
+The two threads share **one `long`, not a structure**: the sampling path
+publishes the anchor into `g_mpwLive`, the worker reads it and never touches the
+scoreboard arrays. `g_mpwGen` is bumped by `MpNewRound` to force a restart,
+because scores reset with the round and every candidate goes stale. It waits for
+round ≥ 3 before dumping — one filter still leaves words that merely held the
+number. Starts lazily on the first MP round; exits on `g_shutdown`.
+
 **`statwatch` is the follow-up that hunts values instead of keys**, anchored on
 `score` — the one number `net_GetGameScoreStats` already gives us. Snapshot
 every **writable** address holding that value, score, run again, keep only those

@@ -23263,6 +23263,21 @@ static int      g_mpPrevNTeams = 0;
 static long     g_mpPrevTotal  = 0;
 static int      g_mpHaveScores = 0;
 
+/* ---- statwatch state, declared here because the sampling path publishes into
+   it and MpNewRound restarts it; the hunt itself is at the end of this
+   section. See the comment there for what it is doing and why on a thread. */
+#define MPWATCH_MAX 65536
+static unsigned long g_mpwAddr[MPWATCH_MAX];
+static int           g_mpwCount = 0;
+static int           g_mpwRound = 0;
+static long          g_mpwValue = 0;
+static volatile long g_mpwLive  = -1;   /* current anchor score, -1 = no match */
+static volatile long g_mpwGen   = 0;    /* bumped per round: forces a restart  */
+static volatile long g_mpwOn    = 0;    /* worker started                      */
+static char          g_mpwWho[64] = {0};
+static DWORD WINAPI  MpWatchThread(LPVOID unused);
+static long          MpWatchAnchor(char* whoOut, int whoCap);
+
 static long MpTotalScore(void)
 {
     long t = 0;
@@ -23551,6 +23566,16 @@ static void MpSample(void* con, const char* why)
     }
     if (f) fclose(f);
     ++g_mpSamples;
+
+    /* Publish the anchor for the watch worker: one long, written here and read
+       there, so the two threads never share a structure. */
+    {
+        char who[64];
+        long anchor = MpWatchAnchor(who, sizeof(who));
+        if (who[0]) _snprintf(g_mpwWho, sizeof(g_mpwWho) - 1, "%s", who);
+        g_mpwLive = g_mpNPlayers ? anchor : -1;
+    }
+
     MpWritePartial();      /* the match must survive the game being quit */
     logf_("[mpstat] sample %d (%s) world=%s players=%d output=%s",
           g_mpSamples, why, g_mpWorld, g_mpNPlayers,
@@ -23735,7 +23760,17 @@ static void MpNewRound(void)
     g_mpRaw[0]     = 0;
     g_mpHaveScores = 0;
     g_mpPrevTotal  = 0;
+    g_mpwLive      = -1;
+    ++g_mpwGen;            /* the watch restarts: scores reset with the round */
     logf_("[mpstat] round %d START %s", g_mpRound, g_mpMatchId);
+
+    /* Start the watch worker once, lazily - no thread is created for anyone who
+       never loads a multiplayer level. */
+    if (!InterlockedExchange((volatile LONG*)&g_mpwOn, 1)) {
+        HANDLE h = CreateThread(NULL, 0, MpWatchThread, NULL, 0, NULL);
+        if (h) { CloseHandle(h); logf_("[mpwatch] worker started"); }
+        else   { g_mpwOn = 0;    logf_("[mpwatch] CreateThread failed"); }
+    }
 }
 
 static void MpStart(void* con, const char* world)
@@ -23999,11 +24034,7 @@ static void MpStatScan(void* console)
 
    Read-only throughout. */
 
-#define MPWATCH_MAX 65536
-static unsigned long g_mpwAddr[MPWATCH_MAX];
-static int           g_mpwCount = 0;
-static int           g_mpwRound = 0;
-static long          g_mpwValue = 0;
+/* State lives further up, with the sampling globals that feed it. */
 
 /* Which score do we anchor on? The local player's, if we can tell who that is;
    otherwise the highest, which at least changes during a match. */
@@ -24027,92 +24058,78 @@ static int MpWatchMatches(unsigned long* q, long want)
     return 0;
 }
 
-static void MpStatWatch(void* console)
+/* ---- the three steps, callable from the worker thread ------------------- */
+
+static void MpwScanAll(long want)
 {
-    fnPrintf P_ = (fnPrintf)FN_PRINTF;
     SYSTEM_INFO si;
     MEMORY_BASIC_INFORMATION mbi;
     unsigned char *p, *limit;
-    char who[64];
-    long want = MpWatchAnchor(who, sizeof(who));
+    int n = 0;
+
+    GetSystemInfo(&si);
+    p     = (unsigned char*)si.lpMinimumApplicationAddress;
+    limit = (unsigned char*)si.lpMaximumApplicationAddress;
+    while (p < limit && n < MPWATCH_MAX && !g_shutdown) {
+        if (VirtualQuery(p, &mbi, sizeof(mbi)) != sizeof(mbi)) break;
+        {
+            unsigned char* base = (unsigned char*)mbi.BaseAddress;
+            SIZE_T sz = mbi.RegionSize;
+            /* WRITABLE only: a live counter is never in a read-only page, and
+               the restriction drops Dunia's static tables - which is exactly
+               what statscan tripped over. */
+            int ok = (mbi.State == MEM_COMMIT) &&
+                     !(mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) &&
+                     (mbi.Protect & (PAGE_READWRITE | PAGE_WRITECOPY |
+                                     PAGE_EXECUTE_READWRITE));
+            if (ok && sz <= MPSCAN_MAXREGION) {
+                unsigned long* q   = (unsigned long*)base;
+                unsigned long* end = (unsigned long*)(base + (sz & ~3u));
+                __try {
+                    for (; q < end && n < MPWATCH_MAX; ++q)
+                        if (MpWatchMatches(q, want))
+                            g_mpwAddr[n++] = (unsigned long)q;
+                } __except (EXCEPTION_EXECUTE_HANDLER) { }
+            }
+            p = base + (sz ? sz : si.dwPageSize);
+        }
+    }
+    g_mpwCount = n;
+    g_mpwRound = 1;
+    g_mpwValue = want;
+}
+
+static void MpwFilter(long want)
+{
+    int i, kept = 0;
+    for (i = 0; i < g_mpwCount; ++i) {
+        unsigned long a = g_mpwAddr[i];
+        if (!Readable((void*)a, 4)) continue;
+        __try {
+            if (MpWatchMatches((unsigned long*)a, want)) g_mpwAddr[kept++] = a;
+        } __except (EXCEPTION_EXECUTE_HANDLER) { }
+    }
+    g_mpwCount = kept;
+    ++g_mpwRound;
+    g_mpwValue = want;
+}
+
+/* Whatever block holds `score` holds the rest of that player's record, so dump
+   a window either side of each survivor and let the layout show itself. */
+static void MpwDump(const char* who, long want)
+{
     char path[MAX_PATH];
     FILE* f;
     int i;
 
-    if (!g_mpActive || !g_mpNPlayers) {
-        P_(console, 0, AC "statwatch: no live scoreboard yet - run this in a "
-                          "match, after somebody has scored.\n");
-        return;
-    }
-
-    /* ---- round 1, or a restart because the anchor has not moved ---------- */
-    if (g_mpwRound == 0 || want == g_mpwValue) {
-        int n = 0;
-        GetSystemInfo(&si);
-        p = (unsigned char*)si.lpMinimumApplicationAddress;
-        limit = (unsigned char*)si.lpMaximumApplicationAddress;
-        while (p < limit && n < MPWATCH_MAX) {
-            if (VirtualQuery(p, &mbi, sizeof(mbi)) != sizeof(mbi)) break;
-            {
-                unsigned char* base = (unsigned char*)mbi.BaseAddress;
-                SIZE_T sz = mbi.RegionSize;
-                /* WRITABLE only: a live counter is not in a read-only page,
-                   and skipping them drops Dunia's static tables outright. */
-                int ok = (mbi.State == MEM_COMMIT) &&
-                         !(mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) &&
-                         (mbi.Protect & (PAGE_READWRITE | PAGE_WRITECOPY |
-                                         PAGE_EXECUTE_READWRITE));
-                if (ok && sz <= MPSCAN_MAXREGION) {
-                    unsigned long* q   = (unsigned long*)base;
-                    unsigned long* end = (unsigned long*)(base + (sz & ~3u));
-                    __try {
-                        for (; q < end && n < MPWATCH_MAX; ++q)
-                            if (MpWatchMatches(q, want))
-                                g_mpwAddr[n++] = (unsigned long)q;
-                    } __except (EXCEPTION_EXECUTE_HANDLER) { }
-                }
-                p = base + (sz ? sz : si.dwPageSize);
-            }
-        }
-        g_mpwCount = n;
-        g_mpwRound = 1;
-        g_mpwValue = want;
-        P_(console, 0, AC "statwatch round 1: %d candidate(s) holding %s's "
-                          "score (%ld).\n", n, who, want);
-        P_(console, 0, AC "  Now go score, then run statwatch again.\n");
-        return;
-    }
-
-    /* ---- later rounds: keep only what followed the score ----------------- */
-    {
-        int kept = 0;
-        for (i = 0; i < g_mpwCount; ++i) {
-            unsigned long a = g_mpwAddr[i];
-            if (!Readable((void*)a, 4)) continue;
-            __try {
-                if (MpWatchMatches((unsigned long*)a, want))
-                    g_mpwAddr[kept++] = a;
-            } __except (EXCEPTION_EXECUTE_HANDLER) { }
-        }
-        g_mpwCount = kept;
-        ++g_mpwRound;
-        g_mpwValue = want;
-        P_(console, 0, AC "statwatch round %d: %d candidate(s) still tracking "
-                          "%s (now %ld).\n", g_mpwRound, kept, who, want);
-    }
-
-    if (g_mpwCount > 40) {
-        P_(console, 0, AC "  Still broad - score again and repeat.\n");
-        return;
-    }
-
-    /* Few enough to be worth dumping. Whatever block holds `score` holds the
-       rest of that player's stats, so print a window around each survivor. */
     _snprintf(path, sizeof(path) - 1, "%s\\mp_statwatch.log", g_dir);
     f = fopen(path, "w");
-    if (f) fprintf(f, "statwatch round %d: %d survivor(s), anchor %s = %ld\n\n",
-                   g_mpwRound, g_mpwCount, who, want);
-    for (i = 0; i < g_mpwCount && f; ++i) {
+    if (!f) return;
+    fprintf(f, "statwatch round %d: %d survivor(s), anchor %s = %ld\n",
+            g_mpwRound, g_mpwCount, who, want);
+    fprintf(f, "match %s, world %s, mode %s\n\n",
+            g_mpMatchId, g_mpWorld, g_mpMode[0] ? g_mpMode : "?");
+    for (i = 0; i < g_mpwCount; ++i) {
         unsigned long a = g_mpwAddr[i];
         long off;
         fprintf(f, "===== %08lX =====\n", a);
@@ -24128,8 +24145,85 @@ static void MpStatWatch(void* console)
         }
         fprintf(f, "\n");
     }
-    if (f) fclose(f);
-    P_(console, 0, AC "statwatch: wrote mp_statwatch.log - send it over.\n");
+    fclose(f);
+    logf_("[mpwatch] wrote mp_statwatch.log - %d survivor(s)", g_mpwCount);
+}
+
+/* ---- the worker ---------------------------------------------------------
+   Runs the whole hunt by itself: snapshot when a score first appears, filter
+   every time it moves, dump once the list is small enough. Nobody types
+   anything.
+
+   ON ITS OWN THREAD ON PURPOSE. The first pass walks every writable page in the
+   process, which takes seconds - on the frame thread that is a visible freeze
+   mid-match. Nothing here calls into the engine (VirtualQuery and guarded reads
+   only), so it does not need the main thread the way the console commands do.
+
+   The main thread publishes the anchor score into g_mpwLive after each sample;
+   this reads that one long and never touches the scoreboard arrays, so there is
+   no shared structure to tear. */
+static DWORD WINAPI MpWatchThread(LPVOID unused)
+{
+    long seenGen = -1;
+    (void)unused;
+    while (!g_shutdown) {
+        long live = g_mpwLive;
+        long gen  = g_mpwGen;
+
+        if (gen != seenGen) {           /* new round: everything starts over */
+            seenGen = gen;
+            g_mpwRound = 0;
+            g_mpwCount = 0;
+            g_mpwValue = 0;
+        }
+
+        if (live > 0) {
+            if (g_mpwRound == 0) {
+                logf_("[mpwatch] scanning for score=%ld ...", live);
+                MpwScanAll(live);
+                logf_("[mpwatch] round 1: %d candidate(s)", g_mpwCount);
+            } else if (live != g_mpwValue && g_mpwCount > 0) {
+                MpwFilter(live);
+                logf_("[mpwatch] round %d: %d candidate(s) still tracking (%ld)",
+                      g_mpwRound, g_mpwCount, live);
+                /* Two filters is the minimum that means anything: one pass can
+                   still be full of words that happened to hold the number. */
+                if (g_mpwCount > 0 && g_mpwCount <= 40 && g_mpwRound >= 3)
+                    MpwDump(g_mpwWho, live);
+                if (g_mpwCount == 0) {
+                    logf_("[mpwatch] all candidates died - rescanning");
+                    g_mpwRound = 0;
+                }
+            }
+        }
+        Sleep(500);
+    }
+    return 0;
+}
+
+/* `statwatch` - status, and a manual dump if you do not want to wait. */
+static void MpStatWatch(void* console)
+{
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    char who[64];
+    long want = MpWatchAnchor(who, sizeof(who));
+
+    if (!g_mpActive || !g_mpNPlayers) {
+        P_(console, 0, AC "statwatch: no live scoreboard yet. It starts itself "
+                          "once somebody scores.\n");
+        return;
+    }
+    P_(console, 0, AC "statwatch: round %d, %d candidate(s), anchor %s=%ld\n",
+       g_mpwRound, g_mpwCount, who, want);
+    if (g_mpwRound == 0)
+        P_(console, 0, AC "  first scan not done yet - it runs within a few "
+                          "seconds of the first score.\n");
+    else if (g_mpwCount > 40)
+        P_(console, 0, AC "  still broad - keep scoring, it narrows by itself.\n");
+    else {
+        MpwDump(who, want);
+        P_(console, 0, AC "  wrote mp_statwatch.log\n");
+    }
 }
 
 /* `mpstats` - manual view of the same thing, for when the automatic path is
