@@ -23207,6 +23207,7 @@ static char          g_mpMatchId[96]= {0};
 static unsigned long g_mpStartTick  = 0;
 static unsigned long g_mpLastSample = 0;
 static int           g_mpSamples    = 0;
+static int           g_mpRound      = 0;
 static int           g_mpGotOutput  = 0;   /* did ANY command ever print? */
 static char          g_mpRaw[MPSTATS_MAXRAW];
 static int           g_mpRawLen     = 0;
@@ -23240,6 +23241,46 @@ static int      g_mpNPlayers = 0;
 static MpTeam   g_mpTeams[MP_MAXTEAMS];
 static int      g_mpNTeams   = 0;
 static char     g_mpMode[32] = {0};
+
+/* ---- round boundaries -------------------------------------------------------
+   Leaving the mp_ world is NOT the end of a match. When a round ends the server
+   rolls straight into the next one and drops everybody into a lobby, still in
+   the same world; you only leave when you quit out of the lobby entirely. So
+   the original "left the world = match over" rule fired once per SESSION, and
+   quietly merged every round of it into a single record.
+
+   The reliable boundary needs no new engine knowledge: within a round scores
+   only ever go up, so a total that DROPS means the scoreboard was reset and a
+   new round has begun. When that happens we write the record from the standings
+   we had just before the drop -- those are the final ones -- and start fresh.
+
+   g_mpPrev* is that "just before" copy, kept precisely so the record is the end
+   of the round rather than the beginning of the next one. */
+static MpPlayer g_mpPrevPlayers[MP_MAXPLAYERS];
+static int      g_mpPrevN      = 0;
+static MpTeam   g_mpPrevTeams[MP_MAXTEAMS];
+static int      g_mpPrevNTeams = 0;
+static long     g_mpPrevTotal  = 0;
+static int      g_mpHaveScores = 0;
+
+static long MpTotalScore(void)
+{
+    long t = 0;
+    int i;
+    for (i = 0; i < g_mpNPlayers; ++i) t += g_mpPlayers[i].score;
+    for (i = 0; i < g_mpNTeams;   ++i) t += g_mpTeams[i].score;
+    return t;
+}
+
+static void MpSnapshotPrev(void)
+{
+    memcpy(g_mpPrevPlayers, g_mpPlayers, sizeof(g_mpPlayers));
+    memcpy(g_mpPrevTeams,   g_mpTeams,   sizeof(g_mpTeams));
+    g_mpPrevN      = g_mpNPlayers;
+    g_mpPrevNTeams = g_mpNTeams;
+    g_mpPrevTotal  = MpTotalScore();
+    g_mpHaveScores = 1;
+}
 
 static void MpTrim(char* s)
 {
@@ -23314,6 +23355,11 @@ static void MpParseScores(const char* text)
 /* Defined below with the record writers; MpSample calls it after every sample
    so a quit mid-match still leaves the match on disk. */
 static void MpWritePartial(void);
+/* Same reason: MpSample closes the finished round and starts the next one the
+   moment it sees the scoreboard reset, which happens while we are still inside
+   the sample. */
+static void MpNewRound(void);
+static void MpWriteRecord(void);
 
 static void MpRawAppend(const char* s)
 {
@@ -23436,6 +23482,45 @@ static void MpSample(void* con, const char* why)
            lose the match. A stale-but-real scoreboard beats a fresh empty one. */
         if (n > 0 && !strcmp(CMDS[i], "net_GetGameScoreStats") && strstr(buf, "TEAM ")) {
             MpParseScores(buf);
+            /* A total that went DOWN means the scoreboard was reset, i.e. the
+               round we were recording has finished and the next has begun in
+               the same world. Write the record from the standings we held just
+               before the drop - those are the final ones - then start a new
+               match around the fresh scoreboard. */
+            /* NOT "any drop". Score is not monotonic within a round: suicides
+               carry <Modifier name="score" value="-1"> in gamemodesconfig.xml,
+               so killing yourself takes a point off, and a naive drop test
+               splits the round every time somebody does. Replaying the rule
+               over a real log showed exactly that - a 10 -> 8 dip scored as a
+               round boundary when it was a couple of suicides.
+
+               A genuine reset zeroes the board, so require that: total 0 after
+               a non-zero total. The >half fallback covers the case where the
+               first sample of the next round already has a kill in it. */
+            if (g_mpHaveScores && g_mpPrevTotal > 0 &&
+                (MpTotalScore() == 0 ||
+                 (g_mpPrevTotal - MpTotalScore()) > g_mpPrevTotal / 2)) {
+                MpPlayer newP[MP_MAXPLAYERS];
+                MpTeam   newT[MP_MAXTEAMS];
+                int      newN = g_mpNPlayers, newNT = g_mpNTeams;
+                memcpy(newP, g_mpPlayers, sizeof(newP));
+                memcpy(newT, g_mpTeams,   sizeof(newT));
+
+                memcpy(g_mpPlayers, g_mpPrevPlayers, sizeof(g_mpPlayers));
+                memcpy(g_mpTeams,   g_mpPrevTeams,   sizeof(g_mpTeams));
+                g_mpNPlayers = g_mpPrevN;
+                g_mpNTeams   = g_mpPrevNTeams;
+                logf_("[mpstat] round ended (score %ld -> %ld) - closing %s",
+                      g_mpPrevTotal, MpTotalScore(), g_mpMatchId);
+                MpWriteRecord();
+
+                memcpy(g_mpPlayers, newP, sizeof(g_mpPlayers));
+                memcpy(g_mpTeams,   newT, sizeof(g_mpTeams));
+                g_mpNPlayers = newN;
+                g_mpNTeams   = newNT;
+                MpNewRound();
+            }
+            MpSnapshotPrev();
         } else if (n > 0 && !strcmp(CMDS[i], "net_GetCurrentGameModeName")) {
             const char* nl = strchr(buf, '\n');       /* line 1 is the echo */
             if (nl && nl[1]) {
@@ -23522,7 +23607,32 @@ static void MpEmit(FILE* f, int final)
         fputc('"', f); MpJsonPuts(f, g_mpTeams[i].name);
         fprintf(f, "\":%ld", g_mpTeams[i].score);
     }
-    fputs("},\"collector\":\"v2-scoreboard\",\"complete\":", f);
+    fputc('}', f);
+
+    /* WHO WON. Highest team score wins a team mode, highest player otherwise,
+       and an equal top score is a draw rather than whoever happens to be listed
+       first - so both winner fields go null and "draw" says why. */
+    {
+        int bt = -1, bp = -1, tieT = 0, tieP = 0;
+        for (i = 0; i < g_mpNTeams; ++i) {
+            if (bt < 0 || g_mpTeams[i].score > g_mpTeams[bt].score) { bt = i; tieT = 0; }
+            else if (g_mpTeams[i].score == g_mpTeams[bt].score)       tieT = 1;
+        }
+        for (i = 0; i < g_mpNPlayers; ++i) {
+            if (bp < 0 || g_mpPlayers[i].score > g_mpPlayers[bp].score) { bp = i; tieP = 0; }
+            else if (g_mpPlayers[i].score == g_mpPlayers[bp].score)      tieP = 1;
+        }
+        fputs(",\"winner_team\":", f);
+        if (bt >= 0 && !tieT) { fputc('"', f); MpJsonPuts(f, g_mpTeams[bt].name); fputc('"', f); }
+        else fputs("null", f);
+        fputs(",\"winner_player\":", f);
+        if (bp >= 0 && !tieP) { fputc('"', f); MpJsonPuts(f, g_mpPlayers[bp].name); fputc('"', f); }
+        else fputs("null", f);
+        fputs(",\"draw\":", f);
+        fputs((g_mpNTeams ? tieT : tieP) ? "true" : "false", f);
+    }
+
+    fputs(",\"collector\":\"v2-scoreboard\",\"complete\":", f);
     fputs(final ? "true," : "false,", f);
     fputs("\"raw\":\"", f);                         MpJsonPuts(f, g_mpRaw);
     fputs("\"}\n", f);
@@ -23599,34 +23709,46 @@ static void MpRecoverPartial(void)
     remove(pp);
 }
 
-static void MpStart(void* con, const char* world)
+/* A fresh match id and fresh counters, keeping the world and mode. Used both by
+   MpStart and by the round-reset path, which must NOT re-sample - it is already
+   inside a sample when it fires. */
+static void MpNewRound(void)
 {
     char stamp[32];
     int i;
     MpUtcNow(stamp, sizeof(stamp));
-    _snprintf(g_mpWorld, sizeof(g_mpWorld) - 1, "%s", world);
-    g_mpWorld[sizeof(g_mpWorld) - 1] = 0;
-
     /* match_id lands in a filename on the server, so keep it to characters the
-       receiver accepts: [A-Za-z0-9._-]. Colons from the timestamp are out. */
-    _snprintf(g_mpMatchId, sizeof(g_mpMatchId) - 1, "%s-%s", g_mpWorld, stamp);
+       receiver accepts: [A-Za-z0-9._-]. Colons from the timestamp are out.
+       g_mpRound disambiguates two rounds that end inside the same second. */
+    _snprintf(g_mpMatchId, sizeof(g_mpMatchId) - 1, "%s-%s-r%d",
+              g_mpWorld, stamp, ++g_mpRound);
     for (i = 0; g_mpMatchId[i]; ++i) {
         char c = g_mpMatchId[i];
         if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
               (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-'))
             g_mpMatchId[i] = '-';
     }
-    g_mpActive     = 1;
     g_mpStartTick  = GetTickCount();
     g_mpLastSample = g_mpStartTick;
     g_mpSamples    = 0;
-    g_mpGotOutput  = 0;
     g_mpRawLen     = 0;
     g_mpRaw[0]     = 0;
+    g_mpHaveScores = 0;
+    g_mpPrevTotal  = 0;
+    logf_("[mpstat] round %d START %s", g_mpRound, g_mpMatchId);
+}
+
+static void MpStart(void* con, const char* world)
+{
+    _snprintf(g_mpWorld, sizeof(g_mpWorld) - 1, "%s", world);
+    g_mpWorld[sizeof(g_mpWorld) - 1] = 0;
+    g_mpRound      = 0;
+    g_mpActive     = 1;
+    g_mpGotOutput  = 0;
     g_mpNPlayers   = 0;
     g_mpNTeams     = 0;
     g_mpMode[0]    = 0;
-    logf_("[mpstat] match START %s", g_mpMatchId);
+    MpNewRound();                    /* sets id, tick, sample and score state */
     MpSample(con, "match-start");
 }
 

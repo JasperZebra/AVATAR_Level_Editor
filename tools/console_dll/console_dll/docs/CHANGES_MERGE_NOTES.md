@@ -150,6 +150,26 @@ forever on a busy ring.
 `net_ExtendMatch` and the kick commands are deliberately absent and must stay
 absent — this runs unattended, during somebody's match. Do not add them.
 
+**UPDATE 2 — one record per ROUND, not per session.** Leaving the `mp_` world is
+**not** the end of a match: when a round ends the server rolls into the next one
+and drops everybody in a lobby, *still in the same world*. You only leave by
+quitting the lobby. So the original rule fired once per session and merged every
+round into one record — the first committed "match" was three rounds glued
+together.
+
+The boundary is the **scoreboard reset**, and `g_mpPrev*` holds the standings
+from just before it, because those are the final ones.
+
+**Do not simplify this to "any drop".** Score is not monotonic within a round —
+`suicides` carries `<Modifier name="score" value="-1">`, so killing yourself
+costs a point. Replaying the naive rule over the real 140-capture log split a
+round at a `10 -> 8` dip that was two suicides. The test is **total 0 after a
+non-zero total**, with a `>half` fallback for when the next round's first sample
+already has a kill in it.
+
+Also added: `winner_team`, `winner_player`, `draw` — an equal top score is a
+draw, not whoever is listed first.
+
 **UPDATE, same day — the first real match answered it.** `net_GetGameScoreStats`
 **works**: 70 samples on `mp_ps3map`, not once silent. It prints
 
