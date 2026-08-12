@@ -164,6 +164,7 @@ static HWND  g_focusWndFwd(void);
    detour calls it and comes first in the file. See tools/mp_stats/README.md. */
 static void MpStatsTick(void* console);
 static void MpStatsCmd(void* console, const char* arg);
+static void MpStatScan(void* console);
 
 /* A disabled window gets no keyboard or mouse input, but GetAsyncKeyState - our
    input path - still works. That is exactly the asymmetry we need: we keep
@@ -1761,6 +1762,7 @@ static void ModHelp(void* c)
     P_(c, 0, AC "               n = seat type: 1 driver (default), 3 passenger\n");
     P_(c, 0, AC "vehexit        get out    vehstatus - what am I in?\n");
     P_(c, 0, AC "mpstats        multiplayer match recording - status + sample now\n");
+    P_(c, 0, AC "statscan       hunt CGameStatsService in memory (run DURING a match)\n");
     P_(c, 0, AC "freecam        detached camera - the body stays put (toggle)\n");
     P_(c, 0, AC "camspeed <n>   freecam speed - in freecam, hold Shift/LCtrl to ramp\n");
     P_(c, 0, AC "firstperson    the game's own first-person camera (toggle)\n");
@@ -16376,6 +16378,7 @@ static int TryModCommand(void* console, const char* line)
     if (_stricmp(p, "vehexit") == 0)  { VehExit(console);      return 1; }
     if (_stricmp(p, "vehstatus") == 0){ VehStatus(console);    return 1; }
     if (_stricmp(p, "mpstats") == 0)  { MpStatsCmd(console, ""); return 1; }
+    if (_stricmp(p, "statscan") == 0) { MpStatScan(console);     return 1; }
     if (_strnicmp(p, "camspeed", 8) == 0 && (p[8] == ' ' || p[8] == '\t' || !p[8])) {
         double v = 0;
         if (sscanf(p + 8, "%lf", &v) == 1 && v > 0) {
@@ -20135,7 +20138,7 @@ static const char* const kOurCmds[] = {
     "entflag", "fixcontrol", "trace", "freecam",
     "firstperson", "fpoffset", "fpfov", "fpaim",
     "fpdiag", "verbose", "fpbody", "camspeed",
-    "vehenter", "vehexit", "vehstatus", "mpstats", "spawn",
+    "vehenter", "vehexit", "vehstatus", "mpstats", "statscan", "spawn",
     "spawn_list", "spawn_all", "anchor", "editorlink",
     "agentinfo", "vehinfo", "facing", "facinginfo",
     "driveai", "rcprobe", "respawn", "resurrect",
@@ -23660,6 +23663,177 @@ static void MpStatsTick(void* console)
         g_mpLastSample = now;
         MpSample(console, "in-match");
     }
+}
+
+/* ==================== FINDING THE REST OF THE STATS ====================
+   net_GetGameScoreStats gives us `score` and nothing else. Kills, deaths,
+   headshots and the other 80 stats declared in gamemodesconfig.xml live in
+   CGameStatsService, and no console command exposes them (the Stats_* family
+   is the frame profiler, not gameplay).
+
+   Rather than guess at offsets, find them. The engine keys every stat by
+   CStringID = raw CRC-32 of the exact-case name (MP_STATS.md), so those u32
+   values are physically present in memory wherever the stat table is. This
+   scans the process for them.
+
+   THE SIGNAL IS THE CLUSTER, NOT THE HIT. Any single 4-byte value turns up by
+   chance in a few hundred MB - 84 needles over ~50M dwords will produce noise
+   no matter what. But several DISTINCT stat hashes inside one small window is
+   not chance: that is the table. So this reports windows ranked by how many
+   different stats they contain, and dumps the densest ones.
+
+   Read-only, run on demand, never from the frame path. */
+
+#include "mp_stat_hashes.h"
+
+#define MPSCAN_WINDOW    0x400     /* bytes; a cluster this close counts as one */
+#define MPSCAN_MAXHITS   4096
+#define MPSCAN_MAXREGION (64u * 1024u * 1024u)
+#define MPSCAN_TOPN      8
+
+typedef struct { unsigned long addr; int idx; } MpScanHit;
+
+/* Sorted table -> bisect. 84 linear compares per dword would make a full scan
+   take minutes; this makes it seconds. */
+static int MpStatIndexOf(unsigned long v)
+{
+    int lo = 0, hi = MP_STAT_COUNT - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        unsigned long m = kMpStatNames[mid].hash;
+        if (m == v) return mid;
+        if (m < v) lo = mid + 1; else hi = mid - 1;
+    }
+    return -1;
+}
+
+static void MpStatScan(void* console)
+{
+    static MpScanHit hits[MPSCAN_MAXHITS];
+    fnPrintf P_ = (fnPrintf)FN_PRINTF;
+    SYSTEM_INFO si;
+    MEMORY_BASIC_INFORMATION mbi;
+    unsigned char* p;
+    unsigned char* limit;
+    unsigned char lowByte[256];
+    int nhits = 0, i, j;
+    unsigned long scanned = 0;
+    char path[MAX_PATH];
+    FILE* f;
+
+    /* One-byte pre-filter: most dwords are rejected on a single compare, and
+       only survivors pay for the bisect. */
+    memset(lowByte, 0, sizeof(lowByte));
+    for (i = 0; i < MP_STAT_COUNT; ++i)
+        lowByte[kMpStatNames[i].hash & 0xFF] = 1;
+
+    GetSystemInfo(&si);
+    p     = (unsigned char*)si.lpMinimumApplicationAddress;
+    limit = (unsigned char*)si.lpMaximumApplicationAddress;
+
+    P_(console, 0, AC "statscan: searching for %d stat hashes...\n", MP_STAT_COUNT);
+
+    while (p < limit && nhits < MPSCAN_MAXHITS) {
+        if (VirtualQuery(p, &mbi, sizeof(mbi)) != sizeof(mbi)) break;
+        {
+            unsigned char* base = (unsigned char*)mbi.BaseAddress;
+            SIZE_T sz = mbi.RegionSize;
+            int ok = (mbi.State == MEM_COMMIT) &&
+                     !(mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) &&
+                     (mbi.Protect & (PAGE_READWRITE | PAGE_READONLY |
+                                     PAGE_WRITECOPY | PAGE_EXECUTE_READ |
+                                     PAGE_EXECUTE_READWRITE));
+            if (ok && sz <= MPSCAN_MAXREGION) {
+                unsigned long* q   = (unsigned long*)base;
+                unsigned long* end = (unsigned long*)(base + (sz & ~3u));
+                __try {
+                    for (; q < end && nhits < MPSCAN_MAXHITS; ++q) {
+                        unsigned long v = *q;
+                        int k;
+                        if (!lowByte[v & 0xFF]) continue;
+                        k = MpStatIndexOf(v);
+                        if (k < 0) continue;
+                        hits[nhits].addr = (unsigned long)q;
+                        hits[nhits].idx  = k;
+                        ++nhits;
+                    }
+                } __except (EXCEPTION_EXECUTE_HANDLER) { }
+                scanned += (unsigned long)sz;
+            }
+            p = base + (sz ? sz : si.dwPageSize);
+        }
+    }
+
+    _snprintf(path, sizeof(path) - 1, "%s\\mp_statscan.log", g_dir);
+    f = fopen(path, "w");
+
+    P_(console, 0, AC "statscan: %d hit(s) in %lu MB\n", nhits, scanned >> 20);
+    if (f) fprintf(f, "statscan: %d hit(s) across %lu MB scanned\n\n",
+                   nhits, scanned >> 20);
+
+    /* Rank windows by how many DISTINCT stats fall inside them. hits[] is in
+       ascending address order because the scan is, so a forward run is enough. */
+    {
+        int bestStart[MPSCAN_TOPN], bestCount[MPSCAN_TOPN], nbest = 0;
+        for (i = 0; i < nhits; ++i) {
+            int distinct = 0, seen[MP_STAT_COUNT];
+            memset(seen, 0, sizeof(seen));
+            for (j = i; j < nhits &&
+                        hits[j].addr - hits[i].addr < MPSCAN_WINDOW; ++j) {
+                if (!seen[hits[j].idx]) { seen[hits[j].idx] = 1; ++distinct; }
+            }
+            if (distinct < 3) continue;          /* 1-2 is noise, not a table */
+            /* keep the best N, skipping windows that overlap a better one */
+            {
+                int dup = 0;
+                for (j = 0; j < nbest; ++j)
+                    if (hits[i].addr - hits[bestStart[j]].addr < MPSCAN_WINDOW ||
+                        hits[bestStart[j]].addr - hits[i].addr < MPSCAN_WINDOW) {
+                        dup = 1;
+                        if (distinct > bestCount[j]) {
+                            bestStart[j] = i; bestCount[j] = distinct;
+                        }
+                        break;
+                    }
+                if (!dup && nbest < MPSCAN_TOPN) {
+                    bestStart[nbest] = i; bestCount[nbest] = distinct; ++nbest;
+                }
+            }
+        }
+
+        if (!nbest) {
+            P_(console, 0, AC "statscan: no cluster of 3+ distinct stats found.\n");
+            if (f) fprintf(f, "No cluster of 3+ distinct stats. Either the table\n"
+                              "is not keyed by these hashes, or nothing has been\n"
+                              "written yet - run this DURING a match, after scoring.\n");
+        }
+        for (i = 0; i < nbest; ++i) {
+            int s = bestStart[i];
+            P_(console, 0, AC "  cluster at %08lX: %d distinct stats\n",
+               hits[s].addr, bestCount[i]);
+            if (!f) continue;
+            fprintf(f, "===== cluster at %08lX: %d distinct stats =====\n",
+                    hits[s].addr, bestCount[i]);
+            for (j = s; j < nhits &&
+                        hits[j].addr - hits[s].addr < MPSCAN_WINDOW; ++j) {
+                unsigned long a = hits[j].addr;
+                fprintf(f, "  %08lX  %-28s", a, kMpStatNames[hits[j].idx].name);
+                /* The value almost certainly sits next to the key. Print both
+                   readings so the layout is obvious from the numbers. */
+                if (Readable((void*)(a + 4), 8)) {
+                    float  fv = *(float*)(a + 4);
+                    long   iv = *(long*)(a + 4);
+                    fprintf(f, "  +4: float=%.3f int=%ld", fv, iv);
+                }
+                if (Readable((void*)(a + 8), 4))
+                    fprintf(f, "  +8: float=%.3f", *(float*)(a + 8));
+                fprintf(f, "\n");
+            }
+            fprintf(f, "\n");
+        }
+    }
+    if (f) fclose(f);
+    P_(console, 0, AC "statscan: wrote mp_statscan.log\n");
 }
 
 /* `mpstats` - manual view of the same thing, for when the automatic path is

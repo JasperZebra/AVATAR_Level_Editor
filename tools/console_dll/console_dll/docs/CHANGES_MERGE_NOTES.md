@@ -51,6 +51,33 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-11 (o) — `statscan`: find the stat table by its own hash keys
+
+**What:** `statscan`, a read-only memory hunt for `CGameStatsService`'s stat
+table, plus generated `mp_stat_hashes.h` (84 hashes, from
+`tools/mp_stats/gen_stat_hashes.py`). Lives at the end of the MP-stats section;
+one dispatch line, one `kOurCmds[]` entry, one `ModHelp` line.
+
+**Why it exists:** `net_GetGameScoreStats` gives `score` and nothing else, and
+**no console command exposes the rest**. Note for anyone tempted by the names —
+the `Stats_*` family is the **frame profiler** (`Stats_MinValue`,
+`Stats_ResetFrame`, `Stats_preset`), not gameplay stats.
+
+**How it avoids guessing.** The engine keys every stat by CRC-32 of the
+exact-case name, so those u32 values are physically in memory wherever the table
+is. **The signal is the cluster, not the hit** — any one 4-byte value appears by
+chance in a few hundred MB, but several *distinct* stat hashes inside one 1 KB
+window is the table. Windows are ranked by distinct-stat count, anything under 3
+is dropped, and the densest are dumped with neighbouring dwords read as both
+`float` and `int` so the node layout falls out of the numbers.
+
+**Do not "optimise" the prefilter away.** A 256-entry low-byte table rejects most
+dwords in one compare; 84 linear compares per dword made a full scan take
+minutes.
+
+`__try`-wrapped, skips uncommitted/guard pages and regions over 64 MB, on demand
+only — never from the frame path. **Untested against a running game.**
+
 ### 2026-08-11 (n) — multiplayer match stats, recorded with no keypress
 
 **What:** a new self-contained section, `MULTIPLAYER MATCH STATS`, that writes
