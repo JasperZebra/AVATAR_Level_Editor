@@ -5454,6 +5454,30 @@ The four findings worth carrying without re-deriving:
 
 Nothing in that doc has been run against a live game.
 
+### Shipping stats to our server — `tools/mp_stats/` (Aug 2026)
+
+`match_record.py` (the JSON-Lines contract), `stats_uploader.py` (watches the
+file, POSTs, retries) and `stats_receiver.py` (reference receiver, **not** the
+production site). Stdlib-only. Design and the full contract:
+`tools/mp_stats/README.md`.
+
+* **The hosts-file trick cannot be reversed for this.** DNS redirection hijacks
+  a request the game already makes; there is no stats upload in `Dunia.dll` to
+  hijack. We write the client, so we pick the endpoint — and players need **no
+  hosts edit at all** for stats.
+* **The upload must not live in the DLL.** A blocking POST on a hooked engine
+  thread turns a slow server into a game freeze at match end. The DLL appends
+  one line and closes; a separate process does everything that can fail.
+* Delivery is at-least-once, deduped server-side by `match_id`. **`200` means
+  duplicate and is not an error.** The reader tracks a **byte offset**, so a
+  half-written trailing line is left until complete.
+* **Still missing: the DLL code that writes the file.** Two routes, and a
+  five-minute live test picks one — run `net_GetPlayerList` and
+  `net_GetGameScoreStats` in a match, press F10, read `console_dump.txt`. Real
+  numbers → use the console commands. Nothing → walk `CGameStatsService`
+  (vtable `0x110A5258`, written exactly once in the binary, so identity-checking
+  it is safe) and find the offsets against a live process.
+
 ---
 
 ## Creature spawn points and WarZone battles — the format, and the generators (Aug 2026)

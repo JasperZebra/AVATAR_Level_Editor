@@ -70,6 +70,17 @@ tools/console_dll/console_dll/data/console_dump.txt
 !tools/packed_codebooks_aoTuV_603.bin
 !tools/pak_converter/
 tools/pak_converter/__pycache__/
+# Multiplayer stats transport - ships match records to our stats server.
+# Real source, stdlib-only, and the collaborator needs it. See
+# tools/mp_stats/README.md and tools/DevAccess/MP_STATS.md.
+!tools/mp_stats/
+tools/mp_stats/__pycache__/
+# Per-machine runtime state: the match log the DLL appends to, the uploader's
+# byte-offset progress file, and the reference receiver's store. All are
+# generated and none belong to anyone but the machine that made them.
+tools/mp_stats/*.jsonl
+tools/mp_stats/*.uploaded
+tools/mp_stats/matches/
 
 # ── Deliberately NOT tracked, and why ───────────────────────────────────────
 #   fcb_names.csv .......... 659 MB. GitHub HARD-REJECTS files over 100 MB, so
