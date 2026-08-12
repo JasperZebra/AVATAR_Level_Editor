@@ -5436,8 +5436,13 @@ The four findings worth carrying without re-deriving:
    upload path — nothing to redirect, so any export is code we add.
 2. **The stat names are not in the binary.** `"kills"`, `"score"`, `"deaths"` get
    zero hits in the decompile; the runtime key is `CStringID`, a hash. Match on
-   CRC-32 and map back with the JSON. (Which of raw/lowercased CRC-32 the engine
-   uses is **not yet settled** — a five-minute check against a live process.)
+   CRC-32 and map back with the JSON — the **`crc32` column, exact case, not
+   `crc32_lower`**. Dunia has two CStringID hashes over one table: `FUN_10103240`
+   (exact) and `FUN_10103280` (`tolower`-folded, only 4 call sites in the whole
+   binary), picked by a flag on `FUN_100ED6A0`. The `<Stat>` parser passes 0, so
+   it is the exact one — corroborated by `console_dll`'s live-verified constants
+   and 10/10 exact-case hits in `fcb_names_cache.n32.pkl`. **22 of 26** stat names
+   change value under folding, and a wrong key misses silently.
 3. **`ATGE/patch/…/gamemodesconfig.xml` is Dunia BINARY xml** (`00 00 FF 83`) and
    overrides the readable `data/` copy. For stats the two schemas are identical
    (verified, all 120 declarations) — **do not assume that for other settings in

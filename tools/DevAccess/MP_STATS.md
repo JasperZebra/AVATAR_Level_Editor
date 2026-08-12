@@ -187,18 +187,52 @@ We already know how to compute it: this project established that Avatar's `Compu
 **CRC-32 (zlib, little-endian)** — the same function `canvas/spawn_builder.py` uses, and the same
 one the console DLL uses for archetype lookup, where the key is `crc32(lowercase(name))`.
 
-`mp_stats.json` therefore ships **both** spellings for all 105 names:
+`mp_stats.json` ships **both** spellings for all 105 names, neither of which collides:
 
 ```json
-{ "name": "headshotKills", "crc32": "...", "crc32_lower": "...", "in_modes": [...] }
+{ "name": "headshotKills", "crc32": "ADCA6926", "crc32_lower": "6C0B4622", "in_modes": [...] }
 ```
 
-**Neither spelling collides** across all 105 names — checked, and the check is in
-`extract_mp_stats.py` so it stays checked. Either can be used as a lookup key.
+### Which spelling — settled, and it is the exact-case one
 
-> Which of the two the engine actually uses is **not yet confirmed**. The archetype table uses
-> lowercase; `CStringID` in general may not. This is a five-minute question to settle against a
-> live process — read one known-nonzero stat (`kills`, after a kill) and see which hash finds it.
+**Use `crc32`. Not `crc32_lower`.** This was an open question and the decompile answers it
+outright; no live process needed.
+
+The engine has **two** CStringID hashes over the same CRC-32 table at `DAT_1117a7f0`:
+
+| | Address | What it does |
+|---|---|---|
+| exact | `FUN_10103240` | textbook reflected CRC-32, **no case folding** |
+| folded | `FUN_10103280` | identical loop, but each char goes through `(*DAT_11000468)` — `tolower` |
+
+They are selected by a flag on the shared constructor:
+
+```c
+FUN_100ed6a0(str, caseInsensitive)   // 0x100ED6A0
+    caseInsensitive ? FUN_10103280(str)   // folded
+                    : FUN_10103240(str);  // exact
+    // empty or NULL -> 0xFFFFFFFF, the invalid CStringID
+```
+
+**The `<Stat>` parser calls it with the flag `0`** (`FUN_102EBB40`, which reads `livereplication`
+and `displayable` immediately after). And `FUN_10103280` has only **four call sites in the entire
+binary** — it is the rare outlier, which is why the archetype table being case-insensitive is a
+special case and not the rule.
+
+Three independent confirmations that the flag-0 branch is plain `zlib.crc32`:
+
+1. **Live-verified hashes.** `console_dll` has been matching `crc32("toggle_console") ==
+   0xD4989D79` and `crc32("cameras.camera.free") == 0x19CED71F` in the retail game for months.
+   `zlib.crc32` reproduces all five of its constants exactly.
+2. **Mixed-case call sites.** The same `FUN_100ed6a0(name, 0, 0)` is called on
+   `"fDiffuseLightingPower"`, `"clrAmbientColor"`, `"CGameMode"`, `"IPlayer"` — names that would be
+   destroyed by folding.
+3. **The 509k name cache.** Those are FCB field names, which `tools/fcb_names_cache.n32.pkl`
+   already resolves. Checked ten of them: **10/10 resolve under `crc32(exact)`, 0/10 under
+   `crc32(lower)`.**
+
+This matters more than it sounds: **22 of 26** representative stat names change value under
+folding. Getting it wrong does not fail loudly — every lookup just silently misses.
 
 ---
 
@@ -239,6 +273,9 @@ the obvious wire format** given the destination is a server.
 * stat name strings are **absent** from the binary
 * no GameSpy / account / leaderboard / upload code exists in Avatar
 * the 105 names hash without collision under CRC-32, both cases
+* **the stat key is raw CRC-32, exact case** — `FUN_102EBB40` passes flag 0 to `FUN_100ED6A0`,
+  which selects `FUN_10103240` (no folding); corroborated by `console_dll`'s live-verified
+  constants and by 10/10 exact-case hits in the 509k FCB name cache
 
 **From Far Cry 2's symbol table, not from Avatar** — same engine, so the *shape* is reliable but
 **no address is**:
@@ -248,7 +285,12 @@ the obvious wire format** given the destination is a server.
 
 **Not established at all:**
 * the byte offsets of the stat map inside `CGameStatsService`
-* whether the `CStringID` key is the raw or the lowercased CRC-32
 * anything about how many of these stats a **client** sees versus the **host**
+
+Partial: the `<Stat>` descriptor object's own layout is readable from `FUN_102EBC10` —
+0x18…0x2C is the name as an SSO string (capacity at +0x2C, the usual 15), **+0x30 is the
+CStringID** the parser then uses as the map key, +0x38 `livereplication`, +0x39 `displayable`.
+`Stat` allocates 0x68 bytes, `StatRatio` and `StatDiff` 0x44 each. Read off the decompile, not
+confirmed against a live process.
 
 Nothing here has been tested against a running game.
