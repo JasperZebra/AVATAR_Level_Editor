@@ -51,6 +51,66 @@ Read the "Merge cheat-sheet" first. Everything after it is detail.
 
 ## Merge cheat-sheet
 
+### 2026-08-11 (n) — multiplayer match stats, recorded with no keypress
+
+**What:** a new self-contained section, `MULTIPLAYER MATCH STATS`, that writes
+one JSON line per multiplayer match to `matches.jsonl` next to the DLL.
+`tools/mp_stats/stats_uploader.py` ships that file to our stats server;
+`tools/mp_stats/README.md` is the design and `tools/DevAccess/MP_STATS.md` is
+the format research.
+
+**Where — five touch points, four of them one line:**
+
+| Location | Change |
+|---|---|
+| ~line 157 (fwd decls) | added `MpStatsTick` / `MpStatsCmd`, next to `ProbeEnter` |
+| after `DumpRing` | **the new section**, ~250 lines, self-contained |
+| `UpdateUI` detour, after `FirstPersonLookTick()` | `MpStatsTick(thisptr);` |
+| dispatch, after `vehstatus` | `mpstats` command |
+| `kOurCmds[]`, after `"vehstatus"` | `"mpstats"` |
+| `ModHelp` | one line |
+
+**The detour call is the only edit in shared territory.** It sits with the two
+existing per-frame ticks and is one line; everything else is either new text
+after `DumpRing` or a single entry appended to a list. If you are merging into
+this, take both sides — nothing here rewrites existing logic.
+
+**Why it does NOT use the game-rules state machine.** The correct trigger is
+`CGameRules::RegisterStateObserver`, which fires on every state transition and
+is named in the Far Cry 2 symbol table. **Avatar's address for it is not
+resolved**, and a guessed address in a vtable call is how you get a DLL that
+looks fine and corrupts the game. So v1 uses only what this file already
+proved: `WorldName()` + the existing `IsMp()` for "are we in a multiplayer
+level", and the console ring for command output. **Entering an `mp_` world
+starts a match, leaving it ends one.**
+
+That is coarser than the state machine — a round restart inside one world reads
+as one match — and it is deliberately the coarse version, because it cannot
+crash and it produces the data needed to build the precise one.
+
+**Capture works like F10, not like a hook.** `MpCapture` notes the console
+ring's `head`/`count`, calls `RunConsoleLine`, then reads what got added — the
+same ring fields `DumpRing` uses (`con+0x0C/0x10/0x14/0x18`). One trap worth
+keeping: **both counters move.** Until the ring fills, `count` grows and `head`
+sits still; once full, `count` pegs at capacity and `head` advances instead. The
+delta is the sum of the two, and a naive `count1-count0` silently returns 0
+forever on a busy ring.
+
+**All six sampled commands are getters.** `net_EndMatch`, `net_restartmatch`,
+`net_ExtendMatch` and the kick commands are deliberately absent and must stay
+absent — this runs unattended, during somebody's match. Do not add them.
+
+**It is honest about not knowing yet.** Nobody has confirmed
+`net_GetGameScoreStats` prints anything; plenty of Avatar's inherited Far Cry 2
+commands execute happily and do nothing. So every sample is written verbatim to
+`mp_stats_raw.log` **and** embedded in the record's `raw` field, `players[]`
+stays empty (valid per `match_record.py`; a wrong roster would not be), and if
+nothing printed all match the log says so and names route B. The answer arrives
+from someone playing rather than from someone testing.
+
+**Untested against a running game.** It compiles clean and `check_cmds` passes
+85/85, which says nothing about behaviour.
+
 ### 2026-08-06 (m) — the remote body is not in the entity tree; label and read what is
 
 **The reverse join (l) reported its own answer, and it is not the one I

@@ -159,6 +159,12 @@ static void ProbeLeave(void);
 static HWND  g_gameWndFwd(void);
 static HWND  g_focusWndFwd(void);
 
+/* Multiplayer match stats. Defined next to DumpRing, because it captures
+   command output the same way F10 does; declared here because the per-frame
+   detour calls it and comes first in the file. See tools/mp_stats/README.md. */
+static void MpStatsTick(void* console);
+static void MpStatsCmd(void* console, const char* arg);
+
 /* A disabled window gets no keyboard or mouse input, but GetAsyncKeyState - our
    input path - still works. That is exactly the asymmetry we need: we keep
    reading the keyboard while the game stops reacting to it. */
@@ -1754,6 +1760,7 @@ static void ModHelp(void* c)
     P_(c, 0, AC "vehenter [n]   board the thing you last spawned\n");
     P_(c, 0, AC "               n = seat type: 1 driver (default), 3 passenger\n");
     P_(c, 0, AC "vehexit        get out    vehstatus - what am I in?\n");
+    P_(c, 0, AC "mpstats        multiplayer match recording - status + sample now\n");
     P_(c, 0, AC "freecam        detached camera - the body stays put (toggle)\n");
     P_(c, 0, AC "camspeed <n>   freecam speed - in freecam, hold Shift/LCtrl to ramp\n");
     P_(c, 0, AC "firstperson    the game's own first-person camera (toggle)\n");
@@ -16368,6 +16375,7 @@ static int TryModCommand(void* console, const char* line)
     }
     if (_stricmp(p, "vehexit") == 0)  { VehExit(console);      return 1; }
     if (_stricmp(p, "vehstatus") == 0){ VehStatus(console);    return 1; }
+    if (_stricmp(p, "mpstats") == 0)  { MpStatsCmd(console, ""); return 1; }
     if (_strnicmp(p, "camspeed", 8) == 0 && (p[8] == ' ' || p[8] == '\t' || !p[8])) {
         double v = 0;
         if (sscanf(p + 8, "%lf", &v) == 1 && v > 0) {
@@ -18778,6 +18786,10 @@ static void __fastcall hkUpdateUI(void* thisptr, void* edx, float dt)
     }
     NoclipTick();          /* main thread, every frame - required for both */
     FirstPersonLookTick(); /* same thread, same reason */
+    MpStatsTick(thisptr);  /* same thread: it runs console commands, and those
+                              are engine calls. Throttled internally to one
+                              sample per 20s, so the per-frame cost is a string
+                              compare. */
 
     if (g_origUpdateUI)
         g_origUpdateUI(thisptr, edx, dt);
@@ -20123,7 +20135,7 @@ static const char* const kOurCmds[] = {
     "entflag", "fixcontrol", "trace", "freecam",
     "firstperson", "fpoffset", "fpfov", "fpaim",
     "fpdiag", "verbose", "fpbody", "camspeed",
-    "vehenter", "vehexit", "vehstatus", "spawn",
+    "vehenter", "vehexit", "vehstatus", "mpstats", "spawn",
     "spawn_list", "spawn_all", "anchor", "editorlink",
     "agentinfo", "vehinfo", "facing", "facinginfo",
     "driveai", "rcprobe", "respawn", "resurrect",
@@ -23149,6 +23161,313 @@ static void DumpRing(void)
     }
     fclose(f);
     logf_("[dump] wrote %d line(s) to console_dump.txt", written);
+}
+
+
+/* ==================== MULTIPLAYER MATCH STATS ====================
+   Records one line per multiplayer match into matches.jsonl, next to the DLL,
+   with no keypress and no typed command. tools/mp_stats/stats_uploader.py
+   ships that file to our stats server; tools/mp_stats/README.md is the design.
+
+   WHY THIS VERSION NEEDS NO NEW ADDRESSES.  The proper trigger is the engine's
+   own CGameRules::RegisterStateObserver, which fires on every game-rules state
+   transition - but Avatar's address for it is not resolved yet, and guessing an
+   address is how you get a DLL that looks fine and corrupts a vtable.  So v1
+   uses only things this file already proved: WorldName() for where we are,
+   IsMp() for whether that is a multiplayer level, and the console ring for
+   command output.  Entering an mp_ world starts a match, leaving it ends one.
+
+   That is coarser than the state machine - a round restart inside one world
+   reads as a single match - and it is deliberately the coarse version, because
+   it cannot crash and it produces the data needed to build the precise one.
+
+   WHAT IT CAPTURES.  We do not yet know whether net_GetGameScoreStats prints
+   anything; several of Avatar's inherited Far Cry 2 commands execute happily
+   and do nothing.  So every sample is written verbatim to mp_stats_raw.log AND
+   embedded in the match record's "raw" field.  If the commands work, that is
+   the data.  If they print nothing, the log says so in as many words, and the
+   answer arrives from someone playing rather than from someone testing. */
+
+#define MPSTATS_FILE     "matches.jsonl"
+#define MPSTATS_RAWLOG   "mp_stats_raw.log"
+#define MPSTATS_PERIOD   20000u   /* ms between samples during a match */
+#define MPSTATS_MAXCAP   200      /* ring lines captured per command, hard cap */
+#define MPSTATS_MAXRAW   16000    /* chars of raw text kept for the record     */
+
+static int           g_mpActive     = 0;
+static char          g_mpWorld[64]  = {0};
+static char          g_mpMatchId[96]= {0};
+static unsigned long g_mpStartTick  = 0;
+static unsigned long g_mpLastSample = 0;
+static int           g_mpSamples    = 0;
+static int           g_mpGotOutput  = 0;   /* did ANY command ever print? */
+static char          g_mpRaw[MPSTATS_MAXRAW];
+static int           g_mpRawLen     = 0;
+
+static void MpRawAppend(const char* s)
+{
+    int n = (int)strlen(s);
+    if (g_mpRawLen + n + 1 >= MPSTATS_MAXRAW) return;   /* full: keep the head */
+    memcpy(g_mpRaw + g_mpRawLen, s, n);
+    g_mpRawLen += n;
+    g_mpRaw[g_mpRawLen] = 0;
+}
+
+/* UTC, ISO-8601. The server wants one timezone and this is the only one every
+   machine agrees on. */
+static void MpUtcNow(char* out, int cap)
+{
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    _snprintf(out, cap - 1, "%04d-%02d-%02dT%02d:%02d:%02dZ",
+              st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+    out[cap - 1] = 0;
+}
+
+/* Run one console command and return what it printed.
+   The console ring is the only place command output exists, so we note where
+   the ring is, run the line, and read whatever got added.  Both counters move:
+   until the ring is full `count` grows and `head` sits still; once it is full
+   `count` pegs at capacity and `head` advances instead.  Summing the two deltas
+   is correct in both regimes and across the transition, which a naive
+   count1-count0 is not - that silently returns 0 forever on a busy ring. */
+static int MpCapture(void* con, const char* cmd, char* out, int cap)
+{
+    static wchar_t line[4096];
+    void** arr;
+    int capn, head0, cnt0, head1, cnt1, added, i, used = 0;
+
+    out[0] = 0;
+    if (!Readable(con, 0x80)) return -1;
+    arr  = (void**)(*(void**)((char*)con + 0x0C));
+    capn = *(int*)((char*)con + 0x10);
+    if (capn <= 0 || !Readable(arr, (SIZE_T)capn * 4)) return -1;
+    head0 = *(int*)((char*)con + 0x14);
+    cnt0  = *(int*)((char*)con + 0x18);
+
+    RunConsoleLine(con, cmd);
+
+    head1 = *(int*)((char*)con + 0x14);
+    cnt1  = *(int*)((char*)con + 0x18);
+    added = (cnt1 - cnt0) + (((head1 - head0) % capn + capn) % capn);
+    if (added <= 0) return 0;                       /* command printed nothing */
+    if (added > MPSTATS_MAXCAP) added = MPSTATS_MAXCAP;
+    if (added > cnt1) added = cnt1;
+
+    for (i = 0; i < added; ++i) {
+        int idx = ((head1 + cnt1 - added + i) % capn + capn) % capn;
+        int n, k = 0;
+        const wchar_t* t;
+        if (ReadDuniaW(arr[idx], line, 4096) <= 0) continue;
+        t = line;
+        while (*t && used < cap - 2) {             /* strip colour markup */
+            if ((unsigned)*t < 0x20) {
+                int h;
+                ++t;
+                for (h = 0; h < 6 && iswxdigit(t[h]); ++h) { }
+                if (h == 6) t += 6;
+                continue;
+            }
+            out[used++] = (char)(*t < 128 ? *t : '?');
+            ++t;
+        }
+        (void)n; (void)k;
+        if (used < cap - 1) out[used++] = '\n';
+    }
+    out[used] = 0;
+    return added;
+}
+
+static void MpSample(void* con, const char* why)
+{
+    /* Getters only. net_EndMatch, net_restartmatch and the kick commands are
+       deliberately absent and must stay absent - this runs unattended, during
+       somebody's match. */
+    static const char* CMDS[] = {
+        "net_GetGameScoreStats", "net_GetPlayerList", "net_GetPlayerListByTeam",
+        "net_GetCurrentGameModeName", "net_GetCurrentMapName", "net_DisplayTime"
+    };
+    char buf[8192], path[MAX_PATH], stamp[32];
+    FILE* f;
+    int i;
+
+    MpUtcNow(stamp, sizeof(stamp));
+    _snprintf(path, sizeof(path) - 1, "%s\\" MPSTATS_RAWLOG, g_dir);
+    f = fopen(path, "a");
+
+    if (f) fprintf(f, "\n===== %s  match=%s  world=%s  (%s) =====\n",
+                   stamp, g_mpMatchId, g_mpWorld, why);
+
+    for (i = 0; i < (int)(sizeof(CMDS) / sizeof(CMDS[0])); ++i) {
+        int n = MpCapture(con, CMDS[i], buf, sizeof(buf));
+        if (n > 0) g_mpGotOutput = 1;
+        if (f) {
+            fprintf(f, "--- %s ---\n", CMDS[i]);
+            if (n < 0)       fprintf(f, "(console not readable)\n");
+            else if (n == 0) fprintf(f, "(printed nothing)\n");
+            else             fputs(buf, f);
+        }
+        /* Only the final sample goes into the record - the intermediate ones
+           are for the log, so a 40-minute match does not blow the buffer. */
+        if (!strcmp(why, "match-end")) {
+            char hdr[128];
+            _snprintf(hdr, sizeof(hdr) - 1, "--- %s ---\n", CMDS[i]);
+            MpRawAppend(hdr);
+            MpRawAppend(n > 0 ? buf : (n == 0 ? "(printed nothing)\n"
+                                              : "(console not readable)\n"));
+        }
+    }
+    if (f) fclose(f);
+    ++g_mpSamples;
+    logf_("[mpstat] sample %d (%s) world=%s output=%s",
+          g_mpSamples, why, g_mpWorld, g_mpGotOutput ? "yes" : "NONE YET");
+}
+
+/* JSON string escaping. The raw capture is engine text we did not write, so it
+   can contain quotes and backslashes; one unescaped byte would make the whole
+   line unparseable and the uploader would skip the match. */
+static void MpJsonPuts(FILE* f, const char* s)
+{
+    for (; *s; ++s) {
+        unsigned char c = (unsigned char)*s;
+        if      (c == '"')  fputs("\\\"", f);
+        else if (c == '\\') fputs("\\\\", f);
+        else if (c == '\n') fputs("\\n",  f);
+        else if (c == '\r') fputs("\\r",  f);
+        else if (c == '\t') fputs("\\t",  f);
+        else if (c < 0x20 || c > 0x7E) fprintf(f, "\\u%04X", c);
+        else fputc(c, f);
+    }
+}
+
+static void MpWriteRecord(void)
+{
+    char path[MAX_PATH], stamp[32];
+    FILE* f;
+    unsigned long dur = (GetTickCount() - g_mpStartTick) / 1000u;
+
+    _snprintf(path, sizeof(path) - 1, "%s\\" MPSTATS_FILE, g_dir);
+    f = fopen(path, "a");                     /* append: one line per match */
+    if (!f) { logf_("[mpstat] cannot write %s", path); return; }
+
+    MpUtcNow(stamp, sizeof(stamp));
+    /* players[] and game_stats{} stay empty until we know the output format -
+       an empty player list is valid per match_record.py, a wrong one is not. */
+    fputs("{\"schema\":1,\"match_id\":\"", f);      MpJsonPuts(f, g_mpMatchId);
+    fputs("\",\"recorded_utc\":\"", f);             MpJsonPuts(f, stamp);
+    fputs("\",\"map\":\"", f);                      MpJsonPuts(f, g_mpWorld);
+    fputs("\",\"gamemode\":null,\"duration_s\":", f);
+    fprintf(f, "%lu", dur);
+    fputs(",\"players\":[],\"game_stats\":{},\"collector\":\"v1-raw\",", f);
+    fputs("\"raw\":\"", f);                         MpJsonPuts(f, g_mpRaw);
+    fputs("\"}\n", f);
+    fclose(f);
+
+    logf_("[mpstat] wrote match %s (%lus, %d samples, output=%s) to " MPSTATS_FILE,
+          g_mpMatchId, dur, g_mpSamples, g_mpGotOutput ? "yes" : "NONE");
+    if (!g_mpGotOutput)
+        logf_("[mpstat] no command printed anything all match - the net_Get* "
+              "commands are inert here, so the stats have to come from "
+              "CGameStatsService instead. See tools/mp_stats/README.md route B.");
+}
+
+static void MpStart(void* con, const char* world)
+{
+    char stamp[32];
+    int i;
+    MpUtcNow(stamp, sizeof(stamp));
+    _snprintf(g_mpWorld, sizeof(g_mpWorld) - 1, "%s", world);
+    g_mpWorld[sizeof(g_mpWorld) - 1] = 0;
+
+    /* match_id lands in a filename on the server, so keep it to characters the
+       receiver accepts: [A-Za-z0-9._-]. Colons from the timestamp are out. */
+    _snprintf(g_mpMatchId, sizeof(g_mpMatchId) - 1, "%s-%s", g_mpWorld, stamp);
+    for (i = 0; g_mpMatchId[i]; ++i) {
+        char c = g_mpMatchId[i];
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+              (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-'))
+            g_mpMatchId[i] = '-';
+    }
+    g_mpActive     = 1;
+    g_mpStartTick  = GetTickCount();
+    g_mpLastSample = g_mpStartTick;
+    g_mpSamples    = 0;
+    g_mpGotOutput  = 0;
+    g_mpRawLen     = 0;
+    g_mpRaw[0]     = 0;
+    logf_("[mpstat] match START %s", g_mpMatchId);
+    MpSample(con, "match-start");
+}
+
+static void MpEnd(void* con)
+{
+    if (!g_mpActive) return;
+    logf_("[mpstat] match END %s", g_mpMatchId);
+    if (con) MpSample(con, "match-end");
+    MpWriteRecord();
+    g_mpActive = 0;
+    g_mpWorld[0] = 0;
+}
+
+/* Called every frame from the UpdateUI detour, on the main thread - the only
+   thread from which engine calls are safe. Everything here is throttled or a
+   plain compare, so the per-frame cost is a string compare and a tick read. */
+static void MpStatsTick(void* console)
+{
+    const char* w;
+    unsigned long now;
+
+    if (!console) return;
+    w = WorldName();
+    if (!w || !w[0]) {
+        if (g_mpActive) MpEnd(console);      /* dropped to no world at all */
+        return;
+    }
+
+    if (!IsMp(w)) {                          /* single-player or menu */
+        if (g_mpActive) MpEnd(console);
+        return;
+    }
+
+    if (!g_mpActive) { MpStart(console, w); return; }
+
+    if (strcmp(w, g_mpWorld) != 0) {         /* changed map = new match */
+        MpEnd(console);
+        MpStart(console, w);
+        return;
+    }
+
+    now = GetTickCount();
+    if (now - g_mpLastSample >= MPSTATS_PERIOD) {
+        g_mpLastSample = now;
+        MpSample(console, "in-match");
+    }
+}
+
+/* `mpstats` - manual view of the same thing, for when the automatic path is
+   itself what needs debugging. Never ends a match; sampling is read-only. */
+static void MpStatsCmd(void* console, const char* arg)
+{
+    char msg[512];
+    (void)arg;
+    if (!g_mpActive) {
+        const char* w = WorldName();
+        _snprintf(msg, sizeof(msg) - 1,
+                  "mpstats: no match being recorded (world '%s' is %s)\n",
+                  (w && w[0]) ? w : "(none)",
+                  (w && w[0] && !IsMp(w)) ? "not multiplayer" : "not loaded");
+        ((fnPrintf)FN_PRINTF)(console, 0, AC "%s", msg);
+        return;
+    }
+    MpSample(console, "manual");
+    _snprintf(msg, sizeof(msg) - 1,
+              "mpstats: match %s\n  world %s, %lus elapsed, %d samples\n"
+              "  commands printing output: %s\n  writing to %s\\" MPSTATS_FILE "\n",
+              g_mpMatchId, g_mpWorld,
+              (unsigned long)((GetTickCount() - g_mpStartTick) / 1000u),
+              g_mpSamples, g_mpGotOutput ? "yes" : "NO - see " MPSTATS_RAWLOG,
+              g_dir);
+    ((fnPrintf)FN_PRINTF)(console, 0, AC "%s", msg);
 }
 
 
