@@ -23189,6 +23189,7 @@ static void DumpRing(void)
    answer arrives from someone playing rather than from someone testing. */
 
 #define MPSTATS_FILE     "matches.jsonl"
+#define MPSTATS_PARTIAL  "matches.partial.json"
 #define MPSTATS_RAWLOG   "mp_stats_raw.log"
 #define MPSTATS_PERIOD   20000u   /* ms between samples during a match */
 #define MPSTATS_MAXCAP   200      /* ring lines captured per command, hard cap */
@@ -23203,6 +23204,110 @@ static int           g_mpSamples    = 0;
 static int           g_mpGotOutput  = 0;   /* did ANY command ever print? */
 static char          g_mpRaw[MPSTATS_MAXRAW];
 static int           g_mpRawLen     = 0;
+
+/* ---- the parsed scoreboard -------------------------------------------------
+   net_GetGameScoreStats prints exactly this, confirmed against a live TDM
+   match on mp_ps3map (2026-08-11, 70 samples, never once silent):
+
+       net_GetGameScoreStats      <- the console echoes the command first
+       TEAM APR: 2                <- team name, then that team's score
+       Zebra - 2                  <- a player on the team named above
+       TEAM UFLL: 5
+       Jasper - 5
+       OTHERS:                    <- players belonging to no team follow
+
+   APR and UFLL are Far Cry 2's factions, inherited like so much else here; the
+   names are whatever the engine prints and we do not try to translate them.
+
+   NOTE what this does NOT give us: only `score`. Kills, deaths, headshots and
+   the other 80-odd stats in gamemodesconfig.xml are not on this scoreboard, so
+   the full set still has to come from CGameStatsService one day. Score plus the
+   roster, teams, mode and map is a real match record in the meantime. */
+#define MP_MAXPLAYERS 32
+#define MP_MAXTEAMS    6
+
+typedef struct { char name[64]; char team[32]; long score; } MpPlayer;
+typedef struct { char name[32]; long score; } MpTeam;
+
+static MpPlayer g_mpPlayers[MP_MAXPLAYERS];
+static int      g_mpNPlayers = 0;
+static MpTeam   g_mpTeams[MP_MAXTEAMS];
+static int      g_mpNTeams   = 0;
+static char     g_mpMode[32] = {0};
+
+static void MpTrim(char* s)
+{
+    int n = (int)strlen(s);
+    while (n > 0 && (s[n-1] == ' ' || s[n-1] == '\t' || s[n-1] == '\r')) s[--n] = 0;
+}
+
+/* Parse one net_GetGameScoreStats capture. Replaces the previous scoreboard
+   rather than merging: the command always prints the whole thing, so the newest
+   sample is the truth and a merge could only resurrect someone who left. */
+static void MpParseScores(const char* text)
+{
+    char line[256], team[32];
+    const char* p = text;
+    int inOthers = 0;
+
+    g_mpNPlayers = 0;
+    g_mpNTeams   = 0;
+    team[0] = 0;
+
+    while (*p) {
+        const char* nl = strchr(p, '\n');
+        int len = nl ? (int)(nl - p) : (int)strlen(p);
+        if (len > (int)sizeof(line) - 1) len = (int)sizeof(line) - 1;
+        memcpy(line, p, len);
+        line[len] = 0;
+        MpTrim(line);
+        p = nl ? nl + 1 : p + strlen(p);
+
+        if (!line[0]) continue;
+        if (!strcmp(line, "OTHERS:")) { inOthers = 1; team[0] = 0; continue; }
+
+        if (!strncmp(line, "TEAM ", 5)) {
+            char* colon = strrchr(line, ':');
+            inOthers = 0;
+            if (colon) {
+                *colon = 0;
+                _snprintf(team, sizeof(team) - 1, "%s", line + 5);
+                team[sizeof(team) - 1] = 0;
+                MpTrim(team);
+                if (g_mpNTeams < MP_MAXTEAMS) {
+                    _snprintf(g_mpTeams[g_mpNTeams].name,
+                              sizeof(g_mpTeams[0].name) - 1, "%s", team);
+                    g_mpTeams[g_mpNTeams].score = strtol(colon + 1, NULL, 10);
+                    ++g_mpNTeams;
+                }
+            }
+            continue;
+        }
+
+        /* "<name> - <score>". Split on the LAST " - ", because a player is free
+           to put " - " in their own name and the score is always last. */
+        {
+            char* sep = NULL;
+            char* q;
+            for (q = line; *q; ++q)
+                if (q[0] == ' ' && q[1] == '-' && q[2] == ' ') sep = q;
+            if (!sep) continue;                  /* the command echo, or prose */
+            *sep = 0;
+            MpTrim(line);
+            if (!line[0] || g_mpNPlayers >= MP_MAXPLAYERS) continue;
+            _snprintf(g_mpPlayers[g_mpNPlayers].name,
+                      sizeof(g_mpPlayers[0].name) - 1, "%s", line);
+            _snprintf(g_mpPlayers[g_mpNPlayers].team,
+                      sizeof(g_mpPlayers[0].team) - 1, "%s", inOthers ? "" : team);
+            g_mpPlayers[g_mpNPlayers].score = strtol(sep + 3, NULL, 10);
+            ++g_mpNPlayers;
+        }
+    }
+}
+
+/* Defined below with the record writers; MpSample calls it after every sample
+   so a quit mid-match still leaves the match on disk. */
+static void MpWritePartial(void);
 
 static void MpRawAppend(const char* s)
 {
@@ -23283,9 +23388,13 @@ static void MpSample(void* con, const char* why)
     /* Getters only. net_EndMatch, net_restartmatch and the kick commands are
        deliberately absent and must stay absent - this runs unattended, during
        somebody's match. */
+    /* net_DisplayTime was in this list and is NOT a registered command - it
+       answered "Unknown command" 68 times in one match. Removed rather than
+       tolerated: an unknown command still costs a console round-trip and it
+       buried the real output in noise. */
     static const char* CMDS[] = {
         "net_GetGameScoreStats", "net_GetPlayerList", "net_GetPlayerListByTeam",
-        "net_GetCurrentGameModeName", "net_GetCurrentMapName", "net_DisplayTime"
+        "net_GetCurrentGameModeName", "net_GetCurrentMapName"
     };
     char buf[8192], path[MAX_PATH], stamp[32];
     FILE* f;
@@ -23301,6 +23410,25 @@ static void MpSample(void* con, const char* why)
     for (i = 0; i < (int)(sizeof(CMDS) / sizeof(CMDS[0])); ++i) {
         int n = MpCapture(con, CMDS[i], buf, sizeof(buf));
         if (n > 0) g_mpGotOutput = 1;
+
+        /* Parse as we go. Only accept a scoreboard that actually contained a
+           TEAM line - the capture occasionally races other console output and
+           returns unrelated text, and overwriting a good roster with that would
+           lose the match. A stale-but-real scoreboard beats a fresh empty one. */
+        if (n > 0 && !strcmp(CMDS[i], "net_GetGameScoreStats") && strstr(buf, "TEAM ")) {
+            MpParseScores(buf);
+        } else if (n > 0 && !strcmp(CMDS[i], "net_GetCurrentGameModeName")) {
+            const char* nl = strchr(buf, '\n');       /* line 1 is the echo */
+            if (nl && nl[1]) {
+                int k = 0;
+                ++nl;
+                while (nl[k] && nl[k] != '\n' && k < (int)sizeof(g_mpMode) - 1) {
+                    g_mpMode[k] = nl[k]; ++k;
+                }
+                g_mpMode[k] = 0;
+                MpTrim(g_mpMode);
+            }
+        }
         if (f) {
             fprintf(f, "--- %s ---\n", CMDS[i]);
             if (n < 0)       fprintf(f, "(console not readable)\n");
@@ -23319,8 +23447,10 @@ static void MpSample(void* con, const char* why)
     }
     if (f) fclose(f);
     ++g_mpSamples;
-    logf_("[mpstat] sample %d (%s) world=%s output=%s",
-          g_mpSamples, why, g_mpWorld, g_mpGotOutput ? "yes" : "NONE YET");
+    MpWritePartial();      /* the match must survive the game being quit */
+    logf_("[mpstat] sample %d (%s) world=%s players=%d output=%s",
+          g_mpSamples, why, g_mpWorld, g_mpNPlayers,
+          g_mpGotOutput ? "yes" : "NONE YET");
 }
 
 /* JSON string escaping. The raw capture is engine text we did not write, so it
@@ -23340,35 +23470,114 @@ static void MpJsonPuts(FILE* f, const char* s)
     }
 }
 
+/* Emit the record as one JSON line to an already-open stream. */
+static void MpEmit(FILE* f, int final)
+{
+    char stamp[32];
+    unsigned long dur = (GetTickCount() - g_mpStartTick) / 1000u;
+    int i;
+
+    MpUtcNow(stamp, sizeof(stamp));
+    fputs("{\"schema\":1,\"match_id\":\"", f);      MpJsonPuts(f, g_mpMatchId);
+    fputs("\",\"recorded_utc\":\"", f);             MpJsonPuts(f, stamp);
+    fputs("\",\"map\":\"", f);                      MpJsonPuts(f, g_mpWorld);
+    fputs("\",\"gamemode\":", f);
+    if (g_mpMode[0]) { fputc('"', f); MpJsonPuts(f, g_mpMode); fputc('"', f); }
+    else             fputs("null", f);
+    fprintf(f, ",\"duration_s\":%lu,\"players\":[", dur);
+    for (i = 0; i < g_mpNPlayers; ++i) {
+        if (i) fputc(',', f);
+        fputs("{\"name\":\"", f);   MpJsonPuts(f, g_mpPlayers[i].name);
+        fputs("\",\"team\":", f);
+        if (g_mpPlayers[i].team[0]) {
+            fputc('"', f); MpJsonPuts(f, g_mpPlayers[i].team); fputc('"', f);
+        } else fputs("null", f);
+        /* "score" is the only per-player stat this scoreboard carries, and the
+           name matches gamemodesconfig.xml exactly - see MP_STATS.md, the
+           engine keys stats by CRC-32 of the exact-case string. */
+        fprintf(f, ",\"stats\":{\"score\":%ld}}", g_mpPlayers[i].score);
+    }
+    fputs("],\"game_stats\":{", f);
+    for (i = 0; i < g_mpNTeams; ++i) {
+        if (i) fputc(',', f);
+        fputc('"', f); MpJsonPuts(f, g_mpTeams[i].name);
+        fprintf(f, "\":%ld", g_mpTeams[i].score);
+    }
+    fputs("},\"collector\":\"v2-scoreboard\",\"complete\":", f);
+    fputs(final ? "true," : "false,", f);
+    fputs("\"raw\":\"", f);                         MpJsonPuts(f, g_mpRaw);
+    fputs("\"}\n", f);
+}
+
+/* THE IN-PROGRESS RECORD.
+   The first live match produced 70 good samples and no matches.jsonl at all,
+   because the player quit from inside the match and the leave-the-world
+   transition never ran. Quitting mid-match is the NORMAL way a session ends,
+   so a design that only writes on a clean exit writes nothing, ever.
+
+   So the current match is rewritten to matches.partial.json after every sample.
+   It is truncated and rewritten rather than appended, so it always holds
+   exactly one object; on a clean end it is promoted into matches.jsonl and
+   deleted, and if the game dies first, the next startup finds it and promotes
+   it then. Either way the match survives. */
+static void MpWritePartial(void)
+{
+    char path[MAX_PATH];
+    FILE* f;
+    _snprintf(path, sizeof(path) - 1, "%s\\" MPSTATS_PARTIAL, g_dir);
+    f = fopen(path, "w");
+    if (!f) return;
+    MpEmit(f, 0);
+    fclose(f);
+}
+
 static void MpWriteRecord(void)
 {
-    char path[MAX_PATH], stamp[32];
+    char path[MAX_PATH];
     FILE* f;
-    unsigned long dur = (GetTickCount() - g_mpStartTick) / 1000u;
 
     _snprintf(path, sizeof(path) - 1, "%s\\" MPSTATS_FILE, g_dir);
     f = fopen(path, "a");                     /* append: one line per match */
     if (!f) { logf_("[mpstat] cannot write %s", path); return; }
-
-    MpUtcNow(stamp, sizeof(stamp));
-    /* players[] and game_stats{} stay empty until we know the output format -
-       an empty player list is valid per match_record.py, a wrong one is not. */
-    fputs("{\"schema\":1,\"match_id\":\"", f);      MpJsonPuts(f, g_mpMatchId);
-    fputs("\",\"recorded_utc\":\"", f);             MpJsonPuts(f, stamp);
-    fputs("\",\"map\":\"", f);                      MpJsonPuts(f, g_mpWorld);
-    fputs("\",\"gamemode\":null,\"duration_s\":", f);
-    fprintf(f, "%lu", dur);
-    fputs(",\"players\":[],\"game_stats\":{},\"collector\":\"v1-raw\",", f);
-    fputs("\"raw\":\"", f);                         MpJsonPuts(f, g_mpRaw);
-    fputs("\"}\n", f);
+    MpEmit(f, 1);
     fclose(f);
 
-    logf_("[mpstat] wrote match %s (%lus, %d samples, output=%s) to " MPSTATS_FILE,
-          g_mpMatchId, dur, g_mpSamples, g_mpGotOutput ? "yes" : "NONE");
+    _snprintf(path, sizeof(path) - 1, "%s\\" MPSTATS_PARTIAL, g_dir);
+    remove(path);                             /* promoted - no longer pending */
+
+    logf_("[mpstat] wrote match %s (%lus, %d samples, %d players, %d teams)",
+          g_mpMatchId, (GetTickCount() - g_mpStartTick) / 1000u,
+          g_mpSamples, g_mpNPlayers, g_mpNTeams);
     if (!g_mpGotOutput)
-        logf_("[mpstat] no command printed anything all match - the net_Get* "
-              "commands are inert here, so the stats have to come from "
-              "CGameStatsService instead. See tools/mp_stats/README.md route B.");
+        logf_("[mpstat] no command printed anything all match - see "
+              "tools/mp_stats/README.md route B.");
+}
+
+/* Called once at startup. If the last session died mid-match, its partial is
+   still on disk; move it into matches.jsonl so the match is not lost. */
+static void MpRecoverPartial(void)
+{
+    char pp[MAX_PATH], mp[MAX_PATH], buf[MPSTATS_MAXRAW + 2048];
+    FILE* in, *out;
+    size_t n;
+
+    _snprintf(pp, sizeof(pp) - 1, "%s\\" MPSTATS_PARTIAL, g_dir);
+    in = fopen(pp, "r");
+    if (!in) return;
+    n = fread(buf, 1, sizeof(buf) - 1, in);
+    fclose(in);
+    buf[n] = 0;
+    if (n < 2 || buf[0] != '{') { remove(pp); return; }   /* truncated: drop */
+
+    _snprintf(mp, sizeof(mp) - 1, "%s\\" MPSTATS_FILE, g_dir);
+    out = fopen(mp, "a");
+    if (out) {
+        fputs(buf, out);
+        if (buf[n - 1] != '\n') fputc('\n', out);
+        fclose(out);
+        logf_("[mpstat] recovered an unfinished match from " MPSTATS_PARTIAL);
+    }
+    remove(pp);
 }
 
 static void MpStart(void* con, const char* world)
@@ -23395,6 +23604,9 @@ static void MpStart(void* con, const char* world)
     g_mpGotOutput  = 0;
     g_mpRawLen     = 0;
     g_mpRaw[0]     = 0;
+    g_mpNPlayers   = 0;
+    g_mpNTeams     = 0;
+    g_mpMode[0]    = 0;
     logf_("[mpstat] match START %s", g_mpMatchId);
     MpSample(con, "match-start");
 }
@@ -23414,10 +23626,16 @@ static void MpEnd(void* con)
    plain compare, so the per-frame cost is a string compare and a tick read. */
 static void MpStatsTick(void* console)
 {
+    static int recovered = 0;
     const char* w;
     unsigned long now;
 
     if (!console) return;
+    if (!recovered) {          /* first frame with a console: flush any match
+                                  the previous session died in the middle of */
+        recovered = 1;
+        MpRecoverPartial();
+    }
     w = WorldName();
     if (!w || !w[0]) {
         if (g_mpActive) MpEnd(console);      /* dropped to no world at all */

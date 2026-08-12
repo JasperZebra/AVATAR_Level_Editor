@@ -100,16 +100,42 @@ forever on a busy ring.
 `net_ExtendMatch` and the kick commands are deliberately absent and must stay
 absent — this runs unattended, during somebody's match. Do not add them.
 
-**It is honest about not knowing yet.** Nobody has confirmed
-`net_GetGameScoreStats` prints anything; plenty of Avatar's inherited Far Cry 2
-commands execute happily and do nothing. So every sample is written verbatim to
-`mp_stats_raw.log` **and** embedded in the record's `raw` field, `players[]`
-stays empty (valid per `match_record.py`; a wrong roster would not be), and if
-nothing printed all match the log says so and names route B. The answer arrives
-from someone playing rather than from someone testing.
+**UPDATE, same day — the first real match answered it.** `net_GetGameScoreStats`
+**works**: 70 samples on `mp_ps3map`, not once silent. It prints
 
-**Untested against a running game.** It compiles clean and `check_cmds` passes
-85/85, which says nothing about behaviour.
+```
+net_GetGameScoreStats      <- the console echoes the command first
+TEAM APR: 2                <- team name, then that team's score
+Zebra - 2                  <- a player on the team named above
+TEAM UFLL: 5
+Jasper - 5
+OTHERS:                    <- players belonging to no team follow
+```
+
+so route A is confirmed and route B is not needed for score. `MpParseScores`
+now turns that into real `players[]` / `game_stats{}`. **The ceiling:** this
+scoreboard carries *only* `score` — kills, deaths and the other 80-odd stats in
+`gamemodesconfig.xml` are not on it, so the full set still needs
+`CGameStatsService` eventually.
+
+**The bug that match found, and it is the important one.** 70 good samples and
+**no `matches.jsonl` at all**, because the player quit from inside the match and
+the leave-the-world transition never ran. Quitting mid-match is the *normal* way
+a session ends, so a design that only writes on a clean exit writes nothing,
+ever. Now the current match is rewritten to `matches.partial.json` after every
+sample, promoted into `matches.jsonl` and deleted on a clean end, and
+**recovered at the next startup** if the game died first. If you touch this
+path, keep that property.
+
+Two smaller corrections from the same log: `net_DisplayTime` is **not a
+registered command** (68 × "Unknown command" in one match) and is gone; and a
+capture with no `TEAM ` line is **rejected rather than parsed**, because the
+ring capture occasionally races other console output (5 of 70) and overwriting
+a good roster with noise loses the match.
+
+**Still untested:** the partial/recovery path itself. The parser was checked
+against the real 70-sample log before rebuilding — 65 usable, 5 correctly
+rejected, final scoreboard Zebra 2 / Jasper 5, which is how the match ended.
 
 ### 2026-08-06 (m) — the remote body is not in the entity tree; label and read what is
 
