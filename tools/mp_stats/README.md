@@ -148,10 +148,33 @@ So the whole lifecycle the stats need is:
 considers the round finished and the scoreboard final — the same moment
 `CGREventEndGameStatsReceived` exists for.
 
-Observing it should be **polling, not hooking**: a background thread comparing
-the current state object's identity every second or so. That is how the DLL
-already does its other watching, it cannot corrupt a vtable it never writes to,
-and a missed poll costs one match rather than the process.
+### The engine hands us the transitions — we do not have to watch for them
+
+An earlier draft of this file proposed polling the state every second. **Don't.**
+The engine has a built-in observer interface for exactly this, and the Far Cry 2
+symbol table names it outright:
+
+```cpp
+CGameRules::RegisterStateObserver(IGameRulesStateObserver*)
+CGameRules::UnRegisterStateObserver(IGameRulesStateObserver*)
+CGameModeManager::GetGameRules() const      // how we reach it
+CGameRules::ProcessEvent(CGREvent const&)   // where the events go
+```
+
+Register an observer and the engine calls us **on every state transition** —
+no timer, no vtable scanning, no sampling window to miss a short round in. This
+is the intended extension point rather than something we are sneaking past.
+
+Two more that come free from the same object, and save guessing at durations:
+
+```cpp
+CGameRules::GetElapsedTime()   CGameRules::GetTimeLeft()   CGameRules::GetTimeOut()
+```
+
+`CGameRules` and `CGRState` are both confirmed present in Avatar's `Dunia.dll`
+(RTTI registration at decompile line 61653 / 61671). **The Avatar addresses for
+these are not yet resolved** — that is the remaining RE, and per AGENTS.md it
+wants the shipped DLL disassembled rather than the decompile trusted.
 
 Identity comes from the RTTI class-descriptor globals, which are lazily
 initialised per class and unique:
@@ -199,17 +222,22 @@ already uses for `CConsole` and `CBTZGame`. But the per-player stat container's 
 established, and this is precisely what AGENTS.md warns about: *"for anything load-bearing,
 disassemble the shipped DLL rather than trusting the decompile."*
 
-**The test that decides it is `probe_cmds.txt`, in this folder.** Copy it over the game's
-`avatar_cmds.txt`, get into a match, score a couple of kills, press **F11** (runs every line) then
-**F10** (writes `console_dump.txt`). No typing, and every command in it is a getter —
-`net_EndMatch`, `net_restartmatch` and the kick commands are deliberately excluded and must not be
-added.
+**The DLL probes itself — no keypresses.** `probe_cmds.txt` in this folder is the command list,
+but it is not something anyone should have to run by hand. The DLL already executes console
+commands and already captures console output, so the collector runs those commands itself at
+`PostRound` and writes what came back. If Route A works, that *is* the record. If the commands turn
+out inert — plenty of Avatar's inherited Far Cry 2 commands are, exactly like `Cheat_godmode` —
+the DLL logs "produced nothing" and we know to build Route B, without anyone having had to test
+anything.
 
-If real numbers come out, Route A is the whole job. If nothing prints — plenty of Avatar's
-inherited Far Cry 2 commands are inert, exactly like `Cheat_godmode` — Route B is the only way and
-the offsets have to be found against a live process.
+The one thing that cannot be automated away is **somebody playing a multiplayer match once** with
+the new DLL loaded. That is not a manual step so much as it is the only way any of this gets
+exercised at all — the whole system is unverified until a real match runs through it. Score a
+couple of kills when it happens: **zeroes everywhere are indistinguishable from "the command does
+nothing"**, which is the one outcome that would tell us nothing.
 
-Score something before probing. **Zeroes everywhere are indistinguishable from "the command does
-nothing"**, which is the one outcome that answers nothing.
+`probe_cmds.txt` stays as the vetted command list — every line a getter, with `net_EndMatch`,
+`net_restartmatch` and the kick commands deliberately excluded. It doubles as the manual fallback
+if the automatic path itself needs debugging.
 
 Nothing in Route A or B has been run against a running game.
